@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+import app.models  # noqa: F401  registers tables on Base.metadata
 from app.db import Base, get_db
 from app.main import app
 
@@ -21,6 +22,16 @@ def engine() -> Generator[Engine, None, None]:
     test_engine.dispose()
     os.close(db_fd)
     os.remove(db_path)
+
+
+@pytest.fixture()
+def db_session(engine: Engine) -> Generator[Session, None, None]:
+    testing_session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session = testing_session_local()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @pytest.fixture()

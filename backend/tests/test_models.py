@@ -1,0 +1,77 @@
+import uuid
+from datetime import date
+
+from app.models import ChatMessage, Holding, Recommendation, Trade, WatchlistItem
+
+
+def test_holding_roundtrip(db_session):
+    holding = Holding(
+        user_id=uuid.uuid4(),
+        ticker="VWCE",
+        name="Vanguard FTSE All-World",
+        asset_type="ETF",
+        shares=10,
+        cost_basis=95.5,
+        first_purchase_date=date(2024, 1, 15),
+    )
+    db_session.add(holding)
+    db_session.commit()
+
+    fetched = db_session.query(Holding).filter_by(ticker="VWCE").one()
+    assert fetched.asset_type == "ETF"
+    assert float(fetched.shares) == 10
+
+
+def test_watchlist_item_roundtrip(db_session):
+    item = WatchlistItem(user_id=uuid.uuid4(), ticker="NVDA", asset_type="STOCK")
+    db_session.add(item)
+    db_session.commit()
+
+    fetched = db_session.query(WatchlistItem).filter_by(ticker="NVDA").one()
+    assert fetched.note is None
+
+
+def test_trade_roundtrip(db_session):
+    trade = Trade(
+        user_id=uuid.uuid4(),
+        date=date(2024, 2, 1),
+        ticker="VWCE",
+        action="BUY",
+        shares=5,
+        price=97.2,
+    )
+    db_session.add(trade)
+    db_session.commit()
+
+    fetched = db_session.query(Trade).filter_by(ticker="VWCE").one()
+    assert fetched.action == "BUY"
+
+
+def test_recommendation_roundtrip(db_session):
+    rec = Recommendation(
+        user_id=uuid.uuid4(),
+        ticker="VWCE",
+        asset_type="ETF",
+        action="HOLD",
+        reasoning=["trend is up", "valuation fair"],
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    fetched = db_session.query(Recommendation).filter_by(ticker="VWCE").one()
+    assert fetched.status == "PENDING"
+    assert fetched.reasoning == ["trend is up", "valuation fair"]
+
+
+def test_chat_message_roundtrip(db_session):
+    msg = ChatMessage(
+        user_id=uuid.uuid4(),
+        session_id="sess-1",
+        role="user",
+        content="How is my portfolio doing?",
+    )
+    db_session.add(msg)
+    db_session.commit()
+
+    fetched = db_session.query(ChatMessage).filter_by(session_id="sess-1").one()
+    assert fetched.role == "user"
