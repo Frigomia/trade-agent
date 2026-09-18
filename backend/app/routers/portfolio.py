@@ -95,6 +95,11 @@ def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
         holding.shares = float(holding.shares) + payload.shares
         holding.cost_basis = total_cost / float(holding.shares)
     elif payload.action == "SELL":
+        if payload.shares > float(holding.shares):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Cannot sell {payload.shares}; holding has {float(holding.shares)}",
+            )
         holding.shares = float(holding.shares) - payload.shares
     else:
         raise HTTPException(status_code=422, detail="action must be BUY or SELL")

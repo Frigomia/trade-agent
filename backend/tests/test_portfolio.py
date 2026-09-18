@@ -1,3 +1,9 @@
+import uuid
+from datetime import date
+
+from app.models import Holding
+
+
 def test_list_holdings_empty(client):
     response = client.get("/portfolio/holdings")
     assert response.status_code == 200
@@ -137,4 +143,48 @@ def test_log_trade_missing_holding_returns_404(client):
         "/portfolio/trades",
         json={"date": "2024-03-01", "ticker": "NOPE", "action": "BUY", "shares": 1, "price": 1.0},
     )
+    assert response.status_code == 404
+
+
+def test_log_trade_sell_more_than_held_returns_422(client):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "VWCE",
+            "name": "Vanguard FTSE All-World",
+            "asset_type": "ETF",
+            "shares": 10,
+            "cost_basis": 90.0,
+            "first_purchase_date": "2024-01-15",
+        },
+    )
+
+    response = client.post(
+        "/portfolio/trades",
+        json={"date": "2024-03-01", "ticker": "VWCE", "action": "SELL", "shares": 11, "price": 105.0},
+    )
+    assert response.status_code == 422
+
+    holdings = client.get("/portfolio/holdings").json()
+    assert holdings[0]["shares"] == 10
+
+
+def test_holdings_scoped_to_user_id(client, db_session):
+    other_user_id = uuid.uuid4()
+    other_holding = Holding(
+        user_id=other_user_id,
+        ticker="AAPL",
+        name="Apple Inc.",
+        asset_type="STOCK",
+        shares=5,
+        cost_basis=150.0,
+        first_purchase_date=date(2024, 1, 1),
+    )
+    db_session.add(other_holding)
+    db_session.commit()
+
+    response = client.get("/portfolio/holdings")
+    assert response.json() == []
+
+    response = client.delete("/portfolio/holdings/AAPL")
     assert response.status_code == 404
