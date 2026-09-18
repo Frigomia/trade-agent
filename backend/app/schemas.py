@@ -20,3 +20,16 @@ class HoldingOut(HoldingIn):
 
     id: int
     user_id: UUID
+
+
+class WatchlistItemIn(BaseModel):
+    ticker: str
+    asset_type: str
+    note: str | None = None
+
+
+class WatchlistItemOut(WatchlistItemIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID

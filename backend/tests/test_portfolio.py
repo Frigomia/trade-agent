@@ -63,3 +63,23 @@ def test_delete_holding(client):
 def test_delete_missing_holding_returns_404(client):
     response = client.delete("/portfolio/holdings/NOPE")
     assert response.status_code == 404
+
+
+def test_list_watchlist_empty(client):
+    response = client.get("/portfolio/watchlist")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_create_and_upsert_watchlist_item(client):
+    payload = {"ticker": "NVDA", "asset_type": "STOCK", "note": "watching earnings"}
+    response = client.post("/portfolio/watchlist", json=payload)
+    assert response.status_code == 200
+    assert response.json()["note"] == "watching earnings"
+
+    payload["note"] = "still watching"
+    response = client.post("/portfolio/watchlist", json=payload)
+    assert response.json()["note"] == "still watching"
+
+    response = client.get("/portfolio/watchlist")
+    assert len(response.json()) == 1
