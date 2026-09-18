@@ -1,6 +1,6 @@
 # Backend Scaffold — Design Spec
 
-Sub-project 1 of the trading agent platform (see `doc/ARCHITECTURE.md` for
+Sub-project 1 of the trading agent platform (see `docs/ARCHITECTURE.md` for
 the full system design). This is the first slice from the build order in
 ARCHITECTURE.md §15: scaffold the FastAPI app, models, and Alembic setup;
 get `/health` and portfolio CRUD running against local SQLite.
@@ -35,7 +35,7 @@ Out of scope (later sub-projects):
 trade-agent/
   CLAUDE.md                  root, navigational only
   .gitignore
-  doc/ARCHITECTURE.md        (existing)
+  docs/ARCHITECTURE.md       (existing)
   docs/superpowers/specs/     (this file)
   backend/
     CLAUDE.md                 backend conventions
