@@ -42,9 +42,7 @@ def upsert_holding(payload: HoldingIn, db: Session = Depends(get_db)) -> Holding
 @router.delete("/holdings/{ticker}", status_code=204)
 def delete_holding(ticker: str, db: Session = Depends(get_db)) -> None:
     holding = (
-        db.query(Holding)
-        .filter_by(user_id=settings.default_user_id, ticker=ticker)
-        .one_or_none()
+        db.query(Holding).filter_by(user_id=settings.default_user_id, ticker=ticker).one_or_none()
     )
     if holding is None:
         raise HTTPException(status_code=404, detail="Holding not found")
@@ -58,9 +56,7 @@ def list_watchlist(db: Session = Depends(get_db)) -> list[WatchlistItem]:
 
 
 @router.post("/watchlist", response_model=WatchlistItemOut)
-def upsert_watchlist_item(
-    payload: WatchlistItemIn, db: Session = Depends(get_db)
-) -> WatchlistItem:
+def upsert_watchlist_item(payload: WatchlistItemIn, db: Session = Depends(get_db)) -> WatchlistItem:
     item = (
         db.query(WatchlistItem)
         .filter_by(user_id=settings.default_user_id, ticker=payload.ticker)
@@ -91,7 +87,9 @@ def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
         )
 
     if payload.action == "BUY":
-        total_cost = float(holding.shares) * float(holding.cost_basis) + payload.shares * payload.price
+        prior_value = float(holding.shares) * float(holding.cost_basis)
+        added_value = payload.shares * payload.price
+        total_cost = prior_value + added_value
         holding.shares = float(holding.shares) + payload.shares
         holding.cost_basis = total_cost / float(holding.shares)
     elif payload.action == "SELL":

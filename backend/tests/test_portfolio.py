@@ -106,7 +106,13 @@ def test_log_trade_buy_updates_holding_cost_basis(client):
 
     response = client.post(
         "/portfolio/trades",
-        json={"date": "2024-03-01", "ticker": "VWCE", "action": "BUY", "shares": 10, "price": 100.0},
+        json={
+            "date": "2024-03-01",
+            "ticker": "VWCE",
+            "action": "BUY",
+            "shares": 10,
+            "price": 100.0,
+        },
     )
     assert response.status_code == 200
 
@@ -130,7 +136,13 @@ def test_log_trade_sell_reduces_shares(client):
 
     response = client.post(
         "/portfolio/trades",
-        json={"date": "2024-03-01", "ticker": "VWCE", "action": "SELL", "shares": 4, "price": 105.0},
+        json={
+            "date": "2024-03-01",
+            "ticker": "VWCE",
+            "action": "SELL",
+            "shares": 4,
+            "price": 105.0,
+        },
     )
     assert response.status_code == 200
 
@@ -161,7 +173,13 @@ def test_log_trade_sell_more_than_held_returns_422(client):
 
     response = client.post(
         "/portfolio/trades",
-        json={"date": "2024-03-01", "ticker": "VWCE", "action": "SELL", "shares": 11, "price": 105.0},
+        json={
+            "date": "2024-03-01",
+            "ticker": "VWCE",
+            "action": "SELL",
+            "shares": 11,
+            "price": 105.0,
+        },
     )
     assert response.status_code == 422
 
