@@ -48,6 +48,20 @@ def test_stock_ungated_not_held_low_score_emits_nothing():
     assert reasoning == []
 
 
+def test_stock_ungated_held_missing_score_emits_nothing():
+    action, pct, reasoning = synthesize("STOCK", True, None, "NEUTRAL")
+    assert action is None
+    assert pct is None
+    assert reasoning == []
+
+
+def test_stock_ungated_not_held_missing_score_emits_nothing():
+    action, pct, reasoning = synthesize("STOCK", False, None, "NEUTRAL")
+    assert action is None
+    assert pct is None
+    assert reasoning == []
+
+
 def test_etf_held_oversold_adds_strong_conviction():
     action, pct, reasoning = synthesize("ETF", True, None, "OVERSOLD")
     assert action == "ADD"

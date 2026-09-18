@@ -24,3 +24,6 @@ def test_score_technical_neutral_on_flat_prices():
 def test_score_technical_neutral_on_insufficient_history():
     assert score_technical([]) == "NEUTRAL"
     assert score_technical([100.0]) == "NEUTRAL"
+    # Thin history (well under the 200-close floor) should not produce a
+    # confident signal even though it's more than the old len(closes) < 2 guard.
+    assert score_technical([100.0 - i for i in range(50)]) == "NEUTRAL"

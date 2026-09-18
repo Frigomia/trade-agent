@@ -44,3 +44,27 @@ def test_run_graph_for_etf_skips_fundamentals_and_news_on_hold():
     assert result["action"] == "HOLD"
     mock_news.assert_not_called()
     assert result["ai_analysis"] is None
+
+
+def test_run_graph_for_stock_with_no_fundamentals_data_skips_scoring():
+    quote = {"price": 100.0, "closes": [100.0] * 220}
+    empty_fundamentals = {
+        "peg_ratio": None,
+        "roe": None,
+        "debt_to_equity": None,
+        "revenue_growth": None,
+        "profit_margin": None,
+    }
+    with (
+        patch("app.agents.market_data.fetch_quote_and_history", AsyncMock(return_value=quote)),
+        patch(
+            "app.agents.market_data.fetch_fundamentals",
+            AsyncMock(return_value=empty_fundamentals),
+        ),
+        patch("app.agents.news.run_news_agent", AsyncMock(return_value=None)) as mock_news,
+    ):
+        result = asyncio.run(run_graph_for_ticker("AAPL", "STOCK", is_held=True))
+
+    assert result["fundamental_score"] is None
+    assert result["action"] is None
+    mock_news.assert_not_called()

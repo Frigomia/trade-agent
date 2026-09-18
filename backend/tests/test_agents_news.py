@@ -34,5 +34,5 @@ def test_run_news_agent_calls_claude_with_web_search(monkeypatch):
     assert result == "Recent news looks positive."
     call_kwargs = mock_client.messages.create.call_args.kwargs
     assert call_kwargs["model"] == settings.anthropic_model
-    assert call_kwargs["tools"][0]["type"] == "web_search_20250305"
+    assert call_kwargs["tools"][0]["type"] == "web_search_20260209"
     assert "untrusted DATA" in call_kwargs["system"]

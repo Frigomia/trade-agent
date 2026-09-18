@@ -31,7 +31,10 @@ async def fetch_data(state: AnalysisState) -> dict[str, Any]:
 def fundamental_agent(state: AnalysisState) -> dict[str, Any]:
     if state["asset_type"] != "STOCK":
         return {"fundamental_score": None}
-    score = fundamental.score_fundamentals(state["fundamentals"])
+    fundamentals = state["fundamentals"]
+    if not fundamentals or all(value is None for value in fundamentals.values()):
+        return {"fundamental_score": None}
+    score = fundamental.score_fundamentals(fundamentals)
     return {"fundamental_score": score}
 
 

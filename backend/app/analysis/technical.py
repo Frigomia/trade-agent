@@ -27,7 +27,7 @@ def _rsi_14(closes: list[float]) -> float:
 
 
 def score_technical(closes: list[float]) -> str:
-    if len(closes) < 2:
+    if len(closes) < 200:
         return "NEUTRAL"
 
     rsi = _rsi_14(closes)

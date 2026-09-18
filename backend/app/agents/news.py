@@ -33,9 +33,9 @@ async def run_news_agent(ticker: str, action: str, reasoning: list[str]) -> str 
     def _create() -> Message:
         return client.messages.create(
             model=settings.anthropic_model,
-            max_tokens=1024,
+            max_tokens=4096,
             system=NEWS_AGENT_SYSTEM_PROMPT,
-            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            tools=[{"type": "web_search_20260209", "name": "web_search"}],
             messages=[{"role": "user", "content": user_message}],
         )
 

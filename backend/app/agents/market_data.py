@@ -38,7 +38,7 @@ async def fetch_fundamentals(ticker: str) -> dict[str, Any]:
         info = yf.Ticker(ticker).info
         debt_to_equity = info.get("debtToEquity")
         return {
-            "peg_ratio": info.get("pegRatio"),
+            "peg_ratio": info.get("pegRatio") or info.get("trailingPegRatio"),
             "roe": info.get("returnOnEquity"),
             # yfinance reports debtToEquity as a percent-like number (e.g. 45.0
             # meaning 45%), not a plain ratio -- normalize to match the other

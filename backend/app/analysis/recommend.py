@@ -24,11 +24,12 @@ def synthesize(
             else:
                 action = "BUY" if technical_signal == "OVERSOLD" else "WATCH"
         else:
-            score = fundamental_score or 0
-            if is_held:
-                action = "SELL" if score < 40 else "TRIM"
+            if fundamental_score is None:
+                action = None
+            elif is_held:
+                action = "SELL" if fundamental_score < 40 else "TRIM"
             else:
-                action = "WATCH" if score >= 40 else None
+                action = "WATCH" if fundamental_score >= 40 else None
     else:  # ETF
         if is_held:
             if technical_signal == "OVERSOLD":

@@ -81,6 +81,14 @@ async def _process_ticker(
 
 async def run_job(job_id: str, tickers: list[dict[str, Any]]) -> None:
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_TICKERS)
-    await asyncio.gather(*(_process_ticker(job_id, t, semaphore) for t in tickers))
-    redis = get_redis()
-    await redis.hset(f"job:{job_id}", "status", "DONE")
+    try:
+        results = await asyncio.gather(
+            *(_process_ticker(job_id, t, semaphore) for t in tickers),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.exception("Unhandled error in _process_ticker", exc_info=result)
+    finally:
+        redis = get_redis()
+        await redis.hset(f"job:{job_id}", "status", "DONE")
