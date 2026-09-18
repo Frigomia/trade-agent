@@ -1,5 +1,5 @@
 from datetime import date
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.config import settings
 from app.models import Holding, Recommendation
@@ -24,12 +24,7 @@ def test_run_analysis_with_no_tickers_uses_holdings(client, db_session):
         # finishes, risking a "Task was destroyed but it is pending" warning.
         # Closing the coroutine instead keeps the test's output pristine.
         coro.close()
-
-        class _NoOpTask:
-            def add_done_callback(self, _callback):
-                pass
-
-        return _NoOpTask()
+        return MagicMock()  # stands in for the Task; add_done_callback is a no-op
 
     with (
         patch("app.routers.analysis.create_job", AsyncMock(return_value="job-123")),

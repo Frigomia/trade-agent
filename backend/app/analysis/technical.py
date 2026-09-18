@@ -1,9 +1,10 @@
+from statistics import mean
+
 from app.config import settings
 
 
 def _sma(closes: list[float], window: int) -> float:
-    tail = closes[-window:]
-    return sum(tail) / len(tail)
+    return mean(closes[-window:])
 
 
 def _rsi_14(closes: list[float]) -> float:
