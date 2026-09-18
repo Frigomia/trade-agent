@@ -33,3 +33,18 @@ class WatchlistItemOut(WatchlistItemIn):
 
     id: int
     user_id: UUID
+
+
+class TradeIn(BaseModel):
+    date: date
+    ticker: str
+    action: str
+    shares: float
+    price: float
+
+
+class TradeOut(TradeIn):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID

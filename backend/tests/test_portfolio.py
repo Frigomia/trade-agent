@@ -83,3 +83,58 @@ def test_create_and_upsert_watchlist_item(client):
 
     response = client.get("/portfolio/watchlist")
     assert len(response.json()) == 1
+
+
+def test_log_trade_buy_updates_holding_cost_basis(client):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "VWCE",
+            "name": "Vanguard FTSE All-World",
+            "asset_type": "ETF",
+            "shares": 10,
+            "cost_basis": 90.0,
+            "first_purchase_date": "2024-01-15",
+        },
+    )
+
+    response = client.post(
+        "/portfolio/trades",
+        json={"date": "2024-03-01", "ticker": "VWCE", "action": "BUY", "shares": 10, "price": 100.0},
+    )
+    assert response.status_code == 200
+
+    holdings = client.get("/portfolio/holdings").json()
+    assert holdings[0]["shares"] == 20
+    assert holdings[0]["cost_basis"] == 95.0
+
+
+def test_log_trade_sell_reduces_shares(client):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "VWCE",
+            "name": "Vanguard FTSE All-World",
+            "asset_type": "ETF",
+            "shares": 10,
+            "cost_basis": 90.0,
+            "first_purchase_date": "2024-01-15",
+        },
+    )
+
+    response = client.post(
+        "/portfolio/trades",
+        json={"date": "2024-03-01", "ticker": "VWCE", "action": "SELL", "shares": 4, "price": 105.0},
+    )
+    assert response.status_code == 200
+
+    holdings = client.get("/portfolio/holdings").json()
+    assert holdings[0]["shares"] == 6
+
+
+def test_log_trade_missing_holding_returns_404(client):
+    response = client.post(
+        "/portfolio/trades",
+        json={"date": "2024-03-01", "ticker": "NOPE", "action": "BUY", "shares": 1, "price": 1.0},
+    )
+    assert response.status_code == 404
