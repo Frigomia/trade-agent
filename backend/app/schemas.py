@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveFloat
@@ -48,3 +48,19 @@ class TradeOut(TradeIn):
 
     id: int
     user_id: UUID
+
+
+class RecommendationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID
+    created_at: datetime
+    ticker: str
+    asset_type: str
+    action: str
+    reasoning: list[str]
+    ai_analysis: str | None
+    suggested_position_pct: float | None
+    status: str
+    reviewed_at: datetime | None
