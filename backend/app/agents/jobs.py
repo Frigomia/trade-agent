@@ -75,6 +75,7 @@ async def _process_ticker(
             logger.exception("Analysis failed for ticker %s", ticker_info["ticker"])
             entry = {"ticker": ticker_info["ticker"], "error": "analysis failed"}
         await redis.rpush(f"job:{job_id}:results", json.dumps(entry))
+        await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
         await redis.hincrby(f"job:{job_id}", "done", 1)
 
 
