@@ -19,6 +19,14 @@
 - Tests run from `backend/` via `python -m pytest tests/ -v` (use `-m pytest`, not bare `pytest`, so `backend/` — the cwd — lands on `sys.path` and `import app...` resolves).
 - Commit after every task's tests pass.
 
+## Out of Scope
+
+None of these tasks add the following — do not add them opportunistically mid-task, they belong to later sub-projects:
+
+- **Row Level Security.** RLS policies are a Postgres feature keyed on `auth.uid()`, which only exists once Supabase Auth issues real JWTs (ARCHITECTURE.md §13). SQLite has no RLS equivalent. Lands with the auth sub-project's Postgres migration.
+- **JWT verification / any auth check.** Every endpoint in this plan trusts `settings.default_user_id` unconditionally — there is no login, no token, no `Depends` guard checking who's asking. Not safe to expose publicly as-is.
+- **CORS and rate limiting.** No `CORSMiddleware`, no per-route rate limits. Local dev only; both are pre-launch checklist items (ARCHITECTURE.md §16) for when this leaves localhost.
+
 ---
 
 ### Task 1: Project skeleton, config, DB session, `/health`
