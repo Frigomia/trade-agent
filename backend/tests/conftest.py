@@ -1,11 +1,11 @@
-import os
-import tempfile
+import contextlib
 from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  registers tables on Base.metadata
@@ -13,16 +13,30 @@ import app.redis_client as redis_client_module
 from app.db import Base, get_db
 from app.main import app
 
+ADMIN_DATABASE_URL = "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/postgres"
+TEST_DATABASE_URL = (
+    "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent_test"
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_test_database() -> None:
+    admin_engine = create_engine(ADMIN_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with (
+        admin_engine.connect() as conn,
+        contextlib.suppress(ProgrammingError),  # already exists from a previous run
+    ):
+        conn.execute(text("CREATE DATABASE trading_agent_test"))
+    admin_engine.dispose()
+
 
 @pytest.fixture()
 def engine() -> Generator[Engine, None, None]:
-    db_fd, db_path = tempfile.mkstemp(suffix=".db")
-    test_engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    test_engine = create_engine(TEST_DATABASE_URL)
     Base.metadata.create_all(bind=test_engine)
     yield test_engine
+    Base.metadata.drop_all(bind=test_engine)
     test_engine.dispose()
-    os.close(db_fd)
-    os.remove(db_path)
 
 
 @pytest.fixture()

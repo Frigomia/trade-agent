@@ -112,7 +112,7 @@ flowchart TB
 | LLM | Claude (Anthropic API), `claude-sonnet-5` default, overridable via env | Web search tool built in server-side; no separate search API needed |
 | Frontend | Next.js (React) + TypeScript + Tailwind | Richest ecosystem for AI-native dashboards (streaming chat UIs, agent trace components) |
 | Data fetching (FE) | SWR | Lightweight, no backend coupling; swap for the Vercel AI SDK later if chat moves to streaming |
-| Database | Postgres via **Supabase** (SQLite for local dev — same SQLAlchemy models, zero setup) | Bundling DB + Auth in one project avoids running a separate auth service for a single-user app |
+| Database | Postgres via **Supabase** (local dev: Postgres+pgvector in Docker Compose — same SQLAlchemy models, same dialect as production) | Bundling DB + Auth in one project avoids running a separate auth service for a single-user app; matching the local and production dialect exactly avoids SQLite/Postgres drift in query behavior |
 | Auth | **Supabase Auth** | Hosted login, public signup disabled, one manually-created user; issues a JWT the backend verifies on every request (see §13) |
 | Migrations | **Alembic** | Autogenerates migrations by diffing SQLAlchemy models against the live schema — `models.py` stays the single source of truth. Handles raw SQL (e.g. RLS policies) via `op.execute()`. Prisma was considered but rejected: it isn't a migration add-on for SQLAlchemy, it replaces it as the ORM entirely, and pulls a Node-based engine into a Python runtime for no benefit here |
 | Cache/queue | Redis (Upstash for hosting) | Quote caching, future job queue for scheduled analysis runs |
@@ -348,7 +348,7 @@ session without the dashboard running.
 Backend (`.env`, see `backend/.env.example`):
 
 ```
-DATABASE_URL=sqlite:///./trading_agent.db   # swap for Supabase Postgres in hosting
+DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent   # local Docker Compose Postgres; swap for Supabase Postgres in hosting
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
@@ -381,6 +381,7 @@ cd trading-agent/backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # add your ANTHROPIC_API_KEY
+docker compose up -d   # Postgres + Redis — required before alembic and before running tests
 alembic upgrade head   # applies the schema — required before first run
 uvicorn app.main:app --reload
 
@@ -391,7 +392,9 @@ cp .env.local.example .env.local
 npm run dev
 ```
 
-SQLite is the local default — zero setup, same models as production.
+Postgres (via Docker Compose, `pgvector/pgvector:pg16`) is the local
+default — same dialect and models as production, started with
+`docker compose up -d`.
 
 ---
 
@@ -449,7 +452,8 @@ separate login system. Single-user setup:
 ## 15. Suggested build order for Claude Code
 
 1. `backend/`: scaffold the FastAPI app, models, and Alembic setup (§4, §5);
-   get `/health` and portfolio CRUD running against local SQLite.
+   get `/health` and portfolio CRUD running against local Postgres (Docker
+   Compose).
 2. Wire the LangGraph analysis graph + `/analysis/run`, verify against a
    couple of real tickers with a real `ANTHROPIC_API_KEY`.
 3. `frontend/`: dashboard reading from a local backend.

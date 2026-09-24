@@ -16,9 +16,15 @@ ARCHITECTURE.md §3. Package manager **uv** (not pip/poetry) · linter/formatter
 ```bash
 uv sync                    # creates .venv, installs everything
 cp .env.example .env       # add ANTHROPIC_API_KEY
+docker compose up -d       # Postgres + Redis — hard prerequisite for the next line
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
+
+If `.env` already existed from before this branch, its `DATABASE_URL` won't
+auto-update — copy the new Postgres connection string from `.env.example`
+by hand, or `alembic upgrade head` fails confusingly (silently resolves the
+SQLite dialect against a stale URL).
 
 | Task           | Command                                                                        |
 | -------------- | ------------------------------------------------------------------------------ |
@@ -90,4 +96,7 @@ human Python reviewer here, so these three commands are the review.
   `recommend.py` — pure functions, no mocking, highest-value tests here
 - Mock the Anthropic client and `yfinance` in any test touching `agents/`
   or `market_data.py` — never call real external APIs in tests
-- SQLite in-memory for anything touching the database
+- Postgres for anything touching the database — the `engine`/`db_session`
+  fixtures in `backend/tests/conftest.py`, backed by a real
+  `trading_agent_test` database. Docker Postgres (`docker compose up -d`)
+  must be running for these to work; no in-memory/SQLite fallback exists
