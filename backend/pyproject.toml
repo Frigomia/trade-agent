@@ -49,5 +49,5 @@ strict = true
 files = ["app"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "mcp.*"]
+module = ["yfinance.*", "mcp.*", "voyageai", "voyageai.*"]
 ignore_missing_imports = true
