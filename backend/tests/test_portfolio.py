@@ -71,6 +71,33 @@ def test_delete_missing_holding_returns_404(client):
     assert response.status_code == 404
 
 
+def test_create_holding_rejects_ticker_with_path_metacharacters(client):
+    payload = {
+        "ticker": "VWCE/../etc",
+        "name": "Vanguard FTSE All-World",
+        "asset_type": "ETF",
+        "shares": 10,
+        "cost_basis": 95.5,
+        "first_purchase_date": "2024-01-15",
+    }
+    response = client.post("/portfolio/holdings", json=payload)
+    assert response.status_code == 422
+
+
+def test_create_holding_uppercases_ticker(client):
+    payload = {
+        "ticker": "vwce",
+        "name": "Vanguard FTSE All-World",
+        "asset_type": "ETF",
+        "shares": 10,
+        "cost_basis": 95.5,
+        "first_purchase_date": "2024-01-15",
+    }
+    response = client.post("/portfolio/holdings", json=payload)
+    assert response.status_code == 200
+    assert response.json()["ticker"] == "VWCE"
+
+
 def test_list_watchlist_empty(client):
     response = client.get("/portfolio/watchlist")
     assert response.status_code == 200
@@ -89,6 +116,12 @@ def test_create_and_upsert_watchlist_item(client):
 
     response = client.get("/portfolio/watchlist")
     assert len(response.json()) == 1
+
+
+def test_create_watchlist_item_rejects_ticker_with_path_metacharacters(client):
+    payload = {"ticker": "NVDA/../etc", "asset_type": "STOCK", "note": "watching earnings"}
+    response = client.post("/portfolio/watchlist", json=payload)
+    assert response.status_code == 422
 
 
 def test_log_trade_buy_updates_holding_cost_basis(client):
