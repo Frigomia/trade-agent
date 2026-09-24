@@ -146,7 +146,14 @@ Recommendation
       ("BUY"|"ADD"|"HOLD"|"TRIM"|"SELL"|"WATCH"),
   reasoning (JSON-encoded list[str]), ai_analysis (nullable text),
   suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"),
-  reviewed_at
+  reviewed_at,
+  price_at_recommendation (Numeric(18,6), nullable -- quote price captured
+      when the job created this row),
+  outcome_forward_return_pct (Numeric(8,4), nullable -- set once a
+      lookback-window price fetch evaluates the outcome),
+  outcome_evaluated_at (nullable -- when the outcome was last evaluated),
+  embedding (pgvector Vector(1024), nullable -- Voyage embedding of the
+      recommendation's situation text, for similarity recall)
 
 ChatMessage
   id, user_id, created_at, session_id, role ("user"|"assistant"), content
@@ -209,6 +216,9 @@ than something your application code has to remember to check everywhere.
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | List persisted `BacktestResult` rows; filter by ticker |
+| POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar` |
+| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct` |
+| POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search |
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
@@ -478,10 +488,12 @@ produces):
 2. **Prebuilt agent harness** — evaluate swapping the hand-rolled LangGraph
    pipeline (§6) for a prebuilt harness (e.g. deep agents), once backtesting
    gives a baseline to compare against.
-3. **Long-term memory** — store past recommendations + outcomes (backtest
-   results, later approve/reject) as embeddings for similarity recall.
-   `pgvector` on the existing Supabase Postgres — no separate vector DB
-   service.
+3. **Long-term memory** — store past recommendations + outcomes as
+   embeddings for similarity recall. Outcomes come from a real historical
+   price fetch ~20 days after each live recommendation, not from backtest
+   results. `pgvector` on the existing Supabase Postgres — no separate
+   vector DB service. Spec:
+   `docs/superpowers/specs/2026-09-24-long-term-memory-design.md`.
 4. **Richer context assembly** — one `build_context(ticker)` that pulls
    live data + long-term memory (step 3) + investment preferences/strategy
    rules + session memory into what the agent reasons over. Deliberately
