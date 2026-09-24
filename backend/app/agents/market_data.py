@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date
 from typing import Any
 
 import yfinance as yf
@@ -8,6 +9,7 @@ from app.redis_client import get_redis
 
 QUOTE_CACHE_TTL = 300
 FUNDAMENTALS_CACHE_TTL = 900
+HISTORY_CACHE_TTL = 86400
 
 
 async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
@@ -50,4 +52,23 @@ async def fetch_fundamentals(ticker: str) -> dict[str, Any]:
 
     result = await asyncio.to_thread(_fetch)
     await redis.set(cache_key, json.dumps(result), ex=FUNDAMENTALS_CACHE_TTL)
+    return result
+
+
+async def fetch_price_history(ticker: str, start: date, end: date) -> list[float]:
+    redis = get_redis()
+    cache_key = f"history:{ticker}:{start.isoformat()}:{end.isoformat()}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        return json.loads(cached)  # type: ignore[no-any-return]
+
+    def _fetch() -> list[float]:
+        history = yf.Ticker(ticker).history(start=start, end=end)
+        closes: list[float] = history["Close"].tolist()
+        return closes
+
+    result = await asyncio.to_thread(_fetch)
+    if not result:
+        return result
+    await redis.set(cache_key, json.dumps(result), ex=HISTORY_CACHE_TTL)
     return result

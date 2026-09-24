@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -8,24 +7,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.agents.jobs import create_job, get_job_status, run_job
+from app.background import make_task_tracker
 from app.config import settings
 from app.db import get_db
 from app.models import Holding, Recommendation, WatchlistItem
 from app.schemas import RecommendationOut
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _log_background_task_exception(task: asyncio.Task[None]) -> None:
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.exception("Background analysis job failed", exc_info=exc)
+_track_background_task = make_task_tracker("analysis")
 
 
 class AnalysisRunIn(BaseModel):
@@ -67,9 +57,7 @@ async def run_analysis(payload: AnalysisRunIn, db: Session = Depends(get_db)) ->
 
     job_id = await create_job(ticker_infos)
     task = asyncio.create_task(run_job(job_id, ticker_infos))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    task.add_done_callback(_log_background_task_exception)
+    _track_background_task(task)
     return {"job_id": job_id}
 
 

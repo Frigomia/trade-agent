@@ -81,7 +81,7 @@ flowchart TB
     end
 
     subgraph Data
-        PG[(Postgres<br/>holdings, trades,<br/>recommendations, chat)]
+        PG[(Postgres<br/>holdings, trades,<br/>recommendations, chat,<br/>backtest_results)]
         REDIS[(Redis<br/>cache + job queue)]
     end
 
@@ -150,6 +150,13 @@ Recommendation
 
 ChatMessage
   id, user_id, created_at, session_id, role ("user"|"assistant"), content
+
+BacktestResult
+  id, user_id, created_at, ticker, start_date, end_date,
+  final_value, buy_and_hold_value (Numeric(18,2)),
+  excess_return_pct (Numeric(8,4)),
+  hit_rate_by_signal (JSON: {signal: {count, avg_forward_return_pct, hit_rate}}),
+  status ("DONE" -- only successful runs persist a row)
 ```
 
 ### Migrations — Alembic
@@ -199,6 +206,9 @@ than something your application code has to remember to check everywhere.
 | GET | `/analysis/recommendations?status=` | — | Filter by status |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
 | POST | `/analysis/recommendations/{id}/reject` | — | |
+| POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |
+| GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
+| GET | `/backtest/results?ticker=` | — | List persisted `BacktestResult` rows; filter by ticker |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search |
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing

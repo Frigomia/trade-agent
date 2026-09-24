@@ -71,3 +71,19 @@ class ChatMessage(Base):
     session_id: Mapped[str] = mapped_column(String(100), index=True)
     role: Mapped[str] = mapped_column(String(10))  # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text)
+
+
+class BacktestResult(Base):
+    __tablename__ = "backtest_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    ticker: Mapped[str] = mapped_column(String(20))
+    start_date: Mapped[date] = mapped_column(Date)
+    end_date: Mapped[date] = mapped_column(Date)
+    final_value: Mapped[float] = mapped_column(Numeric(18, 2))
+    buy_and_hold_value: Mapped[float] = mapped_column(Numeric(18, 2))
+    excess_return_pct: Mapped[float] = mapped_column(Numeric(8, 4))
+    hit_rate_by_signal: Mapped[dict[str, dict[str, float]]] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(10))  # "DONE" -- only successful runs persist a row
