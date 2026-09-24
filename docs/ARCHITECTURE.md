@@ -81,7 +81,7 @@ flowchart TB
     end
 
     subgraph Data
-        PG[(Postgres<br/>holdings, trades,<br/>recommendations, chat)]
+        PG[(Postgres<br/>holdings, trades,<br/>recommendations, chat,<br/>backtest_results)]
         REDIS[(Redis<br/>cache + job queue)]
     end
 
@@ -150,6 +150,13 @@ Recommendation
 
 ChatMessage
   id, user_id, created_at, session_id, role ("user"|"assistant"), content
+
+BacktestResult
+  id, user_id, created_at, ticker, start_date, end_date,
+  final_value, buy_and_hold_value (Numeric(18,2)),
+  excess_return_pct (Numeric(8,4)),
+  hit_rate_by_signal (JSON: {signal: {count, avg_forward_return_pct, hit_rate}}),
+  status ("DONE" -- only successful runs persist a row)
 ```
 
 ### Migrations — Alembic
