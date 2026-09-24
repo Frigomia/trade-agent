@@ -64,3 +64,19 @@ class RecommendationOut(BaseModel):
     suggested_position_pct: float | None
     status: str
     reviewed_at: datetime | None
+
+
+class BacktestResultOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID
+    created_at: datetime
+    ticker: str
+    start_date: date
+    end_date: date
+    final_value: float
+    buy_and_hold_value: float
+    excess_return_pct: float
+    hit_rate_by_signal: dict[str, dict[str, float]]
+    status: str

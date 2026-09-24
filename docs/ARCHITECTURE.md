@@ -199,6 +199,9 @@ than something your application code has to remember to check everywhere.
 | GET | `/analysis/recommendations?status=` | — | Filter by status |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
 | POST | `/analysis/recommendations/{id}/reject` | — | |
+| POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |
+| GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
+| GET | `/backtest/results?ticker=` | — | List persisted `BacktestResult` rows; filter by ticker |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search |
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
