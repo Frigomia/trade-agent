@@ -57,6 +57,7 @@ def simulate(closes: list[float]) -> BacktestMetrics:
         signal: {
             "count": float(len(returns)),
             "avg_forward_return_pct": sum(returns) / len(returns),
+            "hit_rate": sum(1 for r in returns if r > 0) / len(returns),
         }
         for signal, returns in forward_returns_by_signal.items()
     }

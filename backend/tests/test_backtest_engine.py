@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 
 from app.backtest.engine import simulate
@@ -19,6 +21,7 @@ def test_simulate_buys_the_dip_and_beats_buy_and_hold():
     assert metrics.hit_rate_by_signal["OVERSOLD"]["avg_forward_return_pct"] == pytest.approx(
         0.023849938336244644
     )
+    assert 0.0 <= metrics.hit_rate_by_signal["OVERSOLD"]["hit_rate"] <= 1.0
 
 
 def test_simulate_trims_on_weak_downtrend_after_holding():
@@ -50,6 +53,7 @@ def test_simulate_trims_on_weak_downtrend_after_holding():
     assert metrics.buy_and_hold_value == pytest.approx(8046.511627906936)
     assert metrics.excess_return_pct == pytest.approx(0.04122076829501117)
     assert metrics.hit_rate_by_signal.keys() == {"OVERSOLD"}
+    assert 0.0 <= metrics.hit_rate_by_signal["OVERSOLD"]["hit_rate"] <= 1.0
 
 
 def test_simulate_flat_series_has_no_signals_or_trades():
@@ -61,3 +65,14 @@ def test_simulate_flat_series_has_no_signals_or_trades():
     assert metrics.buy_and_hold_value == pytest.approx(10000.0)
     assert metrics.excess_return_pct == pytest.approx(0.0)
     assert metrics.hit_rate_by_signal == {}
+
+
+def test_simulate_never_sees_future_prices():
+    closes = [150.0] * 220
+    seen = []
+    with patch(
+        "app.backtest.engine.technical.score_technical",
+        side_effect=lambda w: seen.append(list(w)) or "NEUTRAL",
+    ):
+        simulate(closes)
+    assert seen == [closes[: i + 1] for i in range(len(closes))]
