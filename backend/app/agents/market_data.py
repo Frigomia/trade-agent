@@ -68,5 +68,7 @@ async def fetch_price_history(ticker: str, start: date, end: date) -> list[float
         return closes
 
     result = await asyncio.to_thread(_fetch)
+    if not result:
+        return result
     await redis.set(cache_key, json.dumps(result), ex=HISTORY_CACHE_TTL)
     return result
