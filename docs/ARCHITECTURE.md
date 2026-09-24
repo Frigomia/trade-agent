@@ -451,6 +451,30 @@ separate login system. Single-user setup:
 7. Chat agent upgrade (§8) and Claude Skill (§10) as later iterations, not
    blocking the core loop.
 
+### 15.1 Post-MVP: evolving the analysis agent
+
+Four ideas brainstormed for after the core loop above ships, each its own
+spec/plan cycle, in this order (each depends on data the previous one
+produces):
+
+1. **Backtesting** — replay `analysis/technical.py` + `analysis/recommend.py`
+   against historical prices, measure buy-and-hold excess return and signal
+   hit-rate, before investing further in the agent. Spec:
+   `docs/superpowers/specs/2026-09-24-backtesting-design.md`.
+2. **Prebuilt agent harness** — evaluate swapping the hand-rolled LangGraph
+   pipeline (§6) for a prebuilt harness (e.g. deep agents), once backtesting
+   gives a baseline to compare against.
+3. **Long-term memory** — store past recommendations + outcomes (backtest
+   results, later approve/reject) as embeddings for similarity recall.
+   `pgvector` on the existing Supabase Postgres — no separate vector DB
+   service.
+4. **Richer context assembly** — one `build_context(ticker)` that pulls
+   live data + long-term memory (step 3) + investment preferences/strategy
+   rules + session memory into what the agent reasons over. Deliberately
+   last: it's mostly wiring once memory (step 3) exists to draw from, and
+   the one open design question (how investment preferences are captured)
+   is worth its own brainstorm rather than guessing ahead of time.
+
 ---
 
 ## 16. Pre-launch checklist
