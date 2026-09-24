@@ -6,7 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = "sqlite:///./trading_agent.db"
+    database_url: str = (
+        "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent"
+    )
     redis_url: str = "redis://localhost:6379/0"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
