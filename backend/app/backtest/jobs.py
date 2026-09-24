@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import date
@@ -39,7 +40,7 @@ async def run_job(job_id: str, ticker: str, start: date, end: date) -> None:
     redis = get_redis()
     try:
         closes = await fetch_price_history(ticker, start, end)
-        metrics = simulate(closes)
+        metrics = await asyncio.to_thread(simulate, closes)
 
         db = SessionLocal()
         try:

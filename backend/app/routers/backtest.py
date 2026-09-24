@@ -1,9 +1,9 @@
 import asyncio
-from datetime import date
-from typing import Any
+from datetime import date, timedelta
+from typing import Any, Self
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.background import make_task_tracker
@@ -11,17 +11,27 @@ from app.backtest.jobs import create_job, get_job_status, run_job
 from app.config import settings
 from app.db import get_db
 from app.models import BacktestResult
-from app.schemas import BacktestResultOut
+from app.schemas import BacktestResultOut, Ticker
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
 _track_background_task = make_task_tracker("backtest")
 
+MAX_BACKTEST_RANGE = timedelta(days=365 * 30)
+
 
 class BacktestRunIn(BaseModel):
-    ticker: str
+    ticker: Ticker
     start_date: date
     end_date: date
+
+    @model_validator(mode="after")
+    def _validate_date_range(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must not be after end_date")
+        if self.end_date - self.start_date > MAX_BACKTEST_RANGE:
+            raise ValueError(f"date range must not exceed {MAX_BACKTEST_RANGE.days} days")
+        return self
 
 
 @router.post("/run", status_code=202)

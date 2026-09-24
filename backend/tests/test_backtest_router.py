@@ -28,6 +28,45 @@ def test_run_backtest_returns_job_id(client):
     assert response.json() == {"job_id": "job-123"}
 
 
+def test_run_backtest_rejects_reversed_date_range(client):
+    response = client.post(
+        "/backtest/run",
+        json={"ticker": "AAPL", "start_date": "2024-01-01", "end_date": "2020-01-01"},
+    )
+    assert response.status_code == 422
+
+
+def test_run_backtest_rejects_range_over_30_years(client):
+    response = client.post(
+        "/backtest/run",
+        json={"ticker": "AAPL", "start_date": "1990-01-01", "end_date": "2024-01-01"},
+    )
+    assert response.status_code == 422
+
+
+def test_run_backtest_rejects_ticker_with_path_metacharacters(client):
+    response = client.post(
+        "/backtest/run",
+        json={"ticker": "AAPL/../etc", "start_date": "2020-01-01", "end_date": "2024-01-01"},
+    )
+    assert response.status_code == 422
+
+
+def test_run_backtest_uppercases_ticker(client):
+    with (
+        patch("app.routers.backtest.create_job", AsyncMock(return_value="job-123")) as mock_create,
+        patch("app.routers.backtest.run_job", AsyncMock()),
+        patch("app.routers.backtest.asyncio.create_task", side_effect=_close_coro),
+    ):
+        response = client.post(
+            "/backtest/run",
+            json={"ticker": "aapl", "start_date": "2020-01-01", "end_date": "2024-01-01"},
+        )
+
+    assert response.status_code == 202
+    mock_create.assert_called_once_with("AAPL", date(2020, 1, 1), date(2024, 1, 1))
+
+
 def test_get_backtest_run_status_returns_404_for_unknown_job(client):
     with patch("app.routers.backtest.get_job_status", AsyncMock(return_value=None)):
         response = client.get("/backtest/run/unknown-job")
