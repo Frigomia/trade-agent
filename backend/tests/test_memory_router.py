@@ -52,6 +52,72 @@ def test_evaluate_outcomes_evaluates_due_rows(client, db_session, monkeypatch):
     assert response.json() == {"evaluated": 1, "remaining": 0}
 
 
+def test_embed_recommendations_skips_failed_row_and_continues(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "voyage_api_key", "test-key")
+    rec1 = Recommendation(
+        user_id=settings.default_user_id,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.1"],
+    )
+    rec2 = Recommendation(
+        user_id=settings.default_user_id,
+        ticker="MSFT",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.2"],
+    )
+    db_session.add_all([rec1, rec2])
+    db_session.commit()
+
+    with patch(
+        "app.routers.memory.embed_text",
+        AsyncMock(side_effect=[RuntimeError("boom"), [0.1] * 1024]),
+    ):
+        response = client.post("/memory/embed")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["embedded"] == 1
+    assert body["remaining"] == 1
+
+
+def test_evaluate_outcomes_skips_failed_row_and_continues(client, db_session, monkeypatch):
+    old_date = datetime.now(UTC) - timedelta(days=21)
+    rec1 = Recommendation(
+        user_id=settings.default_user_id,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.1"],
+        price_at_recommendation=150.0,
+        created_at=old_date,
+    )
+    rec2 = Recommendation(
+        user_id=settings.default_user_id,
+        ticker="MSFT",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.2"],
+        price_at_recommendation=250.0,
+        created_at=old_date,
+    )
+    db_session.add_all([rec1, rec2])
+    db_session.commit()
+
+    with patch(
+        "app.routers.memory.compute_outcome",
+        AsyncMock(side_effect=[RuntimeError("boom"), 0.05]),
+    ):
+        response = client.post("/memory/evaluate-outcomes")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["evaluated"] == 1
+    assert body["remaining"] == 1
+
+
 def test_similar_recommendations_without_api_key_returns_503(client, monkeypatch):
     monkeypatch.setattr(settings, "voyage_api_key", None)
     response = client.post("/memory/similar", json={"query": "AAPL oversold"})
