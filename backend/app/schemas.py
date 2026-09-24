@@ -100,4 +100,6 @@ class MemorySimilarOut(BaseModel):
     asset_type: str
     action: str
     reasoning: list[str]
+    created_at: datetime
     outcome_forward_return_pct: float | None
+    outcome_evaluated_at: datetime | None
