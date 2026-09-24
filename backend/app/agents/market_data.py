@@ -60,7 +60,7 @@ async def fetch_price_history(ticker: str, start: date, end: date) -> list[float
     cache_key = f"history:{ticker}:{start.isoformat()}:{end.isoformat()}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        return list(json.loads(cached))
+        return json.loads(cached)  # type: ignore[no-any-return]
 
     def _fetch() -> list[float]:
         history = yf.Ticker(ticker).history(start=start, end=end)

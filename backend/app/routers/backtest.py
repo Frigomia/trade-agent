@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from datetime import date
 from typing import Any
 
@@ -7,25 +6,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.background import make_task_tracker
 from app.backtest.jobs import create_job, get_job_status, run_job
 from app.config import settings
 from app.db import get_db
 from app.models import BacktestResult
 from app.schemas import BacktestResultOut
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
-_background_tasks: set[asyncio.Task[None]] = set()
-
-
-def _log_background_task_exception(task: asyncio.Task[None]) -> None:
-    if task.cancelled():
-        return
-    exc = task.exception()
-    if exc is not None:
-        logger.exception("Background backtest job failed", exc_info=exc)
+_track_background_task = make_task_tracker("backtest")
 
 
 class BacktestRunIn(BaseModel):
@@ -40,9 +30,7 @@ async def run_backtest(payload: BacktestRunIn) -> dict[str, str]:
     task = asyncio.create_task(
         run_job(job_id, payload.ticker, payload.start_date, payload.end_date)
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-    task.add_done_callback(_log_background_task_exception)
+    _track_background_task(task)
     return {"job_id": job_id}
 
 
