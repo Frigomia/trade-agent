@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./trading_agent.db"
+    redis_url: str = "redis://localhost:6379/0"
+    anthropic_api_key: str | None = None
+    anthropic_model: str = "claude-sonnet-5"
     default_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
 
     max_single_position_pct: float = 0.15
