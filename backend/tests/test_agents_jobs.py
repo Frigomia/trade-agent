@@ -58,7 +58,6 @@ def test_job_lifecycle_completes_and_records_results(session_local):
         try:
             records = saved_session.query(Recommendation).filter_by(ticker="AAPL").all()
             assert len(records) > 0, "No AAPL recommendation found"
-            # Use the most recent record (by id, which is auto-incrementing)
             saved = records[-1]
             assert float(saved.price_at_recommendation) == 150.0
         finally:
