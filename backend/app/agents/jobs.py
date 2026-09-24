@@ -64,6 +64,7 @@ async def _process_ticker(
                         reasoning=state["reasoning"],
                         ai_analysis=state["ai_analysis"],
                         suggested_position_pct=state["suggested_position_pct"],
+                        price_at_recommendation=state["quote"]["price"],
                     )
                     db.add(rec)
                     db.commit()

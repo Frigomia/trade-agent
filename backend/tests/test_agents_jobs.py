@@ -2,18 +2,21 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 from app.agents.jobs import create_job, get_job_status, run_job
+from app.models import Recommendation
 
 FAKE_STATE_BUY = {
     "action": "BUY",
     "reasoning": ["test"],
     "ai_analysis": None,
     "suggested_position_pct": 0.15,
+    "quote": {"price": 150.0, "closes": [150.0]},
 }
 FAKE_STATE_SKIP = {
     "action": None,
     "reasoning": [],
     "ai_analysis": None,
     "suggested_position_pct": None,
+    "quote": {"price": None, "closes": []},
 }
 
 
@@ -50,6 +53,16 @@ def test_job_lifecycle_completes_and_records_results(session_local):
         recorded = [r for r in final["results"] if "recommendation_id" in r]
         assert len(recorded) == 1
         assert recorded[0]["ticker"] == "AAPL"
+
+        saved_session = session_local()
+        try:
+            records = saved_session.query(Recommendation).filter_by(ticker="AAPL").all()
+            assert len(records) > 0, "No AAPL recommendation found"
+            # Use the most recent record (by id, which is auto-incrementing)
+            saved = records[-1]
+            assert float(saved.price_at_recommendation) == 150.0
+        finally:
+            saved_session.close()
 
     asyncio.run(_run())
 
