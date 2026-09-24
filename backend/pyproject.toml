@@ -18,6 +18,7 @@ dependencies = [
     "redis",
     "psycopg[binary]",
     "pgvector",
+    "voyageai",
 ]
 
 [dependency-groups]
