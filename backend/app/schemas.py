@@ -90,3 +90,14 @@ class BacktestResultOut(BaseModel):
     excess_return_pct: float
     hit_rate_by_signal: dict[str, dict[str, float]]
     status: str
+
+
+class MemorySimilarOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ticker: str
+    asset_type: str
+    action: str
+    reasoning: list[str]
+    outcome_forward_return_pct: float | None
