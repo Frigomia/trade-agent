@@ -68,11 +68,15 @@ def test_simulate_flat_series_has_no_signals_or_trades():
 
 
 def test_simulate_never_sees_future_prices():
-    closes = [150.0] * 220
+    # 300 days > LIVE_LOOKBACK_DAYS (252), so this also exercises the window
+    # cap: once the window would exceed 252 elements, its start slides
+    # forward instead of growing further -- never future prices, and never
+    # more trailing history than the live path (period="1y") sees either.
+    closes = [150.0] * 300
     seen = []
     with patch(
         "app.backtest.engine.technical.score_technical",
         side_effect=lambda w: seen.append(list(w)) or "NEUTRAL",
     ):
         simulate(closes)
-    assert seen == [closes[: i + 1] for i in range(len(closes))]
+    assert seen == [closes[max(0, i + 1 - 252) : i + 1] for i in range(len(closes))]

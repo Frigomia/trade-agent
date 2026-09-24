@@ -4,6 +4,12 @@ from app.analysis import recommend, technical
 
 STARTING_CAPITAL = 10_000.0
 HIT_RATE_LOOKAHEAD_DAYS = 20
+# Matches agents/market_data.fetch_quote_and_history's period="1y" lookback,
+# so the backtest's drawdown/SMA calculations see the same window shape the
+# live path does -- an unbounded expanding window makes `max(closes)` an
+# all-time high instead of a trailing one, silently testing a different
+# strategy than what runs in production.
+LIVE_LOOKBACK_DAYS = 252
 
 
 @dataclass
@@ -21,7 +27,7 @@ def simulate(closes: list[float]) -> BacktestMetrics:
     forward_returns_by_signal: dict[str, list[float]] = {}
 
     for i in range(len(closes)):
-        window = closes[: i + 1]
+        window = closes[max(0, i + 1 - LIVE_LOOKBACK_DAYS) : i + 1]
         signal = technical.score_technical(window)
         action, suggested_position_pct, _ = recommend.synthesize(
             asset_type="ETF",
