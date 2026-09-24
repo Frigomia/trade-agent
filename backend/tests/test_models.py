@@ -75,3 +75,24 @@ def test_chat_message_roundtrip(db_session):
 
     fetched = db_session.query(ChatMessage).filter_by(session_id="sess-1").one()
     assert fetched.role == "user"
+
+
+def test_recommendation_memory_fields_roundtrip(db_session):
+    embedding = [0.1] * 1024
+    rec = Recommendation(
+        user_id=uuid.uuid4(),
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.1"],
+        price_at_recommendation=150.25,
+        embedding=embedding,
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    fetched = db_session.query(Recommendation).filter_by(ticker="AAPL").one()
+    assert float(fetched.price_at_recommendation) == 150.25
+    assert fetched.outcome_forward_return_pct is None
+    assert fetched.outcome_evaluated_at is None
+    assert fetched.embedding == embedding
