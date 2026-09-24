@@ -3,3 +3,16 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: trading_agent
+      POSTGRES_USER: trading_agent
+      POSTGRES_PASSWORD: trading_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

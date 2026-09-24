@@ -16,6 +16,8 @@ dependencies = [
     "mcp",
     "yfinance",
     "redis",
+    "psycopg[binary]",
+    "pgvector",
 ]
 
 [dependency-groups]
