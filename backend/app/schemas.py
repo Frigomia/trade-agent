@@ -1,11 +1,21 @@
 from datetime import date, datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveFloat
+from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveFloat, StringConstraints
+
+# Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A".
+# Excludes path metacharacters (/, ?, #, ..) that yfinance interpolates
+# unescaped into its request URL. Pattern is case-insensitive because
+# pydantic-core checks the pattern before applying to_upper.
+Ticker = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, to_upper=True, pattern=r"^[A-Za-z0-9.\-^]{1,20}$"),
+]
 
 
 class HoldingIn(BaseModel):
-    ticker: str
+    ticker: Ticker
     name: str
     asset_type: str
     shares: NonNegativeFloat
@@ -23,7 +33,7 @@ class HoldingOut(HoldingIn):
 
 
 class WatchlistItemIn(BaseModel):
-    ticker: str
+    ticker: Ticker
     asset_type: str
     note: str | None = None
 
