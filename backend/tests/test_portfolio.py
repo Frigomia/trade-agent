@@ -1,7 +1,11 @@
 import uuid
 from datetime import date
+from unittest.mock import AsyncMock, patch
 
-from app.models import Holding
+import pytest
+
+from app.config import settings
+from app.models import Holding, PortfolioSnapshot
 
 
 def test_list_holdings_empty(client):
@@ -218,6 +222,108 @@ def test_log_trade_sell_more_than_held_returns_422(client):
 
     holdings = client.get("/portfolio/holdings").json()
     assert holdings[0]["shares"] == 10
+
+
+def _add_holding(client, ticker="AAPL", name="Apple Inc."):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": ticker,
+            "name": name,
+            "asset_type": "STOCK",
+            "shares": 10,
+            "cost_basis": 150.0,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+
+def test_snapshot_empty_portfolio_has_zero_totals(client):
+    response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_market_value"] == 0
+    assert body["total_cost_basis"] == 0
+
+
+def test_snapshot_computes_totals_from_holdings(client):
+    _add_holding(client)
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 200.0, "closes": [200.0]}),
+    ):
+        response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_market_value"] == 2000.0  # 10 shares * $200
+    assert body["total_cost_basis"] == 1500.0  # 10 shares * $150 cost basis
+
+
+def test_snapshot_fails_when_price_fetch_raises(client):
+    _add_holding(client)
+
+    with (
+        patch(
+            "app.routers.portfolio.fetch_quote_and_history",
+            AsyncMock(side_effect=RuntimeError("yfinance unavailable")),
+        ),
+        pytest.raises(RuntimeError, match="yfinance unavailable"),
+    ):
+        client.post("/portfolio/snapshot")
+
+    assert client.get("/portfolio/snapshots").json() == []
+
+
+def test_snapshot_fails_when_price_is_none(client):
+    _add_holding(client, ticker="DELISTED", name="Delisted Co")
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history",
+        AsyncMock(return_value={"price": None, "closes": []}),
+    ):
+        response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 500
+    assert client.get("/portfolio/snapshots").json() == []
+
+
+def test_snapshot_fails_when_price_is_nan(client):
+    _add_holding(client, ticker="DELISTED", name="Delisted Co")
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history",
+        AsyncMock(return_value={"price": float("nan"), "closes": []}),
+    ):
+        response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 500
+    assert client.get("/portfolio/snapshots").json() == []
+
+
+def test_list_snapshots_ordered_oldest_first(client, db_session):
+    db_session.add(
+        PortfolioSnapshot(
+            user_id=settings.default_user_id, total_market_value=100, total_cost_basis=90
+        )
+    )
+    db_session.commit()
+    db_session.add(
+        PortfolioSnapshot(
+            user_id=settings.default_user_id, total_market_value=200, total_cost_basis=90
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/portfolio/snapshots")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert float(body[0]["total_market_value"]) == 100
+    assert float(body[1]["total_market_value"]) == 200
 
 
 def test_holdings_scoped_to_user_id(client, db_session):

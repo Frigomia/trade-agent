@@ -169,6 +169,10 @@ InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
   sector_avoid_list (JSON list[str], not null, default []),
   notes (nullable), updated_at
+
+PortfolioSnapshot
+  id, user_id, created_at, total_market_value (Numeric(18,2)),
+  total_cost_basis (Numeric(18,2)) -- point-in-time portfolio totals, for value history charts
 ```
 
 ### Migrations — Alembic
@@ -213,6 +217,8 @@ than something your application code has to remember to check everywhere.
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker |
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
+| POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking. Returns created `PortfolioSnapshot` |
+| GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per client IP |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status |
@@ -547,8 +553,10 @@ just believed done.
       separate concern from LangSmith's agent-reasoning traces (§6)
 
 **Product**
-- [ ] Portfolio value history — no snapshot table exists, so no "how am I
-      doing over time" chart is possible yet
+- [x] Portfolio value history — `PortfolioSnapshot` table captures portfolio
+      totals (market value, cost basis) at point in time; snapshots persisted
+      via `POST /portfolio/snapshot`, listed via `GET /portfolio/snapshots`.
+      Capture-only for now; no chart/UI rendering yet
 - [ ] Trade history view in the UI (the `Trade` table exists; nothing
       lists it)
 - [ ] Decide: does "Approve" on a recommendation capture actual execution

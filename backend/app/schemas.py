@@ -137,3 +137,12 @@ class PreferencesIn(BaseModel):
 
 class PreferencesOut(PreferencesIn):
     model_config = ConfigDict(from_attributes=True)
+
+
+class PortfolioSnapshotOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    total_market_value: float
+    total_cost_basis: float
