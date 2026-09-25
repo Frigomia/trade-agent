@@ -11,11 +11,7 @@ router = APIRouter(tags=["preferences"])
 
 @router.get("/preferences", response_model=PreferencesOut)
 def get_preferences(db: Session = Depends(get_db)) -> PreferencesOut | InvestmentPreferences:
-    pref = (
-        db.query(InvestmentPreferences)
-        .filter_by(user_id=settings.default_user_id)
-        .one_or_none()
-    )
+    pref = db.query(InvestmentPreferences).filter_by(user_id=settings.default_user_id).one_or_none()
     if pref is None:
         return PreferencesOut()
     return pref
@@ -25,11 +21,7 @@ def get_preferences(db: Session = Depends(get_db)) -> PreferencesOut | Investmen
 def upsert_preferences(
     payload: PreferencesIn, db: Session = Depends(get_db)
 ) -> InvestmentPreferences:
-    pref = (
-        db.query(InvestmentPreferences)
-        .filter_by(user_id=settings.default_user_id)
-        .one_or_none()
-    )
+    pref = db.query(InvestmentPreferences).filter_by(user_id=settings.default_user_id).one_or_none()
     if pref is None:
         pref = InvestmentPreferences(user_id=settings.default_user_id, **payload.model_dump())
         db.add(pref)

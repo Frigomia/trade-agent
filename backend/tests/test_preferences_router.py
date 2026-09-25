@@ -37,11 +37,7 @@ def test_post_preferences_creates_row(client, db_session):
     assert body["sector_avoid_list"] == ["tobacco", "gambling"]
     assert body["notes"] == "Prefer dividend growth stocks."
 
-    rows = (
-        db_session.query(InvestmentPreferences)
-        .filter_by(user_id=settings.default_user_id)
-        .all()
-    )
+    rows = db_session.query(InvestmentPreferences).filter_by(user_id=settings.default_user_id).all()
     assert len(rows) == 1
 
 
@@ -49,11 +45,7 @@ def test_post_preferences_twice_updates_same_row(client, db_session):
     client.post("/preferences", json={"risk_tolerance": "conservative"})
     client.post("/preferences", json={"risk_tolerance": "aggressive"})
 
-    rows = (
-        db_session.query(InvestmentPreferences)
-        .filter_by(user_id=settings.default_user_id)
-        .all()
-    )
+    rows = db_session.query(InvestmentPreferences).filter_by(user_id=settings.default_user_id).all()
     assert len(rows) == 1
     assert rows[0].risk_tolerance == "aggressive"
 
