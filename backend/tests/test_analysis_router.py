@@ -84,3 +84,22 @@ def test_list_and_approve_recommendation(client, db_session):
 def test_approve_missing_recommendation_returns_404(client):
     response = client.post("/analysis/recommendations/999/approve")
     assert response.status_code == 404
+
+
+def test_run_analysis_rate_limited_after_5_calls_per_minute(client):
+    def _close_coro(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch("app.routers.analysis.create_job", AsyncMock(return_value="job-123")),
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
+    ):
+        for _ in range(5):
+            response = client.post("/analysis/run", json={})
+            assert response.status_code == 202
+
+        response = client.post("/analysis/run", json={})
+
+    assert response.status_code == 429

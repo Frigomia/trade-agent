@@ -213,7 +213,7 @@ than something your application code has to remember to check everywhere.
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker |
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
-| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below) |
+| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per client IP |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
@@ -226,7 +226,7 @@ than something your application code has to remember to check everywhere.
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
-| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search |
+| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per client IP |
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
@@ -574,9 +574,11 @@ just believed done.
       not applicable yet, no auth/JWT exists
 - [ ] RLS enabled and a policy created **in the same migration** per table
       — blocked on Supabase Auth, not started
-- [ ] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
-      cost real Anthropic API money per call, even for a single user;
-      confirmed absent (no rate-limiting library or middleware anywhere)
+- [x] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
+      cost real Anthropic API money per call, even for a single user.
+      `app/rate_limit.py`: a Redis-backed fixed-window counter per client
+      IP, applied via `dependencies=[Depends(rate_limiter(...))]`.
+      `/analysis/run`: 5/min, `/chat`: 20/min
 - [x] Exception text sanitized before it's persisted or returned — the
       original concern (`news_agent` interpolating raw `{exc}`) no longer
       applies; current code has no such interpolation anywhere in

@@ -11,6 +11,7 @@ from app.background import make_task_tracker
 from app.config import settings
 from app.db import get_db
 from app.models import Holding, Recommendation, WatchlistItem
+from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -22,7 +23,11 @@ class AnalysisRunIn(BaseModel):
     tickers: list[str] | None = None
 
 
-@router.post("/run", status_code=202)
+@router.post(
+    "/run",
+    status_code=202,
+    dependencies=[Depends(rate_limiter("analysis_run", limit=5))],
+)
 async def run_analysis(payload: AnalysisRunIn, db: Session = Depends(get_db)) -> dict[str, str]:
     holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=settings.default_user_id)}
     watchlist = {
