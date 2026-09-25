@@ -20,22 +20,20 @@ RETRY_BASE_DELAY_SECONDS = 1.0
 
 
 async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
-    last_exc: Exception | None = None
     for attempt in range(RETRY_ATTEMPTS):
         try:
             return await asyncio.to_thread(fetch)
-        except Exception as exc:
-            last_exc = exc
-            if attempt < RETRY_ATTEMPTS - 1:
-                logger.warning(
-                    "yfinance call failed (attempt %d/%d), retrying",
-                    attempt + 1,
-                    RETRY_ATTEMPTS,
-                    exc_info=True,
-                )
-                await asyncio.sleep(RETRY_BASE_DELAY_SECONDS * (2**attempt))
-    assert last_exc is not None
-    raise last_exc
+        except Exception:
+            if attempt == RETRY_ATTEMPTS - 1:
+                raise
+            logger.warning(
+                "yfinance call failed (attempt %d/%d), retrying",
+                attempt + 1,
+                RETRY_ATTEMPTS,
+                exc_info=True,
+            )
+            await asyncio.sleep(RETRY_BASE_DELAY_SECONDS * (2**attempt))
+    raise AssertionError("unreachable: loop always returns or raises")
 
 
 async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
