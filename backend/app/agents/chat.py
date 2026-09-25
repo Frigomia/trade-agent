@@ -82,14 +82,11 @@ async def run_chat(db: Session, session_id: str, message: str, history: list[Cha
     portfolio_context = await build_portfolio_context(db)
     system_prompt = CHAT_AGENT_SYSTEM_PROMPT.format(portfolio_context=portfolio_context)
 
-    messages: list[MessageParam] = [
-        cast(
-            MessageParam,
-            {"role": m.role, "content": m.content},
-        )
-        for m in history
-    ]
-    messages.append(cast(MessageParam, {"role": "user", "content": message}))
+    messages: list[MessageParam] = cast(
+        list[MessageParam],
+        [{"role": m.role, "content": m.content} for m in history]
+        + [{"role": "user", "content": message}],
+    )
 
     def _create() -> Message:
         return client.messages.create(
