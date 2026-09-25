@@ -289,7 +289,7 @@ which should just call that same endpoint) to log it and update cost basis.
 ## 8. Chat agent — phased design
 
 **Phase 1 (built):** a direct Claude API call with the
-`web_search_20250305` tool, seeded with a portfolio-context string.
+`web_search_20260209` tool, seeded with a portfolio-context string.
 Implementation: `backend/app/agents/chat.py` (context builder + prompt)
 and `backend/app/routers/chat.py` (POST `/chat` endpoint). No tool-calling,
 no ability to take actions — just a portfolio-aware Q&A agent.

@@ -103,4 +103,8 @@ async def run_chat(db: Session, session_id: str, message: str, history: list[Cha
     response = await asyncio.to_thread(_create)
 
     text_blocks = [block.text for block in response.content if block.type == "text"]
-    return "\n".join(text_blocks) if text_blocks else ""
+    if not text_blocks:
+        raise RuntimeError(
+            f"Claude response contained no text blocks (stop_reason={response.stop_reason!r})"
+        )
+    return "\n".join(text_blocks)

@@ -111,3 +111,20 @@ def test_run_chat_accepts_empty_history(monkeypatch, db_session):
     assert result == "Hi, how can I help?"
     messages = mock_client.messages.create.call_args.kwargs["messages"]
     assert messages == [{"role": "user", "content": "hello"}]
+
+
+def test_run_chat_raises_on_no_text_blocks(monkeypatch, db_session):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    chat_module._client = None
+
+    fake_response = MagicMock()
+    fake_response.content = []
+    fake_response.stop_reason = "pause_turn"
+
+    with patch("app.agents.chat.Anthropic") as mock_anthropic_cls:
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = fake_response
+        mock_anthropic_cls.return_value = mock_client
+
+        with pytest.raises(RuntimeError):
+            asyncio.run(run_chat(db_session, "session-1", "hello", history=[]))
