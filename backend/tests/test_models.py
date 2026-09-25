@@ -8,6 +8,7 @@ from app.models import (
     ChatMessage,
     Holding,
     InvestmentPreferences,
+    PortfolioSnapshot,
     Recommendation,
     Trade,
     WatchlistItem,
@@ -128,3 +129,19 @@ def test_investment_preferences_user_id_unique(db_session):
     db_session.add(InvestmentPreferences(user_id=user_id))
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_portfolio_snapshot_roundtrip(db_session):
+    snapshot = PortfolioSnapshot(
+        user_id=uuid.uuid4(),
+        total_market_value=15000.50,
+        total_cost_basis=12000.00,
+    )
+    db_session.add(snapshot)
+    db_session.commit()
+    db_session.refresh(snapshot)
+
+    assert snapshot.id is not None
+    assert snapshot.created_at is not None
+    assert float(snapshot.total_market_value) == 15000.50
+    assert float(snapshot.total_cost_basis) == 12000.00

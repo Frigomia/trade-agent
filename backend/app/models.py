@@ -105,3 +105,13 @@ class InvestmentPreferences(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class PortfolioSnapshot(Base):
+    __tablename__ = "portfolio_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    total_market_value: Mapped[float] = mapped_column(Numeric(18, 2))
+    total_cost_basis: Mapped[float] = mapped_column(Numeric(18, 2))
