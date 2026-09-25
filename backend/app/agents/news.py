@@ -31,7 +31,9 @@ def _get_client() -> Anthropic | None:
     return _client
 
 
-async def run_news_agent(ticker: str, action: str, reasoning: list[str]) -> str | None:
+async def run_news_agent(
+    ticker: str, action: str, reasoning: list[str], context: str | None = None
+) -> str | None:
     client = _get_client()
     if client is None:
         return None
@@ -39,8 +41,12 @@ async def run_news_agent(ticker: str, action: str, reasoning: list[str]) -> str 
     quant_summary = "; ".join(reasoning)
     user_message = (
         f"Ticker: {ticker}\nQuantitative recommendation: {action}\n"
-        f"Quantitative reasoning: {quant_summary}\n\n"
-        "Search for recent news on this ticker and give a brief qualitative second opinion."
+        f"Quantitative reasoning: {quant_summary}\n"
+    )
+    if context:
+        user_message += f"\n## Additional context\n{context}\n"
+    user_message += (
+        "\nSearch for recent news on this ticker and give a brief qualitative second opinion."
     )
 
     def _create() -> Message:
