@@ -164,6 +164,11 @@ BacktestResult
   excess_return_pct (Numeric(8,4)),
   hit_rate_by_signal (JSON: {signal: {count, avg_forward_return_pct, hit_rate}}),
   status ("DONE" -- only successful runs persist a row)
+
+InvestmentPreferences
+  id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
+  sector_avoid_list (JSON list[str], not null, default []),
+  notes (nullable), updated_at
 ```
 
 ### Migrations — Alembic
@@ -219,6 +224,8 @@ than something your application code has to remember to check everywhere.
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar` |
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct` |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
+| GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search |
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
@@ -498,7 +505,7 @@ produces):
 4. **Richer context assembly** — evolve the chat agent into a fuller
    reasoning system. Three phased substeps:
    - 4a. **Chat agent framework (Phase 1)** ✓ done — portfolio-aware Q&A with web search, persisted history (§8)
-   - 4b. **Investment preferences capture** — define and persist user strategy rules, risk thresholds, sector tilts, etc. that feed into agent reasoning
+   - 4b. **Investment preferences capture** ✓ done — define and persist user strategy rules, risk thresholds, sector tilts, etc., captured and stored via `/preferences`; consumed in 4c
    - 4c. **`build_context()` function** — one unified context builder that pulls live data + long-term memory (step 3) + investment preferences (4b) + session memory into what the agent reasons over
 
 ---

@@ -124,3 +124,16 @@ class MemorySimilarOut(BaseModel):
     created_at: datetime
     outcome_forward_return_pct: float | None
     outcome_evaluated_at: datetime | None
+
+
+RiskTolerance = Literal["conservative", "moderate", "aggressive"]
+
+
+class PreferencesIn(BaseModel):
+    risk_tolerance: RiskTolerance | None = None
+    sector_avoid_list: list[str] = Field(default_factory=list)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class PreferencesOut(PreferencesIn):
+    model_config = ConfigDict(from_attributes=True)
