@@ -516,28 +516,33 @@ produces):
 
 Gaps identified during design, beyond the core build — not all blocking,
 but each is a conscious decision or work item for Claude Code to pick up,
-not something to discover by omission. Nothing below is built yet; treat
-every line as a task.
+not something to discover by omission. Audited against actual code state
+2026-09-25 — items below marked done are verified in the codebase, not
+just believed done.
 
 **Data model & security**
-- [ ] `user_id` on every table, for RLS (§4)
-- [ ] Migrations tooling — Alembic, set up per §4
+- [x] `user_id` on every table, for RLS (§4) — present on every table in
+      `models.py`
+- [x] Migrations tooling — Alembic, set up per §4
 - [ ] RLS policies actually written and applied per table (§4 shows the
-      pattern for one table — repeat for all)
+      pattern for one table — repeat for all) — blocked on Supabase Auth
+      (§13), not started
 - [ ] Backup plan — Supabase's free tier has limited/no point-in-time
       recovery; decide if that's acceptable or if you need your own
       periodic export
 
 **Operational**
-- [ ] Scheduling for `/analysis/run` — Fly.io scheduled machine, GitHub
-      Actions cron, or APScheduler in-process. Needs its own service-role
-      auth once login is in, separate from your personal session
+- [ ] Scheduling for `/analysis/run` — still manual (`POST /analysis/run`),
+      matching this project's deliberate no-scheduler style everywhere
+      else (`/backtest/run`, `/memory/embed`, `/memory/evaluate-outcomes`
+      are all manual too); revisit only if that style changes
 - [ ] Notifications — nothing currently surfaces a new recommendation
-      outside the dashboard
+      outside the dashboard (no dashboard exists yet either)
 - [ ] Cost/budget alert in the Anthropic console before anything runs
       unattended on a schedule
-- [ ] Retry/backoff around `yfinance` calls — a scheduled job from a
-      shared Fly.io IP is exactly the pattern that gets rate-limited
+- [ ] Retry/backoff around `yfinance` calls — confirmed absent in
+      `agents/market_data.py`; calls go straight to `yf.Ticker(...)` via
+      `asyncio.to_thread`, no retry/backoff wrapper
 - [ ] Error observability (e.g. Sentry) for crashed requests/cron runs —
       separate concern from LangSmith's agent-reasoning traces (§6)
 
@@ -553,54 +558,61 @@ every line as a task.
       phone, same as Trade Republic itself
 
 **Testing**
-- [ ] Unit tests for the deterministic logic (`analysis/fundamental.py`,
-      `technical.py`, `rebalance.py`, `recommend.py`) — pure functions,
-      cheap to test, and worth locking down before they change further
-- [ ] Mock the Anthropic client in any test touching `agents/` — don't
-      assert on generated text
+- [x] Unit tests for the deterministic logic — `fundamental.py` (3 tests),
+      `technical.py` (5 tests), `recommend.py` (15 tests) all covered.
+      `rebalance.py` was never built (referenced here and in
+      `backend/CLAUDE.md` but doesn't exist — aspirational, not a gap in
+      what exists)
+- [x] Mock the Anthropic client in any test touching `agents/` — verified
+      as the consistent pattern across `test_agents_news.py`,
+      `test_agents_chat.py`, `test_agents_context.py`
 
 **Security (deeper than auth/RLS alone)**
-- [ ] Web search results treated explicitly as untrusted data in every AI
-      prompt, not just implicitly (§6) — prompt injection via a
-      compromised/adversarial page is a real vector once the agent reads
-      the live web
+- [x] Web search results treated explicitly as untrusted data in every AI
+      prompt — present in both `news.py`'s and `chat.py`'s system prompts
 - [ ] JWT decode pins the algorithm explicitly (`algorithms=["HS256"]`) —
-      never decode without pinning; that's the classic `alg: none` /
-      algorithm-confusion attack
+      not applicable yet, no auth/JWT exists
 - [ ] RLS enabled and a policy created **in the same migration** per table
-      — `ENABLE ROW LEVEL SECURITY` with no policy yet blocks all access,
-      including your own backend, not just unauthorized access
+      — blocked on Supabase Auth, not started
 - [ ] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
-      cost real Anthropic API money per call, even for a single user
-- [ ] Exception text sanitized before it's persisted or returned (the
-      `news_agent` fallback currently interpolates `{exc}` directly —
-      don't store or return raw exception messages)
-- [ ] CORS tightened to actual methods/origins used once off localhost
-      (currently `allow_methods=["*"]`, `allow_headers=["*"]`)
+      cost real Anthropic API money per call, even for a single user;
+      confirmed absent (no rate-limiting library or middleware anywhere)
+- [x] Exception text sanitized before it's persisted or returned — the
+      original concern (`news_agent` interpolating raw `{exc}`) no longer
+      applies; current code has no such interpolation anywhere in
+      `agents/`, and every catch site uses `logger.exception` (traceback
+      to logs only, never returned to the caller)
+- [ ] CORS configured for actual methods/origins once a frontend exists on
+      a different origin — currently no `CORSMiddleware` at all (not
+      loose, just absent — fine for a backend with no frontend yet)
 - [ ] Frontend session token stays in httpOnly cookies via Supabase's SSR
-      helpers — confirm nothing falls back to `localStorage`
+      helpers — not applicable yet, no frontend exists
 - [ ] TLS enforced to Postgres (`sslmode=require`) and Redis, not just
-      browser-to-frontend
-- [ ] Dependency vulnerability scanning in CI (Dependabot / `pip-audit` /
-      `npm audit`)
+      browser-to-frontend — confirmed absent; local dev uses plain Docker
+      Postgres with no TLS enforcement in `db.py`'s engine config
+- [x] Dependency vulnerability scanning in CI — `dependabot.yml` (uv +
+      github-actions ecosystems) and `backend-ci.yml`'s `pip-audit` step
+      both present
 
 **Performance**
-- [ ] `/analysis/run` built as an async job (§5), not a blocking request —
-      needed before this is usable with more than a couple of tickers
-- [ ] Blocking calls (`yfinance`, the sync Anthropic client) wrapped in
-      `asyncio.to_thread`/`run_in_threadpool`, or swapped for async
-      equivalents — used directly inside async routes/LangGraph nodes,
-      they stall the event loop
-- [ ] Per-ticker analysis runs concurrently (bounded by a semaphore), not
-      sequentially in a for-loop — each ticker's graph run is independent
-- [ ] Redis quote/fundamentals caching (5–15 min TTL) actually implemented
-      — it's named in the stack table but has no job yet in this design
+- [x] `/analysis/run` built as an async job (§5), not a blocking request —
+      `POST /analysis/run` returns `202` immediately, work happens via
+      `asyncio.create_task(run_job(...))`, client polls
+      `GET /analysis/run/{job_id}`
+- [x] Blocking calls (`yfinance`, the sync Anthropic client) wrapped in
+      `asyncio.to_thread`/`run_in_threadpool` — consistent pattern in
+      `market_data.py`, `news.py`, `chat.py`
+- [x] Per-ticker analysis runs concurrently (bounded by a semaphore), not
+      sequentially — `agents/jobs.py`'s `MAX_CONCURRENT_TICKERS = 3` +
+      `asyncio.Semaphore` + `asyncio.gather`
+- [x] Redis quote/fundamentals caching actually implemented —
+      `market_data.py`: `QUOTE_CACHE_TTL=300`, `FUNDAMENTALS_CACHE_TTL=900`,
+      `HISTORY_CACHE_TTL=86400`, all read/write through `redis_client.py`
 - [ ] Postgres connections go through Supabase's pooler endpoint rather
-      than SQLAlchemy defaults — the free tier's direct connection limit
-      is tight
-- [ ] Frontend refresh strategy decided once `/analysis/run` is a job:
-      poll job status (simplest) or push via WebSocket/SSE (more work,
-      nicer UX) — don't leave this as an unexamined SWR default
+      than SQLAlchemy defaults — deployment-time concern, not applicable
+      to local Docker Postgres
+- [ ] Frontend refresh strategy decided once `/analysis/run` is a job —
+      not applicable yet, no frontend exists
 
 **Legal/compliance**
 - [ ] Confirm GDPR's household-activity exemption still applies — true
