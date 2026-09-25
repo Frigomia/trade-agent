@@ -224,6 +224,20 @@ def test_log_trade_sell_more_than_held_returns_422(client):
     assert holdings[0]["shares"] == 10
 
 
+def _add_holding(client, ticker="AAPL", name="Apple Inc."):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": ticker,
+            "name": name,
+            "asset_type": "STOCK",
+            "shares": 10,
+            "cost_basis": 150.0,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+
 def test_snapshot_empty_portfolio_has_zero_totals(client):
     response = client.post("/portfolio/snapshot")
 
@@ -234,17 +248,7 @@ def test_snapshot_empty_portfolio_has_zero_totals(client):
 
 
 def test_snapshot_computes_totals_from_holdings(client):
-    client.post(
-        "/portfolio/holdings",
-        json={
-            "ticker": "AAPL",
-            "name": "Apple Inc.",
-            "asset_type": "STOCK",
-            "shares": 10,
-            "cost_basis": 150.0,
-            "first_purchase_date": "2024-01-01",
-        },
-    )
+    _add_holding(client)
 
     with patch(
         "app.routers.portfolio.fetch_quote_and_history",
@@ -259,17 +263,7 @@ def test_snapshot_computes_totals_from_holdings(client):
 
 
 def test_snapshot_fails_when_price_fetch_raises(client):
-    client.post(
-        "/portfolio/holdings",
-        json={
-            "ticker": "AAPL",
-            "name": "Apple Inc.",
-            "asset_type": "STOCK",
-            "shares": 10,
-            "cost_basis": 150.0,
-            "first_purchase_date": "2024-01-01",
-        },
-    )
+    _add_holding(client)
 
     with (
         patch(
@@ -284,17 +278,7 @@ def test_snapshot_fails_when_price_fetch_raises(client):
 
 
 def test_snapshot_fails_when_price_is_none(client):
-    client.post(
-        "/portfolio/holdings",
-        json={
-            "ticker": "DELISTED",
-            "name": "Delisted Co",
-            "asset_type": "STOCK",
-            "shares": 10,
-            "cost_basis": 150.0,
-            "first_purchase_date": "2024-01-01",
-        },
-    )
+    _add_holding(client, ticker="DELISTED", name="Delisted Co")
 
     with patch(
         "app.routers.portfolio.fetch_quote_and_history",
@@ -307,17 +291,7 @@ def test_snapshot_fails_when_price_is_none(client):
 
 
 def test_snapshot_fails_when_price_is_nan(client):
-    client.post(
-        "/portfolio/holdings",
-        json={
-            "ticker": "DELISTED",
-            "name": "Delisted Co",
-            "asset_type": "STOCK",
-            "shares": 10,
-            "cost_basis": 150.0,
-            "first_purchase_date": "2024-01-01",
-        },
-    )
+    _add_holding(client, ticker="DELISTED", name="Delisted Co")
 
     with patch(
         "app.routers.portfolio.fetch_quote_and_history",
