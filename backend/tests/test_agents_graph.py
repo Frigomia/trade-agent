@@ -19,6 +19,7 @@ def test_run_graph_for_stock_produces_buy_recommendation():
     with (
         patch("app.agents.market_data.fetch_quote_and_history", AsyncMock(return_value=quote)),
         patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value=fundamentals)),
+        patch("app.agents.context.build_context", AsyncMock(return_value="Some context")),
         patch("app.agents.news.run_news_agent", AsyncMock(return_value="Qualitative color")),
     ):
         result = asyncio.run(run_graph_for_ticker("AAPL", "STOCK", is_held=False))
@@ -27,14 +28,16 @@ def test_run_graph_for_stock_produces_buy_recommendation():
     assert result["technical_signal"] == "OVERSOLD"
     assert result["action"] == "BUY"
     assert result["suggested_position_pct"] == 0.15
+    assert result["context"] == "Some context"
     assert result["ai_analysis"] == "Qualitative color"
 
 
-def test_run_graph_for_etf_skips_fundamentals_and_news_on_hold():
+def test_run_graph_for_etf_skips_fundamentals_news_and_context_on_hold():
     quote = {"price": 100.0, "closes": [100.0] * 220}
     with (
         patch("app.agents.market_data.fetch_quote_and_history", AsyncMock(return_value=quote)),
         patch("app.agents.market_data.fetch_fundamentals", AsyncMock()) as mock_fundamentals,
+        patch("app.agents.context.build_context", AsyncMock()) as mock_context,
         patch("app.agents.news.run_news_agent", AsyncMock(return_value=None)) as mock_news,
     ):
         result = asyncio.run(run_graph_for_ticker("VWCE", "ETF", is_held=True))
@@ -42,6 +45,8 @@ def test_run_graph_for_etf_skips_fundamentals_and_news_on_hold():
     mock_fundamentals.assert_not_called()
     assert result["fundamental_score"] is None
     assert result["action"] == "HOLD"
+    mock_context.assert_not_called()
+    assert result["context"] is None
     mock_news.assert_not_called()
     assert result["ai_analysis"] is None
 
@@ -61,10 +66,13 @@ def test_run_graph_for_stock_with_no_fundamentals_data_skips_scoring():
             "app.agents.market_data.fetch_fundamentals",
             AsyncMock(return_value=empty_fundamentals),
         ),
+        patch("app.agents.context.build_context", AsyncMock()) as mock_context,
         patch("app.agents.news.run_news_agent", AsyncMock(return_value=None)) as mock_news,
     ):
         result = asyncio.run(run_graph_for_ticker("AAPL", "STOCK", is_held=True))
 
     assert result["fundamental_score"] is None
     assert result["action"] is None
+    mock_context.assert_not_called()
+    assert result["context"] is None
     mock_news.assert_not_called()
