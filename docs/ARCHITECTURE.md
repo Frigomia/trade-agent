@@ -540,9 +540,9 @@ just believed done.
       outside the dashboard (no dashboard exists yet either)
 - [ ] Cost/budget alert in the Anthropic console before anything runs
       unattended on a schedule
-- [ ] Retry/backoff around `yfinance` calls — confirmed absent in
-      `agents/market_data.py`; calls go straight to `yf.Ticker(...)` via
-      `asyncio.to_thread`, no retry/backoff wrapper
+- [x] Retry/backoff around `yfinance` calls — `market_data.py`'s
+      `_retry_fetch()` wraps all three fetch functions, 3 attempts,
+      exponential backoff (1s/2s/4s)
 - [ ] Error observability (e.g. Sentry) for crashed requests/cron runs —
       separate concern from LangSmith's agent-reasoning traces (§6)
 
