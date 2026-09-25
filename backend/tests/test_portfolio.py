@@ -280,6 +280,8 @@ def test_snapshot_fails_when_price_fetch_raises(client):
     ):
         client.post("/portfolio/snapshot")
 
+    assert client.get("/portfolio/snapshots").json() == []
+
 
 def test_snapshot_fails_when_price_is_none(client):
     client.post(
@@ -301,6 +303,30 @@ def test_snapshot_fails_when_price_is_none(client):
         response = client.post("/portfolio/snapshot")
 
     assert response.status_code == 500
+    assert client.get("/portfolio/snapshots").json() == []
+
+
+def test_snapshot_fails_when_price_is_nan(client):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "DELISTED",
+            "name": "Delisted Co",
+            "asset_type": "STOCK",
+            "shares": 10,
+            "cost_basis": 150.0,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history",
+        AsyncMock(return_value={"price": float("nan"), "closes": []}),
+    ):
+        response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 500
+    assert client.get("/portfolio/snapshots").json() == []
 
 
 def test_list_snapshots_ordered_oldest_first(client, db_session):

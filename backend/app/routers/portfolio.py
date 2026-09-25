@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -120,7 +122,7 @@ async def create_snapshot(db: Session = Depends(get_db)) -> PortfolioSnapshot:
     for holding in holdings:
         quote = await fetch_quote_and_history(holding.ticker)
         price = quote["price"]
-        if price is None:
+        if price is None or not math.isfinite(price):
             raise HTTPException(
                 status_code=500,
                 detail=f"No current price available for {holding.ticker}",
@@ -144,6 +146,6 @@ def list_snapshots(db: Session = Depends(get_db)) -> list[PortfolioSnapshot]:
     return (
         db.query(PortfolioSnapshot)
         .filter_by(user_id=settings.default_user_id)
-        .order_by(PortfolioSnapshot.created_at)
+        .order_by(PortfolioSnapshot.created_at, PortfolioSnapshot.id)
         .all()
     )
