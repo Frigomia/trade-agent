@@ -21,13 +21,6 @@ BATCH_SIZE = 50
 OUTCOME_LOOKBACK_DAYS = 20
 
 
-def _situation_text(rec: Recommendation) -> str:
-    text = f"{rec.ticker} ({rec.asset_type}): {rec.action}. {'; '.join(rec.reasoning)}."
-    if rec.ai_analysis:
-        text += f" {rec.ai_analysis}"
-    return text
-
-
 @router.post("/embed")
 async def embed_recommendations(db: Session = Depends(get_db)) -> dict[str, int]:
     if not settings.voyage_api_key:
@@ -42,7 +35,11 @@ async def embed_recommendations(db: Session = Depends(get_db)) -> dict[str, int]
     embedded = 0
     for rec in pending:
         try:
-            rec.embedding = await embed_text(_situation_text(rec))
+            reasoning = "; ".join(rec.reasoning)
+            situation = f"{rec.ticker} ({rec.asset_type}): {rec.action}. {reasoning}."
+            if rec.ai_analysis:
+                situation += f" {rec.ai_analysis}"
+            rec.embedding = await embed_text(situation)
             db.commit()
             embedded += 1
         except Exception:

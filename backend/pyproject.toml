@@ -18,13 +18,12 @@ dependencies = [
     "redis",
     "psycopg[binary]",
     "pgvector",
-    "voyageai",
+    "httpx",
 ]
 
 [dependency-groups]
 dev = [
     "pytest",
-    "httpx",
     "ruff",
     "mypy",
     "pip-audit",
@@ -49,5 +48,5 @@ strict = true
 files = ["app"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "mcp.*", "voyageai", "voyageai.*"]
+module = ["yfinance.*", "mcp.*"]
 ignore_missing_imports = true

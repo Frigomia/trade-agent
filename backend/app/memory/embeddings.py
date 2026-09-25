@@ -1,29 +1,21 @@
-import asyncio
-
-import voyageai
+import httpx
 
 from app.config import settings
 
 EMBEDDING_MODEL = "voyage-finance-2"
-
-_client: voyageai.Client | None = None  # type: ignore[name-defined]
-
-
-def _get_client() -> voyageai.Client:  # type: ignore[name-defined]
-    global _client
-    if not settings.voyage_api_key:
-        raise RuntimeError("VOYAGE_API_KEY not configured")
-    if _client is None:
-        _client = voyageai.Client(api_key=settings.voyage_api_key)  # type: ignore[attr-defined]
-    return _client
+VOYAGE_EMBEDDINGS_URL = "https://api.voyageai.com/v1/embeddings"
 
 
 async def embed_text(text: str) -> list[float]:
-    client = _get_client()
+    if not settings.voyage_api_key:
+        raise RuntimeError("VOYAGE_API_KEY not configured")
 
-    def _embed() -> list[float]:
-        result = client.embed([text], model=EMBEDDING_MODEL)
-        embedding: list[float] = result.embeddings[0]
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            VOYAGE_EMBEDDINGS_URL,
+            headers={"Authorization": f"Bearer {settings.voyage_api_key}"},
+            json={"input": [text], "model": EMBEDDING_MODEL},
+        )
+        response.raise_for_status()
+        embedding: list[float] = response.json()["data"][0]["embedding"]
         return embedding
-
-    return await asyncio.to_thread(_embed)
