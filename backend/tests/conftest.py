@@ -29,6 +29,11 @@ def _ensure_test_database() -> None:
         conn.execute(text("CREATE DATABASE trading_agent_test"))
     admin_engine.dispose()
 
+    test_engine = create_engine(TEST_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with test_engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    test_engine.dispose()
+
 
 @pytest.fixture()
 def engine() -> Generator[Engine, None, None]:

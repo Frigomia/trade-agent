@@ -8,9 +8,12 @@ resolution-markers = [
     "python_full_version == '3.14.*' and sys_platform == 'win32'",
     "python_full_version == '3.14.*' and sys_platform == 'emscripten'",
     "python_full_version == '3.14.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
-    "python_full_version < '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.14' and sys_platform == 'emscripten'",
-    "python_full_version < '3.14' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'win32'",
+    "python_full_version == '3.13.*' and sys_platform == 'emscripten'",
+    "python_full_version == '3.13.*' and sys_platform != 'emscripten' and sys_platform != 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'win32'",
+    "python_full_version < '3.13' and sys_platform == 'emscripten'",
+    "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
 [[package]]
@@ -2630,6 +2633,7 @@ dependencies = [
     { name = "alembic" },
     { name = "anthropic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "langgraph" },
     { name = "mcp" },
     { name = "pgvector" },
@@ -2646,7 +2650,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "bandit" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pytest" },
@@ -2658,6 +2661,7 @@ requires-dist = [
     { name = "alembic" },
     { name = "anthropic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "langgraph" },
     { name = "mcp" },
     { name = "pgvector" },
@@ -2674,7 +2678,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "bandit" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pip-audit" },
     { name = "pytest" },

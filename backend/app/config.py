@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
+    voyage_api_key: str | None = None
     default_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
 
     max_single_position_pct: float = 0.15

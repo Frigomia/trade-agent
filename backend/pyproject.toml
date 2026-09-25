@@ -18,12 +18,12 @@ dependencies = [
     "redis",
     "psycopg[binary]",
     "pgvector",
+    "httpx",
 ]
 
 [dependency-groups]
 dev = [
     "pytest",
-    "httpx",
     "ruff",
     "mypy",
     "pip-audit",

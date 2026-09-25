@@ -1,6 +1,7 @@
 import uuid
 from datetime import date, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Date, DateTime, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -60,6 +61,10 @@ class Recommendation(Base):
     suggested_position_pct: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="PENDING")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    outcome_forward_return_pct: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
+    outcome_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
 
 class ChatMessage(Base):
