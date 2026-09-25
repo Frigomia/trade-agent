@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.agents.market_data import fetch_quote_and_history
 from app.config import settings
 from app.db import get_db
-from app.models import Holding, Trade, WatchlistItem
+from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.schemas import (
     HoldingIn,
     HoldingOut,
+    PortfolioSnapshotOut,
     TradeIn,
     TradeOut,
     WatchlistItemIn,
@@ -107,3 +109,41 @@ def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
     db.commit()
     db.refresh(trade)
     return trade
+
+
+@router.post("/snapshot", response_model=PortfolioSnapshotOut)
+async def create_snapshot(db: Session = Depends(get_db)) -> PortfolioSnapshot:
+    holdings = db.query(Holding).filter_by(user_id=settings.default_user_id).all()
+
+    total_market_value = 0.0
+    total_cost_basis = 0.0
+    for holding in holdings:
+        quote = await fetch_quote_and_history(holding.ticker)
+        price = quote["price"]
+        if price is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"No current price available for {holding.ticker}",
+            )
+        total_market_value += float(holding.shares) * price
+        total_cost_basis += float(holding.shares) * float(holding.cost_basis)
+
+    snapshot = PortfolioSnapshot(
+        user_id=settings.default_user_id,
+        total_market_value=total_market_value,
+        total_cost_basis=total_cost_basis,
+    )
+    db.add(snapshot)
+    db.commit()
+    db.refresh(snapshot)
+    return snapshot
+
+
+@router.get("/snapshots", response_model=list[PortfolioSnapshotOut])
+def list_snapshots(db: Session = Depends(get_db)) -> list[PortfolioSnapshot]:
+    return (
+        db.query(PortfolioSnapshot)
+        .filter_by(user_id=settings.default_user_id)
+        .order_by(PortfolioSnapshot.created_at)
+        .all()
+    )
