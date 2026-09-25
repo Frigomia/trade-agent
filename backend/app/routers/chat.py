@@ -7,6 +7,7 @@ from app.agents.chat import run_chat
 from app.config import settings
 from app.db import get_db
 from app.models import ChatMessage
+from app.rate_limit import rate_limiter
 from app.schemas import ChatIn, ChatOut
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,11 @@ def _commit_or_raise(db: Session, log_message: str) -> None:
         raise
 
 
-@router.post("/chat", response_model=ChatOut)
+@router.post(
+    "/chat",
+    response_model=ChatOut,
+    dependencies=[Depends(rate_limiter("chat", limit=20))],
+)
 async def chat(payload: ChatIn, db: Session = Depends(get_db)) -> ChatOut:
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="Chat not configured")

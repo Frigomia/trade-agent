@@ -63,3 +63,14 @@ def test_chat_sessions_are_isolated(client, db_session, monkeypatch):
     # s2's call must not see s1's history, even though s1 has rows already
     call_kwargs = mock_run.call_args.kwargs
     assert call_kwargs["history"] == []
+
+
+def test_chat_rate_limited_after_20_calls_per_minute(client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
+
+    for _ in range(20):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        assert response.status_code == 503
+
+    response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    assert response.status_code == 429

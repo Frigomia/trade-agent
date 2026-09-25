@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 from collections.abc import Generator
 
@@ -47,6 +48,22 @@ def engine() -> Generator[Engine, None, None]:
 @pytest.fixture()
 def session_local(engine: Engine) -> sessionmaker[Session]:
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _flush_rate_limit_keys() -> None:
+    # Starlette's TestClient reports a fixed fake client IP ("testclient") for
+    # every request, so every test hitting a rate-limited route shares the same
+    # Redis key. Flush before each test so leftover counts from a previous test
+    # don't cause a spurious 429. Uses its own throwaway event loop and resets
+    # the client singleton afterward, same reason as _reset_redis_client below.
+    async def _flush() -> None:
+        redis = redis_client_module.get_redis()
+        async for key in redis.scan_iter("ratelimit:*"):
+            await redis.delete(key)
+
+    asyncio.run(_flush())
+    redis_client_module._redis = None
 
 
 @pytest.fixture(autouse=True)
