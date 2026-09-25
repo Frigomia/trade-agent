@@ -1,7 +1,17 @@
 import uuid
 from datetime import date
 
-from app.models import ChatMessage, Holding, Recommendation, Trade, WatchlistItem
+import pytest
+from sqlalchemy.exc import IntegrityError
+
+from app.models import (
+    ChatMessage,
+    Holding,
+    InvestmentPreferences,
+    Recommendation,
+    Trade,
+    WatchlistItem,
+)
 
 
 def test_holding_roundtrip(db_session):
@@ -96,3 +106,25 @@ def test_recommendation_memory_fields_roundtrip(db_session):
     assert fetched.outcome_forward_return_pct is None
     assert fetched.outcome_evaluated_at is None
     assert fetched.embedding == embedding
+
+
+def test_investment_preferences_roundtrip(db_session):
+    pref = InvestmentPreferences(user_id=uuid.uuid4())
+    db_session.add(pref)
+    db_session.commit()
+    db_session.refresh(pref)
+
+    assert pref.risk_tolerance is None
+    assert pref.sector_avoid_list == []
+    assert pref.notes is None
+    assert pref.updated_at is not None
+
+
+def test_investment_preferences_user_id_unique(db_session):
+    user_id = uuid.uuid4()
+    db_session.add(InvestmentPreferences(user_id=user_id))
+    db_session.commit()
+
+    db_session.add(InvestmentPreferences(user_id=user_id))
+    with pytest.raises(IntegrityError):
+        db_session.commit()

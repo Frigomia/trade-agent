@@ -92,3 +92,16 @@ class BacktestResult(Base):
     excess_return_pct: Mapped[float] = mapped_column(Numeric(8, 4))
     hit_rate_by_signal: Mapped[dict[str, dict[str, float]]] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(10))  # "DONE" -- only successful runs persist a row
+
+
+class InvestmentPreferences(Base):
+    __tablename__ = "investment_preferences"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True, index=True)
+    risk_tolerance: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sector_avoid_list: Mapped[list[str]] = mapped_column(JSON, default=list)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
