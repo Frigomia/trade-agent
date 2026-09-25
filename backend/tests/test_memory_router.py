@@ -115,7 +115,40 @@ def test_evaluate_outcomes_skips_failed_row_and_continues(client, db_session, mo
     assert response.status_code == 200
     body = response.json()
     assert body["evaluated"] == 1
-    assert body["remaining"] == 1
+    # rec1's failure is permanent (no price history) -> stamped resolved, not
+    # re-counted as still due, so remaining is 0 not 1.
+    assert body["remaining"] == 0
+
+
+def test_evaluate_outcomes_marks_permanently_failed_row_resolved(client, db_session, monkeypatch):
+    old_date = datetime.now(UTC) - timedelta(days=21)
+    rec = Recommendation(
+        user_id=settings.default_user_id,
+        ticker="DELISTED",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["PEG 1.1"],
+        price_at_recommendation=150.0,
+        created_at=old_date,
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    with patch(
+        "app.routers.memory.compute_outcome",
+        AsyncMock(side_effect=ValueError("No price history for DELISTED")),
+    ):
+        first = client.post("/memory/evaluate-outcomes")
+        second = client.post("/memory/evaluate-outcomes")
+
+    assert first.json() == {"evaluated": 0, "remaining": 0}
+    # Second call must not re-select the same permanently-failing row --
+    # this is the actual regression test for the "stuck batch" bug.
+    assert second.json() == {"evaluated": 0, "remaining": 0}
+
+    db_session.refresh(rec)
+    assert rec.outcome_evaluated_at is not None
+    assert rec.outcome_forward_return_pct is None
 
 
 def test_similar_recommendations_without_api_key_returns_503(client, monkeypatch):

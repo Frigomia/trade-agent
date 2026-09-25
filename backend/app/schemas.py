@@ -1,8 +1,15 @@
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, NonNegativeFloat, PositiveFloat, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    NonNegativeFloat,
+    PositiveFloat,
+    StringConstraints,
+)
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A".
 # Excludes path metacharacters (/, ?, #, ..) that yfinance interpolates
@@ -13,16 +20,20 @@ Ticker = Annotated[
     StringConstraints(strip_whitespace=True, to_upper=True, pattern=r"^[A-Za-z0-9.\-^]{1,20}$"),
 ]
 
+# Matches every DB column comment that already documents this as the only
+# two valid values (models.py: Holding.asset_type, WatchlistItem.asset_type).
+AssetType = Literal["ETF", "STOCK"]
+
 
 class HoldingIn(BaseModel):
     ticker: Ticker
-    name: str
-    asset_type: str
+    name: str = Field(max_length=200)  # matches Holding.name String(200)
+    asset_type: AssetType
     shares: NonNegativeFloat
     cost_basis: NonNegativeFloat
     first_purchase_date: date
-    target_weight: float | None = None
-    sector: str | None = None
+    target_weight: float | None = Field(default=None, ge=0, le=1)
+    sector: str | None = Field(default=None, max_length=100)  # matches Holding.sector String(100)
 
 
 class HoldingOut(HoldingIn):
@@ -34,8 +45,8 @@ class HoldingOut(HoldingIn):
 
 class WatchlistItemIn(BaseModel):
     ticker: Ticker
-    asset_type: str
-    note: str | None = None
+    asset_type: AssetType
+    note: str | None = Field(default=None, max_length=500)  # matches WatchlistItem.note String(500)
 
 
 class WatchlistItemOut(WatchlistItemIn):
@@ -47,8 +58,8 @@ class WatchlistItemOut(WatchlistItemIn):
 
 class TradeIn(BaseModel):
     date: date
-    ticker: str
-    action: str
+    ticker: Ticker
+    action: Literal["BUY", "SELL"]
     shares: PositiveFloat
     price: PositiveFloat
 

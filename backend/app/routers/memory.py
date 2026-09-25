@@ -30,7 +30,13 @@ async def embed_recommendations(db: Session = Depends(get_db)) -> dict[str, int]
         Recommendation.user_id == settings.default_user_id,
         Recommendation.embedding.is_(None),
     )
-    pending = db.query(Recommendation).filter(*pending_filter).limit(BATCH_SIZE).all()
+    pending = (
+        db.query(Recommendation)
+        .filter(*pending_filter)
+        .order_by(Recommendation.id)
+        .limit(BATCH_SIZE)
+        .all()
+    )
 
     embedded = 0
     for rec in pending:
@@ -62,7 +68,13 @@ async def evaluate_outcomes(db: Session = Depends(get_db)) -> dict[str, int]:
         Recommendation.price_at_recommendation.isnot(None),
         Recommendation.created_at <= cutoff,
     )
-    pending = db.query(Recommendation).filter(*due_filter).limit(BATCH_SIZE).all()
+    pending = (
+        db.query(Recommendation)
+        .filter(*due_filter)
+        .order_by(Recommendation.id)
+        .limit(BATCH_SIZE)
+        .all()
+    )
 
     evaluated = 0
     for rec in pending:
@@ -79,6 +91,14 @@ async def evaluate_outcomes(db: Session = Depends(get_db)) -> dict[str, int]:
         except Exception:
             logger.exception("Failed to evaluate outcome for recommendation %s", rec.id)
             db.rollback()
+            # compute_outcome's only failure mode (no price history for the
+            # ticker) is permanent, not transient -- stamp evaluated_at even
+            # on failure so this row stops matching due_filter and blocking
+            # the batch forever. outcome_forward_return_pct stays None,
+            # which is how a caller tells "resolved, no valid outcome" apart
+            # from "not due yet".
+            rec.outcome_evaluated_at = datetime.now(UTC)
+            db.commit()
 
     remaining = db.query(Recommendation).filter(*due_filter).count()
     return {"evaluated": evaluated, "remaining": remaining}
