@@ -1,5 +1,7 @@
 import asyncio
 import json
+import logging
+from collections.abc import Callable
 from datetime import date
 from typing import Any
 
@@ -7,9 +9,33 @@ import yfinance as yf
 
 from app.redis_client import get_redis
 
+logger = logging.getLogger(__name__)
+
 QUOTE_CACHE_TTL = 300
 FUNDAMENTALS_CACHE_TTL = 900
 HISTORY_CACHE_TTL = 86400
+
+RETRY_ATTEMPTS = 3
+RETRY_BASE_DELAY_SECONDS = 1.0
+
+
+async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
+    last_exc: Exception | None = None
+    for attempt in range(RETRY_ATTEMPTS):
+        try:
+            return await asyncio.to_thread(fetch)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < RETRY_ATTEMPTS - 1:
+                logger.warning(
+                    "yfinance call failed (attempt %d/%d), retrying",
+                    attempt + 1,
+                    RETRY_ATTEMPTS,
+                    exc_info=True,
+                )
+                await asyncio.sleep(RETRY_BASE_DELAY_SECONDS * (2**attempt))
+    assert last_exc is not None
+    raise last_exc
 
 
 async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
@@ -24,7 +50,7 @@ async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
         closes = history["Close"].tolist()
         return {"price": closes[-1] if closes else None, "closes": closes}
 
-    result = await asyncio.to_thread(_fetch)
+    result = await _retry_fetch(_fetch)
     await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
     return result
 
@@ -50,7 +76,7 @@ async def fetch_fundamentals(ticker: str) -> dict[str, Any]:
             "profit_margin": info.get("profitMargins"),
         }
 
-    result = await asyncio.to_thread(_fetch)
+    result = await _retry_fetch(_fetch)
     await redis.set(cache_key, json.dumps(result), ex=FUNDAMENTALS_CACHE_TTL)
     return result
 
@@ -67,7 +93,7 @@ async def fetch_price_history(ticker: str, start: date, end: date) -> list[float
         closes: list[float] = history["Close"].tolist()
         return closes
 
-    result = await asyncio.to_thread(_fetch)
+    result = await _retry_fetch(_fetch)
     if not result:
         return result
     await redis.set(cache_key, json.dumps(result), ex=HISTORY_CACHE_TTL)
