@@ -119,6 +119,57 @@ def test_build_context_matches_ticker_containing_dot(db_session):
     assert "BRK.B position" in context
 
 
+def test_build_context_short_ticker_does_not_match_substring(db_session):
+    db_session.add(
+        ChatMessage(
+            user_id=settings.default_user_id,
+            session_id="s1",
+            role="user",
+            content="have a look at my overall value",
+        )
+    )
+    db_session.commit()
+
+    with patch("app.agents.context.embed_text", AsyncMock(return_value=[0.1] * 1024)):
+        context = asyncio.run(build_context(db_session, "V", "STOCK", "BUY", ["PEG 1.1"]))
+
+    assert "No relevant chat history." in context
+
+
+def test_build_context_short_ticker_matches_standalone_token(db_session):
+    db_session.add(
+        ChatMessage(
+            user_id=settings.default_user_id,
+            session_id="s1",
+            role="user",
+            content="thoughts on V?",
+        )
+    )
+    db_session.commit()
+
+    with patch("app.agents.context.embed_text", AsyncMock(return_value=[0.1] * 1024)):
+        context = asyncio.run(build_context(db_session, "V", "STOCK", "BUY", ["PEG 1.1"]))
+
+    assert "thoughts on V?" in context
+
+
+def test_build_context_excludes_assistant_messages(db_session):
+    db_session.add(
+        ChatMessage(
+            user_id=settings.default_user_id,
+            session_id="s1",
+            role="assistant",
+            content="Here's what I found about AAPL from a recent article.",
+        )
+    )
+    db_session.commit()
+
+    with patch("app.agents.context.embed_text", AsyncMock(return_value=[0.1] * 1024)):
+        context = asyncio.run(build_context(db_session, "AAPL", "STOCK", "BUY", ["PEG 1.1"]))
+
+    assert "No relevant chat history." in context
+
+
 def test_build_context_reports_no_chat_history_when_none_match(db_session):
     db_session.add(
         ChatMessage(

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from sqlalchemy.orm import Session
 
@@ -63,9 +64,20 @@ async def _build_memory_section(
 
 def _build_session_memory_section(db: Session, ticker: str) -> str:
     try:
+        # Only the user's own words are first-party; assistant replies can carry
+        # unlabeled web-derived text (the chat agent has web_search) and would be
+        # pasted into news_agent's prompt with no untrusted-data framing.
+        # The regex requires a non-alphanumeric boundary (or string start/end) on
+        # both sides so short tickers like "V" don't match inside "value"/"have";
+        # "." is excluded from the boundary class so "BRK.B" still matches as a
+        # whole unit against surrounding text.
+        ticker_pattern = rf"(^|[^A-Za-z0-9.]){re.escape(ticker)}($|[^A-Za-z0-9])"
         messages = (
             db.query(ChatMessage)
-            .filter(ChatMessage.content.ilike(f"%{ticker}%"))
+            .filter(
+                ChatMessage.role == "user",
+                ChatMessage.content.op("~*")(ticker_pattern),
+            )
             .order_by(ChatMessage.created_at.desc())
             .limit(CHAT_HISTORY_LIMIT)
             .all()
