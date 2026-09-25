@@ -103,6 +103,16 @@ class BacktestResultOut(BaseModel):
     status: str
 
 
+class ChatIn(BaseModel):
+    session_id: str = Field(max_length=100)
+    message: str = Field(min_length=1, max_length=4000)
+
+
+class ChatOut(BaseModel):
+    session_id: str
+    message: str
+
+
 class MemorySimilarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
