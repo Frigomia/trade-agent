@@ -255,7 +255,8 @@ graph TD;
     fetch_data --> technical_agent
     fundamental_agent --> synthesizer
     technical_agent --> synthesizer
-    synthesizer --> news_agent
+    synthesizer --> context_agent
+    context_agent --> news_agent
     news_agent --> __end__([end])
 ```
 
@@ -265,6 +266,7 @@ graph TD;
 | `fundamental_agent` | Deterministic 0–100 fundamental score (PEG, ROE, debt/equity, revenue growth, margins) — stocks only, transparent scoring in `analysis/fundamental.py` |
 | `technical_agent` | 50/200-day SMA trend, 14-day RSI, drawdown from 52w high — `analysis/technical.py` |
 | `synthesizer` | Combines both into one recommendation. **Fundamentals gate the decision; technicals only time entries within that gate** — never the reverse. Logic in `analysis/recommend.py` |
+| `context_agent` | Assembles qualitative context for the LLM's reasoning: investment preferences, similar past recommendations with outcomes, and relevant session memory from chat history. Calls `build_context()` — see §15.1 step 4c |
 | `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Skipped if `ANTHROPIC_API_KEY` is unset — degrades gracefully to quant-only |
 
 Guardrails to build into every AI prompt (`agents/prompts.py`):
@@ -502,11 +504,11 @@ produces):
    results. `pgvector` on the existing Supabase Postgres — no separate
    vector DB service. Spec:
    `docs/superpowers/specs/2026-09-24-long-term-memory-design.md`.
-4. **Richer context assembly** — evolve the chat agent into a fuller
-   reasoning system. Three phased substeps:
+4. **Richer context assembly** ✓ done — evolve the chat agent into a fuller
+   reasoning system. Three phased substeps, all complete:
    - 4a. **Chat agent framework (Phase 1)** ✓ done — portfolio-aware Q&A with web search, persisted history (§8)
    - 4b. **Investment preferences capture** ✓ done — define and persist user strategy rules, risk thresholds, sector tilts, etc., captured and stored via `/preferences`; consumed in 4c
-   - 4c. **`build_context()` function** — one unified context builder that pulls live data + long-term memory (step 3) + investment preferences (4b) + session memory into what the agent reasons over
+   - 4c. **`build_context()` function** ✓ done — one unified context builder that pulls live data + long-term memory (step 3) + investment preferences (4b) + session memory into what the agent reasons over; wired into the analysis graph as `context_agent` node (§6)
 
 ---
 
