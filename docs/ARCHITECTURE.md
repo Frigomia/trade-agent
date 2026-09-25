@@ -288,10 +288,11 @@ which should just call that same endpoint) to log it and update cost basis.
 
 ## 8. Chat agent — phased design
 
-**Phase 1 (build first):** a direct Claude API call with the
-`web_search_20250305` tool, seeded with a portfolio-context string
-(`backend/app/agents/chat.py`). No tool-calling, no ability to take
-actions — just a portfolio-aware Q&A agent.
+**Phase 1 (built):** a direct Claude API call with the
+`web_search_20260209` tool, seeded with a portfolio-context string.
+Implementation: `backend/app/agents/chat.py` (context builder + prompt)
+and `backend/app/routers/chat.py` (POST `/chat` endpoint). No tool-calling,
+no ability to take actions — just a portfolio-aware Q&A agent.
 
 **Phase 2 (later, not part of the initial build):** promote this to a
 LangGraph tool-calling agent (`create_react_agent` or a custom graph) with
@@ -494,12 +495,11 @@ produces):
    results. `pgvector` on the existing Supabase Postgres — no separate
    vector DB service. Spec:
    `docs/superpowers/specs/2026-09-24-long-term-memory-design.md`.
-4. **Richer context assembly** — one `build_context(ticker)` that pulls
-   live data + long-term memory (step 3) + investment preferences/strategy
-   rules + session memory into what the agent reasons over. Deliberately
-   last: it's mostly wiring once memory (step 3) exists to draw from, and
-   the one open design question (how investment preferences are captured)
-   is worth its own brainstorm rather than guessing ahead of time.
+4. **Richer context assembly** — evolve the chat agent into a fuller
+   reasoning system. Three phased substeps:
+   - 4a. **Chat agent framework (Phase 1)** ✓ done — portfolio-aware Q&A with web search, persisted history (§8)
+   - 4b. **Investment preferences capture** — define and persist user strategy rules, risk thresholds, sector tilts, etc. that feed into agent reasoning
+   - 4c. **`build_context()` function** — one unified context builder that pulls live data + long-term memory (step 3) + investment preferences (4b) + session memory into what the agent reasons over
 
 ---
 
