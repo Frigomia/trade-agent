@@ -115,3 +115,21 @@ class PortfolioSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     total_market_value: Mapped[float] = mapped_column(Numeric(18, 2))
     total_cost_basis: Mapped[float] = mapped_column(Numeric(18, 2))
+
+
+class AppUser(Base):
+    """Who may use the service, and as what. Read on every request by the auth path.
+
+    Deliberately has no user_id column and no RLS policy: it is never joined to
+    user-data tables, and only the auth path and (later) the admin API touch it.
+    """
+
+    __tablename__ = "app_users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)  # equals the Supabase auth uid
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    role: Mapped[str] = mapped_column(String(10))  # "admin" | "user"
+    status: Mapped[str] = mapped_column(String(10), default="active")  # "active" | "disabled"
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
