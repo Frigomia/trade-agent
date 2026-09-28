@@ -14,7 +14,7 @@ import app.redis_client as redis_client_module
 from app import rls
 from app.auth.tokens import get_key_resolver
 from app.config import settings
-from app.db import Base, get_db, get_session_factory
+from app.db import Base, get_session_factory
 from app.main import app
 from app.models import AppUser
 from tests.auth_support import TEST_SUPABASE_URL, USER_ID, auth_headers, resolve_test_key
@@ -123,20 +123,10 @@ def db_session(engine: Engine) -> Generator[Session, None, None]:
         session.close()
 
 
-def _install_overrides(engine: Engine, app_engine: Engine) -> None:
-    """Route the app to the test database: owner engine for the not-yet-migrated `get_db`,
-    the restricted-role engine for authenticated sessions, and the test JWT key."""
-    owner_factory = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def _install_overrides(app_engine: Engine) -> None:
+    """Route the app to the test database: the restricted-role engine for authenticated
+    sessions, and the test JWT key."""
     app_factory = sessionmaker(autocommit=False, autoflush=False, bind=app_engine)
-
-    def override_get_db() -> Generator[Session, None, None]:
-        db = owner_factory()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_session_factory] = lambda: app_factory
     app.dependency_overrides[get_key_resolver] = lambda: resolve_test_key
 
@@ -147,7 +137,7 @@ def client(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, No
     with sessionmaker(bind=engine)() as setup:
         setup.add(AppUser(id=USER_ID, email="user@example.com", role="user", status="active"))
         setup.commit()
-    _install_overrides(engine, app_engine)
+    _install_overrides(app_engine)
     with TestClient(app, headers=auth_headers(USER_ID)) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -156,7 +146,7 @@ def client(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, No
 @pytest.fixture()
 def anon_client(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, None]:
     """Same wiring as `client`, but sends no Authorization header."""
-    _install_overrides(engine, app_engine)
+    _install_overrides(app_engine)
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

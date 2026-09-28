@@ -2,13 +2,13 @@ from datetime import date
 
 import pytest
 
-from app.config import settings
 from app.models import BacktestResult
+from tests.auth_support import USER_ID
 
 
 def test_backtest_result_roundtrip(db_session):
     result = BacktestResult(
-        user_id=settings.default_user_id,
+        user_id=USER_ID,
         ticker="AAPL",
         start_date=date(2020, 1, 1),
         end_date=date(2024, 1, 1),

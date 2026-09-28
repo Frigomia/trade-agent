@@ -58,13 +58,3 @@ def scoped_session(user_id: uuid.UUID) -> Generator[Session, None, None]:
 def get_session_factory() -> sessionmaker[Session]:
     """FastAPI dependency so tests can swap in a factory bound to the restricted test role."""
     return SessionLocal
-
-
-def get_db() -> Generator[Session, None, None]:
-    # Unscoped session. Superseded by app.auth.deps.get_user_db; removed once every router
-    # has moved over (Task 8).
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
