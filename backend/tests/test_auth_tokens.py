@@ -3,11 +3,14 @@ import time
 import jwt
 import pytest
 
+import app.auth.tokens as tokens
 from app.auth.tokens import AuthError, AuthUnavailable, verify_token
 from app.config import settings
 from tests.auth_support import (
     OTHER_PRIVATE_KEY,
+    PUBLIC_KEY,
     TEST_ISSUER,
+    TEST_SUPABASE_URL,
     USER_ID,
     make_token,
     resolve_test_key,
@@ -88,3 +91,61 @@ def test_resolver_unavailable_propagates():
 
     with pytest.raises(AuthUnavailable):
         verify_token(make_token(), _down)
+
+
+class _FakeSigningKey:
+    key = PUBLIC_KEY
+
+
+class _FakeJWKClient:
+    """Records construction args; get_signing_key_from_jwt is driven by `outcome`."""
+
+    instances: list["_FakeJWKClient"] = []
+    outcome: Exception | None = None
+
+    def __init__(self, url: str, **kwargs: object) -> None:
+        self.url = url
+        self.kwargs = kwargs
+        _FakeJWKClient.instances.append(self)
+
+    def get_signing_key_from_jwt(self, token: str) -> _FakeSigningKey:
+        if _FakeJWKClient.outcome is not None:
+            raise _FakeJWKClient.outcome
+        return _FakeSigningKey()
+
+
+@pytest.fixture()
+def fake_jwks(monkeypatch):
+    _FakeJWKClient.instances = []
+    _FakeJWKClient.outcome = None
+    monkeypatch.setattr(tokens, "_jwks_client", None)
+    monkeypatch.setattr(tokens, "PyJWKClient", _FakeJWKClient)
+    return _FakeJWKClient
+
+
+def test_resolver_returns_the_jwks_signing_key(fake_jwks):
+    assert tokens._resolve_signing_key(make_token()) is PUBLIC_KEY
+
+
+def test_resolver_builds_jwks_url_lazily_and_reuses_the_client(fake_jwks):
+    assert fake_jwks.instances == []
+
+    tokens._resolve_signing_key(make_token())
+    tokens._resolve_signing_key(make_token())
+
+    assert len(fake_jwks.instances) == 1
+    client = fake_jwks.instances[0]
+    assert client.url == f"{TEST_SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+    assert client.kwargs == {"cache_keys": True}
+
+
+def test_resolver_connection_failure_means_auth_is_unavailable(fake_jwks):
+    fake_jwks.outcome = jwt.PyJWKClientConnectionError("down")
+    with pytest.raises(AuthUnavailable):
+        tokens._resolve_signing_key(make_token())
+
+
+def test_resolver_unknown_key_id_is_an_auth_error(fake_jwks):
+    fake_jwks.outcome = jwt.PyJWKClientError("Unable to find a signing key that matches")
+    with pytest.raises(AuthError):
+        tokens._resolve_signing_key(make_token())
