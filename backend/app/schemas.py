@@ -179,6 +179,10 @@ class InviteIn(BaseModel):
     email: Email
 
 
+class RemoveIn(BaseModel):
+    confirm_email: Email  # must repeat the user's email; the API's safeguard for a permanent delete
+
+
 class AdminUserOut(BaseModel):
     """Access-management data only: never anything from the user's portfolio or chats."""
 

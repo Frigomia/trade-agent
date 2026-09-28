@@ -6,9 +6,12 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from sqlalchemy.orm import Session
+from sqlalchemy import delete
+from sqlalchemy.orm import Session, sessionmaker
 
+from app import rls
 from app.auth.supabase_admin import SupabaseAdmin, SupabaseAdminError, SupabaseUserExists
+from app.db import Base, open_user_session
 from app.models import AppUser
 
 logger = logging.getLogger(__name__)
@@ -147,6 +150,74 @@ def revoke_invite(db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID) -> N
     user = _get_user(db, user_id)
     if user.status != "invited":
         raise Conflict("Only pending invitations can be revoked")
+    _upstream("delete", lambda: supabase.delete(user.id))
+    db.delete(user)
+    db.commit()
+
+
+def _reject_self(user: AppUser, acting_admin_id: uuid.UUID) -> None:
+    # The caller is always an active admin (require_admin), so refusing self-service is also
+    # what guarantees at least one active admin always remains.
+    if user.id == acting_admin_id:
+        raise Conflict("You can't do that to your own account")
+
+
+def disable_user(
+    db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID, acting_admin_id: uuid.UUID
+) -> AppUser:
+    user = _get_user(db, user_id)
+    _reject_self(user, acting_admin_id)
+    if user.status != "active":
+        raise Conflict("Only active users can be disabled")
+    # Supabase first: if it fails, nothing changes on our side.
+    _upstream("ban", lambda: supabase.ban(user.id))
+    user.status = "disabled"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def enable_user(db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID) -> AppUser:
+    user = _get_user(db, user_id)
+    if user.status != "disabled":
+        raise Conflict("Only disabled users can be enabled")
+    _upstream("unban", lambda: supabase.unban(user.id))
+    user.status = "active"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> None:
+    """Deletes the user's rows in every user-data table through a session scoped to that user.
+    RLS limits each DELETE to their own rows; nothing is read."""
+    with open_user_session(factory, user_id) as session:
+        for table_name in rls.USER_TABLES:
+            session.execute(delete(Base.metadata.tables[table_name]))
+        session.commit()
+
+
+def remove_user(
+    db: Session,
+    supabase: SupabaseAdmin,
+    factory: sessionmaker[Session],
+    user_id: uuid.UUID,
+    confirm_email: str,
+    acting_admin_id: uuid.UUID,
+) -> None:
+    """Permanent removal. Order: cut access, delete data, delete the Supabase user, delete the
+    row. A failure after the first step leaves the user disabled; the call can be repeated."""
+    user = _get_user(db, user_id)
+    _reject_self(user, acting_admin_id)
+    if user.email != confirm_email:
+        raise Unprocessable("Confirmation email does not match")
+
+    if user.status != "disabled":
+        _upstream("ban", lambda: supabase.ban(user.id))
+        user.status = "disabled"
+        db.commit()
+
+    _delete_user_data(factory, user.id)
     _upstream("delete", lambda: supabase.delete(user.id))
     db.delete(user)
     db.commit()

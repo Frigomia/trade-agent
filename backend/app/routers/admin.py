@@ -3,14 +3,15 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.admin import service
-from app.auth.deps import get_user_db, require_admin
+from app.auth.deps import CurrentUser, get_user_db, require_admin
 from app.auth.supabase_admin import SupabaseAdmin, get_supabase_admin
 from app.config import settings
+from app.db import get_session_factory
 from app.models import AppUser
-from app.schemas import AdminUserOut, InviteIn
+from app.schemas import AdminUserOut, InviteIn, RemoveIn
 
 # require_admin runs first for every route here (it depends on get_current_user), so an
 # unauthenticated caller gets 401 and a non-admin gets 403 before anything else happens.
@@ -59,4 +60,36 @@ def revoke_invite(
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
 ) -> Response:
     service.revoke_invite(db, supabase, user_id)
+    return Response(status_code=204)
+
+
+@router.post("/users/{user_id}/disable", response_model=AdminUserOut)
+def disable_user(
+    user_id: uuid.UUID,
+    admin: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_user_db),
+    supabase: SupabaseAdmin = Depends(get_supabase_admin),
+) -> AdminUserOut:
+    return _to_out(service.disable_user(db, supabase, user_id, admin.id))
+
+
+@router.post("/users/{user_id}/enable", response_model=AdminUserOut)
+def enable_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_user_db),
+    supabase: SupabaseAdmin = Depends(get_supabase_admin),
+) -> AdminUserOut:
+    return _to_out(service.enable_user(db, supabase, user_id))
+
+
+@router.delete("/users/{user_id}", status_code=204)
+def remove_user(
+    user_id: uuid.UUID,
+    payload: RemoveIn,
+    admin: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_user_db),
+    supabase: SupabaseAdmin = Depends(get_supabase_admin),
+    factory: sessionmaker[Session] = Depends(get_session_factory),
+) -> Response:
+    service.remove_user(db, supabase, factory, user_id, payload.confirm_email, admin.id)
     return Response(status_code=204)
