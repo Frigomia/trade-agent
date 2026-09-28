@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign-in and admin screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: #0a0a0b; color: #d9dbe0; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+::selection { background: rgba(52,231,169,.3); }
+.pagebar { position: sticky; top: 0; z-index: 10; display: flex; gap: 22px; align-items: center; padding: 12px 28px; background: rgba(10,10,11,.9); backdrop-filter: blur(10px); border-bottom: 1px solid #1c1d21; font-size: 14px; }
+.pagebar strong { color: #fff; font-weight: 650; }
+.pagebar a { text-decoration: none; color: #a9adb8; padding: 6px 10px; border-radius: 8px; }
+.pagebar a:hover { color: #fff; background: #17181c; }
+.pagebar .note { margin-left: auto; color: #8a8e9c; font-size: 12.5px; }
+.block { padding: 44px 28px 12px; }
+.block h2 { font-size: 20px; font-weight: 650; color: #fff; letter-spacing: -.01em; }
+.block p.lead { margin-top: 6px; color: #a3a7b3; font-size: 14.5px; max-width: 72ch; }
+.stage { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; margin-top: 22px; }
+.cap { margin-top: 10px; font-size: 12.5px; color: #8a8e9c; text-align: center; max-width: 100%; }
+
+.phone { width: 344px; height: 720px; border-radius: 46px; border: 9px solid #15161a; background: var(--bg); position: relative; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 34px 60px -34px #000, 0 0 0 1px #24262c; }
+.phone .sb { height: 36px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.phone .sb i { width: 74px; height: 22px; border-radius: 12px; background: #000; display: block; }
+.phone .body { flex: 1; min-height: 0; padding: 4px 18px 0; overflow: hidden; }
+.desk { position: relative; width: 1120px; max-width: 100%; height: 680px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); overflow: hidden; display: flex; box-shadow: 0 34px 60px -34px #000; }
+
+.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.num { font-variant-numeric: tabular-nums; }
+.big { font-weight: 600; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; }
+.sp { flex: 1; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.fine { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+
+/* ===== Direction A tokens (identical to the approved direction) ===== */
+.tA {
+  --bg: #060d0c; --panel: rgba(255,255,255,.035); --line: rgba(120,255,214,.11); --line2: rgba(120,255,214,.2);
+  --text: #e7f3ef; --text2: #cfe2dc; --muted: #8aa89f;
+  --accent: #34e7a9; --accent-solid: #34e7a9; --on-accent: #032116;
+  --up: #34e7a9; --down: #ff6b72; --warn: #f4c04f; --on-warn: #2a1c00;
+  --up-bg: rgba(52,231,169,.12); --down-bg: rgba(255,107,114,.12); --warn-bg: rgba(244,192,79,.13);
+  --track: rgba(255,255,255,.08); --tab-bg: rgba(6,13,12,.7); --scrim: rgba(0,0,0,.55); --field: rgba(255,255,255,.045);
+  --shadow: 0 18px 34px -22px #000, inset 0 1px 0 rgba(255,255,255,.05);
+  --pop: 0 30px 60px -20px #000, 0 0 0 1px rgba(120,255,214,.14);
+  --btn-shadow: 0 12px 24px -12px rgba(52,231,169,.6); --focus: #34e7a9;
+  background-image: radial-gradient(520px 260px at 0% 0%, rgba(24,190,146,.16), transparent 62%), radial-gradient(420px 260px at 100% 100%, rgba(24,120,190,.10), transparent 60%);
+  color: var(--text);
+}
+.tA.light {
+  --bg: #f2f8f5; --panel: rgba(255,255,255,.78); --line: rgba(8,110,80,.15); --line2: rgba(8,110,80,.3);
+  --text: #0b1f19; --text2: #29473c; --muted: #52695f;
+  --accent: #078a5f; --accent-solid: #067a52; --on-accent: #ffffff;
+  --up: #067a52; --down: #c8323d; --warn: #9a5b00; --on-warn: #ffffff;
+  --up-bg: rgba(7,138,95,.11); --down-bg: rgba(200,50,61,.10); --warn-bg: rgba(154,91,0,.11);
+  --track: rgba(10,60,45,.10); --tab-bg: rgba(255,255,255,.82); --scrim: rgba(11,31,25,.35); --field: rgba(255,255,255,.9);
+  --shadow: 0 16px 30px -20px rgba(6,60,45,.30), 0 1px 0 rgba(6,60,45,.05), inset 0 1px 0 #fff;
+  --pop: 0 30px 60px -22px rgba(6,60,45,.45), 0 0 0 1px rgba(8,110,80,.14);
+  --btn-shadow: 0 10px 20px -10px rgba(6,122,82,.55); --focus: #067a52;
+  background-image: radial-gradient(520px 260px at 0% 0%, rgba(52,231,169,.22), transparent 62%), radial-gradient(420px 260px at 100% 100%, rgba(80,160,255,.13), transparent 60%);
+}
+.tA :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tA .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+.tA .lbl { font-size: 12px; color: var(--muted); }
+.tA .pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.tA .pill.up { color: var(--up); background: var(--up-bg); }
+.tA .pill.down { color: var(--down); background: var(--down-bg); }
+.tA .pill.warn { color: var(--warn); background: var(--warn-bg); }
+.tA .pill.mute { color: var(--muted); background: var(--track); }
+.tA .badge { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; color: var(--on-accent); background: var(--accent-solid); padding: 3px 9px; border-radius: 8px; }
+.tA .bar { height: 6px; border-radius: 6px; background: var(--track); overflow: hidden; }
+.tA .bar b { display: block; height: 100%; background: var(--accent-solid); border-radius: 6px; }
+.tA .bar.hot b { background: var(--warn); }
+.tA .btn { white-space: nowrap; height: 46px; padding: 0 20px; border-radius: 14px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tA .btn.go { background: var(--accent-solid); color: var(--on-accent); box-shadow: var(--btn-shadow); }
+.tA .btn.no { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+.tA .btn.danger { background: var(--down); color: #fff; }
+.tA .btn.sm { height: 36px; padding: 0 14px; font-size: 13.5px; border-radius: 11px; }
+.tA .tabs { flex: none; display: flex; justify-content: space-around; padding: 10px 6px 16px; border-top: 1px solid var(--line); background: var(--tab-bg); }
+.tA .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+.tA .tab.on { color: var(--accent); }
+.tA .chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; color: var(--muted); }
+.tA .chip.on { background: var(--up-bg); color: var(--accent); }
+.tA .side { width: 218px; flex: none; border-right: 1px solid var(--line); padding: 22px 14px; display: flex; flex-direction: column; gap: 3px; }
+.tA .nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; color: var(--muted); font-size: 14px; }
+.tA .nav.on { background: var(--up-bg); color: var(--accent); }
+.tA .grp { font-size: 12px; color: var(--muted); padding: 16px 12px 6px; }
+.tA .tgl { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); color: var(--text); box-shadow: var(--shadow); flex: none; }
+.tA .tgl:hover { color: var(--accent); }
+
+/* forms */
+.tA .field { display: block; margin-top: 14px; }
+.tA .field > span { display: block; font-size: 12.5px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+.tA .input { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px; border-radius: 13px; background: var(--field); border: 1px solid var(--line); font-size: 15px; color: var(--text); }
+.tA .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--up-bg); }
+.tA .input.err { border-color: var(--down); box-shadow: 0 0 0 3px var(--down-bg); }
+.tA .input.ro { background: var(--track); color: var(--muted); }
+.tA .input .ph { color: var(--muted); }
+.tA .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.tA .errmsg { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--down); margin-top: 8px; }
+.tA .note { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px; background: var(--up-bg); color: var(--text2); font-size: 12.5px; line-height: 1.45; }
+.tA .note .i { color: var(--accent); margin-top: 1px; width: 17px; height: 17px; }
+.tA .chk { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--text2); line-height: 1.45; margin-top: 16px; }
+.tA .chk i { width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--line2); flex: none; margin-top: 1px; display: grid; place-items: center; background: var(--accent-solid); border-color: var(--accent-solid); color: var(--on-accent); }
+.tA .chk i .i { width: 13px; height: 13px; stroke-width: 2.5; }
+.tA .link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tA .mark { width: 38px; height: 38px; border-radius: 12px; background: var(--accent-solid); color: var(--on-accent); display: grid; place-items: center; }
+.tA .strength { display: flex; gap: 4px; margin-top: 8px; }
+.tA .strength b { flex: 1; height: 4px; border-radius: 2px; background: var(--track); }
+.tA .strength b.on { background: var(--accent-solid); }
+
+/* admin table */
+.tA .th, .tA .tr { display: grid; grid-template-columns: 2.3fr .8fr 1fr 1fr 1.6fr 52px; gap: 12px; align-items: center; padding: 0 16px; }
+.tA .th { height: 40px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.tA .tr { height: 60px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.tA .tr:last-child { border-bottom: 0; }
+.tA .tr.sel { background: var(--up-bg); }
+.tA .av { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--track); font-size: 12px; font-weight: 700; color: var(--text2); flex: none; }
+.tA .st { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.tA .st i { width: 8px; height: 8px; border-radius: 50%; background: var(--up); }
+.tA .st.inv i { background: var(--warn); } .tA .st.off i { background: var(--muted); }
+.tA .use { font-size: 12px; color: var(--muted); }
+.tA .use .bar { margin-top: 4px; width: 100px; }
+.tA .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--track); }
+.tA .seg span { font-size: 13px; padding: 6px 12px; border-radius: 9px; color: var(--muted); }
+.tA .seg span.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); border: 1px solid var(--line); }
+
+/* overlays inside a desk frame */
+.tA .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 4; }
+.tA .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; z-index: 5; background: var(--bg); border-left: 1px solid var(--line2); box-shadow: var(--pop); padding: 22px 24px; display: flex; flex-direction: column; }
+.tA .dialog { position: absolute; z-index: 6; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 430px; background: var(--bg); border-radius: 20px; padding: 24px; box-shadow: var(--pop); border: 1px solid var(--line2); }
+.tA .stat { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-today" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 3.5v8.5h8.5"/><path d="M19.6 15.4A8.5 8.5 0 1 1 8.6 4.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5.5 5h13A1.5 1.5 0 0 1 20 6.5v8a1.5 1.5 0 0 1-1.5 1.5H11l-4.5 3.5V16h-1A1.5 1.5 0 0 1 4 14.5v-8A1.5 1.5 0 0 1 5.5 5z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4.5 8h9M18 8h1.5M4.5 16H6M10 16h9.5"/><circle cx="15.5" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="M4.5 8l7.5 5.5L19.5 8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><path d="M16 5.6a3.2 3.2 0 0 1 0 5.8M18 14.4c1.8.6 3 2.2 3.4 4.6"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l3.5-4.5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-7-5.5 15-3-6.2z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V5h5v2M7 7l.8 12h8.4L17 7M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4M12 16.8v.2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.5v5.5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+</svg>
+
+<div class="pagebar">
+  <strong>Sign-in and admin</strong>
+  <a href="#signin">Signing in</a><a href="#admin">Admin</a>
+  <span style="color:#a3a7b3">Every mock has a working theme toggle.</span>
+  <span class="note">Synthetic data &middot; advisory only</span>
+</div>
+
+<!-- ======================= SIGNING IN ======================= -->
+<div class="block" id="signin">
+  <h2>Signing in</h2>
+  <p class="lead">Access is by invitation only, so there is no sign-up screen and no "create account" link on the login page. The only way in is the emailed invitation, which opens the set-password screen.</p>
+  <div class="stage">
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body" style="display:flex;flex-direction:column">
+        <div class="row" style="margin-top:6px"><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div style="margin-top:34px"><div class="mark"><svg class="i"><use href="#i-today"/></svg></div>
+          <div style="font-size:28px;font-weight:650;letter-spacing:-.03em;margin-top:18px">Sign in</div>
+          <div style="color:var(--muted);font-size:14.5px;margin-top:4px">to your trade-agent account</div></div>
+        <label class="field" style="margin-top:26px"><span>Email</span><div class="input"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-mail"/></svg>lena.k@example.com</div></label>
+        <label class="field"><span>Password</span><div class="input focus"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-lock"/></svg><span style="letter-spacing:.2em">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span><div class="sp"></div><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-eye"/></svg></div></label>
+        <div class="row" style="margin-top:12px"><div class="sp"></div><span class="link" style="font-size:13px">Forgot password?</span></div>
+        <button class="btn go" style="width:100%;margin-top:18px">Sign in</button>
+        <div class="note" style="margin-top:22px"><svg class="i"><use href="#i-mail"/></svg><span>trade-agent is by invitation only. If you don't have an account, ask the administrator to invite you.</span></div>
+        <div class="sp"></div>
+        <div class="fine" style="text-align:center;padding-bottom:16px">Advisory information only, not investment advice.</div>
+      </div>
+    </div><div class="cap">Login &middot; dark</div></div>
+
+    <div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body" style="display:flex;flex-direction:column">
+        <div class="row" style="margin-top:6px"><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div style="margin-top:14px"><div class="pill up" style="padding:4px 10px">You're invited</div>
+          <div style="font-size:26px;font-weight:650;letter-spacing:-.03em;margin-top:12px;line-height:1.15">Set your password</div>
+          <div style="color:var(--muted);font-size:14px;margin-top:6px">The administrator invited you to trade-agent. This link expires in 5 days.</div></div>
+        <label class="field" style="margin-top:16px"><span>Email</span><div class="input ro"><svg class="i" style="width:17px;height:17px"><use href="#i-mail"/></svg>sara.m@example.com</div></label>
+        <label class="field" style="margin-top:12px"><span>Create password</span><div class="input focus"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-lock"/></svg><span style="letter-spacing:.2em">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span></div>
+          <div class="strength"><b class="on"></b><b class="on"></b><b class="on"></b><b></b></div><div class="hint">Strong. At least 12 characters.</div></label>
+        <label class="field" style="margin-top:10px"><span>Confirm password</span><div class="input"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-lock"/></svg><span class="ph">Repeat your password</span></div></label>
+        <div class="chk"><i><svg class="i"><use href="#i-check"/></svg></i><span>I understand trade-agent gives advisory information only and is not investment advice. I've read the <span class="link">privacy notice</span>.</span></div>
+        <button class="btn go" style="width:100%;margin-top:16px">Create account</button>
+        <div class="sp"></div>
+      </div>
+    </div><div class="cap">Accept invitation &middot; light</div></div>
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body" style="display:flex;flex-direction:column">
+        <div class="row" style="margin-top:6px"><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div style="margin-top:34px"><div class="mark"><svg class="i"><use href="#i-today"/></svg></div>
+          <div style="font-size:28px;font-weight:650;letter-spacing:-.03em;margin-top:18px">Sign in</div>
+          <div style="color:var(--muted);font-size:14.5px;margin-top:4px">to your trade-agent account</div></div>
+        <label class="field" style="margin-top:26px"><span>Email</span><div class="input"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-mail"/></svg>lena.k@example.com</div></label>
+        <label class="field"><span>Password</span><div class="input err"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-lock"/></svg><span style="letter-spacing:.2em">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</span><div class="sp"></div><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-eye"/></svg></div>
+          <div class="errmsg"><svg class="i" style="width:16px;height:16px"><use href="#i-warn"/></svg>Email or password is incorrect. Try again or reset your password.</div></label>
+        <div class="row" style="margin-top:12px"><div class="sp"></div><span class="link" style="font-size:13px">Forgot password?</span></div>
+        <button class="btn go" style="width:100%;margin-top:18px">Sign in</button>
+        <div class="sp"></div>
+        <div class="fine" style="text-align:center;padding-bottom:16px">Advisory information only, not investment advice.</div>
+      </div>
+    </div><div class="cap">Login &middot; wrong password</div></div>
+
+    <div style="flex:1;min-width:560px">
+      <div class="desk tA light" data-mock style="height:720px">
+        <div style="width:44%;flex:none;padding:44px 40px;display:flex;flex-direction:column;border-right:1px solid var(--line);background:linear-gradient(160deg,rgba(52,231,169,.20),transparent 60%)">
+          <div class="row" style="gap:10px"><div class="mark"><svg class="i"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:18px;letter-spacing:-.01em">trade-agent</span></div>
+          <div style="font-size:30px;font-weight:650;letter-spacing:-.03em;line-height:1.15;margin-top:auto">It shows its work, remembers how past calls turned out, and never places a trade.</div>
+          <div style="color:var(--text2);font-size:14.5px;margin-top:14px;max-width:38ch">An advisory-only reasoning partner. You stay the decision-maker.</div>
+          <div class="fine" style="margin-top:26px">Advisory information only, not investment advice.</div>
+        </div>
+        <div style="flex:1;padding:40px 56px;display:flex;flex-direction:column;justify-content:center;position:relative">
+          <button class="tgl" aria-label="Switch theme" onclick="tg(this)" style="position:absolute;top:22px;right:24px"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button>
+          <div style="max-width:380px;width:100%;margin:0 auto">
+            <div style="font-size:26px;font-weight:650;letter-spacing:-.03em">Sign in</div>
+            <div style="color:var(--muted);font-size:14.5px;margin-top:4px">to your trade-agent account</div>
+            <label class="field" style="margin-top:24px"><span>Email</span><div class="input"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-mail"/></svg>lena.k@example.com</div></label>
+            <label class="field"><span>Password</span><div class="input"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-lock"/></svg><span class="ph">Your password</span></div></label>
+            <div class="row" style="margin-top:12px"><div class="sp"></div><span class="link" style="font-size:13px">Forgot password?</span></div>
+            <button class="btn go" style="width:100%;margin-top:18px">Sign in</button>
+            <div class="note" style="margin-top:22px"><svg class="i"><use href="#i-mail"/></svg><span>trade-agent is by invitation only. If you don't have an account, ask the administrator to invite you.</span></div>
+          </div>
+        </div>
+      </div><div class="cap">Login &middot; desktop, light</div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= ADMIN ======================= -->
+<div class="block" id="admin" style="padding-bottom:70px">
+  <h2>Admin</h2>
+  <p class="lead">The admin manages access, never data. A persistent note says so on every admin screen, and nothing on these screens shows a holding, recommendation, or chat. Admin lives in the same shell as the app, under its own group in the sidebar.</p>
+  <div class="stage" style="flex-direction:column;gap:38px">
+
+    <!-- Users list + invite drawer (dark) -->
+    <div style="width:100%"><div class="desk tA" data-mock>
+      <div class="side">
+        <div class="row" style="gap:10px;padding:2px 10px 14px"><div class="mark" style="width:30px;height:30px;border-radius:10px"><svg class="i" style="width:17px;height:17px"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:15.5px">trade-agent</span></div>
+        <div class="nav"><svg class="i"><use href="#i-today"/></svg>Today</div>
+        <div class="nav"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div>
+        <div class="nav"><svg class="i"><use href="#i-chat"/></svg>Chat</div>
+        <div class="nav"><svg class="i"><use href="#i-hist"/></svg>Backtests</div>
+        <div class="nav"><svg class="i"><use href="#i-sliders"/></svg>Preferences</div>
+        <div class="grp">Administration</div>
+        <div class="nav on"><svg class="i"><use href="#i-users"/></svg>Users</div>
+        <div class="nav"><svg class="i"><use href="#i-gauge"/></svg>Usage &amp; limits</div>
+      </div>
+      <div style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="gap:10px"><div style="font-size:24px;font-weight:650;letter-spacing:-.02em">Users</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button><button class="btn go sm"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg>Invite user</button></div>
+        <div class="note"><svg class="i"><use href="#i-shield"/></svg><span><b>You manage access here, not data.</b> Users' portfolios, recommendations and chats are private and never visible to administrators.</span></div>
+        <div class="row" style="gap:10px"><div class="seg"><span class="on">All 6</span><span>Active 3</span><span>Invited 2</span><span>Disabled 1</span></div></div>
+        <div class="panel" style="padding:0;overflow:hidden">
+          <div class="th"><span>User</span><span>Role</span><span>Status</span><span>Last active</span><span>This month</span><span></span></div>
+          <div class="tr"><div class="row" style="gap:10px"><div class="av">Y</div><div><div style="font-weight:600">admin@example.com</div><div class="lbl">You</div></div></div><span class="pill up">Admin</span><span class="st"><i></i>Active</span><span class="num">Today</span><div class="use">&mdash;</div><svg class="i" style="color:var(--muted)"><use href="#i-more"/></svg></div>
+          <div class="tr"><div class="row" style="gap:10px"><div class="av">LK</div><div style="font-weight:600">lena.k@example.com</div></div><span class="pill mute">User</span><span class="st"><i></i>Active</span><span class="num">2 hours ago</span><div class="use">6 / 20 runs<div class="bar"><b style="width:30%"></b></div></div><svg class="i" style="color:var(--muted)"><use href="#i-more"/></svg></div>
+          <div class="tr"><div class="row" style="gap:10px"><div class="av">TR</div><div style="font-weight:600">tom.r@example.com</div></div><span class="pill mute">User</span><span class="st"><i></i>Active</span><span class="num">Yesterday</span><div class="use">19 / 20 runs<div class="bar hot"><b style="width:95%"></b></div></div><svg class="i" style="color:var(--muted)"><use href="#i-more"/></svg></div>
+          <div class="tr"><div class="row" style="gap:10px"><div class="av">SM</div><div style="font-weight:600">sara.m@example.com</div></div><span class="pill mute">User</span><span class="st inv"><i></i>Invited</span><span class="lbl">Expires in 5 days</span><div class="row" style="gap:6px"><button class="btn no sm" style="height:30px;padding:0 10px;font-size:12.5px">Resend</button><button class="btn no sm" style="height:30px;padding:0 10px;font-size:12.5px">Revoke</button></div><svg class="i" style="color:var(--muted)"><use href="#i-more"/></svg></div>
+          <div class="tr"><div class="row" style="gap:10px"><div class="av">PD</div><div style="font-weight:600">paul.d@example.com</div></div><span class="pill mute">User</span><span class="st inv"><i></i>Invited</span><span class="lbl" style="color:var(--warn)">Expires tomorrow</span><div class="row" style="gap:6px"><button class="btn no sm" style="height:30px;padding:0 10px;font-size:12.5px">Resend</button><button class="btn no sm" style="height:30px;padding:0 10px;font-size:12.5px">Revoke</button></div><svg class="i" style="color:var(--muted)"><use href="#i-more"/></svg></div>
+        </div>
+      </div>
+      <div class="scrim"></div>
+      <div class="drawer">
+        <div class="row"><div style="font-size:19px;font-weight:650;letter-spacing:-.02em">Invite user</div><div class="sp"></div><svg class="i" style="color:var(--muted)"><use href="#i-x"/></svg></div>
+        <div style="color:var(--muted);font-size:13.5px;margin-top:4px">They'll get an email with a link to set a password.</div>
+        <label class="field"><span>Email address</span><div class="input focus"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-mail"/></svg>nina.w@example.com</div></label>
+        <label class="field"><span>Role</span><div class="input ro"><svg class="i" style="width:17px;height:17px"><use href="#i-users"/></svg>User<div class="sp"></div><span class="fine">Only one admin exists</span></div></label>
+        <div style="margin-top:18px;font-size:12.5px;font-weight:600;color:var(--text2)">Monthly limits</div>
+        <div class="row" style="gap:10px;margin-top:8px">
+          <div class="sp"><div class="lbl">Analysis runs</div><div class="input" style="margin-top:5px;height:42px"><span class="num">20</span></div></div>
+          <div class="sp"><div class="lbl">Chat messages</div><div class="input" style="margin-top:5px;height:42px"><span class="num">100</span></div></div>
+        </div>
+        <div class="hint">Defaults from Usage &amp; limits. Change any time; resets on the 1st.</div>
+        <div class="sp"></div>
+        <div class="fine" style="margin-bottom:12px">The invitation link is valid for 7 days.</div>
+        <div class="row" style="gap:10px"><button class="btn no" style="flex:1">Cancel</button><button class="btn go" style="flex:1.4"><svg class="i" style="width:17px;height:17px"><use href="#i-send"/></svg>Send invitation</button></div>
+      </div>
+    </div><div class="cap">Users, with the invite drawer open</div></div>
+
+    <!-- User detail + destructive confirm (light) -->
+    <div style="width:100%"><div class="desk tA light" data-mock>
+      <div class="side">
+        <div class="row" style="gap:10px;padding:2px 10px 14px"><div class="mark" style="width:30px;height:30px;border-radius:10px"><svg class="i" style="width:17px;height:17px"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:15.5px">trade-agent</span></div>
+        <div class="nav"><svg class="i"><use href="#i-today"/></svg>Today</div>
+        <div class="nav"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div>
+        <div class="nav"><svg class="i"><use href="#i-chat"/></svg>Chat</div>
+        <div class="nav"><svg class="i"><use href="#i-hist"/></svg>Backtests</div>
+        <div class="nav"><svg class="i"><use href="#i-sliders"/></svg>Preferences</div>
+        <div class="grp">Administration</div>
+        <div class="nav on"><svg class="i"><use href="#i-users"/></svg>Users</div>
+        <div class="nav"><svg class="i"><use href="#i-gauge"/></svg>Usage &amp; limits</div>
+      </div>
+      <div style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:14px;max-width:760px">
+        <div class="row" style="gap:12px"><span class="lbl" style="font-size:13px">Users /</span><div class="av" style="width:36px;height:36px">TR</div><div><div style="font-size:20px;font-weight:650;letter-spacing:-.02em">tom.r@example.com</div><div class="row lbl" style="gap:8px;margin-top:2px"><span class="st"><i></i>Active</span><span>&middot; joined 14 Aug</span></div></div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div class="panel" style="padding:18px 20px">
+          <div class="row"><span style="font-weight:600">Usage this month</span><div class="sp"></div><span class="lbl">Resets 1 Oct</span></div>
+          <div class="stat"><div style="width:130px"><div style="font-size:13px">Analysis runs</div><div class="fine">Close to the limit</div></div><div class="sp"><div class="bar hot"><b style="width:95%"></b></div></div><span class="num" style="width:84px;text-align:right;font-weight:600;color:var(--warn);white-space:nowrap">19 / 20</span></div>
+          <div class="stat"><div style="width:130px"><div style="font-size:13px">Chat messages</div></div><div class="sp"><div class="bar"><b style="width:31%"></b></div></div><span class="num" style="width:84px;text-align:right;font-weight:600;white-space:nowrap">31 / 100</span></div>
+        </div>
+        <div class="panel" style="padding:18px 20px">
+          <div style="font-weight:600">Monthly limits</div>
+          <div class="row" style="gap:12px;margin-top:10px">
+            <div class="sp"><div class="lbl">Analysis runs</div><div class="input focus" style="margin-top:5px;height:42px"><span class="num">40</span></div></div>
+            <div class="sp"><div class="lbl">Chat messages</div><div class="input" style="margin-top:5px;height:42px"><span class="num">100</span></div></div>
+            <button class="btn go sm" style="align-self:flex-end">Save limits</button>
+          </div>
+        </div>
+        <div class="panel" style="padding:18px 20px">
+          <div style="font-weight:600">Access</div>
+          <div class="row" style="margin-top:12px;gap:14px"><div class="sp"><div style="font-size:13.5px;font-weight:600">Disable access</div><div class="fine" style="margin-top:2px">Signs them out and blocks login. Their data is kept and access can be restored.</div></div><button class="btn no sm">Disable</button></div>
+          <div class="row" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);gap:14px"><div class="sp"><div style="font-size:13.5px;font-weight:600;color:var(--down)">Remove user</div><div class="fine" style="margin-top:2px">Permanently deletes their account and all their data. This cannot be undone.</div></div><button class="btn sm" style="background:var(--down-bg);color:var(--down);border:1px solid var(--down)"><svg class="i" style="width:16px;height:16px"><use href="#i-trash"/></svg>Remove</button></div>
+        </div>
+      </div>
+      <div class="scrim" style="left:218px"></div>
+      <div class="dialog">
+        <div class="row" style="gap:12px"><div style="width:40px;height:40px;border-radius:12px;background:var(--down-bg);color:var(--down);display:grid;place-items:center;flex:none"><svg class="i"><use href="#i-warn"/></svg></div><div style="font-size:18px;font-weight:650;letter-spacing:-.02em">Remove tom.r@example.com?</div></div>
+        <p style="font-size:14px;color:var(--text2);margin-top:12px;line-height:1.5">This permanently deletes their account, portfolio, recommendations, chats and preferences. It cannot be undone. If you only want to pause their access, disable them instead.</p>
+        <label class="field" style="margin-top:14px"><span>Type the email to confirm</span><div class="input focus"><span class="ph">tom.r@example.com</span></div></label>
+        <div class="row" style="gap:10px;margin-top:20px"><button class="btn no" style="flex:1">Cancel</button><button class="btn danger" style="flex:1.4;opacity:.55">Remove permanently</button></div>
+      </div>
+    </div><div class="cap">User detail with limits, and the remove confirmation (the button unlocks only when the email is typed)</div></div>
+
+    <!-- Usage & limits (dark) -->
+    <div style="width:100%"><div class="desk tA" data-mock>
+      <div class="side">
+        <div class="row" style="gap:10px;padding:2px 10px 14px"><div class="mark" style="width:30px;height:30px;border-radius:10px"><svg class="i" style="width:17px;height:17px"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:15.5px">trade-agent</span></div>
+        <div class="nav"><svg class="i"><use href="#i-today"/></svg>Today</div>
+        <div class="nav"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div>
+        <div class="nav"><svg class="i"><use href="#i-chat"/></svg>Chat</div>
+        <div class="nav"><svg class="i"><use href="#i-hist"/></svg>Backtests</div>
+        <div class="nav"><svg class="i"><use href="#i-sliders"/></svg>Preferences</div>
+        <div class="grp">Administration</div>
+        <div class="nav"><svg class="i"><use href="#i-users"/></svg>Users</div>
+        <div class="nav on"><svg class="i"><use href="#i-gauge"/></svg>Usage &amp; limits</div>
+      </div>
+      <div style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="gap:10px"><div style="font-size:24px;font-weight:650;letter-spacing:-.02em">Usage &amp; limits</div><div class="sp"></div><span class="lbl">September, resets 1 Oct</span><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:14px;align-items:start">
+          <div class="panel" style="padding:18px 20px">
+            <div style="font-weight:600">Default limits</div>
+            <div class="fine" style="margin-top:3px">Applied to new invitations. Existing users keep their own.</div>
+            <div class="row" style="gap:12px;margin-top:14px">
+              <div class="sp"><div class="lbl">Analysis runs</div><div class="input" style="margin-top:5px;height:42px"><span class="num">20</span></div></div>
+              <div class="sp"><div class="lbl">Chat messages</div><div class="input" style="margin-top:5px;height:42px"><span class="num">100</span></div></div>
+            </div>
+            <button class="btn go sm" style="margin-top:14px">Save defaults</button>
+            <div class="note" style="margin-top:16px"><svg class="i"><use href="#i-shield"/></svg><span>Counts only. Usage shows how much each person used the service, never what they asked or received.</span></div>
+          </div>
+          <div class="panel" style="padding:0;overflow:hidden">
+            <div class="th" style="grid-template-columns:2fr 1.3fr 1.3fr .8fr"><span>User</span><span>Analysis runs</span><span>Chat messages</span><span></span></div>
+            <div class="tr" style="grid-template-columns:2fr 1.3fr 1.3fr .8fr"><div class="row" style="gap:10px"><div class="av">LK</div>lena.k</div><div class="use"><span class="num" style="color:var(--text)">6 / 20</span><div class="bar"><b style="width:30%"></b></div></div><div class="use"><span class="num" style="color:var(--text)">44 / 100</span><div class="bar"><b style="width:44%"></b></div></div><span class="pill up">OK</span></div>
+            <div class="tr" style="grid-template-columns:2fr 1.3fr 1.3fr .8fr"><div class="row" style="gap:10px"><div class="av">TR</div>tom.r</div><div class="use"><span class="num" style="color:var(--warn)">19 / 20</span><div class="bar hot"><b style="width:95%"></b></div></div><div class="use"><span class="num" style="color:var(--text)">31 / 100</span><div class="bar"><b style="width:31%"></b></div></div><span class="pill warn">Near limit</span></div>
+            <div class="tr" style="grid-template-columns:2fr 1.3fr 1.3fr .8fr"><div class="row" style="gap:10px"><div class="av">NW</div>nina.w</div><div class="use"><span class="num" style="color:var(--text)">20 / 20</span><div class="bar hot"><b style="width:100%"></b></div></div><div class="use"><span class="num" style="color:var(--text)">12 / 100</span><div class="bar"><b style="width:12%"></b></div></div><span class="pill down">At limit</span></div>
+            <div class="tr" style="grid-template-columns:2fr 1.3fr 1.3fr .8fr;background:var(--track)"><span style="font-weight:600;padding-left:42px">Total</span><span class="num" style="font-weight:600">45 runs</span><span class="num" style="font-weight:600">87 messages</span><span></span></div>
+          </div>
+        </div>
+      </div>
+    </div><div class="cap">Usage and limits: defaults on the left, this month per user on the right</div></div>
+
+    <!-- Admin on phone -->
+    <div class="stage" style="margin-top:0"><div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 10px;gap:8px"><div style="font-size:22px;font-weight:650;letter-spacing:-.02em">Users</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button><button class="btn go sm"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg>Invite</button></div>
+        <div class="note"><svg class="i"><use href="#i-shield"/></svg><span>You manage access here, not data. Users' portfolios and chats stay private.</span></div>
+        <div class="seg" style="margin-top:12px;display:flex"><span class="on" style="flex:1;text-align:center">All</span><span style="flex:1;text-align:center">Active</span><span style="flex:1;text-align:center">Invited</span><span style="flex:1;text-align:center">Off</span></div>
+        <div class="panel" style="margin-top:12px;padding:2px 14px">
+          <div class="row" style="gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><div class="av">LK</div><div class="sp"><div style="font-weight:600;font-size:14px">lena.k</div><div class="lbl">Active &middot; 6 / 20 runs</div></div><span class="st"><i></i></span></div>
+          <div class="row" style="gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><div class="av">TR</div><div class="sp"><div style="font-weight:600;font-size:14px">tom.r</div><div class="lbl" style="color:var(--warn)">Near run limit &middot; 19 / 20</div></div><span class="st"><i></i></span></div>
+          <div class="row" style="gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><div class="av">SM</div><div class="sp"><div style="font-weight:600;font-size:14px">sara.m</div><div class="lbl">Invited &middot; expires in 5 days</div></div><span class="st inv"><i></i></span></div>
+          <div class="row" style="gap:10px;padding:12px 0;border-bottom:1px solid var(--line)"><div class="av">PD</div><div class="sp"><div style="font-weight:600;font-size:14px">paul.d</div><div class="lbl" style="color:var(--warn)">Invited &middot; expires tomorrow</div></div><button class="btn no sm" style="height:30px;padding:0 10px;font-size:12.5px">Resend</button></div>
+          <div class="row" style="gap:10px;padding:12px 0"><div class="av">NW</div><div class="sp"><div style="font-weight:600;font-size:14px">nina.w</div><div class="lbl">Disabled</div></div><span class="st off"><i></i></span></div>
+        </div>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab on"><svg class="i"><use href="#i-users"/></svg>Admin</div><div class="tab"><svg class="i"><use href="#i-sliders"/></svg>Prefs</div></div>
+    </div><div class="cap">Admin on a phone: quick invites and resends</div></div></div>
+
+  </div>
+</div>
+
+<script>
+function tg(btn) {
+  const frame = btn.closest('[data-mock]');
+  const light = frame.classList.toggle('light');
+  btn.querySelector('use').setAttribute('href', light ? '#i-moon' : '#i-sun');
+}
+</script>
+</body>
+</html>

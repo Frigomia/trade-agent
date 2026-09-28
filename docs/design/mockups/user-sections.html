@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>User sections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: #0a0a0b; color: #d9dbe0; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+.pagebar { position: sticky; top: 0; z-index: 10; display: flex; gap: 22px; align-items: center; padding: 12px 28px; background: rgba(10,10,11,.9); backdrop-filter: blur(10px); border-bottom: 1px solid #1c1d21; font-size: 14px; }
+.pagebar strong { color: #fff; font-weight: 650; }
+.pagebar a { text-decoration: none; color: #a9adb8; padding: 6px 10px; border-radius: 8px; }
+.pagebar a:hover { color: #fff; background: #17181c; }
+.pagebar .note { margin-left: auto; color: #8a8e9c; font-size: 12.5px; }
+.block { padding: 44px 28px 12px; }
+.block h2 { font-size: 20px; font-weight: 650; color: #fff; letter-spacing: -.01em; }
+.block p.lead { margin-top: 6px; color: #a3a7b3; font-size: 14.5px; max-width: 76ch; }
+.stage { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; margin-top: 22px; }
+.cap { margin-top: 10px; font-size: 12.5px; color: #8a8e9c; text-align: center; max-width: 344px; margin-inline: auto; }
+.cap.wide { max-width: 100%; }
+
+.phone { width: 344px; height: 720px; border-radius: 46px; border: 9px solid #15161a; background: var(--bg); position: relative; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 34px 60px -34px #000, 0 0 0 1px #24262c; }
+.phone .sb { height: 36px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.phone .sb i { width: 74px; height: 22px; border-radius: 12px; background: #000; display: block; }
+.phone .body { flex: 1; min-height: 0; padding: 4px 18px 0; overflow: hidden; display: flex; flex-direction: column; }
+.desk { position: relative; width: 1120px; max-width: 100%; height: 680px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); overflow: hidden; display: flex; box-shadow: 0 34px 60px -34px #000; }
+
+.i { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.num { font-variant-numeric: tabular-nums; }
+.big { font-weight: 600; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.dim { opacity: .55; }
+.row { display: flex; align-items: center; }
+.sp { flex: 1; min-width: 0; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.fine { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+
+.tA {
+  --bg: #060d0c; --panel: rgba(255,255,255,.035); --line: rgba(120,255,214,.11); --line2: rgba(120,255,214,.2);
+  --text: #e7f3ef; --text2: #cfe2dc; --muted: #8aa89f;
+  --accent: #34e7a9; --accent-solid: #34e7a9; --on-accent: #032116;
+  --up: #34e7a9; --down: #ff6b72; --warn: #f4c04f;
+  --up-bg: rgba(52,231,169,.12); --down-bg: rgba(255,107,114,.12); --warn-bg: rgba(244,192,79,.13);
+  --track: rgba(255,255,255,.08); --tab-bg: rgba(6,13,12,.7); --scrim: rgba(0,0,0,.55); --field: rgba(255,255,255,.045);
+  --shadow: 0 18px 34px -22px #000, inset 0 1px 0 rgba(255,255,255,.05);
+  --pop: 0 30px 60px -20px #000, 0 0 0 1px rgba(120,255,214,.14);
+  --btn-shadow: 0 12px 24px -12px rgba(52,231,169,.6); --focus: #34e7a9; --bubble: rgba(52,231,169,.14);
+  background-image: radial-gradient(520px 260px at 0% 0%, rgba(24,190,146,.16), transparent 62%), radial-gradient(420px 260px at 100% 100%, rgba(24,120,190,.10), transparent 60%);
+  color: var(--text);
+}
+.tA.light {
+  --bg: #f2f8f5; --panel: rgba(255,255,255,.78); --line: rgba(8,110,80,.15); --line2: rgba(8,110,80,.3);
+  --text: #0b1f19; --text2: #29473c; --muted: #52695f;
+  --accent: #078a5f; --accent-solid: #067a52; --on-accent: #ffffff;
+  --up: #067a52; --down: #c8323d; --warn: #9a5b00;
+  --up-bg: rgba(7,138,95,.11); --down-bg: rgba(200,50,61,.10); --warn-bg: rgba(154,91,0,.11);
+  --track: rgba(10,60,45,.10); --tab-bg: rgba(255,255,255,.82); --scrim: rgba(11,31,25,.35); --field: rgba(255,255,255,.9);
+  --shadow: 0 16px 30px -20px rgba(6,60,45,.30), 0 1px 0 rgba(6,60,45,.05), inset 0 1px 0 #fff;
+  --pop: 0 30px 60px -22px rgba(6,60,45,.45), 0 0 0 1px rgba(8,110,80,.14);
+  --btn-shadow: 0 10px 20px -10px rgba(6,122,82,.55); --focus: #067a52; --bubble: rgba(7,138,95,.12);
+  background-image: radial-gradient(520px 260px at 0% 0%, rgba(52,231,169,.22), transparent 62%), radial-gradient(420px 260px at 100% 100%, rgba(80,160,255,.13), transparent 60%);
+}
+.tA :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tA .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }
+.tA .lbl { font-size: 12px; color: var(--muted); }
+.tA .h1 { font-size: 22px; font-weight: 650; letter-spacing: -.02em; }
+.tA .pill { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.tA .pill.up { color: var(--up); background: var(--up-bg); }
+.tA .pill.down { color: var(--down); background: var(--down-bg); }
+.tA .pill.warn { color: var(--warn); background: var(--warn-bg); }
+.tA .pill.mute { color: var(--muted); background: var(--track); }
+.tA .badge { font-size: 11.5px; font-weight: 700; letter-spacing: .05em; color: var(--on-accent); background: var(--accent-solid); padding: 3px 9px; border-radius: 8px; }
+.tA .badge.trim { background: var(--warn); color: #2a1c00; }
+.tA.light .badge.trim { color: #fff; }
+.tA .bar { height: 6px; border-radius: 6px; background: var(--track); overflow: hidden; }
+.tA .bar b { display: block; height: 100%; background: var(--accent-solid); border-radius: 6px; }
+.tA .bar.hot b { background: var(--warn); }
+.tA .btn { flex: none; white-space: nowrap; height: 46px; padding: 0 20px; border-radius: 14px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tA .btn.go { background: var(--accent-solid); color: var(--on-accent); box-shadow: var(--btn-shadow); }
+.tA .btn.no { background: var(--panel); border: 1px solid var(--line); color: var(--text); }
+.tA .btn.sm { height: 36px; padding: 0 14px; font-size: 13.5px; border-radius: 11px; }
+.tA .btn.off { opacity: .45; }
+.tA .tabs { flex: none; display: flex; justify-content: space-around; padding: 10px 6px 16px; border-top: 1px solid var(--line); background: var(--tab-bg); }
+.tA .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+.tA .tab.on { color: var(--accent); }
+.tA .side { width: 218px; flex: none; border-right: 1px solid var(--line); padding: 22px 14px; display: flex; flex-direction: column; gap: 3px; }
+.tA .nav { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; color: var(--muted); font-size: 14px; }
+.tA .nav.on { background: var(--up-bg); color: var(--accent); }
+.tA .tgl { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); color: var(--text); box-shadow: var(--shadow); flex: none; }
+.tA .tgl:hover { color: var(--accent); }
+.tA .mark { width: 30px; height: 30px; border-radius: 10px; background: var(--accent-solid); color: var(--on-accent); display: grid; place-items: center; }
+.tA .field { display: block; margin-top: 14px; }
+.tA .field > span { display: block; font-size: 12.5px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+.tA .input { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 13px; background: var(--field); border: 1px solid var(--line); font-size: 15px; color: var(--text); }
+.tA .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--up-bg); }
+.tA .input.ro { background: var(--track); color: var(--muted); }
+.tA .input .ph { color: var(--muted); }
+.tA .hint { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+.tA .note { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 14px; background: var(--up-bg); color: var(--text2); font-size: 12.5px; line-height: 1.45; }
+.tA .note .i { color: var(--accent); margin-top: 1px; width: 17px; height: 17px; }
+.tA .note.warn { background: var(--warn-bg); } .tA .note.warn .i { color: var(--warn); }
+.tA .link { color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.tA .seg { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--track); }
+.tA .seg span { flex: 1; text-align: center; font-size: 13px; padding: 7px 6px; border-radius: 9px; color: var(--muted); white-space: nowrap; }
+.tA .seg span.on { background: var(--panel); color: var(--text); box-shadow: var(--shadow); border: 1px solid var(--line); font-weight: 600; }
+.tA .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; padding: 6px 12px; border-radius: 999px; background: var(--track); color: var(--text2); }
+.tA .chip.add { background: none; border: 1px dashed var(--line2); color: var(--accent); }
+.tA .chip .i { width: 13px; height: 13px; }
+.tA .sec { font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.tA .th, .tA .tr { display: grid; gap: 12px; align-items: center; padding: 0 16px; }
+.tA .th { height: 40px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); }
+.tA .tr { height: 58px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.tA .tr:last-child { border-bottom: 0; }
+.tA .r { text-align: right; }
+.tA .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 4; }
+.tA .drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 390px; z-index: 5; background: var(--bg); border-left: 1px solid var(--line2); box-shadow: var(--pop); padding: 22px 24px; display: flex; flex-direction: column; }
+
+/* chat */
+.tA .msg { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.5; }
+.tA .msg.me { align-self: flex-end; background: var(--bubble); border-bottom-right-radius: 5px; }
+.tA .msg.ai { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.tA .web { border: 1px dashed var(--line2); border-radius: 12px; padding: 9px 11px; margin-top: 9px; font-size: 12.5px; color: var(--text2); }
+.tA .web .lbl { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.tA .compose { flex: none; display: flex; gap: 8px; align-items: center; padding: 10px 0 12px; }
+.tA .compose .input { flex: 1; height: 44px; border-radius: 22px; }
+.tA .send { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-solid); color: var(--on-accent); box-shadow: var(--btn-shadow); flex: none; }
+.tA .send.off { opacity: .4; box-shadow: none; }
+.tA .use { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.tA .use .bar { width: 54px; }
+.tA .ev { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.tA .ev:last-child { border-bottom: 0; }
+.tA .ev .k { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.tA .ev p { font-size: 13px; color: var(--text2); margin-top: 4px; line-height: 1.45; }
+.tA .stat { display: flex; flex-direction: column; gap: 2px; }
+.tA .stat b { font-size: 22px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.tA .callrow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.tA .callrow:last-child { border-bottom: 0; }
+.tA .ok { color: var(--up); } .tA .miss { color: var(--down); }
+.tA .cap2 { font-size: 11.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-today" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></symbol>
+  <symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 3.5v8.5h8.5"/><path d="M19.6 15.4A8.5 8.5 0 1 1 8.6 4.4"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5.5 5h13A1.5 1.5 0 0 1 20 6.5v8a1.5 1.5 0 0 1-1.5 1.5H11l-4.5 3.5V16h-1A1.5 1.5 0 0 1 4 14.5v-8A1.5 1.5 0 0 1 5.5 5z"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4.5 8h9M18 8h1.5M4.5 16H6M10 16h9.5"/><circle cx="15.5" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></symbol>
+  <symbol id="i-hist" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="3"/><path d="M4.5 8l7.5 5.5L19.5 8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18" cy="12" r="1.2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5.5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4M12 16.8v.2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.5v5.5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V6z"/><path d="M9 12l2.2 2.2L15.5 10"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.6 5.2 3.6 8.5s-1 6.1-3.6 8.5c-2.6-2.4-3.6-5.2-3.6-8.5s1-6.1 3.6-8.5z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.5v11M7 11l5 5 5-5M5 19.5h14"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19H10M14 8l4 4-4 4M18 12H9.5"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.5 7V5h5v2M7 7l.8 12h8.4L17 7M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="3"/><path d="M4 10h16M9 3.5v3M15 3.5v3"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8.5 7h11M8.5 12h11M8.5 17h11"/><circle cx="4.8" cy="7" r=".8"/><circle cx="4.8" cy="12" r=".8"/><circle cx="4.8" cy="17" r=".8"/></symbol>
+</svg>
+
+<div class="pagebar">
+  <strong>User sections</strong>
+  <a href="#reco">Recommendations</a><a href="#chat">Chat</a><a href="#more">Track record &amp; preferences</a><a href="#desktop">Portfolio &amp; backtests</a>
+  <span class="note">Synthetic data &middot; advisory only &middot; every mock has a theme toggle</span>
+</div>
+
+<!-- ============ RECOMMENDATION DETAIL ============ -->
+<div class="block" id="reco">
+  <h2>Recommendation: evidence, decision, and what happens after</h2>
+  <p class="lead">The detail page keeps the numbers and the AI's web second opinion visibly different kinds of evidence, and states a conflict rather than hiding it. Approving records a decision only; the confirmation says nothing was sold and points at the broker app.</p>
+  <div class="stage">
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="gap:8px;margin-bottom:8px"><svg class="i" style="color:var(--muted)"><use href="#i-back"/></svg><span class="lbl">Today</span><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div class="row" style="gap:10px"><div style="font-size:30px;font-weight:650;letter-spacing:-.03em">NVDA</div><span class="badge trim">TRIM</span><div class="sp"></div><span class="pill down">Pending</span></div>
+        <div class="row" style="gap:10px;margin-top:2px"><span class="big" style="font-size:20px">121<span class="dim">.60</span></span><span class="pill down">&minus;1.8%</span><span class="lbl">&middot; you hold 8 shares, 9.5%</span></div>
+        <div class="panel" style="padding:4px 16px;margin-top:12px">
+          <div class="ev"><div class="k">Fundamentals <span class="pill down" style="margin-left:auto">52 / 100</span></div><p>Below the 60 gate, so the system won't call this a buy. This decides the direction.</p></div>
+          <div class="ev"><div class="k">Technical <span class="pill mute" style="margin-left:auto">Neutral &middot; RSI 49</span></div><p>Times entries only. It doesn't change this call.</p></div>
+          <div class="ev"><div class="k">Suggested position <span class="num" style="margin-left:auto;font-weight:600">5.0% <span class="lbl" style="font-weight:400">from 9.5%</span></span></div></div>
+        </div>
+        <div class="web" style="margin-top:10px;padding:11px 13px"><div class="lbl"><svg class="i" style="width:15px;height:15px"><use href="#i-globe"/></svg>Web second opinion &middot; not part of the score</div>Coverage leans positive on demand. <b style="color:var(--warn)">This conflicts with the fundamentals reading</b>; the call follows the numbers.</div>
+        <div class="row" style="margin-top:10px;gap:8px;font-size:13px;color:var(--text2)"><svg class="i" style="width:17px;height:17px;color:var(--muted)"><use href="#i-hist"/></svg><span>3 similar past calls &middot; avg <b class="num">&minus;2.1%</b> after 20 days</span></div>
+        <div class="sp"></div>
+        <div class="row" style="gap:10px"><button class="btn go" style="flex:1.3">Approve</button><button class="btn no" style="flex:1">Dismiss</button></div>
+        <div class="fine" style="text-align:center;padding:9px 0 12px">Approving records your decision. Nothing is sent to a broker.</div>
+      </div>
+    </div><div class="cap">Detail, pending decision</div></div>
+
+    <div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body" style="align-items:center;text-align:center">
+        <div class="row" style="align-self:stretch"><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div style="margin-top:44px;width:64px;height:64px;border-radius:50%;background:var(--up-bg);color:var(--up);display:grid;place-items:center"><svg class="i" style="width:30px;height:30px;stroke-width:2"><use href="#i-check"/></svg></div>
+        <div style="font-size:24px;font-weight:650;letter-spacing:-.02em;margin-top:18px">Decision recorded</div>
+        <div style="color:var(--text2);font-size:14.5px;margin-top:8px;max-width:28ch">You approved <b>NVDA &middot; TRIM</b>.</div>
+        <div class="note warn" style="margin-top:22px;text-align:left"><svg class="i"><use href="#i-warn"/></svg><span><b>Nothing was sold.</b> trade-agent never trades. If you decide to act, do it in your broker app, then log it here so your portfolio stays accurate.</span></div>
+        <div class="sp"></div>
+        <button class="btn go" style="width:100%">Log the trade I placed</button>
+        <button class="btn no" style="width:100%;margin-top:10px">Back to Today</button>
+        <div class="fine" style="padding:12px 0 14px"><span class="link">Change my decision</span></div>
+      </div>
+    </div><div class="cap">After Approve: recorded, and clearly not executed</div></div>
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 4px"><div class="h1">Track record</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div class="lbl">How past calls looked 20 trading days later</div>
+        <div class="panel" style="padding:16px 18px;margin-top:14px">
+          <div class="row" style="align-items:baseline;gap:8px"><span class="big" style="font-size:34px">11<span class="dim"> of 16</span></span></div>
+          <div style="font-size:13.5px;color:var(--text2);margin-top:2px">calls moved the way the action implied</div>
+          <div class="row" style="gap:3px;margin-top:12px"><div class="sp bar" style="height:8px"><b style="width:69%"></b></div></div>
+          <div class="fine" style="margin-top:10px">HOLD and WATCH aren't scored. A small sample, not a forecast.</div>
+        </div>
+        <div class="panel" style="padding:2px 16px;margin-top:12px">
+          <div class="callrow"><div class="sp"><div style="font-weight:600">AAPL <span class="badge" style="margin-left:4px">BUY</span></div><div class="lbl">12 Aug &middot; approved</div></div><div class="r" style="text-align:right"><div class="num ok" style="font-weight:600">+4.2%</div><div class="cap2">Moved as implied</div></div></div>
+          <div class="callrow"><div class="sp"><div style="font-weight:600">MSFT <span class="badge trim" style="margin-left:4px">TRIM</span></div><div class="lbl">05 Aug &middot; approved</div></div><div style="text-align:right"><div class="num ok" style="font-weight:600">&minus;3.1%</div><div class="cap2">Moved as implied</div></div></div>
+          <div class="callrow"><div class="sp"><div style="font-weight:600">VWCE <span class="badge" style="margin-left:4px">ADD</span></div><div class="lbl">29 Jul &middot; dismissed</div></div><div style="text-align:right"><div class="num miss" style="font-weight:600">&minus;0.8%</div><div class="cap2">Did not</div></div></div>
+          <div class="callrow"><div class="sp"><div style="font-weight:600">ASML <span class="badge" style="margin-left:4px">BUY</span></div><div class="lbl">22 Jul &middot; approved</div></div><div style="text-align:right"><div class="num ok" style="font-weight:600">+6.7%</div><div class="cap2">Moved as implied</div></div></div>
+          <div class="callrow"><div class="sp"><div style="font-weight:600">TSLA <span class="badge" style="margin-left:4px;background:var(--down);color:#fff">SELL</span></div><div class="lbl">15 Jul &middot; dismissed</div></div><div style="text-align:right"><div class="num miss" style="font-weight:600">+2.4%</div><div class="cap2">Did not</div></div></div>
+        </div>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab"><svg class="i"><use href="#i-chat"/></svg>Chat</div><div class="tab on"><svg class="i"><use href="#i-more"/></svg>More</div></div>
+    </div><div class="cap">Track record: scored whether or not the call was approved</div></div>
+
+  </div>
+</div>
+
+<!-- ============ CHAT ============ -->
+<div class="block" id="chat">
+  <h2>Chat</h2>
+  <p class="lead">The usage indicator is always visible and quiet. At the limit it becomes an explanation with the reset date and who to ask, never an error, and history stays readable.</p>
+  <div class="stage">
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 10px;gap:8px"><div class="h1">Chat</div><div class="sp"></div><span class="use"><span class="num">44 / 100</span><span class="bar"><b style="width:44%"></b></span></span><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden;justify-content:flex-end;padding-bottom:6px">
+          <div class="msg me">Why TRIM on NVDA? It's up this year.</div>
+          <div class="msg ai">The call comes from fundamentals: NVDA scores 52 / 100, below the 60 gate, so the system won't recommend holding the full size. Technicals are neutral and never override that. You hold 8 shares, 9.5% of your portfolio.
+            <div class="web"><div class="lbl"><svg class="i" style="width:15px;height:15px"><use href="#i-globe"/></svg>From the web &middot; not part of the score</div>Recent coverage is positive on demand but flags stretched valuation.</div></div>
+          <div class="msg me">What would change your mind?</div>
+        </div>
+        <div class="fine" style="text-align:center;margin-bottom:4px">Advisory only, not investment advice.</div>
+        <div class="compose"><div class="input focus"><span class="ph">Ask about your portfolio</span></div><div class="send"><svg class="i"><use href="#i-up"/></svg></div></div>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab on"><svg class="i"><use href="#i-chat"/></svg>Chat</div><div class="tab"><svg class="i"><use href="#i-more"/></svg>More</div></div>
+    </div><div class="cap">Chat with the usage indicator</div></div>
+
+    <div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 10px;gap:8px"><div class="h1">Chat</div><div class="sp"></div><span class="use" style="color:var(--warn)"><span class="num">100 / 100</span><span class="bar hot"><b style="width:100%"></b></span></span><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden;justify-content:flex-end;padding-bottom:6px">
+          <div class="msg me">And the ETF part of the portfolio?</div>
+          <div class="msg ai">VWCE is 47.6% of your portfolio and 7.6% above your average cost. No open recommendation on it right now.</div>
+        </div>
+        <div class="note warn" style="margin-bottom:10px"><svg class="i"><use href="#i-warn"/></svg><span><b>You've used all 100 chat messages this month.</b> They reset on 1 October. Need more sooner? Ask the administrator to raise your limit.</span></div>
+        <div class="compose"><div class="input ro"><span class="ph">Chat is paused until 1 Oct</span></div><div class="send off"><svg class="i"><use href="#i-up"/></svg></div></div>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab on"><svg class="i"><use href="#i-chat"/></svg>Chat</div><div class="tab"><svg class="i"><use href="#i-more"/></svg>More</div></div>
+    </div><div class="cap">Limit reached: explained, with reset date and who to ask</div></div>
+
+    <div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 4px"><div class="h1">Preferences</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div class="sec" style="margin-top:14px">Risk tolerance</div>
+        <div class="seg" style="margin-top:7px"><span>Conservative</span><span class="on">Moderate</span><span>Aggressive</span></div>
+        <div class="sec" style="margin-top:14px">Sectors to avoid</div>
+        <div class="row" style="flex-wrap:wrap;gap:7px;margin-top:8px"><span class="chip">Tobacco <svg class="i"><use href="#i-x"/></svg></span><span class="chip">Weapons <svg class="i"><use href="#i-x"/></svg></span><span class="chip">Fossil fuels <svg class="i"><use href="#i-x"/></svg></span><span class="chip add"><svg class="i"><use href="#i-plus"/></svg>Add</span></div>
+        <div class="sec" style="margin-top:14px">Notes for the analyst</div>
+        <div class="input" style="height:auto;align-items:flex-start;padding:11px 14px;margin-top:7px;font-size:14px;line-height:1.45;min-height:64px">Long-term horizon. No leveraged ETFs. I'd rather hold cash than chase.</div>
+        <div class="row" style="margin-top:4px"><div class="sp"></div><span class="fine num">71 / 2000</span></div>
+        <div class="note" style="margin-top:8px"><svg class="i"><use href="#i-shield"/></svg><span>These shape explanations and the web second opinion. They never change the score or the call.</span></div>
+        <div class="sec" style="margin-top:12px">Appearance</div>
+        <div class="seg" style="margin-top:7px"><span class="on">System</span><span>Light</span><span>Dark</span></div>
+        <div class="sp"></div>
+        <button class="btn go" style="width:100%;margin:10px 0 10px">Save preferences</button>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab"><svg class="i"><use href="#i-chat"/></svg>Chat</div><div class="tab on"><svg class="i"><use href="#i-more"/></svg>More</div></div>
+    </div><div class="cap">Preferences (under More), with the theme selector</div></div>
+
+  </div>
+</div>
+
+<!-- ============ MORE: account ============ -->
+<div class="block" id="more">
+  <h2>More: account and data</h2>
+  <p class="lead">"More" holds Track record, Backtests, Preferences and Account. Account is where an invited user finds their own usage and their data rights.</p>
+  <div class="stage">
+
+    <div><div class="phone tA" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 12px"><div class="h1">Account</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div class="panel" style="padding:14px 16px"><div class="lbl">Signed in as</div><div style="font-weight:600;margin-top:2px">lena.k@example.com</div>
+          <div class="row" style="gap:10px;margin-top:8px;padding-top:12px;border-top:1px solid var(--line)"><svg class="i" style="color:var(--muted)"><use href="#i-lock"/></svg><span class="sp" style="font-size:14px">Change password</span><svg class="i" style="color:var(--muted)"><use href="#i-chev"/></svg></div></div>
+        <div class="panel" style="padding:14px 16px;margin-top:8px">
+          <div class="row"><span class="sec">Your usage</span><div class="sp"></div><span class="lbl">Resets 1 Oct &middot; set by admin</span></div>
+          <div class="row" style="gap:10px;margin-top:8px"><span style="font-size:13px;width:98px">Analysis runs</span><div class="sp bar"><b style="width:30%"></b></div><span class="num" style="font-size:13px;width:52px;text-align:right">6 / 20</span></div>
+          <div class="row" style="gap:10px;margin-top:10px"><span style="font-size:13px;width:98px">Chat messages</span><div class="sp bar"><b style="width:44%"></b></div><span class="num" style="font-size:13px;width:52px;text-align:right">44 / 100</span></div>
+        </div>
+        <div class="panel" style="padding:4px 16px;margin-top:8px">
+          <div class="row" style="gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><svg class="i" style="color:var(--muted)"><use href="#i-hist"/></svg><span class="sp" style="font-size:14px">Track record</span><svg class="i" style="color:var(--muted)"><use href="#i-chev"/></svg></div>
+          <div class="row" style="gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><svg class="i" style="color:var(--muted)"><use href="#i-list"/></svg><span class="sp" style="font-size:14px">Backtests</span><svg class="i" style="color:var(--muted)"><use href="#i-chev"/></svg></div>
+          <div class="row" style="gap:10px;padding:10px 0"><svg class="i" style="color:var(--muted)"><use href="#i-sliders"/></svg><span class="sp" style="font-size:14px">Preferences</span><svg class="i" style="color:var(--muted)"><use href="#i-chev"/></svg></div></div>
+        <div class="panel" style="padding:4px 16px;margin-top:8px">
+          <div class="row" style="gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><svg class="i" style="color:var(--muted)"><use href="#i-download"/></svg><span class="sp" style="font-size:14px">Export my data</span></div>
+          <div class="row" style="gap:10px;padding:10px 0;color:var(--down)"><svg class="i"><use href="#i-trash"/></svg><span class="sp" style="font-size:14px">Delete my account and data</span></div></div>
+        <div class="sp"></div>
+        <button class="btn no" style="width:100%;margin-bottom:12px"><svg class="i" style="width:17px;height:17px"><use href="#i-logout"/></svg>Sign out</button>
+      </div>
+      <div class="tabs"><div class="tab"><svg class="i"><use href="#i-today"/></svg>Today</div><div class="tab"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div><div class="tab"><svg class="i"><use href="#i-chat"/></svg>Chat</div><div class="tab on"><svg class="i"><use href="#i-more"/></svg>More</div></div>
+    </div><div class="cap">Account: usage visible to the user, export and delete are self-service</div></div>
+
+  </div>
+</div>
+
+<!-- ============ DESKTOP ============ -->
+<div class="block" id="desktop" style="padding-bottom:70px">
+  <h2>Portfolio management and backtests (desktop)</h2>
+  <p class="lead">Logging a trade uses past-tense language on purpose (Bought / Sold): it records something the user already did elsewhere. Totals carry a quiet note about the known mixed-currency gap rather than a currency symbol that would over-claim.</p>
+  <div class="stage" style="flex-direction:column;gap:38px">
+
+    <div><div class="phone tA light" data-mock>
+      <div class="sb"><span>9:41</span><i></i><span>5G</span></div>
+      <div class="body">
+        <div class="row" style="margin:6px 0 4px"><div class="h1">Portfolio</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button></div>
+        <div class="big" style="font-size:34px;margin-top:6px">10,204<span class="dim">.10</span></div>
+        <div class="panel" style="padding:2px 16px;margin-top:14px">
+          <div class="callrow"><div class="sp"><b>AAPL</b><div class="lbl">12 shares</div></div><span class="num">2,236.80</span></div>
+          <div class="callrow"><div class="sp"><b>MSFT</b><div class="lbl">5 shares</div></div><span class="num">2,140.50</span></div>
+          <div class="callrow"><div class="sp"><b>VWCE</b><div class="lbl">40 shares</div></div><span class="num">4,854.00</span></div>
+        </div>
+      </div>
+      <div class="scrim" style="z-index:4"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:5;background:var(--bg);border-radius:26px 26px 0 0;border-top:1px solid var(--line2);box-shadow:var(--pop);padding:10px 18px 16px">
+        <div style="width:38px;height:4px;border-radius:2px;background:var(--line2);margin:0 auto 12px"></div>
+        <div class="row"><div style="font-size:18px;font-weight:650;letter-spacing:-.02em">Log a trade</div><div class="sp"></div><svg class="i" style="color:var(--muted)"><use href="#i-x"/></svg></div>
+        <div style="color:var(--muted);font-size:13px;margin-top:2px">Record a trade you already placed in your broker app.</div>
+        <div class="note" style="margin-top:10px"><svg class="i"><use href="#i-shield"/></svg><span>This only records it here. Nothing is sent to a broker.</span></div>
+        <div class="row" style="gap:10px"><label class="field sp" style="margin-top:10px"><span>Ticker</span><div class="input focus">NVDA</div></label><div class="field sp" style="margin-top:10px"><span>What happened</span><div class="seg" style="height:44px;align-items:stretch"><span class="on" style="display:grid;place-items:center">Sold</span><span style="display:grid;place-items:center">Bought</span></div></div></div>
+        <div class="row" style="gap:10px"><label class="field sp" style="margin-top:10px"><span>Shares</span><div class="input num">3</div></label><label class="field sp" style="margin-top:10px"><span>Price</span><div class="input num">121.60</div></label></div>
+        <label class="field" style="margin-top:10px"><span>Date</span><div class="input num">28 Sep 2026</div></label>
+        <button class="btn go" style="width:100%;margin-top:16px">Save to log</button>
+      </div>
+    </div><div class="cap">Log a trade: a sheet that says plainly nothing is sent to a broker</div></div>
+
+    <div style="width:100%"><div class="desk tA light" data-mock>
+      <div class="side">
+        <div class="row" style="gap:10px;padding:2px 10px 14px"><div class="mark"><svg class="i" style="width:17px;height:17px"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:15.5px">trade-agent</span></div>
+        <div class="nav"><svg class="i"><use href="#i-today"/></svg>Today</div>
+        <div class="nav on"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div>
+        <div class="nav"><svg class="i"><use href="#i-chat"/></svg>Chat</div>
+        <div class="nav"><svg class="i"><use href="#i-hist"/></svg>Track record</div>
+        <div class="nav"><svg class="i"><use href="#i-list"/></svg>Backtests</div>
+        <div class="nav"><svg class="i"><use href="#i-sliders"/></svg>Preferences</div>
+      </div>
+      <div style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="gap:10px"><div class="h1" style="font-size:24px">Portfolio</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-moon"/></svg></button><button class="btn no sm"><svg class="i" style="width:16px;height:16px"><use href="#i-cam"/></svg>Record snapshot</button><button class="btn go sm"><svg class="i" style="width:16px;height:16px"><use href="#i-plus"/></svg>Log a trade</button></div>
+        <div class="row" style="gap:28px;align-items:flex-end">
+          <div class="stat"><span class="lbl">Portfolio value</span><span class="big" style="font-size:38px">10,204<span class="dim">.10</span></span></div>
+          <div class="stat"><span class="lbl">Cost basis</span><b>9,652<span class="dim">.40</span></b></div>
+          <div class="stat"><span class="lbl">Total P/L</span><b class="ok">+551<span class="dim">.70</span> <span class="pill up" style="vertical-align:middle">+5.7%</span></b></div>
+        </div>
+        <div class="fine" style="margin-top:-6px">Mixed currencies are not converted yet, so totals add amounts as entered.</div>
+        <div style="display:grid;grid-template-columns:1.9fr 1fr;gap:14px;align-items:start">
+          <div class="panel" style="padding:0;overflow:hidden">
+            <div class="th" style="grid-template-columns:1.6fr .6fr .8fr .8fr .9fr 1fr"><span>Holding</span><span class="r">Shares</span><span class="r">Avg cost</span><span class="r">Price</span><span class="r">Value</span><span class="r">P/L</span></div>
+            <div class="tr" style="grid-template-columns:1.6fr .6fr .8fr .8fr .9fr 1fr"><div><b>AAPL</b><div class="lbl">Apple &middot; 21.9%</div></div><span class="r num">12</span><span class="r num">171.20</span><span class="r num">186.40</span><span class="r num">2,236.80</span><span class="r num ok">+182.40<div class="lbl ok">+8.9%</div></span></div>
+            <div class="tr" style="grid-template-columns:1.6fr .6fr .8fr .8fr .9fr 1fr"><div><b>MSFT</b><div class="lbl">Microsoft &middot; 21.0%</div></div><span class="r num">5</span><span class="r num">402.00</span><span class="r num">428.10</span><span class="r num">2,140.50</span><span class="r num ok">+130.50<div class="lbl ok">+6.5%</div></span></div>
+            <div class="tr" style="grid-template-columns:1.6fr .6fr .8fr .8fr .9fr 1fr"><div><b>VWCE</b><div class="lbl">All-World ETF &middot; 47.6%</div></div><span class="r num">40</span><span class="r num">112.80</span><span class="r num">121.35</span><span class="r num">4,854.00</span><span class="r num ok">+342.00<div class="lbl ok">+7.6%</div></span></div>
+            <div class="tr" style="grid-template-columns:1.6fr .6fr .8fr .8fr .9fr 1fr"><div><b>NVDA</b><div class="lbl">NVIDIA &middot; 9.5%</div></div><span class="r num">8</span><span class="r num">134.50</span><span class="r num">121.60</span><span class="r num">972.80</span><span class="r num miss">&minus;103.20<div class="lbl miss">&minus;9.6%</div></span></div>
+          </div>
+          <div class="panel" style="padding:16px 18px">
+            <div class="row"><span style="font-weight:600">Watchlist</span><div class="sp"></div><span class="link" style="font-size:13px">Add</span></div>
+            <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)"><div class="sp"><b>ASML</b><div class="lbl">Watching</div></div><span class="num">702.40</span></div>
+            <div class="row" style="padding:12px 0;border-bottom:1px solid var(--line)"><div class="sp"><b>TSLA</b><div class="lbl">Watching</div></div><span class="num">238.15</span></div>
+            <div class="row" style="padding:12px 0"><div class="sp"><b>KO</b><div class="lbl">Watching</div></div><span class="num">61.90</span></div>
+          </div>
+        </div>
+      </div>
+    </div><div class="cap wide">Portfolio on desktop; Log a trade opens the same sheet as on the phone</div></div>
+
+    <div style="width:100%"><div class="desk tA" data-mock>
+      <div class="side">
+        <div class="row" style="gap:10px;padding:2px 10px 14px"><div class="mark"><svg class="i" style="width:17px;height:17px"><use href="#i-today"/></svg></div><span style="font-weight:700;font-size:15.5px">trade-agent</span></div>
+        <div class="nav"><svg class="i"><use href="#i-today"/></svg>Today</div>
+        <div class="nav"><svg class="i"><use href="#i-pie"/></svg>Portfolio</div>
+        <div class="nav"><svg class="i"><use href="#i-chat"/></svg>Chat</div>
+        <div class="nav"><svg class="i"><use href="#i-hist"/></svg>Track record</div>
+        <div class="nav on"><svg class="i"><use href="#i-list"/></svg>Backtests</div>
+        <div class="nav"><svg class="i"><use href="#i-sliders"/></svg>Preferences</div>
+      </div>
+      <div style="flex:1;min-width:0;padding:22px 26px;display:flex;flex-direction:column;gap:14px">
+        <div class="row" style="gap:10px"><div class="h1" style="font-size:24px">Backtests</div><div class="sp"></div><button class="tgl" aria-label="Switch theme" onclick="tg(this)"><svg class="i" style="width:17px;height:17px"><use href="#i-sun"/></svg></button></div>
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:14px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="panel" style="padding:16px 18px">
+              <div style="font-weight:600">Run a backtest</div>
+              <label class="field" style="margin-top:8px"><span>Ticker</span><div class="input focus">AAPL</div></label>
+              <div class="row" style="gap:10px"><label class="field sp"><span>From</span><div class="input num" style="font-size:14px">1 Jan 2023</div></label><label class="field sp"><span>To</span><div class="input num" style="font-size:14px">31 Dec 2024</div></label></div>
+              <button class="btn go" style="width:100%;margin-top:16px">Run backtest</button>
+              <div class="fine" style="margin-top:10px">Starts with 10,000 and replays the technical signal on past prices. Past performance isn't a forecast.</div>
+            </div>
+            <div class="panel" style="padding:4px 16px">
+              <div class="sec" style="padding:12px 0 4px">Previous runs</div>
+              <div class="row" style="padding:10px 0;border-bottom:1px solid var(--line)"><div class="sp"><b>AAPL</b><div class="lbl">2023 to 2024</div></div><span class="pill down num">&minus;3.8%</span></div>
+              <div class="row" style="padding:10px 0"><div class="sp"><b>VWCE</b><div class="lbl">2022 to 2024</div></div><span class="pill up num">+1.2%</span></div>
+            </div>
+          </div>
+          <div class="panel" style="padding:18px 22px">
+            <div class="row"><div><div style="font-weight:600;font-size:16px">AAPL &middot; 1 Jan 2023 to 31 Dec 2024</div><div class="lbl">Signal strategy vs buy and hold</div></div><div class="sp"></div><span class="pill down" style="font-size:13px">&minus;3.8% vs buy and hold</span></div>
+            <div class="row" style="gap:34px;margin-top:14px">
+              <div class="stat"><span class="lbl">Strategy final value</span><b>11,840</b></div>
+              <div class="stat"><span class="lbl">Buy and hold</span><b>12,310</b></div>
+            </div>
+            <svg viewBox="0 0 600 150" style="width:100%;height:150px;margin-top:10px" aria-label="Strategy and buy-and-hold value over time" role="img">
+              <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".25"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0 110 C60 104 90 118 140 96 S230 70 290 78 S390 40 450 52 S540 30 600 24 L600 150 L0 150Z" fill="url(#g1)"/>
+              <path d="M0 110 C60 104 90 118 140 96 S230 70 290 78 S390 40 450 52 S540 30 600 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5"/>
+              <path d="M0 110 C60 108 90 112 140 100 S230 80 290 84 S390 56 450 62 S540 44 600 36" fill="none" stroke="var(--accent)" stroke-width="2.25"/>
+            </svg>
+            <div class="row" style="gap:16px;font-size:12px;color:var(--muted)"><span class="row" style="gap:6px"><i style="width:14px;height:3px;background:var(--accent);border-radius:2px;display:block"></i>Signal strategy</span><span class="row" style="gap:6px"><i style="width:14px;border-top:2px dashed var(--muted);display:block"></i>Buy and hold</span></div>
+            <div style="margin-top:14px;border-top:1px solid var(--line)">
+              <div class="th" style="grid-template-columns:1.4fr 1fr 1fr 1fr;padding:0;height:38px"><span>Technical signal</span><span class="r">Times seen</span><span class="r">Avg move after</span><span class="r">Rose afterwards</span></div>
+              <div class="tr" style="grid-template-columns:1.4fr 1fr 1fr 1fr;padding:0;height:44px"><span>Oversold</span><span class="r num">9</span><span class="r num ok">+3.2%</span><span class="r num">67%</span></div>
+              <div class="tr" style="grid-template-columns:1.4fr 1fr 1fr 1fr;padding:0;height:44px"><span>Neutral</span><span class="r num">41</span><span class="r num ok">+0.8%</span><span class="r num">54%</span></div>
+              <div class="tr" style="grid-template-columns:1.4fr 1fr 1fr 1fr;padding:0;height:44px"><span>Overbought</span><span class="r num">6</span><span class="r num miss">&minus;1.1%</span><span class="r num">33%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><div class="cap wide">Backtests: run form, result vs buy and hold, per-signal hit rates</div></div>
+
+  </div>
+</div>
+
+<script>
+function tg(btn) {
+  const frame = btn.closest('[data-mock]');
+  const light = frame.classList.toggle('light');
+  btn.querySelector('use').setAttribute('href', light ? '#i-moon' : '#i-sun');
+}
+</script>
+</body>
+</html>
