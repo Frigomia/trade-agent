@@ -11,13 +11,20 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  registers tables on Base.metadata
 import app.redis_client as redis_client_module
+from app.config import settings
 from app.db import Base, get_db
 from app.main import app
+from tests.auth_support import TEST_SUPABASE_URL
 
 ADMIN_DATABASE_URL = "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/postgres"
 TEST_DATABASE_URL = (
     "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent_test"
 )
+
+
+@pytest.fixture(autouse=True)
+def _configure_supabase_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "supabase_url", TEST_SUPABASE_URL)
 
 
 @pytest.fixture(scope="session", autouse=True)
