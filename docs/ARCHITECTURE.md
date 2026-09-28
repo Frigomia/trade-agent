@@ -400,7 +400,7 @@ session without the dashboard running.
 Backend (`.env`, see `backend/.env.example`):
 
 ```
-DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent   # runtime role trading_agent_app (RLS enforced); swap for the Supabase session-pooler URL in hosting
+DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent   # must use the trading_agent_app role for RLS to apply (the local Docker default shown here is the superuser, which bypasses RLS); in hosting, the Supabase session-pooler URL of the trading_agent_app role
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
@@ -456,7 +456,7 @@ default — same dialect and models as production, started with
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
 | Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy` |
-| Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` as a Fly secret: `fly secrets set DATABASE_URL=...` |
+| Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
 | CI/CD | GitHub Actions | Suggested: on push to `main`, run backend tests → `fly deploy`; separately, Vercel's own GitHub integration handles the frontend automatically |
