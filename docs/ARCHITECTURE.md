@@ -173,9 +173,11 @@ PortfolioSnapshot
   total_cost_basis (Numeric(18,2)) -- point-in-time portfolio totals, for value history charts
 
 AppUser
-  id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("active"|"disabled"),
-  created_at, accepted_terms_at, last_seen_at
-  -- no user_id, no RLS; read on every request by the auth path
+  id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("invited"|"active"|"disabled"),
+  created_at, invited_at, accepted_terms_at, last_seen_at
+  -- no user_id, no RLS; read on every request by the auth path. The runtime role may
+  -- INSERT/DELETE rows and UPDATE only status, accepted_terms_at, last_seen_at, invited_at:
+  -- it cannot change id, email, or role.
 ```
 
 ### Migrations — Alembic
@@ -248,8 +250,18 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per client IP |
+| GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
+| POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
+| GET | `/admin/users?status=` | — | **Admin only.** List users (access data only: never portfolios, recommendations, or chats); `invite_expires_at` is a display hint |
+| POST | `/admin/users/invite` | `{email}` | **Admin only.** Supabase invite (24 h link) and an `app_users` row with status `invited`; an already-invited address is re-sent. `201` |
+| POST | `/admin/users/{id}/resend` | — | **Admin only.** Re-send an invitation (invited users) |
+| POST | `/admin/users/{id}/revoke` | — | **Admin only.** Delete a pending invitation. `204` |
+| POST | `/admin/users/{id}/disable` , `/enable` | — | **Admin only.** Ban/unban in Supabase and set status; disabling takes effect on the next request |
+| DELETE | `/admin/users/{id}` | `{confirm_email}` | **Admin only.** Permanent removal: disables, deletes the user's rows (through their own RLS scope), the Supabase user, then the `app_users` row; retryable. `204`; `422` if `confirm_email` does not match |
 
 Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row, and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
+
+Admin routes return `403` to non-admins; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for an address whose Supabase user is already confirmed (the invitee clicked the link but has not yet accepted the terms) is `409`, not `502`. If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when it created it: when an `app_users` row already exists for that id or address it returns `409` and deletes nothing. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
@@ -406,6 +418,9 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
+SUPABASE_SECRET_KEY=                        # backend only; Supabase Auth admin calls (invite, ban, delete)
+INVITE_REDIRECT_URL=                        # where the emailed link lands (the frontend accept page)
+INVITE_LINK_HOURS=24                        # display hint only; Supabase enforces the real expiry
 ```
 
 Plus the risk-profile thresholds in `backend/app/config.py`
@@ -517,8 +532,21 @@ and invited users; nobody can sign up on their own.
   superuser the order does not matter.
 - Open question: FastAPI's `/docs`, `/redoc`, and `/openapi.json` are currently
   unauthenticated. Decide before public hosting whether to disable or protect them.
-- Invitations, the admin API, per-user limits, and export/delete are built in
-  later cycles (see the auth and multi-user specs under `docs/superpowers/specs/`).
+- **Invitations (admin API).** The admin invites by email through Supabase's invite API:
+  the backend calls it with `SUPABASE_SECRET_KEY` and records an `invited` row in
+  `app_users`; the invitee's emailed link signs them in at `INVITE_REDIRECT_URL`, they set a
+  password with Supabase's client, then the frontend calls `POST /me/accept`.
+  The link lifetime is the project's **Email OTP expiration**, shared with password-reset and
+  other email links; set it to 86400 seconds (24 hours). Supabase discourages longer, so an
+  expired invitation is handled by Resend. The built-in mailer is 2 emails per hour and for
+  testing only: configure **custom SMTP** (Authentication, Emails, SMTP Settings). The
+  redirect URL must be in the project's allowed redirect URLs, or Supabase silently sends the
+  link to the Site URL. `SUPABASE_SECRET_KEY` bypasses Row Level Security on Supabase's own
+  tables: keep it in the backend environment only. New-style `sb_secret_` keys are sent in the
+  `apikey` header only; legacy JWT (`service_role`) keys are also sent in
+  `Authorization: Bearer`.
+- Per-user limits, usage, and the user's own export/delete are built in the next cycle
+  (see the specs under `docs/superpowers/specs/`).
 
 ---
 
@@ -592,6 +620,7 @@ just believed done.
       `models.py`
 - [x] Migrations tooling — Alembic, set up per §4
 - [x] RLS policies written and applied to all eight user-data tables in one migration; enforced for the `trading_agent_app` role
+- [x] Invitation flow, admin user management, and narrowed `app_users` grants (sub-project 2b)
 - [ ] Backup plan — Supabase's free tier has limited/no point-in-time
       recovery; decide if that's acceptable or if you need your own
       periodic export
