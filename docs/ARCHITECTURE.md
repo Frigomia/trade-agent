@@ -455,7 +455,7 @@ default — same dialect and models as production, started with
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy` |
+| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command) |
 | Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
@@ -470,7 +470,8 @@ and invited users; nobody can sign up on their own.
   `ES256`/`RS256`, checking `aud == "authenticated"`, the issuer, and expiry.
   Signing keys are cached in process, so a short Supabase outage does not lock
   out users whose key is already cached; an unreachable JWKS with no cached key
-  means `503`. Legacy shared-secret (HS256) verification is not supported: use
+  means `503`. The keys are cached for the life of the process, so after revoking
+  a Supabase signing key the backend must be restarted. Legacy shared-secret (HS256) verification is not supported: use
   asymmetric JWT signing keys. Then it loads the user's row from `app_users`; no
   active row means `403`, which is also what keeps a self-registered Supabase
   user out. Role and status come from our table, never from token claims.
@@ -485,6 +486,35 @@ and invited users; nobody can sign up on their own.
 - One-time Supabase setup: `ALTER ROLE trading_agent_app WITH LOGIN PASSWORD
   '...'` in the SQL editor after the RLS migration has run (the migration creates
   the role `NOLOGIN` so no password is ever committed).
+- **Deploy check: the runtime role must not bypass RLS.** Through the URL in
+  `DATABASE_URL`, run `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname
+  = current_user;` (both must be `false`) and `SELECT count(*) FROM pg_tables
+  WHERE tablename IN ('holdings', 'watchlist_items', 'trades',
+  'recommendations', 'chat_messages', 'backtest_results',
+  'investment_preferences', 'portfolio_snapshots') AND tableowner =
+  current_user;` (must be `0`; a table owner is exempt from RLS unless it is
+  forced, and can disable it). The `.env.example` default (the Docker superuser)
+  and the `postgres` owner URL from Supabase's Connect dialog both bypass RLS
+  silently. The app-level `user_id` filters stay on every query, but the
+  database-level guarantee only holds for `trading_agent_app`. A startup check
+  that refuses to boot on a bypassing role is planned for the deploy cycle
+  (roadmap step 5).
+- **Migrating existing single-user data.** Before auth, every row carries
+  `user_id = 00000000-0000-0000-0000-000000000001` (the removed
+  `default_user_id`). Once you bootstrap the owner under their real Supabase uid,
+  `GET /portfolio/holdings` returns `[]` because those rows belong to nobody.
+  Reassign them **before** the RLS migration: on a managed Postgres the owner
+  lacks `BYPASSRLS`, and once the policies exist `FORCE ROW LEVEL SECURITY`
+  blocks the `UPDATE` (`USING` needs the old id, `WITH CHECK` the new one, so no
+  single `app.current_user_id` satisfies both). Order: (1) create the user in
+  Supabase and note the uid; (2) as the owner (`MIGRATION_DATABASE_URL`), for
+  each of `holdings`, `watchlist_items`, `trades`, `recommendations`,
+  `chat_messages`, `backtest_results`, `investment_preferences`,
+  `portfolio_snapshots`, run `UPDATE <table> SET user_id = '<supabase-uid>' WHERE
+  user_id = '00000000-0000-0000-0000-000000000001';`; (3) `alembic upgrade head`
+  up to the RLS migration (`dd035aae788b`); (4) run `python -m
+  app.auth.bootstrap_admin <email> <supabase-uid>`. On the local Docker
+  superuser the order does not matter.
 - Open question: FastAPI's `/docs`, `/redoc`, and `/openapi.json` are currently
   unauthenticated. Decide before public hosting whether to disable or protect them.
 - Invitations, the admin API, per-user limits, and export/delete are built in

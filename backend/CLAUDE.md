@@ -33,6 +33,10 @@ and point `DATABASE_URL` at that role to exercise RLS by hand (the default
 `trading_agent` superuser bypasses it). Keep `MIGRATION_DATABASE_URL` on the owner
 (Alembic falls back to `DATABASE_URL` when it is unset).
 
+Existing single-user data (all rows on the old default `user_id`) must be reassigned
+*before* the RLS migration: see "Migrating existing single-user data" in
+`docs/ARCHITECTURE.md` §13.
+
 | Task           | Command                                                                        |
 | -------------- | ------------------------------------------------------------------------------ |
 | Test all / one | `uv run python -m pytest tests/ -v` / `uv run python -m pytest path::test_name -v` (needs `-m pytest`, not bare `pytest` — otherwise `backend/` isn't on `sys.path` and `import app...` fails) |
