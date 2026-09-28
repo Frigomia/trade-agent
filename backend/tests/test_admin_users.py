@@ -2,7 +2,8 @@ import uuid
 from datetime import datetime
 
 import pytest
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
 from app.auth.supabase_admin import get_supabase_admin
 from app.config import settings
@@ -39,6 +40,15 @@ def test_user_management_is_503_when_the_secret_key_is_not_configured(admin_clie
 
     assert response.status_code == 503
     assert response.json() == {"detail": "User management not configured"}
+
+
+def test_auth_is_checked_before_the_503(anon_client, client, monkeypatch):
+    monkeypatch.setattr(settings, "supabase_secret_key", None)
+
+    assert (
+        anon_client.post("/admin/users/invite", json={"email": "a@example.com"}).status_code == 401
+    )
+    assert client.post("/admin/users/invite", json={"email": "a@example.com"}).status_code == 403
 
 
 # ---- list ------------------------------------------------------------------------------------
@@ -145,15 +155,50 @@ def test_invite_supabase_failure_is_502_and_creates_nothing(
     assert db_session.query(AppUser).filter_by(email="a@example.com").count() == 0
 
 
-def test_invite_database_failure_deletes_the_supabase_user(admin_client, fake_supabase, db_session):
+def test_invite_colliding_with_an_existing_user_is_409_and_deletes_nothing(
+    admin_client, fake_supabase, db_session
+):
     # The fake hands back an id that already exists in app_users, so the insert fails.
     fake_supabase.next_id = ADMIN_ID
 
-    with pytest.raises(IntegrityError):
+    response = admin_client.post("/admin/users/invite", json={"email": "a@example.com"})
+
+    assert response.status_code == 409
+    assert _row(db_session, ADMIN_ID).email == "admin@example.com"
+    assert ("delete", ADMIN_ID) not in fake_supabase.calls
+    assert db_session.query(AppUser).filter_by(email="a@example.com").count() == 0
+
+
+def test_invite_database_failure_deletes_the_supabase_user(
+    admin_client, fake_supabase, db_session, monkeypatch
+):
+    fake_supabase.next_id = USER_ID
+    original_commit = Session.commit
+
+    def failing_commit(self):
+        if any(isinstance(obj, AppUser) for obj in self.new):  # only the invite insert
+            raise OperationalError("INSERT", {}, Exception("database down"))
+        return original_commit(self)
+
+    monkeypatch.setattr(Session, "commit", failing_commit)
+
+    with pytest.raises(OperationalError):
         admin_client.post("/admin/users/invite", json={"email": "a@example.com"})
 
-    assert ("delete", ADMIN_ID) in fake_supabase.calls
-    assert db_session.query(AppUser).filter_by(email="a@example.com").count() == 0
+    assert ("delete", USER_ID) in fake_supabase.calls
+    assert _row(db_session, USER_ID) is None
+
+
+def test_invite_of_an_invited_address_already_confirmed_in_supabase_is_409(
+    admin_client, db_session, fake_supabase
+):
+    add_app_user(db_session, USER_ID, status="invited", email="a@example.com", invited_at=OLD)
+    fake_supabase.existing_emails.add("a@example.com")
+
+    response = admin_client.post("/admin/users/invite", json={"email": "a@example.com"})
+
+    assert response.status_code == 409
+    assert _row(db_session, USER_ID).invited_at == OLD
 
 
 # ---- resend ----------------------------------------------------------------------------------
@@ -171,6 +216,16 @@ def test_resend_is_only_for_invited_users(admin_client, db_session):
     add_app_user(db_session, USER_ID, status="active")
 
     assert admin_client.post(f"/admin/users/{USER_ID}/resend").status_code == 409
+
+
+def test_resend_of_an_address_already_confirmed_in_supabase_is_409(
+    admin_client, db_session, fake_supabase
+):
+    add_app_user(db_session, USER_ID, status="invited", email="a@example.com", invited_at=OLD)
+    fake_supabase.existing_emails.add("a@example.com")
+
+    assert admin_client.post(f"/admin/users/{USER_ID}/resend").status_code == 409
+    assert _row(db_session, USER_ID).invited_at == OLD
 
 
 def test_resend_unknown_user_is_404(admin_client):

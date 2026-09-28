@@ -106,6 +106,13 @@ def invite_user(
         db.commit()
     except Exception:
         db.rollback()
+        # invite() can return an EXISTING Supabase user (re-send). If we already have a row for
+        # that id or address, the account is not ours to delete: report a conflict instead.
+        if (
+            db.get(AppUser, supabase_id) is not None
+            or db.query(AppUser).filter_by(email=email).first() is not None
+        ):
+            raise Conflict("That address already has access") from None
         # Do not leave a Supabase user (and a sent email) that we have no record of.
         try:
             supabase.delete(supabase_id)
@@ -122,7 +129,14 @@ def resend_invite(
     user = _get_user(db, user_id)
     if user.status != "invited":
         raise Conflict("Only pending invitations can be resent")
-    _upstream("invite", lambda: supabase.invite(user.email, redirect_to))
+    try:
+        supabase.invite(user.email, redirect_to)
+    except SupabaseUserExists:
+        # Confirmed in Supabase but terms not yet accepted, so app_users still says "invited".
+        raise Conflict("That address has already accepted the invitation") from None
+    except SupabaseAdminError as exc:
+        logger.error("Supabase invite failed: %s", type(exc).__name__)
+        raise UpstreamError(UPSTREAM_DETAIL) from None
     user.invited_at = _utcnow()
     db.commit()
     db.refresh(user)
