@@ -34,9 +34,12 @@ USER_TABLES = (
 def upgrade() -> None:
     op.execute(rls.create_role_sql())
     op.execute(rls.grant_schema_sql())
-    for table in (*USER_TABLES, "app_users"):
+    for table in USER_TABLES:
         for statement in rls.grant_table_sql(table):
             op.execute(statement)
+    # app_users exactly as it was at this revision (narrowed by a later migration). Written out
+    # so replaying history does not depend on the current rls.py.
+    op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON app_users TO {rls.RUNTIME_ROLE}")
     for table in USER_TABLES:
         for statement in rls.policy_sql(table):
             op.execute(statement)
