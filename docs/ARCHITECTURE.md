@@ -299,6 +299,15 @@ recommendation and manually executed it in Trade Republic, calls
 `POST /portfolio/trades` (or clicks a "mark as executed" action in the UI,
 which should just call that same endpoint) to log it and update cost basis.
 
+**Approve and execute are deliberately separate steps** (decided
+2026-09-28). Approving means "I agree with this recommendation"; executing
+happens later, in another app, at a price that isn't known at approval
+time. Merging them into one call would force either a price up front or a
+two-phase state inside a single endpoint, and would lose a real distinction:
+approved-but-never-executed is a meaningful state. A UI can still prompt
+"log the trade?" right after an approve by calling the existing
+`POST /portfolio/trades` — no backend change needed.
+
 ---
 
 ## 8. Chat agent — phased design
@@ -559,9 +568,11 @@ just believed done.
       Capture-only for now; no chart/UI rendering yet
 - [ ] Trade history view in the UI (the `Trade` table exists; nothing
       lists it)
-- [ ] Decide: does "Approve" on a recommendation capture actual execution
+- [x] Decide: does "Approve" on a recommendation capture actual execution
       price/shares, or does that stay a separate manual step via
-      `POST /portfolio/trades`? Currently these are conflated
+      `POST /portfolio/trades`? Decided: stays separate (see §7). The
+      "conflated" premise was stale — the code and §7 already kept them
+      apart
 - [ ] Deliberate responsive/mobile pass — likely to be checked from a
       phone, same as Trade Republic itself
 
