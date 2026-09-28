@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  registers tables on Base.metadata
 import app.redis_client as redis_client_module
+from app import rls
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
@@ -19,6 +20,9 @@ from tests.auth_support import TEST_SUPABASE_URL
 ADMIN_DATABASE_URL = "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/postgres"
 TEST_DATABASE_URL = (
     "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent_test"
+)
+APP_TEST_DATABASE_URL = (
+    "postgresql+psycopg://trading_agent_app:trading_agent_app@localhost:5432/trading_agent_test"
 )
 
 
@@ -42,14 +46,38 @@ def _ensure_test_database() -> None:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     test_engine.dispose()
 
+    # The restricted runtime role is cluster-wide. Give it a login for the local test Docker
+    # Postgres only: the migration creates it NOLOGIN so no password is ever committed.
+    role_engine = create_engine(ADMIN_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with role_engine.connect() as conn:
+        conn.execute(text(rls.create_role_sql()))
+        conn.execute(text(f"ALTER ROLE {rls.RUNTIME_ROLE} LOGIN PASSWORD 'trading_agent_app'"))
+    role_engine.dispose()
+
 
 @pytest.fixture()
 def engine() -> Generator[Engine, None, None]:
     test_engine = create_engine(TEST_DATABASE_URL)
     Base.metadata.create_all(bind=test_engine)
+    with test_engine.begin() as conn:
+        for statement in rls.apply_sql():
+            conn.execute(text(statement))
     yield test_engine
     Base.metadata.drop_all(bind=test_engine)
     test_engine.dispose()
+
+
+@pytest.fixture()
+def app_engine(engine: Engine) -> Generator[Engine, None, None]:
+    """Engine connected as the restricted runtime role, so RLS is actually enforced."""
+    restricted_engine = create_engine(APP_TEST_DATABASE_URL)
+    yield restricted_engine
+    restricted_engine.dispose()
+
+
+@pytest.fixture()
+def app_session_local(app_engine: Engine) -> sessionmaker[Session]:
+    return sessionmaker(autocommit=False, autoflush=False, bind=app_engine)
 
 
 @pytest.fixture()
