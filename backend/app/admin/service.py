@@ -133,13 +133,21 @@ def resend_invite(
     if user.status != "invited":
         raise Conflict("Only pending invitations can be resent")
     try:
-        supabase.invite(user.email, redirect_to)
+        supabase_id = supabase.invite(user.email, redirect_to)
     except SupabaseUserExists:
         # Confirmed in Supabase but terms not yet accepted, so app_users still says "invited".
         raise Conflict("That address has already accepted the invitation") from None
     except SupabaseAdminError as exc:
         logger.error("Supabase invite failed: %s", type(exc).__name__)
         raise UpstreamError(UPSTREAM_DETAIL) from None
+    if supabase_id != user.id:
+        # The Supabase user was deleted out-of-band, so Supabase created a NEW one (and emailed
+        # it). Drop that stray user and leave our row alone.
+        try:
+            supabase.delete(supabase_id)
+        except SupabaseAdminError as exc:
+            logger.error("Compensating Supabase delete failed: %s", type(exc).__name__)
+        raise Conflict("This invitation is out of date; revoke it and invite the address again")
     user.invited_at = _utcnow()
     db.commit()
     db.refresh(user)
@@ -190,10 +198,12 @@ def enable_user(db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID) -> App
 
 def _delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> None:
     """Deletes the user's rows in every user-data table through a session scoped to that user.
-    RLS limits each DELETE to their own rows; nothing is read."""
+    Two layers: the explicit user_id filter (holds even if DATABASE_URL is a role that bypasses
+    RLS) and RLS on the scoped session. Nothing is read."""
     with open_user_session(factory, user_id) as session:
         for table_name in rls.USER_TABLES:
-            session.execute(delete(Base.metadata.tables[table_name]))
+            table = Base.metadata.tables[table_name]
+            session.execute(delete(table).where(table.c.user_id == user_id))
         session.commit()
 
 
@@ -219,5 +229,8 @@ def remove_user(
 
     _delete_user_data(factory, user.id)
     _upstream("delete", lambda: supabase.delete(user.id))
+    # A running job may have written rows since the first pass. This narrows the window; it does
+    # not close it.
+    _delete_user_data(factory, user.id)
     db.delete(user)
     db.commit()

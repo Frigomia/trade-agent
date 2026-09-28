@@ -21,10 +21,11 @@ USER_TABLES: tuple[str, ...] = (
 # Every table the runtime role may touch: the user tables plus the auth table.
 RUNTIME_TABLES: tuple[str, ...] = (*USER_TABLES, "app_users")
 
-# The auth table is deliberately not writable wholesale: the runtime role may create and delete
-# rows and update only these columns, so no application bug can change a user's id, email, or
-# role (for example promote someone to admin). Role is set only by the bootstrap command on the
-# owner connection.
+# The auth table is deliberately not writable wholesale: the runtime role cannot UPDATE id,
+# email, or role, so no application bug can change an existing user's role (for example promote
+# someone to admin). Role is set only by the bootstrap command on the owner connection. The role
+# can still INSERT rows with any role value: that is by design for the invite flow, and a known
+# defense-in-depth gap.
 APP_USERS_UPDATABLE_COLUMNS: tuple[str, ...] = (
     "status",
     "accepted_terms_at",

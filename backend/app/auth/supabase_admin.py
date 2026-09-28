@@ -39,7 +39,7 @@ def _error_code(response: httpx.Response) -> str | None:
 
 
 def _raise_for_status(response: httpx.Response) -> None:
-    if response.status_code >= 400:
+    if not response.is_success:
         raise SupabaseAdminError(f"HTTP {response.status_code}")
 
 
@@ -79,7 +79,7 @@ class SupabaseAdmin:
                     json=json,
                     params=params,
                 )
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, httpx.InvalidURL) as exc:
             raise SupabaseAdminError(type(exc).__name__) from None
 
     def invite(self, email: str, redirect_to: str | None) -> uuid.UUID:

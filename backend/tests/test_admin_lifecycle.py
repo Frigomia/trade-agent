@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 from app import rls
+from app.admin import service
 from app.db import Base
 from app.models import AppUser
 from tests.auth_support import (
@@ -195,3 +196,42 @@ def test_lifecycle_routes_require_admin(client, anon_client):
         == 403
     )
     assert anon_client.post(f"/admin/users/{USER_ID}/enable").status_code == 401
+
+
+def test_delete_user_data_only_touches_the_target_even_when_rls_is_bypassed(
+    db_session, engine, session_local
+):
+    # `session_local` is bound to the owner engine, which bypasses RLS: only the explicit
+    # user_id filter can keep the other user's rows.
+    add_app_user(db_session, USER_ID)
+    add_app_user(db_session, OTHER_USER_ID)
+    for table_name in rls.USER_TABLES:
+        db_session.add_all(
+            [ROW_FACTORIES[table_name](USER_ID), ROW_FACTORIES[table_name](OTHER_USER_ID)]
+        )
+    db_session.commit()
+
+    service._delete_user_data(session_local, USER_ID)
+
+    for table_name in rls.USER_TABLES:
+        assert _count(engine, table_name, USER_ID) == 0, table_name
+        assert _count(engine, table_name, OTHER_USER_ID) == 1, table_name
+
+
+def test_remove_deletes_data_written_between_the_two_passes(
+    admin_client, db_session, engine, fake_supabase, monkeypatch
+):
+    add_app_user(db_session, USER_ID, status="active", email="target@example.com")
+    real_delete = fake_supabase.delete
+
+    def delete_then_simulate_a_late_job_write(user_id):
+        real_delete(user_id)
+        db_session.add(ROW_FACTORIES["holdings"](USER_ID))
+        db_session.commit()
+
+    monkeypatch.setattr(fake_supabase, "delete", delete_then_simulate_a_late_job_write)
+
+    assert _remove(admin_client, USER_ID, "target@example.com").status_code == 204
+
+    assert _count(engine, "holdings", USER_ID) == 0
+    assert _row(db_session, USER_ID) is None

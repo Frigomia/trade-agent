@@ -37,8 +37,9 @@ def upgrade() -> None:
     for table in USER_TABLES:
         for statement in rls.grant_table_sql(table):
             op.execute(statement)
-    # app_users exactly as it was at this revision (narrowed by a later migration). Written out
-    # so replaying history does not depend on the current rls.py.
+    # Only this one grant is written out literally: it is app_users as it was at this revision
+    # (narrowed by a later migration). The user-table grants and policies still call the current
+    # rls.py builders.
     op.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON app_users TO {rls.RUNTIME_ROLE}")
     for table in USER_TABLES:
         for statement in rls.policy_sql(table):

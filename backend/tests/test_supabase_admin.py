@@ -156,3 +156,19 @@ def test_get_supabase_admin_builds_a_client_when_configured(monkeypatch):
     monkeypatch.setattr(settings, "supabase_secret_key", NEW_KEY)
 
     assert isinstance(get_supabase_admin(), SupabaseAdmin)
+
+
+@pytest.mark.parametrize("call", ["ban", "delete"])
+def test_a_redirect_is_not_success(call):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(302, headers={"location": "https://elsewhere.example"})
+
+    with pytest.raises(SupabaseAdminError):
+        getattr(_client(handler), call)(USER_ID)
+
+
+# "not a url" fails as httpx.UnsupportedProtocol; a non-numeric port fails as httpx.InvalidURL.
+@pytest.mark.parametrize("base_url", ["not a url", "https://host:abc"])
+def test_an_invalid_base_url_raises_supabase_admin_error(base_url):
+    with pytest.raises(SupabaseAdminError):
+        SupabaseAdmin(base_url, NEW_KEY).ban(USER_ID)

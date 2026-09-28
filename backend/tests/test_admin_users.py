@@ -204,6 +204,7 @@ def test_invite_of_an_invited_address_already_confirmed_in_supabase_is_409(
 # ---- resend ----------------------------------------------------------------------------------
 def test_resend_refreshes_the_invitation(admin_client, db_session, fake_supabase):
     add_app_user(db_session, USER_ID, status="invited", email="a@example.com", invited_at=OLD)
+    fake_supabase.ids_by_email["a@example.com"] = USER_ID
 
     response = admin_client.post(f"/admin/users/{USER_ID}/resend")
 
@@ -265,3 +266,21 @@ def test_revoke_supabase_failure_keeps_the_row(admin_client, db_session, fake_su
 
     assert admin_client.post(f"/admin/users/{USER_ID}/revoke").status_code == 502
     assert _row(db_session, USER_ID) is not None
+
+
+def test_resend_when_supabase_returns_a_different_id_conflicts_and_drops_the_stray_user(
+    admin_client, db_session, fake_supabase
+):
+    invited_at = datetime(2024, 1, 1, 12, 0, 0)
+    add_app_user(
+        db_session, USER_ID, status="invited", email="stale@example.com", invited_at=invited_at
+    )
+    new_id = uuid.uuid4()
+    fake_supabase.ids_by_email["stale@example.com"] = new_id
+
+    response = admin_client.post(f"/admin/users/{USER_ID}/resend")
+
+    assert response.status_code == 409
+    assert ("delete", new_id) in fake_supabase.calls
+    db_session.expire_all()
+    assert db_session.get(AppUser, USER_ID).invited_at == invited_at
