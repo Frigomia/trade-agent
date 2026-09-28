@@ -26,6 +26,13 @@ auto-update — copy the new Postgres connection string from `.env.example`
 by hand, or `alembic upgrade head` fails confusingly (silently resolves the
 SQLite dialect against a stale URL).
 
+Auth needs `SUPABASE_URL` in `.env`. The RLS migration creates the runtime role
+`trading_agent_app` `NOLOGIN`; locally run `docker compose exec postgres psql -U
+trading_agent -c "ALTER ROLE trading_agent_app LOGIN PASSWORD 'trading_agent_app'"`
+and point `DATABASE_URL` at that role to exercise RLS by hand (the default
+`trading_agent` superuser bypasses it). Keep `MIGRATION_DATABASE_URL` on the owner
+(Alembic falls back to `DATABASE_URL` when it is unset).
+
 | Task           | Command                                                                        |
 | -------------- | ------------------------------------------------------------------------------ |
 | Test all / one | `uv run python -m pytest tests/ -v` / `uv run python -m pytest path::test_name -v` (needs `-m pytest`, not bare `pytest` — otherwise `backend/` isn't on `sys.path` and `import app...` fails) |
@@ -54,8 +61,10 @@ human Python reviewer here, so these three commands are the review.
   concurrent request, the single most common FastAPI throughput bug.
   Don't reach for `async def` until the async job queue (ARCHITECTURE.md
   §5) is actually built with async clients throughout.
-- **One SQLAlchemy session per request**, via `Depends(get_db)`. Never
-  instantiate a session ad hoc inside a function. Every write goes in a
+- **One SQLAlchemy session per request**, via `Depends(get_user_db)`
+  (app/auth/deps.py). It is scoped to the authenticated user: never open a
+  session for user data any other way; background jobs use
+  `app.db.scoped_session(user_id)`. Every write goes in a
   try/except with an explicit `rollback()` on failure — a commit with no
   rollback path leaves the session poisoned for the rest of the request.
 - **Pydantic v2 idioms only** — `model_dump()`/`model_validate()`. Never
@@ -84,8 +93,8 @@ human Python reviewer here, so these three commands are the review.
   that unless the prompt says so.
 - Never log/persist raw exception text — may contain secrets or connection strings
 - Never commit `.env`; all secrets via environment variables
-- Pin JWT algorithm explicitly (`algorithms=["HS256"]`) when verifying
-  Supabase tokens — unpinned decode is how `alg: none` attacks work
+- JWT algorithms are pinned to `ES256`/`RS256` (app/auth/tokens.py); never
+  add HS256 or an unpinned decode
 - RLS: `ENABLE ROW LEVEL SECURITY` and the first `CREATE POLICY` land in
   the _same_ migration — enabling with no policy blocks all access,
   including the backend's own
@@ -100,3 +109,12 @@ human Python reviewer here, so these three commands are the review.
   fixtures in `backend/tests/conftest.py`, backed by a real
   `trading_agent_test` database. Docker Postgres (`docker compose up -d`)
   must be running for these to work; no in-memory/SQLite fallback exists
+- API tests run as the restricted `trading_agent_app` role with real JWTs
+  signed by a generated test key (tests/auth_support.py); never point the
+  `client` fixture at a superuser, or RLS is silently bypassed.
+  `tests/test_rls.py` fails if a table with a `user_id` column is missing from
+  `app/rls.py`
+- The session-scoped fixture in `conftest.py` gives the local Docker
+  `trading_agent_app` role LOGIN with the known test password
+  `trading_agent_app` (local Docker Postgres only; the migration itself creates
+  the role `NOLOGIN` with no password)
