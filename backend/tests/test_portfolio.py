@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.models import Holding, PortfolioSnapshot
-from tests.auth_support import OTHER_USER_ID, USER_ID
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
 def test_list_holdings_empty(client):
@@ -376,3 +376,38 @@ def test_upsert_holding_is_stored_for_the_caller(client, db_session):
 
     stored = db_session.query(Holding).filter_by(ticker="AAPL").one()
     assert stored.user_id == USER_ID
+
+
+def test_identity_comes_from_the_token_not_a_default_user(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    as_other = auth_headers(OTHER_USER_ID)
+    payload = {
+        "ticker": "MSFT",
+        "name": "Microsoft",
+        "asset_type": "STOCK",
+        "shares": 3,
+        "cost_basis": 200,
+        "first_purchase_date": "2024-01-01",
+    }
+
+    assert client.post("/portfolio/holdings", json=payload, headers=as_other).status_code == 200
+    assert db_session.query(Holding).filter_by(ticker="MSFT").one().user_id == OTHER_USER_ID
+    assert db_session.query(Holding).filter_by(user_id=USER_ID).count() == 0
+
+    db_session.add(
+        Holding(
+            user_id=USER_ID,
+            ticker="AAPL",
+            name="Apple",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/portfolio/holdings", headers=as_other)
+
+    assert response.status_code == 200
+    assert [h["ticker"] for h in response.json()] == ["MSFT"]

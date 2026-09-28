@@ -48,9 +48,10 @@ def _touch_last_seen(db: Session, row: AppUser) -> None:
     try:
         row.last_seen_at = now
         db.commit()
-    except Exception:
-        # Never block a request over a bookkeeping write.
-        logger.exception("Failed to update last_seen_at")
+    except Exception as exc:
+        # Never block a request over a bookkeeping write. Log the class only: driver messages
+        # can carry SQL and bound parameters.
+        logger.warning("Failed to update last_seen_at: %s", type(exc).__name__)
         db.rollback()
 
 
@@ -81,8 +82,10 @@ def get_current_user(
         if row is None or row.status != "active":
             logger.info("Refused user without active access: %s", verified.user_id)
             raise HTTPException(status_code=403, detail="No access to this service")
+        # Build the result first: a failed bookkeeping commit expires the row's attributes.
+        current = CurrentUser(id=row.id, email=row.email, role=row.role)
         _touch_last_seen(db, row)
-        return CurrentUser(id=row.id, email=row.email, role=row.role)
+        return current
 
 
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
