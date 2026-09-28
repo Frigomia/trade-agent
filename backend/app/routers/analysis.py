@@ -60,15 +60,15 @@ async def run_analysis(payload: AnalysisRunIn, db: Session = Depends(get_db)) ->
             for w in watchlist.values()
         ]
 
-    job_id = await create_job(ticker_infos)
-    task = asyncio.create_task(run_job(job_id, ticker_infos))
+    job_id = await create_job(settings.default_user_id, ticker_infos)
+    task = asyncio.create_task(run_job(job_id, settings.default_user_id, ticker_infos))
     _track_background_task(task)
     return {"job_id": job_id}
 
 
 @router.get("/run/{job_id}")
 async def get_run_status(job_id: str) -> dict[str, Any]:
-    status = await get_job_status(job_id)
+    status = await get_job_status(job_id, settings.default_user_id)
     if status is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return status

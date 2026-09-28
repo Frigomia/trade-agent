@@ -2,6 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 from app.agents.graph import run_graph_for_ticker
+from tests.auth_support import USER_ID
 
 
 def test_run_graph_for_stock_produces_buy_recommendation():
@@ -22,7 +23,7 @@ def test_run_graph_for_stock_produces_buy_recommendation():
         patch("app.agents.context.build_context", AsyncMock(return_value="Some context")),
         patch("app.agents.news.run_news_agent", AsyncMock(return_value="Qualitative color")),
     ):
-        result = asyncio.run(run_graph_for_ticker("AAPL", "STOCK", is_held=False))
+        result = asyncio.run(run_graph_for_ticker(USER_ID, "AAPL", "STOCK", is_held=False))
 
     assert result["fundamental_score"] == 100
     assert result["technical_signal"] == "OVERSOLD"
@@ -40,7 +41,7 @@ def test_run_graph_for_etf_skips_fundamentals_news_and_context_on_hold():
         patch("app.agents.context.build_context", AsyncMock()) as mock_context,
         patch("app.agents.news.run_news_agent", AsyncMock(return_value=None)) as mock_news,
     ):
-        result = asyncio.run(run_graph_for_ticker("VWCE", "ETF", is_held=True))
+        result = asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=True))
 
     mock_fundamentals.assert_not_called()
     assert result["fundamental_score"] is None
@@ -69,7 +70,7 @@ def test_run_graph_for_stock_with_no_fundamentals_data_skips_scoring():
         patch("app.agents.context.build_context", AsyncMock()) as mock_context,
         patch("app.agents.news.run_news_agent", AsyncMock(return_value=None)) as mock_news,
     ):
-        result = asyncio.run(run_graph_for_ticker("AAPL", "STOCK", is_held=True))
+        result = asyncio.run(run_graph_for_ticker(USER_ID, "AAPL", "STOCK", is_held=True))
 
     assert result["fundamental_score"] is None
     assert result["action"] is None

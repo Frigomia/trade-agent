@@ -52,7 +52,9 @@ async def chat(payload: ChatIn, db: Session = Depends(get_db)) -> ChatOut:
     db.add(user_row)
     _commit_or_raise(db, "Failed to persist user chat message")
 
-    reply = await run_chat(db, payload.session_id, payload.message, history=history)
+    reply = await run_chat(
+        db, settings.default_user_id, payload.session_id, payload.message, history=history
+    )
 
     assistant_row = ChatMessage(
         user_id=settings.default_user_id,

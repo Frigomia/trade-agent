@@ -120,4 +120,4 @@ async def similar_recommendations(
     except Exception:
         logger.exception("Embedding failed for similarity query")
         raise HTTPException(status_code=503, detail="Embeddings unavailable") from None
-    return find_similar(db, query_embedding, payload.top_k)
+    return find_similar(db, settings.default_user_id, query_embedding, payload.top_k)

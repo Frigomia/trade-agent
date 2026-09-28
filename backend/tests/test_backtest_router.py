@@ -64,7 +64,9 @@ def test_run_backtest_uppercases_ticker(client):
         )
 
     assert response.status_code == 202
-    mock_create.assert_called_once_with("AAPL", date(2020, 1, 1), date(2024, 1, 1))
+    mock_create.assert_called_once_with(
+        settings.default_user_id, "AAPL", date(2020, 1, 1), date(2024, 1, 1)
+    )
 
 
 def test_get_backtest_run_status_returns_404_for_unknown_job(client):
