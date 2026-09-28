@@ -146,3 +146,30 @@ class PortfolioSnapshotOut(BaseModel):
     created_at: datetime
     total_market_value: float
     total_cost_basis: float
+
+
+# Light shape check only; the real check is that Supabase can deliver the invitation. Lowercased
+# and trimmed so the same person is never two rows.
+Email = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        max_length=320,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    ),
+]
+
+
+class AcceptIn(BaseModel):
+    accept_terms: Literal[True]  # false or missing is a 422
+
+
+class MeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    role: str
+    status: str
+    accepted_terms_at: datetime | None
