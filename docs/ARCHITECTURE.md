@@ -548,6 +548,15 @@ and invited users; nobody can sign up on their own.
   tables: keep it in the backend environment only. New-style `sb_secret_` keys are sent in the
   `apikey` header only; legacy JWT (`service_role`) keys are also sent in
   `Authorization: Bearer`.
+- **Invitation and removal caveats.** (i) Supabase email sign-ups must be OFF. Before the
+  first invitation, review Authentication, Users and delete any unconfirmed accounts you did
+  not create: inviting an address reuses an existing unconfirmed Supabase user, so an account
+  pre-created by someone else while sign-ups were on would keep its password. (ii) Removing a
+  user deletes their data twice (before and after the Supabase delete), but a background job
+  still running for that user can write rows after that. Remove a user after their jobs finish
+  (jobs are short-lived); the residual risk is accepted. (iii) The runtime role can INSERT
+  `app_users` rows with any `role` value (invite hardcodes `"user"`); only UPDATE of `role`,
+  `email`, and `id` is denied.
 - Per-user limits, usage, and the user's own export/delete are built in the next cycle
   (see the specs under `docs/superpowers/specs/`).
 

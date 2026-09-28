@@ -26,7 +26,9 @@ auto-update — copy the new Postgres connection string from `.env.example`
 by hand, or `alembic upgrade head` fails confusingly (silently resolves the
 SQLite dialect against a stale URL).
 
-Auth needs `SUPABASE_URL` in `.env`. The RLS migration creates the runtime role
+Auth needs `SUPABASE_URL` in `.env`; admin and invitations also need
+`SUPABASE_SECRET_KEY` (backend-only, never in the frontend) and `INVITE_REDIRECT_URL`
+(optional `INVITE_LINK_HOURS`). The RLS migration creates the runtime role
 `trading_agent_app` `NOLOGIN`; locally run `docker compose exec postgres psql -U
 trading_agent -c "ALTER ROLE trading_agent_app LOGIN PASSWORD 'trading_agent_app'"`
 and point `DATABASE_URL` at that role to exercise RLS by hand (the default
