@@ -173,3 +173,23 @@ class MeOut(BaseModel):
     role: str
     status: str
     accepted_terms_at: datetime | None
+
+
+class InviteIn(BaseModel):
+    email: Email
+
+
+class AdminUserOut(BaseModel):
+    """Access-management data only: never anything from the user's portfolio or chats."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    role: str
+    status: str
+    created_at: datetime
+    invited_at: datetime | None
+    invite_expires_at: datetime | None = None  # display hint, filled in by the router
+    accepted_terms_at: datetime | None
+    last_seen_at: datetime | None

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.admin.service import AdminError
-from app.routers import analysis, backtest, chat, me, memory, portfolio, preferences
+from app.routers import admin, analysis, backtest, chat, me, memory, portfolio, preferences
 
 app = FastAPI(title="Trading Agent API")
 app.include_router(portfolio.router)
@@ -12,6 +12,7 @@ app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(preferences.router)
 app.include_router(me.router)
+app.include_router(admin.router)
 
 
 @app.exception_handler(AdminError)
