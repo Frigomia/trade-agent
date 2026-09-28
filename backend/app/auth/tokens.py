@@ -1,4 +1,3 @@
-import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -8,8 +7,6 @@ import jwt
 from jwt import PyJWKClient
 
 from app.config import settings
-
-logger = logging.getLogger(__name__)
 
 # Asymmetric algorithms only, pinned explicitly: an unpinned decode is how "alg: none" and
 # HS256-signed-with-the-public-key attacks work. Legacy shared-secret (HS256) is not accepted.

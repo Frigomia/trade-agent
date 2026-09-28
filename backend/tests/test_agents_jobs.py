@@ -21,8 +21,9 @@ FAKE_STATE_SKIP = {
 }
 
 
-def test_job_lifecycle_completes_and_records_results(session_local):
+def test_job_lifecycle_completes_and_records_results(session_local, app_session_local):
     async def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool) -> dict:
+        assert user_id == OTHER_USER_ID
         return FAKE_STATE_BUY if ticker == "AAPL" else FAKE_STATE_SKIP
 
     async def _run() -> None:
@@ -30,20 +31,20 @@ def test_job_lifecycle_completes_and_records_results(session_local):
             {"ticker": "AAPL", "asset_type": "STOCK", "is_held": False},
             {"ticker": "NOPE", "asset_type": "STOCK", "is_held": False},
         ]
-        job_id = await create_job(USER_ID, tickers)
+        job_id = await create_job(OTHER_USER_ID, tickers)
 
-        status = await get_job_status(job_id, USER_ID)
+        status = await get_job_status(job_id, OTHER_USER_ID)
         assert status is not None
         assert status["status"] == "RUNNING"
         assert status["total"] == 2
 
         with (
             patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(side_effect=_fake_run_graph)),
-            patch("app.db.SessionLocal", session_local),
+            patch("app.db.SessionLocal", app_session_local),
         ):
-            await run_job(job_id, USER_ID, tickers)
+            await run_job(job_id, OTHER_USER_ID, tickers)
 
-        final = await get_job_status(job_id, USER_ID)
+        final = await get_job_status(job_id, OTHER_USER_ID)
         assert final is not None
         assert final["status"] == "DONE"
         assert final["done"] == 2
@@ -61,6 +62,7 @@ def test_job_lifecycle_completes_and_records_results(session_local):
             assert len(records) > 0, "No AAPL recommendation found"
             saved = records[-1]
             assert float(saved.price_at_recommendation) == 150.0
+            assert saved.user_id == OTHER_USER_ID
         finally:
             saved_session.close()
 

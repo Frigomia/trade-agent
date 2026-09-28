@@ -4,10 +4,11 @@ from unittest.mock import AsyncMock, patch
 
 from app.backtest.engine import BacktestMetrics
 from app.backtest.jobs import create_job, get_job_status, run_job
+from app.models import BacktestResult
 from tests.auth_support import OTHER_USER_ID, USER_ID
 
 
-def test_backtest_job_completes_and_persists_result(session_local):
+def test_backtest_job_completes_and_persists_result(session_local, app_session_local):
     fake_metrics = BacktestMetrics(
         final_value=11000.0,
         buy_and_hold_value=10500.0,
@@ -16,9 +17,9 @@ def test_backtest_job_completes_and_persists_result(session_local):
     )
 
     async def _run() -> None:
-        job_id = await create_job(USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+        job_id = await create_job(OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
 
-        status = await get_job_status(job_id, USER_ID)
+        status = await get_job_status(job_id, OTHER_USER_ID)
         assert status == {"status": "RUNNING", "backtest_result_id": None}
 
         with (
@@ -27,14 +28,22 @@ def test_backtest_job_completes_and_persists_result(session_local):
                 AsyncMock(return_value=[100.0] * 300),
             ),
             patch("app.backtest.jobs.simulate", return_value=fake_metrics),
-            patch("app.db.SessionLocal", session_local),
+            patch("app.db.SessionLocal", app_session_local),
         ):
-            await run_job(job_id, USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+            await run_job(job_id, OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
 
-        final = await get_job_status(job_id, USER_ID)
+        final = await get_job_status(job_id, OTHER_USER_ID)
         assert final is not None
         assert final["status"] == "DONE"
         assert final["backtest_result_id"] is not None
+
+        owner = session_local()
+        try:
+            saved = owner.get(BacktestResult, final["backtest_result_id"])
+            assert saved is not None
+            assert saved.user_id == OTHER_USER_ID
+        finally:
+            owner.close()
 
     asyncio.run(_run())
 
