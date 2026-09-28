@@ -53,9 +53,13 @@ New package `backend/app/auth/`.
   - `get_current_user` reads the bearer token, verifies it, loads `app_users` by the token's `sub`, and
     returns `CurrentUser(id, email, role)`.
   - `require_admin` depends on `get_current_user` and requires `role == "admin"`.
-  - A user-scoped database dependency replaces `get_db` for user data. It resolves the current user,
-    opens a transaction, runs `select set_config('app.current_user_id', :uid, true)` (transaction
-    local), and yields the session. A route cannot obtain a user-data session without an
+  - A user-scoped database dependency replaces `get_db` for user data. It resolves the current user
+    and yields a session that remembers the user id; a SQLAlchemy `after_begin` hook then runs
+    `select set_config('app.current_user_id', :uid, true)` (transaction local) at the start of
+    **every** transaction of that session. Handlers commit mid-request (chat commits twice), and a
+    setting applied only once would vanish after the first commit and hide the user's own rows;
+    re-applying it per transaction avoids that without session-level state that could leak to the
+    next user of a pooled connection. A route cannot obtain a user-data session without an
     authenticated user.
 - `models.AppUser`: `id` (UUID, primary key, equal to the Supabase auth uid), `email` (unique),
   `role` ("admin" or "user"), `status` ("active" or "disabled"), `created_at`,
@@ -92,16 +96,20 @@ One source of truth, `backend/app/rls.py`: `USER_TABLES` and a function returnin
 ALTER TABLE holdings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE holdings FORCE ROW LEVEL SECURITY;
 CREATE POLICY holdings_owner ON holdings
-  USING (user_id = current_setting('app.current_user_id', true)::uuid)
-  WITH CHECK (user_id = current_setting('app.current_user_id', true)::uuid);
+  USING (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid)
+  WITH CHECK (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid);
 ```
 
 - Covered tables: `holdings`, `watchlist_items`, `trades`, `recommendations`, `chat_messages`,
   `backtest_results`, `investment_preferences`, `portfolio_snapshots`.
-- With the variable unset, `current_setting(..., true)` is NULL, the comparison is false, and the query
-  sees zero rows: the default is deny.
-- A single Alembic migration applies `rls.py` (policies are manual `op.execute()`; autogenerate cannot
-  produce them, as `ARCHITECTURE.md` §4 already notes). Migrations are still only created through the
+- `NULLIF` is needed because on a reused pooled connection `current_setting(..., true)` can return an
+  empty string after the transaction that set it has ended, and `''::uuid` raises. With the variable
+  unset the expression is NULL, the comparison is false, and the query sees zero rows: the default is
+  deny.
+- A single Alembic migration applies the policies through `rls.py` (policies are manual
+  `op.execute()`; autogenerate cannot produce them, as `ARCHITECTURE.md` §4 already notes). The
+  migration names its tables explicitly instead of iterating `USER_TABLES`, so it stays valid when
+  later migrations add tables. Migrations are still only created through the
   alembic CLI.
 - The `app.current_user_id` approach is used instead of Supabase's `auth.uid()`: this backend connects
   to Postgres directly rather than through Supabase's API layer, so `auth.uid()` would need a shim
