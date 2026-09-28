@@ -256,12 +256,12 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/admin/users/invite` | `{email}` | **Admin only.** Supabase invite (24 h link) and an `app_users` row with status `invited`; an already-invited address is re-sent. `201` |
 | POST | `/admin/users/{id}/resend` | — | **Admin only.** Re-send an invitation (invited users) |
 | POST | `/admin/users/{id}/revoke` | — | **Admin only.** Delete a pending invitation. `204` |
-| POST | `/admin/users/{id}/disable` , `/enable` | — | **Admin only.** Ban/unban in Supabase and set status; disabling takes effect on the next request |
+| POST | `/admin/users/{id}/disable` or `/admin/users/{id}/enable` | — | **Admin only.** Ban/unban in Supabase and set status; disabling takes effect on the next request |
 | DELETE | `/admin/users/{id}` | `{confirm_email}` | **Admin only.** Permanent removal: disables, deletes the user's rows (through their own RLS scope), the Supabase user, then the `app_users` row; retryable. `204`; `422` if `confirm_email` does not match |
 
-Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row, and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
+Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
-Admin routes return `403` to non-admins; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for an address whose Supabase user is already confirmed (the invitee clicked the link but has not yet accepted the terms) is `409`, not `502`. If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when it created it: when an `app_users` row already exists for that id or address it returns `409` and deletes nothing. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
+Admin routes return `403` to non-admins; `404` for an unknown user id; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for any address whose Supabase user is already confirmed is `409`, not `502` (most commonly an invitee who clicked the link but has not accepted the terms yet; on a fresh invite with no `app_users` row it means "already registered"). If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when no `app_users` row exists for that Supabase id or that address; otherwise it returns `409` and deletes nothing. If the insert fails for any other reason, the original error is re-raised (a `500`) after that compensation. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
@@ -470,7 +470,7 @@ default — same dialect and models as production, started with
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command) |
+| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint |
 | Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
@@ -488,7 +488,8 @@ and invited users; nobody can sign up on their own.
   means `503`. The keys are cached for the life of the process, so after revoking
   a Supabase signing key the backend must be restarted. Legacy shared-secret (HS256) verification is not supported: use
   asymmetric JWT signing keys. Then it loads the user's row from `app_users`; no
-  active row means `403`, which is also what keeps a self-registered Supabase
+  active row means `403` (except that an `invited` user may call `/me` and
+  `/me/accept`), which is also what keeps a self-registered Supabase
   user out. Role and status come from our table, never from token claims.
 - **First admin**: create your user in the Supabase dashboard, then run
   `python -m app.auth.bootstrap_admin <email> <supabase-uid>` (it refuses to run
@@ -496,7 +497,9 @@ and invited users; nobody can sign up on their own.
 - **Frontend** (not built yet): `@supabase/ssr` in Next.js: login page,
   middleware that redirects unauthenticated requests, session token attached to
   every backend request.
-- New env vars: `SUPABASE_URL` (backend), `MIGRATION_DATABASE_URL` (backend),
+- New env vars: `SUPABASE_URL` (backend), `SUPABASE_SECRET_KEY` (backend, secret),
+  `INVITE_REDIRECT_URL` (backend), `INVITE_LINK_HOURS` (backend, optional, default 24),
+  `MIGRATION_DATABASE_URL` (backend),
   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend).
 - One-time Supabase setup: `ALTER ROLE trading_agent_app WITH LOGIN PASSWORD
   '...'` in the SQL editor after the RLS migration has run (the migration creates
