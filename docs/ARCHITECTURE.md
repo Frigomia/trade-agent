@@ -112,8 +112,8 @@ flowchart TB
 | LLM | Claude (Anthropic API), `claude-sonnet-5` default, overridable via env | Web search tool built in server-side; no separate search API needed |
 | Frontend | Next.js (React) + TypeScript + Tailwind | Richest ecosystem for AI-native dashboards (streaming chat UIs, agent trace components) |
 | Data fetching (FE) | SWR | Lightweight, no backend coupling; swap for the Vercel AI SDK later if chat moves to streaming |
-| Database | Postgres via **Supabase** (local dev: Postgres+pgvector in Docker Compose — same SQLAlchemy models, same dialect as production) | Bundling DB + Auth in one project avoids running a separate auth service for a single-user app; matching the local and production dialect exactly avoids SQLite/Postgres drift in query behavior |
-| Auth | **Supabase Auth** | Hosted login, public signup disabled, one manually-created user; issues a JWT the backend verifies on every request (see §13) |
+| Database | Postgres via **Supabase** (local dev: Postgres+pgvector in Docker Compose — same SQLAlchemy models, same dialect as production) | Bundling DB + Auth in one project avoids running a separate auth service; matching the local and production dialect exactly avoids SQLite/Postgres drift in query behavior |
+| Auth | **Supabase Auth** | Hosted login, public sign-up disabled, invitation-only (admin invites by email); issues a JWT the backend verifies against the project's JWKS on every request (see §13). Roles and status live in our own `app_users` table |
 | Migrations | **Alembic** | Autogenerates migrations by diffing SQLAlchemy models against the live schema — `models.py` stays the single source of truth. Handles raw SQL (e.g. RLS policies) via `op.execute()`. Prisma was considered but rejected: it isn't a migration add-on for SQLAlchemy, it replaces it as the ORM entirely, and pulls a Node-based engine into a Python runtime for no benefit here |
 | Cache/queue | Redis (Upstash for hosting) | Quote caching, future job queue for scheduled analysis runs |
 | Market data | `yfinance` | Free, no key, but unofficial — see §9 limitations |
@@ -123,12 +123,10 @@ flowchart TB
 
 ## 4. Data model
 
-SQLAlchemy models (`backend/app/models.py`). Every table carries a
-`user_id` even though there's only one user today — this is what makes
-**Row Level Security (RLS)** possible once Supabase Auth is wired in. A
+SQLAlchemy models (`backend/app/models.py`). Every user-data table carries a
+`user_id` so **Row Level Security (RLS)** can enforce per-user isolation. A
 JWT check alone only guards the API layer; RLS is the actual database-level
-boundary, and retrofitting `user_id` onto tables with existing data later
-is far more painful than including it from the first migration:
+boundary:
 
 ```python
 Holding
@@ -173,6 +171,11 @@ InvestmentPreferences
 PortfolioSnapshot
   id, user_id, created_at, total_market_value (Numeric(18,2)),
   total_cost_basis (Numeric(18,2)) -- point-in-time portfolio totals, for value history charts
+
+AppUser
+  id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("active"|"disabled"),
+  created_at, accepted_terms_at, last_seen_at
+  -- no user_id, no RLS; read on every request by the auth path
 ```
 
 ### Migrations — Alembic
@@ -187,22 +190,34 @@ alembic revision --autogenerate -m "add user_id for RLS"
 alembic upgrade head
 ```
 
-RLS policies are plain SQL, so they go into a migration as a manual
-`op.execute()` step (autogenerate won't produce these — write once per
-table):
+RLS policies are plain SQL, so they go into a migration as manual `op.execute()`
+steps (autogenerate won't produce them). `backend/app/rls.py` is the single
+source of truth for the table lists and the SQL; a test fails if a table with a
+`user_id` column is missing from it:
 
-```python
-def upgrade():
-    op.execute("ALTER TABLE holdings ENABLE ROW LEVEL SECURITY")
-    op.execute("""
-        CREATE POLICY holdings_owner_only ON holdings
-        FOR ALL USING (user_id = auth.uid())
-    """)
+```sql
+ALTER TABLE holdings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE holdings FORCE ROW LEVEL SECURITY;
+CREATE POLICY holdings_owner ON holdings
+  USING (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid)
+  WITH CHECK (user_id = NULLIF(current_setting('app.current_user_id', true), '')::uuid);
 ```
 
-`auth.uid()` is a Supabase Postgres function that reads the current
-request's verified JWT — this is what makes RLS the real boundary rather
-than something your application code has to remember to check everywhere.
+The backend connects to Postgres directly (not through Supabase's API layer), so
+Supabase's `auth.uid()` does not apply. Instead `app/db.py` runs
+`set_config('app.current_user_id', <uid>, true)` at the start of **every**
+transaction of a user-scoped session (a SQLAlchemy `after_begin` hook, so it
+survives the mid-request `commit()`s handlers make). With the setting unset,
+queries return zero rows. The API connects as a dedicated role
+(`trading_agent_app`: no `BYPASSRLS`, not the table owner); migrations and the
+bootstrap command use the owner role (`MIGRATION_DATABASE_URL`). On Supabase use
+the session pooler (port 5432), not the transaction pooler.
+
+`FORCE ROW LEVEL SECURITY` also applies to the table owner unless it is a
+superuser or has `BYPASSRLS`. On a managed Postgres where the owner role lacks
+`BYPASSRLS`, a data migration (or any query) run through `MIGRATION_DATABASE_URL`
+sees zero rows in the user-data tables unless it sets `app.current_user_id`
+itself. The bootstrap command is unaffected: `app_users` has no RLS.
 
 ---
 
@@ -233,6 +248,8 @@ than something your application code has to remember to check everywhere.
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per client IP |
+
+Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row, and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
@@ -383,12 +400,12 @@ session without the dashboard running.
 Backend (`.env`, see `backend/.env.example`):
 
 ```
-DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent   # local Docker Compose Postgres; swap for Supabase Postgres in hosting
+DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/trading_agent   # must use the trading_agent_app role for RLS to apply (the local Docker default shown here is the superuser, which bypasses RLS); in hosting, the Supabase session-pooler URL of the trading_agent_app role
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
-SUPABASE_URL=                               # hosting only, for JWT verification
-SUPABASE_JWT_SECRET=                        # hosting only
+MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
+SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
 ```
 
 Plus the risk-profile thresholds in `backend/app/config.py`
@@ -438,29 +455,70 @@ default — same dialect and models as production, started with
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy` |
-| Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` as a Fly secret: `fly secrets set DATABASE_URL=...` |
+| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command) |
+| Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
 | CI/CD | GitHub Actions | Suggested: on push to `main`, run backend tests → `fly deploy`; separately, Vercel's own GitHub integration handles the frontend automatically |
 
-**Authentication: Supabase Auth.** Since Supabase already hosts the
-Postgres database, use the same project for Auth rather than standing up a
-separate login system. Single-user setup:
+**Authentication: Supabase Auth, invitation-only.** The service has one admin
+and invited users; nobody can sign up on their own.
 
-- Disable public sign-up in the Supabase Auth settings; create the one
-  account (yourself) via the Supabase dashboard or CLI.
-- **Frontend**: `@supabase/ssr` in Next.js — a login page, a middleware
-  that redirects unauthenticated requests away from the dashboard, and the
-  Supabase session token attached to every backend request.
-- **Backend**: a FastAPI dependency that verifies the Supabase-issued JWT
-  on every request (decode + verify signature against the project's JWT
-  secret, check `aud: "authenticated"` and expiry; reject with 401
-  otherwise) and apply it via `Depends(...)` on each router.
-- New env vars: `SUPABASE_URL`, `SUPABASE_JWT_SECRET` (backend verification),
-  `SUPABASE_ANON_KEY` (frontend client).
-- This closes the gap that made public hosting unsafe before — don't skip
-  it, but it's now a scoped, concrete task rather than an open warning.
+- Disable public email sign-ups in the Supabase Auth settings.
+- **Backend**: `app/auth/` verifies the Supabase access token against the
+  project's JWKS (`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`), pinning
+  `ES256`/`RS256`, checking `aud == "authenticated"`, the issuer, and expiry.
+  Signing keys are cached in process, so a short Supabase outage does not lock
+  out users whose key is already cached; an unreachable JWKS with no cached key
+  means `503`. The keys are cached for the life of the process, so after revoking
+  a Supabase signing key the backend must be restarted. Legacy shared-secret (HS256) verification is not supported: use
+  asymmetric JWT signing keys. Then it loads the user's row from `app_users`; no
+  active row means `403`, which is also what keeps a self-registered Supabase
+  user out. Role and status come from our table, never from token claims.
+- **First admin**: create your user in the Supabase dashboard, then run
+  `python -m app.auth.bootstrap_admin <email> <supabase-uid>` (it refuses to run
+  if an admin already exists).
+- **Frontend** (not built yet): `@supabase/ssr` in Next.js: login page,
+  middleware that redirects unauthenticated requests, session token attached to
+  every backend request.
+- New env vars: `SUPABASE_URL` (backend), `MIGRATION_DATABASE_URL` (backend),
+  `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend).
+- One-time Supabase setup: `ALTER ROLE trading_agent_app WITH LOGIN PASSWORD
+  '...'` in the SQL editor after the RLS migration has run (the migration creates
+  the role `NOLOGIN` so no password is ever committed).
+- **Deploy check: the runtime role must not bypass RLS.** Through the URL in
+  `DATABASE_URL`, run `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname
+  = current_user;` (both must be `false`) and `SELECT count(*) FROM pg_tables
+  WHERE tablename IN ('holdings', 'watchlist_items', 'trades',
+  'recommendations', 'chat_messages', 'backtest_results',
+  'investment_preferences', 'portfolio_snapshots') AND tableowner =
+  current_user;` (must be `0`; a table owner is exempt from RLS unless it is
+  forced, and can disable it). The `.env.example` default (the Docker superuser)
+  and the `postgres` owner URL from Supabase's Connect dialog both bypass RLS
+  silently. The app-level `user_id` filters stay on every query, but the
+  database-level guarantee only holds for `trading_agent_app`. A startup check
+  that refuses to boot on a bypassing role is planned for the deploy cycle
+  (roadmap step 5).
+- **Migrating existing single-user data.** Before auth, every row carries
+  `user_id = 00000000-0000-0000-0000-000000000001` (the removed
+  `default_user_id`). Once you bootstrap the owner under their real Supabase uid,
+  `GET /portfolio/holdings` returns `[]` because those rows belong to nobody.
+  Reassign them **before** the RLS migration: on a managed Postgres the owner
+  lacks `BYPASSRLS`, and once the policies exist `FORCE ROW LEVEL SECURITY`
+  blocks the `UPDATE` (`USING` needs the old id, `WITH CHECK` the new one, so no
+  single `app.current_user_id` satisfies both). Order: (1) create the user in
+  Supabase and note the uid; (2) as the owner (`MIGRATION_DATABASE_URL`), for
+  each of `holdings`, `watchlist_items`, `trades`, `recommendations`,
+  `chat_messages`, `backtest_results`, `investment_preferences`,
+  `portfolio_snapshots`, run `UPDATE <table> SET user_id = '<supabase-uid>' WHERE
+  user_id = '00000000-0000-0000-0000-000000000001';`; (3) `alembic upgrade head`
+  up to the RLS migration (`dd035aae788b`); (4) run `python -m
+  app.auth.bootstrap_admin <email> <supabase-uid>`. On the local Docker
+  superuser the order does not matter.
+- Open question: FastAPI's `/docs`, `/redoc`, and `/openapi.json` are currently
+  unauthenticated. Decide before public hosting whether to disable or protect them.
+- Invitations, the admin API, per-user limits, and export/delete are built in
+  later cycles (see the auth and multi-user specs under `docs/superpowers/specs/`).
 
 ---
 
@@ -475,12 +533,7 @@ separate login system. Single-user setup:
   harvesting) are not modeled anywhere yet.
 - The AI layer costs money per call and depends on web search quality at
   call time — treat its output as a second opinion, not a verdict.
-- No authentication in the initial build — Supabase Auth is decided (§13)
-  but is a build step, not a given. Blocking for public hosting; do not
-  deploy before it's wired up.
-- `user_id` is planned on every table (§4) from the very first migration —
-  RLS policies still need to be written and applied per table once
-  Supabase Auth exists to issue the JWTs `auth.uid()` reads.
+- Multi-user: with other people's data the GDPR household-activity exemption no longer applies. A privacy notice and self-service data export and deletion are required before inviting anyone (export/delete are built in sub-project 2c). The system is advisory only and gives no personalized investment advice as a licensed service; recommendations to third parties may still count as investment advice in some jurisdictions, so screens carry an explicit "advisory only, not investment advice" statement.
 
 ---
 
@@ -492,8 +545,7 @@ separate login system. Single-user setup:
 2. Wire the LangGraph analysis graph + `/analysis/run`, verify against a
    couple of real tickers with a real `ANTHROPIC_API_KEY`.
 3. `frontend/`: dashboard reading from a local backend.
-4. Add Supabase Auth (§13) — login page, middleware, and the backend JWT
-   verification dependency — before any public deployment.
+4. ✓ Supabase Auth (§13): JWKS verification, `app_users`, per-user RLS (auth core). Login page and middleware arrive with the frontend.
 5. Deploy: Supabase (DB + Auth) → Fly.io backend → Vercel frontend, wired
    together.
 6. MCP server: verify locally against Claude Desktop.
@@ -539,9 +591,7 @@ just believed done.
 - [x] `user_id` on every table, for RLS (§4) — present on every table in
       `models.py`
 - [x] Migrations tooling — Alembic, set up per §4
-- [ ] RLS policies actually written and applied per table (§4 shows the
-      pattern for one table — repeat for all) — blocked on Supabase Auth
-      (§13), not started
+- [x] RLS policies written and applied to all eight user-data tables in one migration; enforced for the `trading_agent_app` role
 - [ ] Backup plan — Supabase's free tier has limited/no point-in-time
       recovery; decide if that's acceptable or if you need your own
       periodic export
@@ -589,10 +639,8 @@ just believed done.
 **Security (deeper than auth/RLS alone)**
 - [x] Web search results treated explicitly as untrusted data in every AI
       prompt — present in both `news.py`'s and `chat.py`'s system prompts
-- [ ] JWT decode pins the algorithm explicitly (`algorithms=["HS256"]`) —
-      not applicable yet, no auth/JWT exists
-- [ ] RLS enabled and a policy created **in the same migration** per table
-      — blocked on Supabase Auth, not started
+- [x] JWT decode pins the algorithm explicitly (`algorithms=["ES256","RS256"]`)
+- [x] RLS enabled and a policy created **in the same migration** per table
 - [x] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
       cost real Anthropic API money per call, even for a single user.
       `app/rate_limit.py`: a Redis-backed fixed-window counter per client
@@ -636,6 +684,4 @@ just believed done.
       not applicable yet, no frontend exists
 
 **Legal/compliance**
-- [ ] Confirm GDPR's household-activity exemption still applies — true
-      as long as this stays single-user; revisit immediately if that
-      ever changes
+- [ ] Privacy notice and self-service data export/deletion in place before inviting the first user (the household exemption no longer applies once other people's data is stored)

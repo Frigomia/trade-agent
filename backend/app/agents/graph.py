@@ -1,16 +1,18 @@
 import logging
+import uuid
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
 from app.agents import context, market_data, news
 from app.analysis import fundamental, recommend, technical
-from app.db import SessionLocal
+from app.db import scoped_session
 
 logger = logging.getLogger(__name__)
 
 
 class AnalysisState(TypedDict):
+    user_id: uuid.UUID
     ticker: str
     asset_type: str
     is_held: bool
@@ -65,16 +67,19 @@ def synthesizer(state: AnalysisState) -> dict[str, Any]:
 async def context_agent(state: AnalysisState) -> dict[str, Any]:
     if state["action"] is None or state["action"] == "HOLD":
         return {"context": None}
-    db = SessionLocal()
     try:
-        built_context = await context.build_context(
-            db, state["ticker"], state["asset_type"], state["action"], state["reasoning"]
-        )
+        with scoped_session(state["user_id"]) as db:
+            built_context = await context.build_context(
+                db,
+                state["user_id"],
+                state["ticker"],
+                state["asset_type"],
+                state["action"],
+                state["reasoning"],
+            )
     except Exception:
         logger.exception("build_context failed for %s", state["ticker"])
         built_context = None
-    finally:
-        db.close()
     return {"context": built_context}
 
 
@@ -108,9 +113,12 @@ def build_graph() -> Any:
     return graph.compile()
 
 
-async def run_graph_for_ticker(ticker: str, asset_type: str, is_held: bool) -> AnalysisState:
+async def run_graph_for_ticker(
+    user_id: uuid.UUID, ticker: str, asset_type: str, is_held: bool
+) -> AnalysisState:
     app_graph = build_graph()
     initial_state: AnalysisState = {
+        "user_id": user_id,
         "ticker": ticker,
         "asset_type": asset_type,
         "is_held": is_held,

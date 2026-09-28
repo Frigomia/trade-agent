@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
-from app.config import settings
-from app.db import get_db
+from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.schemas import (
     HoldingIn,
@@ -17,23 +16,29 @@ from app.schemas import (
     WatchlistItemOut,
 )
 
-router = APIRouter(prefix="/portfolio", tags=["portfolio"])
+# The router-level dependency makes authentication run before anything else on every route,
+# even one whose handler forgets to ask for the user.
+router = APIRouter(
+    prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("/holdings", response_model=list[HoldingOut])
-def list_holdings(db: Session = Depends(get_db)) -> list[Holding]:
-    return db.query(Holding).filter_by(user_id=settings.default_user_id).all()
+def list_holdings(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> list[Holding]:
+    return db.query(Holding).filter_by(user_id=user.id).all()
 
 
 @router.post("/holdings", response_model=HoldingOut)
-def upsert_holding(payload: HoldingIn, db: Session = Depends(get_db)) -> Holding:
-    holding = (
-        db.query(Holding)
-        .filter_by(user_id=settings.default_user_id, ticker=payload.ticker)
-        .one_or_none()
-    )
+def upsert_holding(
+    payload: HoldingIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> Holding:
+    holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
-        holding = Holding(user_id=settings.default_user_id, **payload.model_dump())
+        holding = Holding(user_id=user.id, **payload.model_dump())
         db.add(holding)
     else:
         for field, value in payload.model_dump().items():
@@ -44,10 +49,10 @@ def upsert_holding(payload: HoldingIn, db: Session = Depends(get_db)) -> Holding
 
 
 @router.delete("/holdings/{ticker}", status_code=204)
-def delete_holding(ticker: str, db: Session = Depends(get_db)) -> None:
-    holding = (
-        db.query(Holding).filter_by(user_id=settings.default_user_id, ticker=ticker).one_or_none()
-    )
+def delete_holding(
+    ticker: str, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> None:
+    holding = db.query(Holding).filter_by(user_id=user.id, ticker=ticker).one_or_none()
     if holding is None:
         raise HTTPException(status_code=404, detail="Holding not found")
     db.delete(holding)
@@ -55,19 +60,21 @@ def delete_holding(ticker: str, db: Session = Depends(get_db)) -> None:
 
 
 @router.get("/watchlist", response_model=list[WatchlistItemOut])
-def list_watchlist(db: Session = Depends(get_db)) -> list[WatchlistItem]:
-    return db.query(WatchlistItem).filter_by(user_id=settings.default_user_id).all()
+def list_watchlist(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> list[WatchlistItem]:
+    return db.query(WatchlistItem).filter_by(user_id=user.id).all()
 
 
 @router.post("/watchlist", response_model=WatchlistItemOut)
-def upsert_watchlist_item(payload: WatchlistItemIn, db: Session = Depends(get_db)) -> WatchlistItem:
-    item = (
-        db.query(WatchlistItem)
-        .filter_by(user_id=settings.default_user_id, ticker=payload.ticker)
-        .one_or_none()
-    )
+def upsert_watchlist_item(
+    payload: WatchlistItemIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> WatchlistItem:
+    item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if item is None:
-        item = WatchlistItem(user_id=settings.default_user_id, **payload.model_dump())
+        item = WatchlistItem(user_id=user.id, **payload.model_dump())
         db.add(item)
     else:
         for field, value in payload.model_dump().items():
@@ -78,12 +85,12 @@ def upsert_watchlist_item(payload: WatchlistItemIn, db: Session = Depends(get_db
 
 
 @router.post("/trades", response_model=TradeOut)
-def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
-    holding = (
-        db.query(Holding)
-        .filter_by(user_id=settings.default_user_id, ticker=payload.ticker)
-        .one_or_none()
-    )
+def log_trade(
+    payload: TradeIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> Trade:
+    holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
         raise HTTPException(
             status_code=404,
@@ -106,7 +113,7 @@ def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
     else:
         raise HTTPException(status_code=422, detail="action must be BUY or SELL")
 
-    trade = Trade(user_id=settings.default_user_id, **payload.model_dump())
+    trade = Trade(user_id=user.id, **payload.model_dump())
     db.add(trade)
     db.commit()
     db.refresh(trade)
@@ -114,8 +121,10 @@ def log_trade(payload: TradeIn, db: Session = Depends(get_db)) -> Trade:
 
 
 @router.post("/snapshot", response_model=PortfolioSnapshotOut)
-async def create_snapshot(db: Session = Depends(get_db)) -> PortfolioSnapshot:
-    holdings = db.query(Holding).filter_by(user_id=settings.default_user_id).all()
+async def create_snapshot(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> PortfolioSnapshot:
+    holdings = db.query(Holding).filter_by(user_id=user.id).all()
 
     total_market_value = 0.0
     total_cost_basis = 0.0
@@ -131,7 +140,7 @@ async def create_snapshot(db: Session = Depends(get_db)) -> PortfolioSnapshot:
         total_cost_basis += float(holding.shares) * float(holding.cost_basis)
 
     snapshot = PortfolioSnapshot(
-        user_id=settings.default_user_id,
+        user_id=user.id,
         total_market_value=total_market_value,
         total_cost_basis=total_cost_basis,
     )
@@ -142,10 +151,12 @@ async def create_snapshot(db: Session = Depends(get_db)) -> PortfolioSnapshot:
 
 
 @router.get("/snapshots", response_model=list[PortfolioSnapshotOut])
-def list_snapshots(db: Session = Depends(get_db)) -> list[PortfolioSnapshot]:
+def list_snapshots(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> list[PortfolioSnapshot]:
     return (
         db.query(PortfolioSnapshot)
-        .filter_by(user_id=settings.default_user_id)
+        .filter_by(user_id=user.id)
         .order_by(PortfolioSnapshot.created_at, PortfolioSnapshot.id)
         .all()
     )

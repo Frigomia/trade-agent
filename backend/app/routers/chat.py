@@ -4,15 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.agents.chat import run_chat
+from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.config import settings
-from app.db import get_db
 from app.models import ChatMessage
 from app.rate_limit import rate_limiter
 from app.schemas import ChatIn, ChatOut
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(tags=["chat"], dependencies=[Depends(get_current_user)])
 
 
 def _commit_or_raise(db: Session, log_message: str) -> None:
@@ -29,14 +29,18 @@ def _commit_or_raise(db: Session, log_message: str) -> None:
     response_model=ChatOut,
     dependencies=[Depends(rate_limiter("chat", limit=20))],
 )
-async def chat(payload: ChatIn, db: Session = Depends(get_db)) -> ChatOut:
+async def chat(
+    payload: ChatIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> ChatOut:
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="Chat not configured")
 
     history = (
         db.query(ChatMessage)
         .filter(
-            ChatMessage.user_id == settings.default_user_id,
+            ChatMessage.user_id == user.id,
             ChatMessage.session_id == payload.session_id,
         )
         .order_by(ChatMessage.created_at)
@@ -44,7 +48,7 @@ async def chat(payload: ChatIn, db: Session = Depends(get_db)) -> ChatOut:
     )
 
     user_row = ChatMessage(
-        user_id=settings.default_user_id,
+        user_id=user.id,
         session_id=payload.session_id,
         role="user",
         content=payload.message,
@@ -52,10 +56,10 @@ async def chat(payload: ChatIn, db: Session = Depends(get_db)) -> ChatOut:
     db.add(user_row)
     _commit_or_raise(db, "Failed to persist user chat message")
 
-    reply = await run_chat(db, payload.session_id, payload.message, history=history)
+    reply = await run_chat(db, user.id, payload.session_id, payload.message, history=history)
 
     assistant_row = ChatMessage(
-        user_id=settings.default_user_id,
+        user_id=user.id,
         session_id=payload.session_id,
         role="assistant",
         content=reply,

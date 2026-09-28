@@ -27,7 +27,13 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Migrations run as the table owner. DATABASE_URL is the restricted runtime role and cannot
+# create tables or policies, so prefer MIGRATION_DATABASE_URL when it is set. "%" is doubled
+# because Alembic's config parser treats it as interpolation syntax.
+config.set_main_option(
+    "sqlalchemy.url",
+    (settings.migration_database_url or settings.database_url).replace("%", "%%"),
+)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

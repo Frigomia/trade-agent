@@ -1,6 +1,6 @@
-from app.config import settings
 from app.memory.similarity import find_similar
 from app.models import Recommendation
+from tests.auth_support import OTHER_USER_ID, USER_ID
 
 
 def _vector(index: int, value: float = 1.0) -> list[float]:
@@ -10,7 +10,7 @@ def _vector(index: int, value: float = 1.0) -> list[float]:
 
 
 def test_find_similar_orders_by_cosine_distance(db_session):
-    user_id = settings.default_user_id
+    user_id = USER_ID
     close = Recommendation(
         user_id=user_id,
         ticker="AAA",
@@ -45,6 +45,22 @@ def test_find_similar_orders_by_cosine_distance(db_session):
     db_session.add_all([close, far, opposite, no_embedding])
     db_session.commit()
 
-    results = find_similar(db_session, _vector(0, 1.0), top_k=2)
+    results = find_similar(db_session, USER_ID, _vector(0, 1.0), top_k=2)
 
     assert [r.ticker for r in results] == ["AAA", "BBB"]
+
+
+def test_find_similar_ignores_other_users_recommendations(db_session):
+    db_session.add(
+        Recommendation(
+            user_id=OTHER_USER_ID,
+            ticker="AAPL",
+            asset_type="STOCK",
+            action="BUY",
+            reasoning=["theirs"],
+            embedding=_vector(0, 1.0),
+        )
+    )
+    db_session.commit()
+
+    assert find_similar(db_session, USER_ID, _vector(0, 1.0), top_k=5) == []

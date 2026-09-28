@@ -19,6 +19,7 @@ dependencies = [
     "psycopg[binary]",
     "pgvector",
     "httpx",
+    "pyjwt[crypto]>=2.14.0",
 ]
 
 [dependency-groups]

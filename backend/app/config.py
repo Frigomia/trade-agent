@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,7 +11,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     voyage_api_key: str | None = None
-    default_user_id: UUID = UUID("00000000-0000-0000-0000-000000000001")
+    supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
+    migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only
 
     max_single_position_pct: float = 0.15
     rsi_oversold: float = 30.0

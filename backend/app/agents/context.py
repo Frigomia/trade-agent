@@ -1,9 +1,9 @@
 import logging
 import re
+import uuid
 
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.memory.embeddings import embed_text
 from app.memory.similarity import find_similar
 from app.models import ChatMessage, InvestmentPreferences
@@ -15,13 +15,9 @@ CHAT_MESSAGE_DISPLAY_LIMIT = 500
 SIMILAR_RECOMMENDATIONS_LIMIT = 3
 
 
-def _build_preferences_section(db: Session) -> str:
+def _build_preferences_section(db: Session, user_id: uuid.UUID) -> str:
     try:
-        pref = (
-            db.query(InvestmentPreferences)
-            .filter_by(user_id=settings.default_user_id)
-            .one_or_none()
-        )
+        pref = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
         if pref is None:
             return "No stated investment preferences."
 
@@ -39,12 +35,12 @@ def _build_preferences_section(db: Session) -> str:
 
 
 async def _build_memory_section(
-    db: Session, ticker: str, asset_type: str, action: str, reasoning: list[str]
+    db: Session, user_id: uuid.UUID, ticker: str, asset_type: str, action: str, reasoning: list[str]
 ) -> str:
     situation = f"{ticker} ({asset_type}): {action}. {'; '.join(reasoning)}."
     try:
         embedding = await embed_text(situation)
-        similar = find_similar(db, embedding, top_k=SIMILAR_RECOMMENDATIONS_LIMIT)
+        similar = find_similar(db, user_id, embedding, top_k=SIMILAR_RECOMMENDATIONS_LIMIT)
     except Exception:
         logger.exception("Long-term memory lookup failed for %s", ticker)
         similar = []
@@ -62,7 +58,7 @@ async def _build_memory_section(
     return "\n".join(lines)
 
 
-def _build_session_memory_section(db: Session, ticker: str) -> str:
+def _build_session_memory_section(db: Session, user_id: uuid.UUID, ticker: str) -> str:
     try:
         # Only the user's own words are first-party; assistant replies can carry
         # unlabeled web-derived text (the chat agent has web_search) and would be
@@ -75,6 +71,7 @@ def _build_session_memory_section(db: Session, ticker: str) -> str:
         messages = (
             db.query(ChatMessage)
             .filter(
+                ChatMessage.user_id == user_id,
                 ChatMessage.role == "user",
                 ChatMessage.content.op("~*")(ticker_pattern),
             )
@@ -93,11 +90,16 @@ def _build_session_memory_section(db: Session, ticker: str) -> str:
 
 
 async def build_context(
-    db: Session, ticker: str, asset_type: str, action: str, reasoning: list[str]
+    db: Session,
+    user_id: uuid.UUID,
+    ticker: str,
+    asset_type: str,
+    action: str,
+    reasoning: list[str],
 ) -> str:
-    preferences_text = _build_preferences_section(db)
-    memory_text = await _build_memory_section(db, ticker, asset_type, action, reasoning)
-    session_text = _build_session_memory_section(db, ticker)
+    preferences_text = _build_preferences_section(db, user_id)
+    memory_text = await _build_memory_section(db, user_id, ticker, asset_type, action, reasoning)
+    session_text = _build_session_memory_section(db, user_id, ticker)
 
     return (
         f"## Investment preferences\n{preferences_text}\n\n"

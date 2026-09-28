@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from typing import cast
 
 from anthropic import Anthropic
@@ -11,14 +12,12 @@ from app.models import ChatMessage, Holding, Recommendation, WatchlistItem
 RECENT_RECOMMENDATIONS_LIMIT = 10
 
 
-async def build_portfolio_context(db: Session) -> str:
-    holdings = db.query(Holding).filter(Holding.user_id == settings.default_user_id).all()
-    watchlist = (
-        db.query(WatchlistItem).filter(WatchlistItem.user_id == settings.default_user_id).all()
-    )
+async def build_portfolio_context(db: Session, user_id: uuid.UUID) -> str:
+    holdings = db.query(Holding).filter(Holding.user_id == user_id).all()
+    watchlist = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id).all()
     recent_recs = (
         db.query(Recommendation)
-        .filter(Recommendation.user_id == settings.default_user_id)
+        .filter(Recommendation.user_id == user_id)
         .order_by(Recommendation.created_at.desc())
         .limit(RECENT_RECOMMENDATIONS_LIMIT)
         .all()
@@ -77,9 +76,11 @@ def _get_client() -> Anthropic:
     return _client
 
 
-async def run_chat(db: Session, session_id: str, message: str, history: list[ChatMessage]) -> str:
+async def run_chat(
+    db: Session, user_id: uuid.UUID, session_id: str, message: str, history: list[ChatMessage]
+) -> str:
     client = _get_client()
-    portfolio_context = await build_portfolio_context(db)
+    portfolio_context = await build_portfolio_context(db, user_id)
     system_prompt = CHAT_AGENT_SYSTEM_PROMPT.format(portfolio_context=portfolio_context)
 
     messages: list[MessageParam] = cast(

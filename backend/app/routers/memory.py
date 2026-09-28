@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.config import settings
-from app.db import get_db
 from app.memory.embeddings import embed_text
 from app.memory.outcomes import compute_outcome
 from app.memory.similarity import find_similar
@@ -15,19 +15,21 @@ from app.schemas import MemorySimilarOut
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/memory", tags=["memory"])
+router = APIRouter(prefix="/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
 BATCH_SIZE = 50
 OUTCOME_LOOKBACK_DAYS = 20
 
 
 @router.post("/embed")
-async def embed_recommendations(db: Session = Depends(get_db)) -> dict[str, int]:
+async def embed_recommendations(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> dict[str, int]:
     if not settings.voyage_api_key:
         raise HTTPException(status_code=503, detail="Embeddings not configured")
 
     pending_filter = (
-        Recommendation.user_id == settings.default_user_id,
+        Recommendation.user_id == user.id,
         Recommendation.embedding.is_(None),
     )
     pending = (
@@ -57,13 +59,15 @@ async def embed_recommendations(db: Session = Depends(get_db)) -> dict[str, int]
 
 
 @router.post("/evaluate-outcomes")
-async def evaluate_outcomes(db: Session = Depends(get_db)) -> dict[str, int]:
+async def evaluate_outcomes(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> dict[str, int]:
     # Recommendation.created_at is DateTime (no tz) — this comparison is only
     # correct because the Postgres session's TimeZone is UTC (true for this
     # project's Docker Postgres image). Not enforced at the schema level.
     cutoff = datetime.now(UTC) - timedelta(days=OUTCOME_LOOKBACK_DAYS)
     due_filter = (
-        Recommendation.user_id == settings.default_user_id,
+        Recommendation.user_id == user.id,
         Recommendation.outcome_evaluated_at.is_(None),
         Recommendation.price_at_recommendation.isnot(None),
         Recommendation.created_at <= cutoff,
@@ -111,7 +115,9 @@ class MemorySimilarIn(BaseModel):
 
 @router.post("/similar", response_model=list[MemorySimilarOut])
 async def similar_recommendations(
-    payload: MemorySimilarIn, db: Session = Depends(get_db)
+    payload: MemorySimilarIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
 ) -> list[Recommendation]:
     if not settings.voyage_api_key:
         raise HTTPException(status_code=503, detail="Embeddings not configured")
@@ -120,4 +126,4 @@ async def similar_recommendations(
     except Exception:
         logger.exception("Embedding failed for similarity query")
         raise HTTPException(status_code=503, detail="Embeddings unavailable") from None
-    return find_similar(db, query_embedding, payload.top_k)
+    return find_similar(db, user.id, query_embedding, payload.top_k)

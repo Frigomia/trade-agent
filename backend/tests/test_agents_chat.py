@@ -1,4 +1,5 @@
 import asyncio
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,12 +8,13 @@ from app.agents import chat as chat_module
 from app.agents.chat import build_portfolio_context, run_chat
 from app.config import settings
 from app.models import ChatMessage, Holding, Recommendation, WatchlistItem
+from tests.auth_support import OTHER_USER_ID, USER_ID
 
 
 def test_build_portfolio_context_includes_holdings_watchlist_recommendations(db_session):
     db_session.add(
         Holding(
-            user_id=settings.default_user_id,
+            user_id=USER_ID,
             ticker="AAPL",
             name="Apple Inc.",
             asset_type="STOCK",
@@ -22,12 +24,10 @@ def test_build_portfolio_context_includes_holdings_watchlist_recommendations(db_
             target_weight=0.2,
         )
     )
-    db_session.add(
-        WatchlistItem(user_id=settings.default_user_id, ticker="MSFT", asset_type="STOCK")
-    )
+    db_session.add(WatchlistItem(user_id=USER_ID, ticker="MSFT", asset_type="STOCK"))
     db_session.add(
         Recommendation(
-            user_id=settings.default_user_id,
+            user_id=USER_ID,
             ticker="AAPL",
             asset_type="STOCK",
             action="HOLD",
@@ -36,7 +36,7 @@ def test_build_portfolio_context_includes_holdings_watchlist_recommendations(db_
     )
     db_session.commit()
 
-    context = asyncio.run(build_portfolio_context(db_session))
+    context = asyncio.run(build_portfolio_context(db_session, USER_ID))
 
     assert "AAPL" in context
     assert "MSFT" in context
@@ -44,7 +44,7 @@ def test_build_portfolio_context_includes_holdings_watchlist_recommendations(db_
 
 
 def test_build_portfolio_context_handles_empty_portfolio(db_session):
-    context = asyncio.run(build_portfolio_context(db_session))
+    context = asyncio.run(build_portfolio_context(db_session, USER_ID))
 
     assert isinstance(context, str)
     assert context != ""
@@ -54,7 +54,7 @@ def test_run_chat_raises_without_api_key(monkeypatch, db_session):
     monkeypatch.setattr(settings, "anthropic_api_key", None)
 
     with pytest.raises(RuntimeError):
-        asyncio.run(run_chat(db_session, "session-1", "hello", history=[]))
+        asyncio.run(run_chat(db_session, USER_ID, "session-1", "hello", history=[]))
 
 
 def test_run_chat_calls_claude_with_history_and_web_search(monkeypatch, db_session):
@@ -62,7 +62,7 @@ def test_run_chat_calls_claude_with_history_and_web_search(monkeypatch, db_sessi
     chat_module._client = None
 
     prior = ChatMessage(
-        user_id=settings.default_user_id,
+        user_id=USER_ID,
         session_id="session-1",
         role="user",
         content="what's my AAPL position?",
@@ -79,7 +79,9 @@ def test_run_chat_calls_claude_with_history_and_web_search(monkeypatch, db_sessi
         mock_client.messages.create.return_value = fake_response
         mock_anthropic_cls.return_value = mock_client
 
-        result = asyncio.run(run_chat(db_session, "session-1", "should I sell?", history=[prior]))
+        result = asyncio.run(
+            run_chat(db_session, USER_ID, "session-1", "should I sell?", history=[prior])
+        )
 
     assert result == "You hold 10 shares of AAPL."
     call_kwargs = mock_client.messages.create.call_args.kwargs
@@ -106,7 +108,9 @@ def test_run_chat_accepts_empty_history(monkeypatch, db_session):
         mock_client.messages.create.return_value = fake_response
         mock_anthropic_cls.return_value = mock_client
 
-        result = asyncio.run(run_chat(db_session, "brand-new-session", "hello", history=[]))
+        result = asyncio.run(
+            run_chat(db_session, USER_ID, "brand-new-session", "hello", history=[])
+        )
 
     assert result == "Hi, how can I help?"
     messages = mock_client.messages.create.call_args.kwargs["messages"]
@@ -127,4 +131,23 @@ def test_run_chat_raises_on_no_text_blocks(monkeypatch, db_session):
         mock_anthropic_cls.return_value = mock_client
 
         with pytest.raises(RuntimeError):
-            asyncio.run(run_chat(db_session, "session-1", "hello", history=[]))
+            asyncio.run(run_chat(db_session, USER_ID, "session-1", "hello", history=[]))
+
+
+def test_build_portfolio_context_excludes_other_users_holdings(db_session):
+    db_session.add(
+        Holding(
+            user_id=OTHER_USER_ID,
+            ticker="ZZZZ",
+            name="Theirs",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    context = asyncio.run(build_portfolio_context(db_session, USER_ID))
+
+    assert "ZZZZ" not in context
