@@ -47,5 +47,11 @@ def downgrade() -> None:
         op.execute(f"DROP POLICY IF EXISTS {table}_owner ON {table}")
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
-    # The role and its grants are left in place: dropping a role that still owns grants or
-    # has connections fails, and a leftover NOLOGIN role is harmless.
+    # Revoke what upgrade() granted: with RLS off, leftover grants would let the runtime role
+    # read every user's rows. The role itself stays: dropping a role that still owns grants or
+    # has connections fails, and a NOLOGIN role with no privileges is harmless.
+    for table in (*USER_TABLES, "app_users"):
+        op.execute(f"REVOKE ALL ON {table} FROM {rls.RUNTIME_ROLE}")
+    for table in USER_TABLES:
+        op.execute(f"REVOKE ALL ON SEQUENCE {table}_id_seq FROM {rls.RUNTIME_ROLE}")
+    op.execute(f"REVOKE USAGE ON SCHEMA public FROM {rls.RUNTIME_ROLE}")

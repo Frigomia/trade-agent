@@ -118,10 +118,24 @@ def test_user_cannot_update_or_delete_other_users_rows(engine, app_session_local
 
 
 @pytest.mark.parametrize("table_name", rls.USER_TABLES)
+def test_user_cannot_reassign_own_row_to_another_user(engine, app_session_local, table_name):
+    _seed_both_users(engine, table_name)
+    table = _table(table_name)
+
+    with (
+        open_user_session(app_session_local, USER_ID) as session,
+        pytest.raises(DBAPIError, match="row-level security"),
+    ):
+        session.execute(
+            update(table).where(table.c.user_id == USER_ID).values(user_id=OTHER_USER_ID)
+        )
+
+
+@pytest.mark.parametrize("table_name", rls.USER_TABLES)
 def test_insert_for_another_user_is_rejected(app_session_local, table_name):
     with open_user_session(app_session_local, USER_ID) as session:
         session.add(ROW_FACTORIES[table_name](OTHER_USER_ID))
-        with pytest.raises(DBAPIError):
+        with pytest.raises(DBAPIError, match="row-level security"):
             session.flush()
 
 
