@@ -12,12 +12,20 @@ from sqlalchemy.orm import Session, sessionmaker
 import app.models  # noqa: F401  registers tables on Base.metadata
 import app.redis_client as redis_client_module
 from app import rls
+from app.auth.supabase_admin import get_supabase_admin
 from app.auth.tokens import get_key_resolver
 from app.config import settings
 from app.db import Base, get_session_factory
 from app.main import app
 from app.models import AppUser
-from tests.auth_support import TEST_SUPABASE_URL, USER_ID, auth_headers, resolve_test_key
+from tests.auth_support import (
+    ADMIN_ID,
+    TEST_SUPABASE_URL,
+    USER_ID,
+    FakeSupabaseAdmin,
+    auth_headers,
+    resolve_test_key,
+)
 
 ADMIN_DATABASE_URL = "postgresql+psycopg://trading_agent:trading_agent@localhost:5432/postgres"
 TEST_DATABASE_URL = (
@@ -148,5 +156,25 @@ def anon_client(engine: Engine, app_engine: Engine) -> Generator[TestClient, Non
     """Same wiring as `client`, but sends no Authorization header."""
     _install_overrides(app_engine)
     with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def fake_supabase() -> FakeSupabaseAdmin:
+    return FakeSupabaseAdmin()
+
+
+@pytest.fixture()
+def admin_client(
+    engine: Engine, app_engine: Engine, fake_supabase: FakeSupabaseAdmin
+) -> Generator[TestClient, None, None]:
+    """Authenticated as an active admin (ADMIN_ID); Supabase is replaced by `fake_supabase`."""
+    with sessionmaker(bind=engine)() as setup:
+        setup.add(AppUser(id=ADMIN_ID, email="admin@example.com", role="admin", status="active"))
+        setup.commit()
+    _install_overrides(app_engine)
+    app.dependency_overrides[get_supabase_admin] = lambda: fake_supabase
+    with TestClient(app, headers=auth_headers(ADMIN_ID)) as test_client:
         yield test_client
     app.dependency_overrides.clear()
