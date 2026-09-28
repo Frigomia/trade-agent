@@ -6,14 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
+from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.backtest.jobs import create_job, get_job_status, run_job
-from app.config import settings
-from app.db import get_db
 from app.models import BacktestResult
 from app.schemas import BacktestResultOut, Ticker
 
-router = APIRouter(prefix="/backtest", tags=["backtest"])
+router = APIRouter(prefix="/backtest", tags=["backtest"], dependencies=[Depends(get_current_user)])
 
 _track_background_task = make_task_tracker("backtest")
 
@@ -35,30 +34,34 @@ class BacktestRunIn(BaseModel):
 
 
 @router.post("/run", status_code=202)
-async def run_backtest(payload: BacktestRunIn) -> dict[str, str]:
-    job_id = await create_job(
-        settings.default_user_id, payload.ticker, payload.start_date, payload.end_date
-    )
+async def run_backtest(
+    payload: BacktestRunIn, user: CurrentUser = Depends(get_current_user)
+) -> dict[str, str]:
+    job_id = await create_job(user.id, payload.ticker, payload.start_date, payload.end_date)
     task = asyncio.create_task(
-        run_job(
-            job_id, settings.default_user_id, payload.ticker, payload.start_date, payload.end_date
-        )
+        run_job(job_id, user.id, payload.ticker, payload.start_date, payload.end_date)
     )
     _track_background_task(task)
     return {"job_id": job_id}
 
 
 @router.get("/run/{job_id}")
-async def get_run_status(job_id: str) -> dict[str, Any]:
-    status = await get_job_status(job_id, settings.default_user_id)
+async def get_run_status(
+    job_id: str, user: CurrentUser = Depends(get_current_user)
+) -> dict[str, Any]:
+    status = await get_job_status(job_id, user.id)
     if status is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return status
 
 
 @router.get("/results", response_model=list[BacktestResultOut])
-def list_results(ticker: str | None = None, db: Session = Depends(get_db)) -> list[BacktestResult]:
-    query = db.query(BacktestResult).filter_by(user_id=settings.default_user_id)
+def list_results(
+    ticker: str | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> list[BacktestResult]:
+    query = db.query(BacktestResult).filter_by(user_id=user.id)
     if ticker:
         query = query.filter_by(ticker=ticker)
     return query.all()
