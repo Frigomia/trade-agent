@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.config import settings
 from app.models import Holding, PortfolioSnapshot
+from tests.auth_support import OTHER_USER_ID, USER_ID
 
 
 def test_list_holdings_empty(client):
@@ -304,17 +304,9 @@ def test_snapshot_fails_when_price_is_nan(client):
 
 
 def test_list_snapshots_ordered_oldest_first(client, db_session):
-    db_session.add(
-        PortfolioSnapshot(
-            user_id=settings.default_user_id, total_market_value=100, total_cost_basis=90
-        )
-    )
+    db_session.add(PortfolioSnapshot(user_id=USER_ID, total_market_value=100, total_cost_basis=90))
     db_session.commit()
-    db_session.add(
-        PortfolioSnapshot(
-            user_id=settings.default_user_id, total_market_value=200, total_cost_basis=90
-        )
-    )
+    db_session.add(PortfolioSnapshot(user_id=USER_ID, total_market_value=200, total_cost_basis=90))
     db_session.commit()
 
     response = client.get("/portfolio/snapshots")
@@ -345,3 +337,42 @@ def test_holdings_scoped_to_user_id(client, db_session):
 
     response = client.delete("/portfolio/holdings/AAPL")
     assert response.status_code == 404
+
+
+def test_portfolio_requires_authentication(anon_client):
+    assert anon_client.get("/portfolio/holdings").status_code == 401
+
+
+def test_list_holdings_excludes_other_users_holdings(client, db_session):
+    db_session.add(
+        Holding(
+            user_id=OTHER_USER_ID,
+            ticker="ZZZZ",
+            name="Theirs",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    response = client.get("/portfolio/holdings")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_upsert_holding_is_stored_for_the_caller(client, db_session):
+    payload = {
+        "ticker": "AAPL",
+        "name": "Apple",
+        "asset_type": "STOCK",
+        "shares": 2,
+        "cost_basis": 100,
+        "first_purchase_date": "2024-01-01",
+    }
+    assert client.post("/portfolio/holdings", json=payload).status_code == 200
+
+    stored = db_session.query(Holding).filter_by(ticker="AAPL").one()
+    assert stored.user_id == USER_ID
