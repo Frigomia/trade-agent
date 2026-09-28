@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.config import settings
 from app.models import ChatMessage
+from tests.auth_support import OTHER_USER_ID, add_app_user, auth_headers
 
 
 def test_chat_without_api_key_returns_503(client, monkeypatch):
@@ -74,3 +75,25 @@ def test_chat_rate_limited_after_20_calls_per_minute(client, monkeypatch):
 
     response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
     assert response.status_code == 429
+
+
+def test_chat_requires_authentication(anon_client):
+    response = anon_client.post("/chat", json={"session_id": "s", "message": "hi"})
+    assert response.status_code == 401
+
+
+def test_chat_persists_rows_for_the_token_user_not_a_default(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    add_app_user(db_session, OTHER_USER_ID)
+
+    with patch("app.routers.chat.run_chat", AsyncMock(return_value="reply")) as mock_run:
+        response = client.post(
+            "/chat",
+            json={"session_id": "s1", "message": "hi"},
+            headers=auth_headers(OTHER_USER_ID),
+        )
+
+    assert response.status_code == 200
+    rows = db_session.query(ChatMessage).all()
+    assert [row.user_id for row in rows] == [OTHER_USER_ID, OTHER_USER_ID]
+    assert mock_run.call_args.args[1] == OTHER_USER_ID
