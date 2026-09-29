@@ -13,6 +13,7 @@ app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(preferences.router)
 app.include_router(me.router)
+app.include_router(me.active_router)
 app.include_router(admin.router)
 
 

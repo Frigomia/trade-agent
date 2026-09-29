@@ -114,6 +114,16 @@ class ChatOut(BaseModel):
     message: str
 
 
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    session_id: str
+    role: str
+    content: str
+    created_at: datetime
+
+
 class MemorySimilarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -174,6 +184,44 @@ class MeOut(BaseModel):
     role: str
     status: str
     accepted_terms_at: datetime | None
+
+
+class ExportProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    role: str
+    status: str
+    created_at: datetime
+    accepted_terms_at: datetime | None
+    last_seen_at: datetime | None
+
+
+class ExportOut(BaseModel):
+    profile: ExportProfileOut
+    holdings: list[HoldingOut]
+    watchlist_items: list[WatchlistItemOut]
+    trades: list[TradeOut]
+    recommendations: list[RecommendationOut]
+    chat_messages: list[ChatMessageOut]
+    backtest_results: list[BacktestResultOut]
+    investment_preferences: PreferencesOut | None
+    portfolio_snapshots: list[PortfolioSnapshotOut]
+
+
+class UsageDetail(BaseModel):
+    used: int
+    limit: int
+
+
+class UsageOut(BaseModel):
+    analysis_runs: UsageDetail
+    chat_messages: UsageDetail
+
+
+class DataDeleteIn(BaseModel):
+    confirm: Literal[True]  # false or missing is a 422, same idiom as AcceptIn
 
 
 class InviteIn(BaseModel):
