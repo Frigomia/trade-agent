@@ -31,7 +31,7 @@ describe("apiFetch", () => {
     await apiFetch("/portfolio/holdings");
 
     const [, init] = vi.mocked(fetch).mock.calls[0];
-    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
+    expect((init?.headers as Headers).get("Authorization")).toBe("Bearer test-token");
   });
 
   it("omits the Authorization header entirely when there is no session", async () => {
@@ -41,7 +41,59 @@ describe("apiFetch", () => {
     await apiFetch("/health");
 
     const [, init] = vi.mocked(fetch).mock.calls[0];
-    expect(init?.headers as Record<string, string>).not.toHaveProperty("Authorization");
+    expect((init?.headers as Headers).has("Authorization")).toBe(false);
+  });
+
+  it("merges a caller-supplied Headers instance and preserves its Content-Type", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+
+    await apiFetch("/health", { headers: new Headers({ "X-Custom": "abc" }) });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    const headers = init?.headers as Headers;
+    expect(headers.get("X-Custom")).toBe("abc");
+    expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("merges caller-supplied headers passed as a tuple array", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+
+    await apiFetch("/health", { headers: [["X-Custom", "abc"]] });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Headers).get("X-Custom")).toBe("abc");
+  });
+
+  it("does not force Content-Type when the body is FormData", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+
+    await apiFetch("/health", { method: "POST", body: new FormData() });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Headers).has("Content-Type")).toBe(false);
+  });
+
+  it("joins FastAPI's array-of-validation-errors detail shape into one message", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: [
+            { loc: ["body", "amount"], msg: "field required", type: "value_error.missing" },
+            { loc: ["body", "symbol"], msg: "must not be empty", type: "value_error" },
+          ],
+        }),
+        { status: 422 },
+      ),
+    );
+
+    await expect(apiFetch("/portfolio/holdings")).rejects.toMatchObject({
+      status: 422,
+      detail: "field required; must not be empty",
+    });
   });
 
   it("parses the backend's error detail on a non-2xx response", async () => {

@@ -12,7 +12,8 @@ export const PHONE_TABS: NavItem[] = [
   { label: "Today", href: "/today", icon: Home },
   { label: "Portfolio", href: "/portfolio", icon: PieChart },
   { label: "Chat", href: "/chat", icon: MessageCircle },
-  { label: "More", href: "/more/preferences", icon: MoreHorizontal },
+  { label: "More", href: "/more", icon: MoreHorizontal },
+  { label: "Admin", href: "/admin", icon: Shield, adminOnly: true },
 ];
 
 export const DESKTOP_SECTIONS: NavItem[] = [

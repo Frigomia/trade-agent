@@ -5,6 +5,13 @@ import { IconButton } from "@mui/material";
 import { Sun, Moon } from "lucide-react";
 
 export function ThemeToggle() {
+  // ponytail: known limitation — the icon on first paint is always the dark-theme icon, briefly
+  // wrong for a light-theme user until the effect below corrects it after mount. Reading
+  // document.documentElement.dataset.theme in the useState initializer looks like a one-line
+  // fix, but this is a "use client" component that Next still server-renders for the initial
+  // HTML, so the initializer would run on the client during hydration with a different value
+  // than the server-rendered markup — trading this flash for a hydration mismatch (the exact
+  // class of bug Finding 5 addresses elsewhere). Not worth restructuring for a Minor finding.
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
   useEffect(() => {
@@ -16,7 +23,11 @@ export function ThemeToggle() {
   }, []);
 
   function toggle() {
-    const next = theme === "light" ? "dark" : "light";
+    // Reads the DOM directly rather than the `theme` state variable, so this always acts on the
+    // real current value even if data-theme changed externally (a second toggle instance, or a
+    // future Preferences screen) between renders.
+    const current = document.documentElement.dataset.theme === "light" ? "light" : "dark";
+    const next = current === "light" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", next);
     try {
       localStorage.setItem("theme", next);

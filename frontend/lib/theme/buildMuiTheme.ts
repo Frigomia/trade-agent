@@ -4,50 +4,53 @@ import type { StatusColors } from "./readStatusColors";
 /**
  * Every color/shadow/radius here reads a CSS custom property (see app/globals.css) instead
  * of a literal value, so the theme never drifts from the tokens Tailwind classes also use —
- * with one exception: `statusColors.*`, used only as `palette.{primary,success,error,warning}.main`.
- * Some MUI components (e.g. ListItemButton's `.selected`/hover styles) call
- * theme.alpha()/decomposeColor() on `main` while building their static styles, which throws
- * (MUI error #9) on a var(--...) reference it can't parse as a literal color, so `main` needs an
- * actual literal color. `statusColors` is how the caller supplies one: ThemeProvider resolves it
- * from the same CSS custom properties at runtime (see readStatusColors.ts), so app/globals.css
- * stays the single source of truth instead of the values being hand-copied into this file.
- * `light`/`dark`/`contrastText` below, and every styleOverride, stay on the CSS var and do
- * respond live to a theme toggle without this module knowing. `mode` only steers MUI's own
- * contrast/elevation math; it does not select the actual colors.
+ * with one exception: `statusColors.*`. MUI's stock components call theme.alpha()/emphasize()/
+ * decomposeColor() on several palette fields at render time (not just at theme-creation time) —
+ * not only `.main` (Button/Chip/Link/Skeleton/ToggleButton all touch `text.primary`,
+ * Snackbar touches `background.default`, Alert touches a `light`/`dark` field) — which throws
+ * (MUI error #9, "Unsupported var(...) color") on a var(--...) reference it can't parse as a
+ * literal color. So every field below that MUI itself reads as a color needs an actual literal
+ * value. `statusColors` is how the caller supplies these: ThemeProvider resolves them from the
+ * same CSS custom properties at runtime (see readStatusColors.ts), so app/globals.css stays the
+ * single source of truth instead of the values being hand-copied into this file. Everywhere
+ * else (styleOverrides, borders, etc.) stays on the CSS var and responds live to a theme toggle
+ * without this module knowing. `mode` only steers MUI's own contrast/elevation math; it does
+ * not select the actual colors.
  */
 export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors): MuiTheme {
   return createTheme({
     palette: {
       mode,
-      background: { default: "var(--bg)", paper: "var(--panel)" },
-      text: { primary: "var(--text)", secondary: "var(--text2)" },
-      // light/dark/contrastText are set explicitly (even though they repeat the CSS var) because
-      // MUI's palette augmentation otherwise tries to compute them by parsing `main` as a
-      // literal CSS color — which throws (MUI error #9) since these are var(--...) references
-      // it can't decompose. The design spec has no separate light/dark shade for these tokens.
+      background: { default: statusColors.bgDefault, paper: statusColors.bgPaper },
+      text: { primary: statusColors.textPrimary, secondary: statusColors.textSecondary },
+      // light/dark/contrastText are set explicitly (even though light/dark repeat `main`)
+      // because MUI's palette augmentation otherwise tries to compute them by parsing `main`
+      // as a literal CSS color — which throws (MUI error #9) since these are var(--...)
+      // references it can't decompose. The design spec has no separate light/dark shade for
+      // these tokens, so light/dark reuse the same resolved value as main.
       primary: {
         main: statusColors.accentSolid,
-        light: "var(--accent-solid)",
-        dark: "var(--accent-solid)",
-        contrastText: "var(--on-accent)",
+        light: statusColors.accentSolid,
+        dark: statusColors.accentSolid,
+        contrastText: statusColors.onAccent,
       },
       success: {
         main: statusColors.up,
-        light: "var(--up)",
-        dark: "var(--up)",
-        contrastText: "var(--on-accent)",
+        light: statusColors.up,
+        dark: statusColors.up,
+        contrastText: statusColors.onAccent,
       },
       error: {
         main: statusColors.down,
-        light: "var(--down)",
-        dark: "var(--down)",
-        contrastText: "var(--on-accent)",
+        light: statusColors.down,
+        dark: statusColors.down,
+        contrastText: statusColors.onAccent,
       },
       warning: {
         main: statusColors.warn,
-        light: "var(--warn)",
-        dark: "var(--warn)",
-        contrastText: "var(--on-accent)",
+        light: statusColors.warn,
+        dark: statusColors.warn,
+        contrastText: statusColors.onAccent,
       },
     },
     shape: { borderRadius: 18 },

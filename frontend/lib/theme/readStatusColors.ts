@@ -3,6 +3,11 @@ export interface StatusColors {
   up: string;
   down: string;
   warn: string;
+  onAccent: string;
+  textPrimary: string;
+  textSecondary: string;
+  bgDefault: string;
+  bgPaper: string;
 }
 
 // Used before the DOM-reading effect below has run (first render / SSR), matching the dark
@@ -12,6 +17,11 @@ export const DEFAULT_STATUS_COLORS: StatusColors = {
   up: "#34e7a9",
   down: "#ff6b72",
   warn: "#f4c04f",
+  onAccent: "#032116",
+  textPrimary: "#e7f3ef",
+  textSecondary: "#cfe2dc",
+  bgDefault: "#060d0c",
+  bgPaper: "rgba(255, 255, 255, 0.035)",
 };
 
 // Resolves the live values of the handful of CSS custom properties buildMuiTheme needs as
@@ -25,5 +35,10 @@ export function readStatusColors(): StatusColors {
     up: read("--up", DEFAULT_STATUS_COLORS.up),
     down: read("--down", DEFAULT_STATUS_COLORS.down),
     warn: read("--warn", DEFAULT_STATUS_COLORS.warn),
+    onAccent: read("--on-accent", DEFAULT_STATUS_COLORS.onAccent),
+    textPrimary: read("--text", DEFAULT_STATUS_COLORS.textPrimary),
+    textSecondary: read("--text2", DEFAULT_STATUS_COLORS.textSecondary),
+    bgDefault: read("--bg", DEFAULT_STATUS_COLORS.bgDefault),
+    bgPaper: read("--panel", DEFAULT_STATUS_COLORS.bgPaper),
   };
 }
