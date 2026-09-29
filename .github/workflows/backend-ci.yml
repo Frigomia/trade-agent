@@ -90,6 +90,12 @@ jobs:
   secrets-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
+    # This job scans the whole repo, not just backend/ — override the workflow's
+    # backend-scoped default so `gitleaks detect`'s --source . and its default
+    # .gitleaksignore lookup (also relative to cwd) both resolve at the repo root.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v7
         with:
@@ -103,11 +109,5 @@ jobs:
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
           tar -xzf gitleaks.tar.gz gitleaks
           sudo mv gitleaks /usr/local/bin/
-      - name: Debug gitleaksignore
-        run: |
-          pwd
-          ls -la .gitleaksignore
-          cat -A .gitleaksignore
-          gitleaks version
       - name: Run gitleaks
         run: gitleaks detect --source . --redact -v
