@@ -1,11 +1,14 @@
-from datetime import date, datetime
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
+import app.redis_client as redis_client_module
 from app import rls
+from app.config import settings
 from app.db import Base
-from app.models import AppUser, Holding
+from app.models import AppUser, InvestmentPreferences
 from tests.auth_support import OTHER_USER_ID, ROW_FACTORIES, USER_ID, add_app_user, auth_headers
 
 
@@ -113,30 +116,58 @@ def test_usage_is_403_for_an_invited_user(client, db_session):
     assert response.status_code == 403
 
 
+def test_usage_reflects_real_calls_and_matches_the_admin_view(
+    client, admin_client, db_session, monkeypatch
+):
+    monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
+
+    def _close_coro(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch("app.routers.analysis.create_job", AsyncMock(return_value="job-1")),
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
+    ):
+        client.post("/analysis/run", json={})
+
+    client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    usage = client.get("/me/usage").json()
+    assert usage["analysis_runs"]["used"] == 1
+    assert usage["chat_messages"]["used"] == 2
+
+    # `client` and `admin_client` are two separate TestClients, each with its own event-loop
+    # portal; the module-level Redis client is a singleton bound to whichever loop created it,
+    # so it must be dropped before switching portals or the admin_client calls below raise
+    # "attached to a different loop" (same reason conftest's _reset_redis_client resets it
+    # between tests, just needed mid-test here too).
+    redis_client_module._redis = None
+
+    admin_row = next(u for u in admin_client.get("/admin/users").json() if u["id"] == str(USER_ID))
+    assert admin_row["monthly_analysis_used"] == 1
+    assert admin_row["monthly_chat_used"] == 2
+
+
 def test_export_returns_only_the_callers_own_rows(client, db_session):
-    db_session.add(
-        Holding(
-            user_id=USER_ID,
-            ticker="AAPL",
-            name="Apple",
-            asset_type="STOCK",
-            shares=1,
-            cost_basis=1,
-            first_purchase_date=date(2024, 1, 1),
-        )
-    )
     add_app_user(db_session, OTHER_USER_ID)
-    db_session.add(
-        Holding(
-            user_id=OTHER_USER_ID,
-            ticker="MSFT",
-            name="Microsoft",
-            asset_type="STOCK",
-            shares=1,
-            cost_basis=1,
-            first_purchase_date=date(2024, 1, 1),
-        )
-    )
+    # investment_preferences is a singular object in ExportOut, and its Out schema exposes no
+    # user_id (nor does chat_messages'/portfolio_snapshots'), so give those a value that differs
+    # per user to prove isolation; every other table's Out schema exposes user_id directly.
+    for table_name in rls.USER_TABLES:
+        if table_name == "investment_preferences":
+            continue
+        caller_row = ROW_FACTORIES[table_name](USER_ID)
+        other_row = ROW_FACTORIES[table_name](OTHER_USER_ID)
+        if table_name == "chat_messages":
+            other_row.content = "other user's message"
+        elif table_name == "portfolio_snapshots":
+            other_row.total_market_value = 999
+        db_session.add_all([caller_row, other_row])
+    db_session.add(InvestmentPreferences(user_id=USER_ID, notes="caller-notes"))
+    db_session.add(InvestmentPreferences(user_id=OTHER_USER_ID, notes="other-notes"))
     db_session.commit()
 
     response = client.get("/me/export")
@@ -144,7 +175,22 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
     assert response.status_code == 200
     body = response.json()
     assert body["profile"]["id"] == str(USER_ID)
-    assert [h["ticker"] for h in body["holdings"]] == ["AAPL"]
+
+    rows_with_user_id = set(rls.USER_TABLES) - {
+        "investment_preferences",
+        "chat_messages",
+        "portfolio_snapshots",
+    }
+    for table_name in rows_with_user_id:
+        rows = body[table_name]
+        assert len(rows) == 1, table_name
+        assert rows[0]["user_id"] == str(USER_ID), table_name
+
+    assert len(body["chat_messages"]) == 1
+    assert body["chat_messages"][0]["content"] == "hi"
+    assert len(body["portfolio_snapshots"]) == 1
+    assert body["portfolio_snapshots"][0]["total_market_value"] == 1
+    assert body["investment_preferences"]["notes"] == "caller-notes"
 
 
 def test_export_is_403_for_an_invited_user(client, db_session):

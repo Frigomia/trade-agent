@@ -7,7 +7,6 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeFloat,
-    NonNegativeInt,
     PositiveFloat,
     StringConstraints,
 )
@@ -234,10 +233,14 @@ class RemoveIn(BaseModel):
 
 class LimitsIn(BaseModel):
     """Either field is independent: omitted leaves that limit unchanged, an explicit null clears
-    the override back to the system default, and a non-negative integer sets it."""
+    the override back to the system default, and a non-negative integer sets it. extra="forbid"
+    turns a misspelled key (e.g. "analyiss_limit") into a 422 instead of a silent no-op; the
+    upper bound matches Postgres's Integer column so an oversized value 422s instead of 500ing."""
 
-    analysis_limit: NonNegativeInt | None = None
-    chat_limit: NonNegativeInt | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
+    chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
 
 
 class AdminUserOut(BaseModel):

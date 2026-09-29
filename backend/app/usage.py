@@ -75,6 +75,7 @@ async def check_and_increment_usage(kind: str, user_id: str, limit: int) -> None
     if count == 1:
         await redis.expire(key, _MONTH_TTL_SECONDS)
     if count > limit:
+        await redis.decr(key)
         raise UsageLimitExceeded(kind, limit)
 
 

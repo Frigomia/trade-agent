@@ -331,6 +331,24 @@ def test_set_limits_rejects_a_negative_value(admin_client, db_session):
     assert response.status_code == 422
 
 
+def test_set_limits_rejects_a_value_above_the_postgres_integer_column(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(
+        f"/admin/users/{USER_ID}/limits", json={"analysis_limit": 2_147_483_648}
+    )
+
+    assert response.status_code == 422
+
+
+def test_set_limits_rejects_an_unknown_field(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analyiss_limit": 5})
+
+    assert response.status_code == 422
+
+
 def test_set_limits_unknown_user_is_404(admin_client):
     response = admin_client.patch(f"/admin/users/{uuid.uuid4()}/limits", json={"analysis_limit": 1})
     assert response.status_code == 404

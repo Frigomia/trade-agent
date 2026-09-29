@@ -48,6 +48,23 @@ def test_check_and_increment_usage_rejects_even_the_first_call_when_limit_is_zer
     asyncio.run(_run())
 
 
+def test_check_and_increment_usage_does_not_inflate_the_counter_on_rejection():
+    user_id = str(uuid.uuid4())
+
+    async def _run() -> None:
+        for _ in range(3):
+            await check_and_increment_usage("test_kind", user_id, limit=3)
+        # Two more rejected attempts must not push the counter past 3.
+        for _ in range(2):
+            with pytest.raises(UsageLimitExceeded):
+                await check_and_increment_usage("test_kind", user_id, limit=3)
+        assert await get_usage("test_kind", user_id) == 3
+        # Raising the limit by 1 must now unblock the very next call.
+        await check_and_increment_usage("test_kind", user_id, limit=4)
+
+    asyncio.run(_run())
+
+
 def test_get_usage_reads_without_incrementing():
     user_id = str(uuid.uuid4())
 

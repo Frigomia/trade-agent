@@ -1,8 +1,12 @@
 """Supabase Auth admin API: invite, ban, unban, delete users.
 
-A small synchronous httpx client (routes are sync `def`). Every failure becomes one
-SupabaseAdminError that carries no response text or exception message: those can echo keys,
-hosts, and email addresses.
+A small synchronous httpx client. Most of the app's routes are sync `def`, so FastAPI runs them
+in its own threadpool automatically. The admin router (`app/routers/admin.py`) is `async def`
+instead (it needs to `await usage.get_usage`), so its handlers wrap each call into this module in
+`starlette.concurrency.run_in_threadpool` themselves — otherwise a blocking call here (up to
+REQUEST_TIMEOUT_SECONDS) would freeze the whole event loop, not just that one request. Every
+failure becomes one SupabaseAdminError that carries no response text or exception message: those
+can echo keys, hosts, and email addresses.
 """
 
 import uuid

@@ -697,7 +697,7 @@ just believed done.
       `app/rate_limit.py`: a Redis-backed per-minute limiter per user, applied via
       `dependencies=[Depends(rate_limiter(...))]`. `/analysis/run`: 5/min,
       `/chat`: 20/min. Monthly caps per user (default 100 analysis/500 chat) enforced
-      in the request handler (sub-project 2c)
+      in a route dependency (`check_monthly_usage`, run before the handler; sub-project 2c)
 - [x] Exception text sanitized before it's persisted or returned — the
       original concern (`news_agent` interpolating raw `{exc}`) no longer
       applies; current code has no such interpolation anywhere in

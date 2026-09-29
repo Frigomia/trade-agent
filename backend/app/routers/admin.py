@@ -4,6 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 
 from app import usage
 from app.admin import service
@@ -35,7 +36,8 @@ async def list_users(
     status: Literal["invited", "active", "disabled"] | None = None,
     db: Session = Depends(get_user_db),
 ) -> list[AdminUserOut]:
-    return [await _to_out(u) for u in service.list_users(db, status)]
+    users = await run_in_threadpool(service.list_users, db, status)
+    return [await _to_out(u) for u in users]
 
 
 @router.post("/users/invite", response_model=AdminUserOut, status_code=201)
@@ -44,7 +46,9 @@ async def invite_user(
     db: Session = Depends(get_user_db),
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
 ) -> AdminUserOut:
-    user = service.invite_user(db, supabase, payload.email, settings.invite_redirect_url)
+    user = await run_in_threadpool(
+        service.invite_user, db, supabase, payload.email, settings.invite_redirect_url
+    )
     return await _to_out(user)
 
 
@@ -54,7 +58,9 @@ async def resend_invite(
     db: Session = Depends(get_user_db),
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
 ) -> AdminUserOut:
-    user = service.resend_invite(db, supabase, user_id, settings.invite_redirect_url)
+    user = await run_in_threadpool(
+        service.resend_invite, db, supabase, user_id, settings.invite_redirect_url
+    )
     return await _to_out(user)
 
 
@@ -75,7 +81,8 @@ async def disable_user(
     db: Session = Depends(get_user_db),
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
 ) -> AdminUserOut:
-    return await _to_out(service.disable_user(db, supabase, user_id, admin.id))
+    user = await run_in_threadpool(service.disable_user, db, supabase, user_id, admin.id)
+    return await _to_out(user)
 
 
 @router.post("/users/{user_id}/enable", response_model=AdminUserOut)
@@ -84,7 +91,8 @@ async def enable_user(
     db: Session = Depends(get_user_db),
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
 ) -> AdminUserOut:
-    return await _to_out(service.enable_user(db, supabase, user_id))
+    user = await run_in_threadpool(service.enable_user, db, supabase, user_id)
+    return await _to_out(user)
 
 
 @router.patch("/users/{user_id}/limits", response_model=AdminUserOut)
@@ -94,7 +102,7 @@ async def set_limits(
     db: Session = Depends(get_user_db),
 ) -> AdminUserOut:
     fields = payload.model_dump(exclude_unset=True)
-    user = service.set_limits(db, user_id, fields)
+    user = await run_in_threadpool(service.set_limits, db, user_id, fields)
     return await _to_out(user)
 
 
