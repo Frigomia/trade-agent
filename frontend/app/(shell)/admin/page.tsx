@@ -25,29 +25,9 @@ export default function AdminPage() {
 
   const filtered = (users ?? []).filter((u) => filter === "all" || u.status === filter);
 
-  async function handleResend(id: string) {
+  async function handleAction(id: string, action: "resend" | "revoke" | "enable") {
     try {
-      await apiFetch(`/admin/users/${id}/resend`, { method: "POST" });
-      setActionError(null);
-      mutate();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
-
-  async function handleRevoke(id: string) {
-    try {
-      await apiFetch(`/admin/users/${id}/revoke`, { method: "POST" });
-      setActionError(null);
-      mutate();
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
-
-  async function handleEnable(id: string) {
-    try {
-      await apiFetch(`/admin/users/${id}/enable`, { method: "POST" });
+      await apiFetch(`/admin/users/${id}/${action}`, { method: "POST" });
       setActionError(null);
       mutate();
     } catch (err) {
@@ -99,16 +79,16 @@ export default function AdminPage() {
           <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
           {user.status === "invited" && (
             <>
-              <Button size="small" onClick={() => handleResend(user.id)}>
+              <Button size="small" onClick={() => handleAction(user.id, "resend")}>
                 Resend
               </Button>
-              <Button size="small" onClick={() => handleRevoke(user.id)}>
+              <Button size="small" onClick={() => handleAction(user.id, "revoke")}>
                 Revoke
               </Button>
             </>
           )}
           {user.status === "disabled" && (
-            <Button size="small" onClick={() => handleEnable(user.id)}>
+            <Button size="small" onClick={() => handleAction(user.id, "enable")}>
               Enable
             </Button>
           )}

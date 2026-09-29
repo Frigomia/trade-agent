@@ -1,27 +1,20 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Box, TextField, Button, Alert, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/client";
+import { useClientSession } from "@/lib/auth/useClientSession";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const [hasSession, setHasSession] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const { session, checkingSession } = useClientSession();
+  const hasSession = Boolean(session);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setHasSession(Boolean(session));
-      setCheckingSession(false);
-    });
-  }, []);
 
   async function handleRequest(event: FormEvent) {
     event.preventDefault();

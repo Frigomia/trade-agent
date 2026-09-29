@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -13,24 +13,17 @@ import {
 } from "@mui/material";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
+import { useClientSession } from "@/lib/auth/useClientSession";
 
 export default function AcceptInvitationPage() {
   const router = useRouter();
-  const [email, setEmail] = useState<string | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const { session, checkingSession } = useClientSession();
+  const email = session?.user.email ?? null;
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setEmail(session?.user.email ?? null);
-      setCheckingSession(false);
-    });
-  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();

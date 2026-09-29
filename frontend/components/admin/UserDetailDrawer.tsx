@@ -49,23 +49,11 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
     setSubmitting(false);
   }
 
-  async function handleDisable() {
+  async function handleStatusAction(action: "disable" | "enable") {
     if (!user) return;
     setError(null);
     try {
-      await apiFetch(`/admin/users/${user.id}/disable`, { method: "POST" });
-      onChanged();
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
-
-  async function handleEnable() {
-    if (!user) return;
-    setError(null);
-    try {
-      await apiFetch(`/admin/users/${user.id}/enable`, { method: "POST" });
+      await apiFetch(`/admin/users/${user.id}/${action}`, { method: "POST" });
       onChanged();
       onClose();
     } catch (err) {
@@ -134,12 +122,12 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
         <Divider sx={{ my: 2 }} />
 
         {user.status === "active" && (
-          <Button variant="outlined" fullWidth onClick={handleDisable}>
+          <Button variant="outlined" fullWidth onClick={() => handleStatusAction("disable")}>
             Disable
           </Button>
         )}
         {user.status === "disabled" && (
-          <Button variant="outlined" fullWidth onClick={handleEnable}>
+          <Button variant="outlined" fullWidth onClick={() => handleStatusAction("enable")}>
             Enable
           </Button>
         )}
