@@ -14,9 +14,10 @@ the trade yourself in your broker's app.
   an admin API for inviting/managing users, per-user monthly usage limits, and self-service data
   export/deletion are all built and merged (PRs [#21](../../pull/21), [#22](../../pull/22),
   [#23](../../pull/23)).
-- **Frontend:** foundation only ([#24](../../pull/24)) — scaffold, theming, shell navigation, and
-  a typed API client exist; no real screens yet. The recommendation review, portfolio, and chat
-  screens are the next cycles.
+- **Frontend:** foundation ([#24](../../pull/24)) plus real login and admin screens
+  ([#27](../../pull/27)) — theming, shell navigation, a typed API client, session-backed route
+  protection, invite/login/reset flows, and the admin users/usage screens are all built and
+  merged. The recommendation review, portfolio, and chat screens are the next cycles.
 
 ## Layout
 
