@@ -68,6 +68,20 @@ def accept_terms(db: Session, user_id: uuid.UUID) -> AppUser:
     return user
 
 
+def set_limits(db: Session, user_id: uuid.UUID, fields: dict[str, int | None]) -> AppUser:
+    """`fields` holds only the keys the caller actually sent (see LimitsIn and
+    model_dump(exclude_unset=True)): an omitted key leaves that limit unchanged, a present key
+    (including an explicit null) sets or clears the override."""
+    user = _get_user(db, user_id)
+    if "analysis_limit" in fields:
+        user.monthly_analysis_limit = fields["analysis_limit"]
+    if "chat_limit" in fields:
+        user.monthly_chat_limit = fields["chat_limit"]
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def _upstream[T](action: str, call: Callable[[], T]) -> T:
     """Runs a Supabase call; any failure becomes a generic 502. Only the class is logged."""
     try:

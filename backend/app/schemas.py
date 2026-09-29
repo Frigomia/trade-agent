@@ -7,6 +7,7 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeFloat,
+    NonNegativeInt,
     PositiveFloat,
     StringConstraints,
 )
@@ -183,8 +184,18 @@ class RemoveIn(BaseModel):
     confirm_email: Email  # must repeat the user's email; the API's safeguard for a permanent delete
 
 
+class LimitsIn(BaseModel):
+    """Either field is independent: omitted leaves that limit unchanged, an explicit null clears
+    the override back to the system default, and a non-negative integer sets it."""
+
+    analysis_limit: NonNegativeInt | None = None
+    chat_limit: NonNegativeInt | None = None
+
+
 class AdminUserOut(BaseModel):
-    """Access-management data only: never anything from the user's portfolio or chats."""
+    """Access-management data only: never anything from the user's portfolio or chats. The four
+    monthly_* fields are effective limits and this month's counts (never the raw nullable
+    override column) — always filled in by the router's _to_out, like invite_expires_at below."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -197,3 +208,7 @@ class AdminUserOut(BaseModel):
     invite_expires_at: datetime | None = None  # display hint, filled in by the router
     accepted_terms_at: datetime | None
     last_seen_at: datetime | None
+    monthly_analysis_limit: int | None = None
+    monthly_analysis_used: int | None = None
+    monthly_chat_limit: int | None = None
+    monthly_chat_used: int | None = None
