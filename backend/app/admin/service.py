@@ -6,13 +6,11 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from sqlalchemy import delete
 from sqlalchemy.orm import Session, sessionmaker
 
-from app import rls
 from app.auth.supabase_admin import SupabaseAdmin, SupabaseAdminError, SupabaseUserExists
-from app.db import Base, open_user_session
 from app.models import AppUser
+from app.user_data import delete_user_data
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +65,20 @@ def accept_terms(db: Session, user_id: uuid.UUID) -> AppUser:
     if changed:
         db.commit()
         db.refresh(user)
+    return user
+
+
+def set_limits(db: Session, user_id: uuid.UUID, fields: dict[str, int | None]) -> AppUser:
+    """`fields` holds only the keys the caller actually sent (see LimitsIn and
+    model_dump(exclude_unset=True)): an omitted key leaves that limit unchanged, a present key
+    (including an explicit null) sets or clears the override."""
+    user = _get_user(db, user_id)
+    if "analysis_limit" in fields:
+        user.monthly_analysis_limit = fields["analysis_limit"]
+    if "chat_limit" in fields:
+        user.monthly_chat_limit = fields["chat_limit"]
+    db.commit()
+    db.refresh(user)
     return user
 
 
@@ -196,17 +208,6 @@ def enable_user(db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID) -> App
     return user
 
 
-def _delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> None:
-    """Deletes the user's rows in every user-data table through a session scoped to that user.
-    Two layers: the explicit user_id filter (holds even if DATABASE_URL is a role that bypasses
-    RLS) and RLS on the scoped session. Nothing is read."""
-    with open_user_session(factory, user_id) as session:
-        for table_name in rls.USER_TABLES:
-            table = Base.metadata.tables[table_name]
-            session.execute(delete(table).where(table.c.user_id == user_id))
-        session.commit()
-
-
 def remove_user(
     db: Session,
     supabase: SupabaseAdmin,
@@ -227,10 +228,10 @@ def remove_user(
         user.status = "disabled"
         db.commit()
 
-    _delete_user_data(factory, user.id)
+    delete_user_data(factory, user.id)
     _upstream("delete", lambda: supabase.delete(user.id))
     # A running job may have written rows since the first pass. This narrows the window; it does
     # not close it.
-    _delete_user_data(factory, user.id)
+    delete_user_data(factory, user.id)
     db.delete(user)
     db.commit()

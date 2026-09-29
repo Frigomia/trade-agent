@@ -1,7 +1,20 @@
+import uuid
+
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
+from app.auth.deps import CurrentUser, get_current_user
 from app.rate_limit import rate_limiter
+
+
+def _make_fake_user_factory():
+    """Factory that creates a consistent user for dependency injection."""
+    user_id = uuid.uuid4()
+
+    def _fake_user() -> CurrentUser:
+        return CurrentUser(id=user_id, email="probe@example.com", role="user")
+
+    return _fake_user
 
 
 def _make_probe_app() -> FastAPI:
@@ -11,6 +24,7 @@ def _make_probe_app() -> FastAPI:
     def probe() -> dict[str, bool]:
         return {"ok": True}
 
+    app.dependency_overrides[get_current_user] = _make_fake_user_factory()
     return app
 
 
@@ -32,3 +46,19 @@ def test_rate_limiter_blocks_after_the_limit():
         response = probe_client.get("/probe")
 
     assert response.status_code == 429
+
+
+def test_rate_limiter_gives_each_user_their_own_budget():
+    # Regression test: before this task, the key was the client IP, so two different users
+    # behind the same IP (or, in tests, TestClient's fixed fake "testclient" host) shared one
+    # budget and throttled each other.
+    probe_app = _make_probe_app()
+    with TestClient(probe_app) as probe_client:
+        for _ in range(3):
+            assert probe_client.get("/probe").status_code == 200
+        assert probe_client.get("/probe").status_code == 429  # first user is now throttled
+
+        probe_app.dependency_overrides[get_current_user] = (
+            _make_fake_user_factory()
+        )  # a second, distinct user
+        assert probe_client.get("/probe").status_code == 200  # fresh budget

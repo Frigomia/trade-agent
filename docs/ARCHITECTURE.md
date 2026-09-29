@@ -174,10 +174,13 @@ PortfolioSnapshot
 
 AppUser
   id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("invited"|"active"|"disabled"),
-  created_at, invited_at, accepted_terms_at, last_seen_at
+  created_at, invited_at, accepted_terms_at, last_seen_at,
+  monthly_analysis_limit (nullable integer), monthly_chat_limit (nullable integer)
   -- no user_id, no RLS; read on every request by the auth path. The runtime role may
-  -- INSERT/DELETE rows and UPDATE only status, accepted_terms_at, last_seen_at, invited_at:
-  -- it cannot change id, email, or role.
+  -- INSERT/DELETE rows and UPDATE only status, accepted_terms_at, last_seen_at, invited_at,
+  -- monthly_analysis_limit, monthly_chat_limit: it cannot change id, email, or role.
+  -- NULL on a limit column means "use the system default" (Settings.default_monthly_analysis_limit /
+  -- default_monthly_chat_limit). Set only by the admin API (PATCH /admin/users/{id}/limits).
 ```
 
 ### Migrations — Alembic
@@ -236,7 +239,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking. Returns created `PortfolioSnapshot` |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
-| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per client IP |
+| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable) |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
@@ -249,10 +252,14 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
-| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per client IP |
+| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable) |
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
 | POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
-| GET | `/admin/users?status=` | — | **Admin only.** List users (access data only: never portfolios, recommendations, or chats); `invite_expires_at` is a display hint |
+| GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
+| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table |
+| DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
+| PATCH | `/admin/users/{id}/limits` | `{analysis_limit?, chat_limit?}` | **Admin only.** Sets or clears (via explicit `null`) a per-user monthly override; an omitted field is left unchanged |
+| GET | `/admin/users?status=` | — | **Admin only.** List users (access data only: never portfolios, recommendations, or chats); `invite_expires_at` is a display hint; also returns each user's effective monthly limits and this month's usage counts |
 | POST | `/admin/users/invite` | `{email}` | **Admin only.** Supabase invite (24 h link) and an `app_users` row with status `invited`; an already-invited address is re-sent. `201` |
 | POST | `/admin/users/{id}/resend` | — | **Admin only.** Re-send an invitation (invited users) |
 | POST | `/admin/users/{id}/revoke` | — | **Admin only.** Delete a pending invitation. `204` |
@@ -262,6 +269,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
 Admin routes return `403` to non-admins; `404` for an unknown user id; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for any address whose Supabase user is already confirmed is `409`, not `502` (most commonly an invitee who clicked the link but has not accepted the terms yet; on a fresh invite with no `app_users` row it means "already registered"). If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when no `app_users` row exists for that Supabase id or that address; otherwise it returns `409` and deletes nothing. If the insert fails for any other reason, the original error is re-raised (a `500`) after that compensation. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
+
+`POST /analysis/run` and `POST /chat` return `429` with a calm, specific message when the caller's monthly cap is reached ("Monthly limit reached (N analysis runs this month). Resets next month, or ask your admin to raise it."), distinct from the generic `429` the per-minute burst limiter returns.
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
@@ -421,6 +430,8 @@ SUPABASE_URL=                               # e.g. https://<project>.supabase.co
 SUPABASE_SECRET_KEY=                        # backend only; Supabase Auth admin calls (invite, ban, delete)
 INVITE_REDIRECT_URL=                        # where the emailed link lands (the frontend accept page)
 INVITE_LINK_HOURS=24                        # display hint only; Supabase enforces the real expiry
+DEFAULT_MONTHLY_ANALYSIS_LIMIT=100          # system-wide default monthly cap on /analysis/run calls
+DEFAULT_MONTHLY_CHAT_LIMIT=500              # system-wide default monthly cap on /chat calls
 ```
 
 Plus the risk-profile thresholds in `backend/app/config.py`
@@ -557,8 +568,7 @@ and invited users; nobody can sign up on their own.
   (jobs are short-lived); the residual risk is accepted. (iii) The runtime role can INSERT
   `app_users` rows with any `role` value (invite hardcodes `"user"`); only UPDATE of `role`,
   `email`, and `id` is denied.
-- Per-user limits, usage, and the user's own export/delete are built in the next cycle
-  (see the specs under `docs/superpowers/specs/`).
+- ✓ Per-user monthly limits and overrides, monthly usage tracking, and self-service export/deletion (sub-project 2c)
 
 ---
 
@@ -684,9 +694,10 @@ just believed done.
 - [x] RLS enabled and a policy created **in the same migration** per table
 - [x] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
       cost real Anthropic API money per call, even for a single user.
-      `app/rate_limit.py`: a Redis-backed fixed-window counter per client
-      IP, applied via `dependencies=[Depends(rate_limiter(...))]`.
-      `/analysis/run`: 5/min, `/chat`: 20/min
+      `app/rate_limit.py`: a Redis-backed per-minute limiter per user, applied via
+      `dependencies=[Depends(rate_limiter(...))]`. `/analysis/run`: 5/min,
+      `/chat`: 20/min. Monthly caps per user (default 100 analysis/500 chat) enforced
+      in a route dependency (`check_monthly_usage`, run before the handler; sub-project 2c)
 - [x] Exception text sanitized before it's persisted or returned — the
       original concern (`news_agent` interpolating raw `{exc}`) no longer
       applies; current code has no such interpolation anywhere in
@@ -725,4 +736,4 @@ just believed done.
       not applicable yet, no frontend exists
 
 **Legal/compliance**
-- [ ] Privacy notice and self-service data export/deletion in place before inviting the first user (the household exemption no longer applies once other people's data is stored)
+- [x] Self-service data export and deletion in place (sub-project 2c): `GET /me/export` and `DELETE /me/data` endpoints; privacy notice and household-exemption statement still needed before inviting other users

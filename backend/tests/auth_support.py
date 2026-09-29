@@ -78,6 +78,8 @@ def add_app_user(
     status: str = "active",
     email: str | None = None,
     invited_at: datetime | None = None,
+    monthly_analysis_limit: int | None = None,
+    monthly_chat_limit: int | None = None,
 ) -> AppUser:
     user = AppUser(
         id=user_id,
@@ -85,6 +87,8 @@ def add_app_user(
         role=role,
         status=status,
         invited_at=invited_at,
+        monthly_analysis_limit=monthly_analysis_limit,
+        monthly_chat_limit=monthly_chat_limit,
     )
     session.add(user)
     session.commit()

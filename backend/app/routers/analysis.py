@@ -13,6 +13,7 @@ from app.background import make_task_tracker
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut
+from app.usage import check_monthly_usage
 
 router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 
@@ -26,7 +27,10 @@ class AnalysisRunIn(BaseModel):
 @router.post(
     "/run",
     status_code=202,
-    dependencies=[Depends(rate_limiter("analysis_run", limit=5))],
+    dependencies=[
+        Depends(rate_limiter("analysis_run", limit=5)),
+        Depends(check_monthly_usage("analysis_run")),
+    ],
 )
 async def run_analysis(
     payload: AnalysisRunIn,

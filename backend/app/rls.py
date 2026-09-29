@@ -31,6 +31,8 @@ APP_USERS_UPDATABLE_COLUMNS: tuple[str, ...] = (
     "accepted_terms_at",
     "last_seen_at",
     "invited_at",
+    "monthly_analysis_limit",
+    "monthly_chat_limit",
 )
 
 # NULLIF: once a transaction that set the variable ends, current_setting() can return an empty

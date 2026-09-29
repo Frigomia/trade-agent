@@ -1,16 +1,16 @@
 from collections.abc import Awaitable, Callable
 
-from fastapi import HTTPException, Request
+from fastapi import Depends, HTTPException
 
+from app.auth.deps import CurrentUser, get_current_user
 from app.redis_client import get_redis
 
 
 def rate_limiter(
     key_prefix: str, limit: int, window_seconds: int = 60
-) -> Callable[[Request], Awaitable[None]]:
-    async def _check(request: Request) -> None:
-        client_ip = request.client.host if request.client else "unknown"
-        key = f"ratelimit:{key_prefix}:{client_ip}"
+) -> Callable[..., Awaitable[None]]:
+    async def _check(user: CurrentUser = Depends(get_current_user)) -> None:
+        key = f"ratelimit:{key_prefix}:{user.id}"
         redis = get_redis()
         count = await redis.incr(key)
         if count == 1:

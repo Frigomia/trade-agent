@@ -78,6 +78,8 @@ def test_list_never_exposes_financial_fields(admin_client):
         assert set(user) == {
             "id", "email", "role", "status", "created_at", "invited_at",
             "invite_expires_at", "accepted_terms_at", "last_seen_at",
+            "monthly_analysis_limit", "monthly_analysis_used",
+            "monthly_chat_limit", "monthly_chat_used",
         }  # fmt: skip
 
 
@@ -284,3 +286,69 @@ def test_resend_when_supabase_returns_a_different_id_conflicts_and_drops_the_str
     assert ("delete", new_id) in fake_supabase.calls
     db_session.expire_all()
     assert db_session.get(AppUser, USER_ID).invited_at == invited_at
+
+
+# ---- limits ----------------------------------------------------------------------------------
+def test_list_users_includes_usage_fields(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.get("/admin/users")
+
+    assert response.status_code == 200
+    row = next(u for u in response.json() if u["id"] == str(USER_ID))
+    assert row["monthly_analysis_limit"] == settings.default_monthly_analysis_limit
+    assert row["monthly_analysis_used"] == 0
+    assert row["monthly_chat_limit"] == settings.default_monthly_chat_limit
+    assert row["monthly_chat_used"] == 0
+
+
+def test_set_limits_overrides_and_then_clears(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analysis_limit": 7})
+    assert response.status_code == 200
+    assert response.json()["monthly_analysis_limit"] == 7
+    # chat_limit was never mentioned in the body, so it stays at the default.
+    assert response.json()["monthly_chat_limit"] == settings.default_monthly_chat_limit
+
+    # Push chat_limit off its default so the next assertion can't pass by coincidence.
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"chat_limit": 5})
+    assert response.status_code == 200
+    assert response.json()["monthly_chat_limit"] == 5
+
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analysis_limit": None})
+    assert response.status_code == 200
+    assert response.json()["monthly_analysis_limit"] == settings.default_monthly_analysis_limit
+    # chat_limit was entirely absent from this body, so its override must survive untouched.
+    assert response.json()["monthly_chat_limit"] == 5
+
+
+def test_set_limits_rejects_a_negative_value(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analysis_limit": -1})
+
+    assert response.status_code == 422
+
+
+def test_set_limits_rejects_a_value_above_the_postgres_integer_column(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(
+        f"/admin/users/{USER_ID}/limits", json={"analysis_limit": 2_147_483_648}
+    )
+
+    assert response.status_code == 422
+
+
+def test_set_limits_rejects_an_unknown_field(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analyiss_limit": 5})
+
+    assert response.status_code == 422
+
+
+def test_set_limits_unknown_user_is_404(admin_client):
+    response = admin_client.patch(f"/admin/users/{uuid.uuid4()}/limits", json={"analysis_limit": 1})
+    assert response.status_code == 404

@@ -113,6 +113,16 @@ class ChatOut(BaseModel):
     message: str
 
 
+class ChatMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    session_id: str
+    role: str
+    content: str
+    created_at: datetime
+
+
 class MemorySimilarOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -175,6 +185,44 @@ class MeOut(BaseModel):
     accepted_terms_at: datetime | None
 
 
+class ExportProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    role: str
+    status: str
+    created_at: datetime
+    accepted_terms_at: datetime | None
+    last_seen_at: datetime | None
+
+
+class ExportOut(BaseModel):
+    profile: ExportProfileOut
+    holdings: list[HoldingOut]
+    watchlist_items: list[WatchlistItemOut]
+    trades: list[TradeOut]
+    recommendations: list[RecommendationOut]
+    chat_messages: list[ChatMessageOut]
+    backtest_results: list[BacktestResultOut]
+    investment_preferences: PreferencesOut | None
+    portfolio_snapshots: list[PortfolioSnapshotOut]
+
+
+class UsageDetail(BaseModel):
+    used: int
+    limit: int
+
+
+class UsageOut(BaseModel):
+    analysis_runs: UsageDetail
+    chat_messages: UsageDetail
+
+
+class DataDeleteIn(BaseModel):
+    confirm: Literal[True]  # false or missing is a 422, same idiom as AcceptIn
+
+
 class InviteIn(BaseModel):
     email: Email
 
@@ -183,8 +231,22 @@ class RemoveIn(BaseModel):
     confirm_email: Email  # must repeat the user's email; the API's safeguard for a permanent delete
 
 
+class LimitsIn(BaseModel):
+    """Either field is independent: omitted leaves that limit unchanged, an explicit null clears
+    the override back to the system default, and a non-negative integer sets it. extra="forbid"
+    turns a misspelled key (e.g. "analyiss_limit") into a 422 instead of a silent no-op; the
+    upper bound matches Postgres's Integer column so an oversized value 422s instead of 500ing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
+    chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
+
+
 class AdminUserOut(BaseModel):
-    """Access-management data only: never anything from the user's portfolio or chats."""
+    """Access-management data only: never anything from the user's portfolio or chats. The four
+    monthly_* fields are effective limits and this month's counts (never the raw nullable
+    override column) — always filled in by the router's _to_out, like invite_expires_at below."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -197,3 +259,7 @@ class AdminUserOut(BaseModel):
     invite_expires_at: datetime | None = None  # display hint, filled in by the router
     accepted_terms_at: datetime | None
     last_seen_at: datetime | None
+    monthly_analysis_limit: int | None = None
+    monthly_analysis_used: int | None = None
+    monthly_chat_limit: int | None = None
+    monthly_chat_used: int | None = None
