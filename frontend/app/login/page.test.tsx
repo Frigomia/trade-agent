@@ -1,0 +1,52 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+const signInWithPassword = vi.fn();
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({ auth: { signInWithPassword } }),
+}));
+
+import LoginPage from "./page";
+
+describe("LoginPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("redirects to /today on a successful sign-in", async () => {
+    signInWithPassword.mockResolvedValue({ error: null });
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/today"));
+    expect(signInWithPassword).toHaveBeenCalledWith({ email: "a@example.com", password: "secret123" });
+  });
+
+  it("shows an inline error on a wrong password, and does not redirect", async () => {
+    signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/email or password is incorrect/i)).toBeInTheDocument(),
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("links to /reset-password", () => {
+    render(<LoginPage />);
+    expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute(
+      "href",
+      "/reset-password",
+    );
+  });
+});
