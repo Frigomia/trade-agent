@@ -33,6 +33,8 @@ class CurrentUser:
     id: uuid.UUID
     email: str
     role: str
+    monthly_analysis_limit: int | None = None
+    monthly_chat_limit: int | None = None
 
 
 def _not_authenticated() -> HTTPException:
@@ -88,7 +90,13 @@ def _authenticate(
             logger.info("Refused user without allowed access: %s", verified.user_id)
             raise HTTPException(status_code=403, detail="No access to this service")
         # Build the result first: a failed bookkeeping commit expires the row's attributes.
-        current = CurrentUser(id=row.id, email=row.email, role=row.role)
+        current = CurrentUser(
+            id=row.id,
+            email=row.email,
+            role=row.role,
+            monthly_analysis_limit=row.monthly_analysis_limit,
+            monthly_chat_limit=row.monthly_chat_limit,
+        )
         _touch_last_seen(db, row)
         return current
 

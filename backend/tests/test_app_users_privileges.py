@@ -15,7 +15,17 @@ def _can_update(engine, column: str) -> bool:
         ).scalar_one()
 
 
-@pytest.mark.parametrize("column", ["status", "accepted_terms_at", "last_seen_at", "invited_at"])
+@pytest.mark.parametrize(
+    "column",
+    [
+        "status",
+        "accepted_terms_at",
+        "last_seen_at",
+        "invited_at",
+        "monthly_analysis_limit",
+        "monthly_chat_limit",
+    ],
+)
 def test_runtime_role_can_update_the_lifecycle_columns(engine, column):
     assert _can_update(engine, column) is True
 

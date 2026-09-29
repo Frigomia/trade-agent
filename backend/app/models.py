@@ -135,3 +135,6 @@ class AppUser(Base):
     accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     invited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # NULL means "use Settings.default_monthly_*_limit". Set only by the admin API.
+    monthly_analysis_limit: Mapped[int | None] = mapped_column(nullable=True)
+    monthly_chat_limit: Mapped[int | None] = mapped_column(nullable=True)
