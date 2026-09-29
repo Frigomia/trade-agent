@@ -4,9 +4,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 from app import rls
-from app.admin import service
 from app.db import Base
 from app.models import AppUser
+from app.user_data import delete_user_data
 from tests.auth_support import (
     ADMIN_ID,
     OTHER_USER_ID,
@@ -211,7 +211,7 @@ def test_delete_user_data_only_touches_the_target_even_when_rls_is_bypassed(
         )
     db_session.commit()
 
-    service._delete_user_data(session_local, USER_ID)
+    delete_user_data(session_local, USER_ID)
 
     for table_name in rls.USER_TABLES:
         assert _count(engine, table_name, USER_ID) == 0, table_name
