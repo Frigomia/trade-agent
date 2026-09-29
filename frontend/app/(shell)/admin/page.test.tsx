@@ -103,4 +103,15 @@ describe("AdminPage", () => {
 
     await waitFor(() => expect(screen.getByText("Invite already pending")).toBeInTheDocument());
   });
+
+  it("opens the user detail drawer when an active row's details button is clicked", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /user details/i }));
+
+    // UserDetailDrawer renders a "Remove user" heading once open for this user.
+    await waitFor(() => expect(screen.getByText(/remove user/i)).toBeInTheDocument());
+  });
 });

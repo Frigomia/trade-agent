@@ -7,6 +7,7 @@ import { Plus, MoreHorizontal } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
+import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
@@ -18,6 +19,7 @@ export default function AdminPage() {
   } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const filtered = (users ?? []).filter((u) => filter === "all" || u.status === filter);
@@ -109,13 +111,22 @@ export default function AdminPage() {
             </Button>
           )}
           {user.status === "active" && (
-            <IconButton size="small" aria-label="User details">
+            <IconButton
+              size="small"
+              aria-label="User details"
+              onClick={() => setSelectedUserId(user.id)}
+            >
               <MoreHorizontal size={18} />
             </IconButton>
           )}
         </Box>
       ))}
       <InviteDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={() => mutate()} />
+      <UserDetailDrawer
+        user={users?.find((u) => u.id === selectedUserId) ?? null}
+        onClose={() => setSelectedUserId(null)}
+        onChanged={() => mutate()}
+      />
     </Box>
   );
 }
