@@ -311,9 +311,16 @@ def test_set_limits_overrides_and_then_clears(admin_client, db_session):
     # chat_limit was never mentioned in the body, so it stays at the default.
     assert response.json()["monthly_chat_limit"] == settings.default_monthly_chat_limit
 
+    # Push chat_limit off its default so the next assertion can't pass by coincidence.
+    response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"chat_limit": 5})
+    assert response.status_code == 200
+    assert response.json()["monthly_chat_limit"] == 5
+
     response = admin_client.patch(f"/admin/users/{USER_ID}/limits", json={"analysis_limit": None})
     assert response.status_code == 200
     assert response.json()["monthly_analysis_limit"] == settings.default_monthly_analysis_limit
+    # chat_limit was entirely absent from this body, so its override must survive untouched.
+    assert response.json()["monthly_chat_limit"] == 5
 
 
 def test_set_limits_rejects_a_negative_value(admin_client, db_session):
