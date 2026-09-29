@@ -43,4 +43,26 @@ describe("GET /auth/confirm", () => {
     expect(verifyOtp).not.toHaveBeenCalled();
     expect(response.headers.get("location")).toBe("https://example.com/accept-invitation");
   });
+
+  it("ignores an off-site next param and falls back to /accept-invitation", async () => {
+    verifyOtp.mockResolvedValue({ error: null });
+    const request = new NextRequest(
+      "https://example.com/auth/confirm?token_hash=abc&type=invite&next=https://evil.example/phish",
+    );
+
+    const response = await GET(request);
+
+    expect(response.headers.get("location")).toBe("https://example.com/accept-invitation");
+  });
+
+  it("ignores a protocol-relative next param and falls back to /accept-invitation", async () => {
+    verifyOtp.mockResolvedValue({ error: null });
+    const request = new NextRequest(
+      "https://example.com/auth/confirm?token_hash=abc&type=invite&next=//evil.example",
+    );
+
+    const response = await GET(request);
+
+    expect(response.headers.get("location")).toBe("https://example.com/accept-invitation");
+  });
 });
