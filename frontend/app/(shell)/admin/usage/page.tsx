@@ -1,18 +1,31 @@
 "use client";
 
+import Link from "next/link";
 import useSWR from "swr";
-import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell, Chip } from "@mui/material";
+import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell, Chip, Alert } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
 export default function AdminUsagePage() {
-  const { data: users } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
+  const { data: users, error: loadError } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ fontWeight: 650, mb: 2 }}>
-        Usage and limits
-      </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        You manage access, not data.
+      </Alert>
+      {loadError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Could not load usage.
+        </Alert>
+      )}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 650 }}>
+          Usage and limits
+        </Typography>
+        <Box sx={{ flex: 1 }} />
+        <Link href="/admin">Back to users</Link>
+      </Box>
       <Table>
         <TableHead>
           <TableRow>

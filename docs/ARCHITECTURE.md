@@ -569,6 +569,28 @@ and invited users; nobody can sign up on their own.
   `app_users` rows with any `role` value (invite hardcodes `"user"`); only UPDATE of `role`,
   `email`, and `id` is denied.
 - ✓ Per-user monthly limits and overrides, monthly usage tracking, and self-service export/deletion (sub-project 2c)
+- **Owner setup: invite email template and redirect allow-list (required, manual, dashboard-only).**
+  The backend invites users through Supabase's server-side admin API, so no browser-side PKCE
+  code-challenge is ever created for an invite — the admin (not the invitee) triggers it. That
+  means Supabase's invite email delivers session tokens via the "implicit" flow, which the
+  frontend's `@supabase/ssr` browser client (forced to `flowType: "pkce"`) cannot consume
+  directly. The frontend now handles this with a dedicated confirmation route,
+  `frontend/app/auth/confirm/route.ts`, which exchanges `token_hash`/`type` for a session
+  server-side via `supabase.auth.verifyOtp` — Supabase's documented SSR pattern for email links.
+  Two dashboard changes the project owner must make before this works end to end:
+  1. **Authentication → Email Templates → Invite**: change the link to
+     `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation`.
+     Without this change, invite links still point at the old implicit-flow URL and will not work
+     even with the frontend code in place.
+  2. **Authentication → URL Configuration → Redirect URLs**: add the deployed frontend's
+     `<origin>/auth/confirm` and `<origin>/reset-password` to the allow-list — `resetPasswordForEmail`
+     builds its `redirectTo` from `window.location.origin`, so every origin the app is served from
+     needs both paths allow-listed, or Supabase silently redirects to the Site URL instead.
+  **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
+  walkthrough against a live Supabase project has not been performed — the implementing agent's
+  sandboxed environment has no browser or email access. This remains a required manual
+  verification step before the login-and-admin-screens branch can be trusted in production, the
+  same as earlier owner-verification cycles on this project.
 
 ---
 

@@ -43,4 +43,11 @@ describe("AdminUsagePage", () => {
     expect(screen.getByText("7 / 100")).toBeInTheDocument();
     expect(screen.getByText("42 / 500")).toBeInTheDocument();
   });
+
+  it("shows an inline error when the usage list fails to load", async () => {
+    apiFetch.mockRejectedValue(new Error("Forbidden"));
+    renderFresh(<AdminUsagePage />);
+
+    await waitFor(() => expect(screen.getByText(/could not load usage/i)).toBeInTheDocument());
+  });
 });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Box, TextField, Button, Alert, Typography } from "@mui/material";
 import { createClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,9 +20,17 @@ export default function LoginPage() {
     setSubmitting(true);
     const supabase = createClient();
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setSubmitting(false);
     if (signInError) {
+      setSubmitting(false);
       setError("Email or password is incorrect. Try again or reset your password.");
+      return;
+    }
+    try {
+      await apiFetch("/me");
+    } catch {
+      await supabase.auth.signOut();
+      setSubmitting(false);
+      setError("This account doesn't have access. Contact your administrator.");
       return;
     }
     router.push("/today");

@@ -61,6 +61,18 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
     }
   }
 
+  async function handleEnable() {
+    if (!user) return;
+    setError(null);
+    try {
+      await apiFetch(`/admin/users/${user.id}/enable`, { method: "POST" });
+      onChanged();
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
+    }
+  }
+
   async function handleRemove() {
     if (!user) return;
     setError(null);
@@ -124,6 +136,11 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
         {user.status === "active" && (
           <Button variant="outlined" fullWidth onClick={handleDisable}>
             Disable
+          </Button>
+        )}
+        {user.status === "disabled" && (
+          <Button variant="outlined" fullWidth onClick={handleEnable}>
+            Enable
           </Button>
         )}
 

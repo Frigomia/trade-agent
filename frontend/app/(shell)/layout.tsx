@@ -7,7 +7,13 @@ import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
 export default async function ShellLayout({ children }: { children: React.ReactNode }) {
   const session = await resolveSession();
-  if (!session || session.status !== "active") {
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.status === "invited") {
+    redirect("/accept-invitation");
+  }
+  if (session.status !== "active") {
     redirect("/login");
   }
 

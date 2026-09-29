@@ -42,6 +42,13 @@ const USER: AdminUserOut = {
   monthly_chat_used: 10,
 };
 
+const DISABLED_USER: AdminUserOut = {
+  ...USER,
+  id: "u2",
+  email: "disabled@example.com",
+  status: "disabled",
+};
+
 describe("UserDetailDrawer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -101,6 +108,38 @@ describe("UserDetailDrawer", () => {
 
     fireEvent.change(screen.getByLabelText(/confirm email/i), { target: { value: USER.email } });
     expect(removeButton).not.toBeDisabled();
+  });
+
+  it("disables an active user and closes the drawer", async () => {
+    apiFetch.mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+    const onClose = vi.fn();
+    render(<UserDetailDrawer user={USER} onClose={onClose} onChanged={onChanged} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^disable$/i }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/admin/users/u1/disable",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("enables a disabled user and closes the drawer", async () => {
+    apiFetch.mockResolvedValue(undefined);
+    const onChanged = vi.fn();
+    const onClose = vi.fn();
+    render(<UserDetailDrawer user={DISABLED_USER} onClose={onClose} onChanged={onChanged} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^enable$/i }));
+
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/admin/users/u2/enable",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("calls DELETE with confirm_email once the typed value matches", async () => {

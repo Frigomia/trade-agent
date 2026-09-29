@@ -64,6 +64,21 @@ const USERS: AdminUserOut[] = [
     monthly_chat_limit: 500,
     monthly_chat_used: 0,
   },
+  {
+    id: "u3",
+    email: "disabled@example.com",
+    role: "user",
+    status: "disabled",
+    created_at: "2026-01-01T00:00:00",
+    invited_at: null,
+    invite_expires_at: null,
+    accepted_terms_at: "2026-01-02T00:00:00",
+    last_seen_at: "2026-01-03T00:00:00",
+    monthly_analysis_limit: 100,
+    monthly_analysis_used: 0,
+    monthly_chat_limit: 500,
+    monthly_chat_used: 0,
+  },
 ];
 
 describe("AdminPage", () => {
@@ -104,14 +119,73 @@ describe("AdminPage", () => {
     await waitFor(() => expect(screen.getByText("Invite already pending")).toBeInTheDocument());
   });
 
+  it("revokes an invite and refetches the list", async () => {
+    apiFetch.mockResolvedValueOnce(USERS).mockResolvedValueOnce(undefined).mockResolvedValueOnce(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("invited@example.com")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /revoke/i }));
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/admin/users/u2/revoke", expect.objectContaining({ method: "POST" })),
+    );
+  });
+
+  it("enables a disabled user and refetches the list", async () => {
+    apiFetch.mockResolvedValueOnce(USERS).mockResolvedValueOnce(undefined).mockResolvedValueOnce(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("disabled@example.com")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /enable/i }));
+
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/admin/users/u3/enable", expect.objectContaining({ method: "POST" })),
+    );
+  });
+
+  it("filters the list by status via the filter chips", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
+    expect(screen.getByText("invited@example.com")).toBeInTheDocument();
+    expect(screen.getByText("disabled@example.com")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(/^Active/));
+
+    await waitFor(() => {
+      expect(screen.getByText("active@example.com")).toBeInTheDocument();
+      expect(screen.queryByText("invited@example.com")).not.toBeInTheDocument();
+      expect(screen.queryByText("disabled@example.com")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText(/^All/));
+
+    await waitFor(() => {
+      expect(screen.getByText("active@example.com")).toBeInTheDocument();
+      expect(screen.getByText("invited@example.com")).toBeInTheDocument();
+      expect(screen.getByText("disabled@example.com")).toBeInTheDocument();
+    });
+  });
+
   it("opens the user detail drawer when an active row's details button is clicked", async () => {
     apiFetch.mockResolvedValue(USERS);
     renderFresh(<AdminPage />);
 
     await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /user details/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /user details/i })[0]);
 
     // UserDetailDrawer renders a "Remove user" heading once open for this user.
+    await waitFor(() => expect(screen.getByText(/remove user/i)).toBeInTheDocument());
+  });
+
+  it("opens the user detail drawer for a disabled row too", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("disabled@example.com")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: /user details/i })[1]);
+
     await waitFor(() => expect(screen.getByText(/remove user/i)).toBeInTheDocument());
   });
 });

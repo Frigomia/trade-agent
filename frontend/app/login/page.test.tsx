@@ -5,8 +5,14 @@ const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 const signInWithPassword = vi.fn();
+const signOut = vi.fn();
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { signInWithPassword } }),
+  createClient: () => ({ auth: { signInWithPassword, signOut } }),
+}));
+
+const apiFetch = vi.fn();
+vi.mock("@/lib/api/client", () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
 import LoginPage from "./page";
@@ -18,6 +24,7 @@ describe("LoginPage", () => {
 
   it("redirects to /today on a successful sign-in", async () => {
     signInWithPassword.mockResolvedValue({ error: null });
+    apiFetch.mockResolvedValue({});
     render(<LoginPage />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
@@ -26,6 +33,20 @@ describe("LoginPage", () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/today"));
     expect(signInWithPassword).toHaveBeenCalledWith({ email: "a@example.com", password: "secret123" });
+  });
+
+  it("signs the user back out and shows a calm message when the account has no access", async () => {
+    signInWithPassword.mockResolvedValue({ error: null });
+    apiFetch.mockRejectedValue(new Error("Forbidden"));
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalled());
+    expect(screen.getByText(/this account doesn't have access/i)).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("shows an inline error on a wrong password, and does not redirect", async () => {

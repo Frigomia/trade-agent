@@ -26,7 +26,7 @@ describe("ShellLayout", () => {
     expect(redirect).toHaveBeenCalledWith("/login");
   });
 
-  it("redirects to /login when the session isn't active yet (still invited)", async () => {
+  it("redirects to /accept-invitation when the session isn't active yet (still invited)", async () => {
     vi.mocked(resolveSession).mockResolvedValue({
       userId: "u1",
       email: "a@example.com",
@@ -35,7 +35,7 @@ describe("ShellLayout", () => {
     });
 
     await expect(ShellLayout({ children: null })).rejects.toThrow("NEXT_REDIRECT");
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(redirect).toHaveBeenCalledWith("/accept-invitation");
   });
 
   it("renders the shell for an active session, without redirecting", async () => {
