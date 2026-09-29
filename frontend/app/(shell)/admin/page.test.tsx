@@ -4,9 +4,12 @@ import { SWRConfig } from "swr";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
 const apiFetch = vi.fn();
-vi.mock("@/lib/api/client", () => ({
-  apiFetch: (...args: unknown[]) => apiFetch(...args),
-  ApiError: class ApiError extends Error {
+// The class must be created inside vi.hoisted (not as a plain top-level `class` statement) —
+// vi.mock's factory is hoisted above the import of "./page", which transitively imports
+// "@/lib/api/client" and triggers the factory before a plain top-level class declaration would
+// have run, throwing a "Cannot access before initialization" TDZ error.
+const { FakeApiError } = vi.hoisted(() => {
+  class FakeApiError extends Error {
     status: number;
     detail: string;
     constructor(status: number, detail: string) {
@@ -14,7 +17,12 @@ vi.mock("@/lib/api/client", () => ({
       this.status = status;
       this.detail = detail;
     }
-  },
+  }
+  return { FakeApiError };
+});
+vi.mock("@/lib/api/client", () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+  ApiError: FakeApiError,
 }));
 
 import AdminPage from "./page";
@@ -82,5 +90,17 @@ describe("AdminPage", () => {
     await waitFor(() =>
       expect(apiFetch).toHaveBeenCalledWith("/admin/users/u2/resend", expect.objectContaining({ method: "POST" })),
     );
+  });
+
+  it("shows the backend's error detail inline when a resend fails", async () => {
+    apiFetch
+      .mockResolvedValueOnce(USERS)
+      .mockRejectedValueOnce(new FakeApiError(409, "Invite already pending"));
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("invited@example.com")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /resend/i }));
+
+    await waitFor(() => expect(screen.getByText("Invite already pending")).toBeInTheDocument());
   });
 });
