@@ -18,40 +18,27 @@ import type { StatusColors } from "./readStatusColors";
  * not select the actual colors.
  */
 export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors): MuiTheme {
+  // light/dark/contrastText are set explicitly (even though light/dark repeat `main`) because
+  // MUI's palette augmentation otherwise tries to compute them by parsing `main` as a literal
+  // CSS color — which throws (MUI error #9) since these are var(--...) references it can't
+  // decompose. The design spec has no separate light/dark shade for these tokens, so light/dark
+  // reuse the same resolved value as main.
+  const statusColor = (main: string) => ({
+    main,
+    light: main,
+    dark: main,
+    contrastText: statusColors.onAccent,
+  });
+
   return createTheme({
     palette: {
       mode,
       background: { default: statusColors.bgDefault, paper: statusColors.bgPaper },
       text: { primary: statusColors.textPrimary, secondary: statusColors.textSecondary },
-      // light/dark/contrastText are set explicitly (even though light/dark repeat `main`)
-      // because MUI's palette augmentation otherwise tries to compute them by parsing `main`
-      // as a literal CSS color — which throws (MUI error #9) since these are var(--...)
-      // references it can't decompose. The design spec has no separate light/dark shade for
-      // these tokens, so light/dark reuse the same resolved value as main.
-      primary: {
-        main: statusColors.accentSolid,
-        light: statusColors.accentSolid,
-        dark: statusColors.accentSolid,
-        contrastText: statusColors.onAccent,
-      },
-      success: {
-        main: statusColors.up,
-        light: statusColors.up,
-        dark: statusColors.up,
-        contrastText: statusColors.onAccent,
-      },
-      error: {
-        main: statusColors.down,
-        light: statusColors.down,
-        dark: statusColors.down,
-        contrastText: statusColors.onAccent,
-      },
-      warning: {
-        main: statusColors.warn,
-        light: statusColors.warn,
-        dark: statusColors.warn,
-        contrastText: statusColors.onAccent,
-      },
+      primary: statusColor(statusColors.accentSolid),
+      success: statusColor(statusColors.up),
+      error: statusColor(statusColors.down),
+      warning: statusColor(statusColors.warn),
     },
     shape: { borderRadius: 18 },
     typography: {
