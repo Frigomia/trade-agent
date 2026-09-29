@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None  # backend-only secret for Supabase Auth admin calls
     invite_redirect_url: str | None = None  # where the emailed invitation link lands (frontend)
     invite_link_hours: int = 24  # display hint only; Supabase enforces the real link expiry
+    cors_allowed_origins: str = "http://localhost:3000"  # comma-separated frontend origin(s)
 
     default_monthly_analysis_limit: int = 100
     default_monthly_chat_limit: int = 500

@@ -90,6 +90,12 @@ jobs:
   secrets-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
+    # This job scans the whole repo, not just backend/ — override the workflow's
+    # backend-scoped default so `gitleaks detect`'s --source . and its default
+    # .gitleaksignore lookup (also relative to cwd) both resolve at the repo root.
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v7
         with:

@@ -1,11 +1,19 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.admin.service import AdminError
+from app.config import settings
 from app.routers import admin, analysis, backtest, chat, me, memory, portfolio, preferences
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
 app = FastAPI(title="Trading Agent API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(portfolio.router)
 app.include_router(analysis.router)
 app.include_router(backtest.router)
