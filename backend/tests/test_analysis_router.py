@@ -244,3 +244,32 @@ def test_recommendations_list_and_review_only_touch_the_token_users_rows(client,
     db_session.refresh(theirs)
     assert theirs.status == "APPROVED"
     assert mine.status == "PENDING"
+
+
+def test_recommendation_exposes_evidence_fields(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["Fundamental score 78/100", "Technical signal: OVERSOLD"],
+        status="PENDING",
+        fundamental_score=78,
+        technical_signal="OVERSOLD",
+        price_at_recommendation=186.40,
+    )
+    db_session.add(rec)
+    db_session.commit()
+    db_session.refresh(rec)
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["fundamental_score"] == 78
+    assert body["technical_signal"] == "OVERSOLD"
+    assert body["price_at_recommendation"] == 186.40
