@@ -58,9 +58,12 @@ change — this was verified, not assumed.
   `RecommendationCard` per pending recommendation.
 - **`frontend/app/(shell)/today/[id]/page.tsx`** — recommendation detail, deep-linkable.
   `useSWR(`/analysis/recommendations/${id}`, apiFetch)`.
-- **Confirmation is in-page state, not a route.** After a successful Approve (from the card or
-  the detail page), that recommendation's UI swaps to `ConfirmationPanel` in place — no
-  navigation, no throwaway route for a transient state.
+- **Confirmation is in-page state on the detail page only, not a route.** The mockups only ever
+  show the full "Decision recorded" screen following the detail page's Approve — never an inline
+  version on the list. A list-card decision just removes that card from Today (the list
+  revalidates); showing "Back to Today" there would be nonsensical navigation copy on the screen
+  you're already standing on. After a successful Approve/Dismiss on the detail page, its content
+  swaps to `ConfirmationPanel` in place — no route, no throwaway page for a transient state.
 - No filter chips, no historical (approved/rejected) view on Today — pending-only per the
   approved spec; history is Track record's job (roadmap item 8).
 
@@ -76,9 +79,11 @@ change — this was verified, not assumed.
   `results[].error` entries exist, show a small inline note ("3 analyzed, 1 failed"). On
   `FAILED`: inline error banner. The button is disabled with a spinner for the whole RUNNING
   window.
-- **Approve/Dismiss:** `POST /analysis/recommendations/{id}/approve` or `/reject`. On success:
-  swap to `ConfirmationPanel`; `mutate` the list so the card is gone from Today on return. On
-  failure: inline `ApiError.detail`, submitting state re-enables the buttons.
+- **Approve/Dismiss from a list card:** `POST /analysis/recommendations/{id}/approve` or
+  `/reject`. On success: `mutate` the list — the card disappears because it's no longer `PENDING`.
+  On failure: inline `ApiError.detail`, submitting state re-enables the buttons.
+- **Approve/Dismiss from the detail page:** same endpoints; on success, swap the page's content to
+  `ConfirmationPanel` in place (no navigation) rather than removing anything.
 - **"Change my decision":** calls the opposite endpoint, then returns to the normal
   approve/dismiss view.
 - **Rate limit / monthly cap on Run analysis:** `POST /analysis/run` can 429 immediately (5/min
@@ -121,11 +126,14 @@ In `frontend/components/recommendations/`:
   entirely, not shown as an error, when `current_price` is null), `EvidencePanel`, one compact
   reasoning line (`ai_analysis`'s first sentence, falling back to the technical-signal reasoning
   entry when `ai_analysis` is null — e.g. HOLD actions), inline Approve/Dismiss.
-- **`RecommendationDetail.tsx`** — full evidence: `EvidencePanel`, the full `reasoning` list, and
-  `WebOpinionBox.tsx` (the dashed "not part of the score" box — detail-only, never on the card,
-  per the approved spec), Approve/Dismiss.
-- **`ConfirmationPanel.tsx`** — the in-place "Decision recorded" view, used from both the card
-  and the detail page. No "Log the trade" CTA. "Back to Today" and "Change my decision".
+- **`WebOpinionBox.tsx`** — the dashed "not part of the score" box — detail-only, never on the
+  card, per the approved spec.
+- **`ConfirmationPanel.tsx`** — the detail page's "Decision recorded" view (see Screens & routes —
+  the list never shows this). No "Log the trade" CTA. "Back to Today" and "Change my decision".
+- The detail page itself composes `EvidencePanel`, the full `reasoning` list, `WebOpinionBox`,
+  and Approve/Dismiss directly — no separate `RecommendationDetail` wrapper. It has exactly one
+  consumer (the page), matching how `admin/page.tsx` already keeps its own single-consumer content
+  inline rather than extracting it.
 
 ## Error and empty states
 
