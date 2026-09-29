@@ -3,13 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { ThemeProvider as MuiThemeProvider, CssBaseline } from "@mui/material";
 import { buildMuiTheme } from "@/lib/theme/buildMuiTheme";
+import { readStatusColors, DEFAULT_STATUS_COLORS, type StatusColors } from "@/lib/theme/readStatusColors";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<"light" | "dark">("dark");
+  // Defaults to the dark theme's own literal values (see readStatusColors.ts) until the effect
+  // below resolves the real ones from the DOM, avoiding a hydration mismatch — the same pattern
+  // `mode` above already uses.
+  const [statusColors, setStatusColors] = useState<StatusColors>(DEFAULT_STATUS_COLORS);
 
   useEffect(() => {
     const root = document.documentElement;
-    const sync = () => setMode(root.dataset.theme === "light" ? "light" : "dark");
+    const sync = () => {
+      setMode(root.dataset.theme === "light" ? "light" : "dark");
+      setStatusColors(readStatusColors());
+    };
     sync();
     // The toggle flips data-theme directly (synchronously, for zero flash); this observer
     // is how the MUI theme object learns about that flip and rebuilds.
@@ -18,7 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return () => observer.disconnect();
   }, []);
 
-  const theme = useMemo(() => buildMuiTheme(mode), [mode]);
+  const theme = useMemo(() => buildMuiTheme(mode, statusColors), [mode, statusColors]);
 
   return (
     <MuiThemeProvider theme={theme}>
