@@ -97,14 +97,16 @@ def session_local(engine: Engine) -> sessionmaker[Session]:
 
 @pytest.fixture(autouse=True)
 def _flush_rate_limit_keys() -> None:
-    # Starlette's TestClient reports a fixed fake client IP ("testclient") for
-    # every request, so every test hitting a rate-limited route shares the same
-    # Redis key. Flush before each test so leftover counts from a previous test
-    # don't cause a spurious 429. Uses its own throwaway event loop and resets
-    # the client singleton afterward, same reason as _reset_redis_client below.
+    # Starlette's TestClient reports a fixed fake client IP ("testclient") for every request, and
+    # the client/admin_client fixtures reuse the same user ids across tests, so both the burst
+    # limiter's and the usage counter's Redis keys must be flushed before each test, or leftover
+    # counts from a previous test cause a spurious 429. Uses its own throwaway event loop and
+    # resets the client singleton afterward, same reason as _reset_redis_client below.
     async def _flush() -> None:
         redis = redis_client_module.get_redis()
         async for key in redis.scan_iter("ratelimit:*"):
+            await redis.delete(key)
+        async for key in redis.scan_iter("usage:*"):
             await redis.delete(key)
 
     asyncio.run(_flush())
