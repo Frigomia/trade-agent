@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/client", () => ({
 }));
 
 import { createClient } from "@/lib/supabase/client";
-import { apiFetch, ApiError } from "./client";
+import { apiFetch, apiFetchServer, ApiError } from "./client";
 
 function mockSession(accessToken: string | null) {
   vi.mocked(createClient).mockReturnValue({
@@ -124,5 +124,40 @@ describe("apiFetch", () => {
 
     const result = await apiFetch<{ status: string }>("/health");
     expect(result).toEqual({ status: "ok" });
+  });
+});
+
+describe("apiFetchServer", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    process.env.NEXT_PUBLIC_API_URL = "http://localhost:8000";
+  });
+
+  it("attaches the given access token as the bearer header", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+
+    await apiFetchServer("/me", "server-token");
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init?.headers as Headers).get("Authorization")).toBe("Bearer server-token");
+  });
+
+  it("parses the backend's error detail the same way apiFetch does", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: "No access to this service" }), { status: 403 }),
+    );
+
+    await expect(apiFetchServer("/admin/users", "tok")).rejects.toMatchObject({
+      status: 403,
+      detail: "No access to this service",
+    });
+  });
+
+  it("returns parsed JSON on success", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ id: "u1" }), { status: 200 }));
+
+    const result = await apiFetchServer<{ id: string }>("/me", "tok");
+
+    expect(result).toEqual({ id: "u1" });
   });
 });

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Box, List, ListItemButton, ListItemIcon, ListItemText } from "@mui/material";
 import { DESKTOP_SECTIONS, type NavItem } from "./navItems";
-import type { Role } from "@/lib/auth/role-stub";
+import type { Role } from "@/lib/auth/session";
 
 export function Sidebar({ role }: { role: Role }) {
   const items = DESKTOP_SECTIONS.filter((item: NavItem) => !item.adminOnly || role === "admin");

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Box } from "@mui/material";
 import { PHONE_TABS, type NavItem } from "./navItems";
-import type { Role } from "@/lib/auth/role-stub";
+import type { Role } from "@/lib/auth/session";
 
 export function TabBar({ role }: { role: Role }) {
   const tabs = PHONE_TABS.filter((item: NavItem) => !item.adminOnly || role === "admin");
