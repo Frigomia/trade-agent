@@ -5,6 +5,18 @@ import { createTheme, type Theme as MuiTheme } from "@mui/material/styles";
  * of a literal value, so the theme never drifts from the tokens Tailwind classes also use.
  * `mode` only steers MUI's own contrast/elevation math; it does not select the actual colors.
  */
+// Literal per-mode mirrors of the accent/up/down/warn tokens in app/globals.css, used only as
+// `palette.*.main`. Some MUI components (e.g. ListItemButton's `.selected`/hover styles) call
+// theme.alpha()/decomposeColor() on `main` while building their static styles, which throws
+// (MUI error #9) on a var(--...) reference it can't parse as a literal color. Every *rendered*
+// color in this app still comes from the CSS var (via `light`/`dark`/`contrastText` below, and
+// every styleOverride in this file) — `main` here only feeds that internal color math and must
+// be kept in sync with globals.css by hand if those tokens change.
+const ACCENT_MAIN = { light: "#067a52", dark: "#34e7a9" };
+const UP_MAIN = { light: "#067a52", dark: "#34e7a9" };
+const DOWN_MAIN = { light: "#c8323d", dark: "#ff6b72" };
+const WARN_MAIN = { light: "#9a5b00", dark: "#f4c04f" };
+
 export function buildMuiTheme(mode: "light" | "dark"): MuiTheme {
   return createTheme({
     palette: {
@@ -16,14 +28,29 @@ export function buildMuiTheme(mode: "light" | "dark"): MuiTheme {
       // literal CSS color — which throws (MUI error #9) since these are var(--...) references
       // it can't decompose. The design spec has no separate light/dark shade for these tokens.
       primary: {
-        main: "var(--accent-solid)",
+        main: ACCENT_MAIN[mode],
         light: "var(--accent-solid)",
         dark: "var(--accent-solid)",
         contrastText: "var(--on-accent)",
       },
-      success: { main: "var(--up)", light: "var(--up)", dark: "var(--up)", contrastText: "var(--on-accent)" },
-      error: { main: "var(--down)", light: "var(--down)", dark: "var(--down)", contrastText: "var(--on-accent)" },
-      warning: { main: "var(--warn)", light: "var(--warn)", dark: "var(--warn)", contrastText: "var(--on-accent)" },
+      success: {
+        main: UP_MAIN[mode],
+        light: "var(--up)",
+        dark: "var(--up)",
+        contrastText: "var(--on-accent)",
+      },
+      error: {
+        main: DOWN_MAIN[mode],
+        light: "var(--down)",
+        dark: "var(--down)",
+        contrastText: "var(--on-accent)",
+      },
+      warning: {
+        main: WARN_MAIN[mode],
+        light: "var(--warn)",
+        dark: "var(--warn)",
+        contrastText: "var(--on-accent)",
+      },
     },
     shape: { borderRadius: 18 },
     typography: {
