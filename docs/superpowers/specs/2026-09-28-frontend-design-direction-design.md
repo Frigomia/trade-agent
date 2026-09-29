@@ -135,9 +135,9 @@ secondary sections, Export my data, Delete my account and data, Sign out.
 
 **Admin** (admin only; every admin screen carries "You manage access here, not data.")
 - Users: filter by All / Active / Invited / Disabled with counts; table of email, role, status, last
-  active, this-month usage bars; inline Resend and Revoke on invited rows; an amber "expires tomorrow"
+  active, this-month usage bars; inline Resend and Revoke on invited rows; an amber "expires soon"
   cue. Invite user drawer: email, role fixed to User (only one admin exists), monthly limits prefilled
-  from defaults, 7-day link validity.
+  from defaults, 24-hour link validity.
 - User detail: usage this month, limits editor, Disable access (reversible, keeps data), Remove user
   (permanent; confirmation requires typing the user's email).
 - Usage & limits: default limits for new invitations; per-user usage with OK / Near limit / At limit;

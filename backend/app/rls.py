@@ -21,6 +21,18 @@ USER_TABLES: tuple[str, ...] = (
 # Every table the runtime role may touch: the user tables plus the auth table.
 RUNTIME_TABLES: tuple[str, ...] = (*USER_TABLES, "app_users")
 
+# The auth table is deliberately not writable wholesale: the runtime role cannot UPDATE id,
+# email, or role, so no application bug can change an existing user's role (for example promote
+# someone to admin). Role is set only by the bootstrap command on the owner connection. The role
+# can still INSERT rows with any role value: that is by design for the invite flow, and a known
+# defense-in-depth gap.
+APP_USERS_UPDATABLE_COLUMNS: tuple[str, ...] = (
+    "status",
+    "accepted_terms_at",
+    "last_seen_at",
+    "invited_at",
+)
+
 # NULLIF: once a transaction that set the variable ends, current_setting() can return an empty
 # string instead of NULL on a reused connection, and ''::uuid raises. NULL compares false, so
 # an unset variable means "no rows" (default deny).
@@ -46,6 +58,12 @@ def grant_schema_sql() -> str:
 
 
 def grant_table_sql(table: str) -> list[str]:
+    if table == "app_users":
+        columns = ", ".join(APP_USERS_UPDATABLE_COLUMNS)
+        return [
+            f"GRANT SELECT, INSERT, DELETE ON app_users TO {RUNTIME_ROLE}",
+            f"GRANT UPDATE ({columns}) ON app_users TO {RUNTIME_ROLE}",
+        ]
     statements = [f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {RUNTIME_ROLE}"]
     if table in USER_TABLES:
         # Every user table has an integer id backed by a serial sequence named <table>_id_seq.

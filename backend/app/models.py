@@ -129,7 +129,9 @@ class AppUser(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)  # equals the Supabase auth uid
     email: Mapped[str] = mapped_column(String(320), unique=True)
     role: Mapped[str] = mapped_column(String(10))  # "admin" | "user"
-    status: Mapped[str] = mapped_column(String(10), default="active")  # "active" | "disabled"
+    # "invited" | "active" | "disabled"
+    status: Mapped[str] = mapped_column(String(10), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     accepted_terms_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    invited_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

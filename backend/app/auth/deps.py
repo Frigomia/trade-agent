@@ -55,10 +55,15 @@ def _touch_last_seen(db: Session, row: AppUser) -> None:
         db.rollback()
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    resolve_key: KeyResolver = Depends(get_key_resolver),
-    factory: sessionmaker[Session] = Depends(get_session_factory),
+_ACTIVE = frozenset({"active"})
+_INVITED_OR_ACTIVE = frozenset({"invited", "active"})
+
+
+def _authenticate(
+    credentials: HTTPAuthorizationCredentials | None,
+    resolve_key: KeyResolver,
+    factory: sessionmaker[Session],
+    allowed_statuses: frozenset[str],
 ) -> CurrentUser:
     if credentials is None:
         raise _not_authenticated()
@@ -79,13 +84,31 @@ def get_current_user(
         # Role and status come from our own table on every request, so disabling a user takes
         # effect immediately rather than when their token expires. A user with a valid
         # Supabase token but no row here (for example a self-registered account) is refused.
-        if row is None or row.status != "active":
-            logger.info("Refused user without active access: %s", verified.user_id)
+        if row is None or row.status not in allowed_statuses:
+            logger.info("Refused user without allowed access: %s", verified.user_id)
             raise HTTPException(status_code=403, detail="No access to this service")
         # Build the result first: a failed bookkeeping commit expires the row's attributes.
         current = CurrentUser(id=row.id, email=row.email, role=row.role)
         _touch_last_seen(db, row)
         return current
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    resolve_key: KeyResolver = Depends(get_key_resolver),
+    factory: sessionmaker[Session] = Depends(get_session_factory),
+) -> CurrentUser:
+    """Active users only: every data route uses this."""
+    return _authenticate(credentials, resolve_key, factory, _ACTIVE)
+
+
+def get_known_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    resolve_key: KeyResolver = Depends(get_key_resolver),
+    factory: sessionmaker[Session] = Depends(get_session_factory),
+) -> CurrentUser:
+    """Invited or active users: only /me and /me/accept, so an invitee can finish signing up."""
+    return _authenticate(credentials, resolve_key, factory, _INVITED_OR_ACTIVE)
 
 
 def require_admin(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:

@@ -1,7 +1,3 @@
-import uuid
-from collections.abc import Callable
-from datetime import date
-
 import pytest
 from sqlalchemy import Table, create_engine, delete, select, update
 from sqlalchemy.exc import DBAPIError
@@ -9,54 +5,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app import rls
 from app.db import Base, open_user_session
-from app.models import (
-    BacktestResult,
-    ChatMessage,
-    Holding,
-    InvestmentPreferences,
-    PortfolioSnapshot,
-    Recommendation,
-    Trade,
-    WatchlistItem,
-)
-from tests.auth_support import OTHER_USER_ID, USER_ID
-
-ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
-    "holdings": lambda uid: Holding(
-        user_id=uid,
-        ticker="AAPL",
-        name="Apple",
-        asset_type="STOCK",
-        shares=1,
-        cost_basis=1,
-        first_purchase_date=date(2024, 1, 1),
-    ),
-    "watchlist_items": lambda uid: WatchlistItem(user_id=uid, ticker="AAPL", asset_type="STOCK"),
-    "trades": lambda uid: Trade(
-        user_id=uid, date=date(2024, 1, 1), ticker="AAPL", action="BUY", shares=1, price=1
-    ),
-    "recommendations": lambda uid: Recommendation(
-        user_id=uid, ticker="AAPL", asset_type="STOCK", action="BUY", reasoning=["x"]
-    ),
-    "chat_messages": lambda uid: ChatMessage(
-        user_id=uid, session_id="s", role="user", content="hi"
-    ),
-    "backtest_results": lambda uid: BacktestResult(
-        user_id=uid,
-        ticker="AAPL",
-        start_date=date(2020, 1, 1),
-        end_date=date(2024, 1, 1),
-        final_value=1,
-        buy_and_hold_value=1,
-        excess_return_pct=0,
-        hit_rate_by_signal={},
-        status="DONE",
-    ),
-    "investment_preferences": lambda uid: InvestmentPreferences(user_id=uid, sector_avoid_list=[]),
-    "portfolio_snapshots": lambda uid: PortfolioSnapshot(
-        user_id=uid, total_market_value=1, total_cost_basis=1
-    ),
-}
+from app.models import Holding
+from tests.auth_support import OTHER_USER_ID, ROW_FACTORIES, USER_ID
 
 
 def _table(name: str) -> Table:
