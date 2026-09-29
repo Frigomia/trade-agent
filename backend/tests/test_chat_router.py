@@ -1,8 +1,8 @@
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
-from app.models import ChatMessage
-from tests.auth_support import OTHER_USER_ID, add_app_user, auth_headers
+from app.models import AppUser, ChatMessage
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
 def test_chat_without_api_key_returns_503(client, monkeypatch):
@@ -75,6 +75,20 @@ def test_chat_rate_limited_after_20_calls_per_minute(client, monkeypatch):
 
     response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
     assert response.status_code == 429
+
+
+def test_chat_is_429_after_the_monthly_limit(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
+    db_session.query(AppUser).filter_by(id=USER_ID).update({"monthly_chat_limit": 2})
+    db_session.commit()
+
+    for _ in range(2):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        assert response.status_code == 503
+
+    response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    assert response.status_code == 429
+    assert "Monthly limit reached" in response.json()["detail"]
 
 
 def test_chat_requires_authentication(anon_client):

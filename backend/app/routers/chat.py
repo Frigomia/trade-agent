@@ -9,6 +9,7 @@ from app.config import settings
 from app.models import ChatMessage
 from app.rate_limit import rate_limiter
 from app.schemas import ChatIn, ChatOut
+from app.usage import check_monthly_usage
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,10 @@ def _commit_or_raise(db: Session, log_message: str) -> None:
 @router.post(
     "/chat",
     response_model=ChatOut,
-    dependencies=[Depends(rate_limiter("chat", limit=20))],
+    dependencies=[
+        Depends(rate_limiter("chat", limit=20)),
+        Depends(check_monthly_usage("chat")),
+    ],
 )
 async def chat(
     payload: ChatIn,

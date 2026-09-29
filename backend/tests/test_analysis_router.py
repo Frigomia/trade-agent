@@ -1,7 +1,7 @@
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.models import Holding, Recommendation
+from app.models import AppUser, Holding, Recommendation
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
@@ -103,6 +103,27 @@ def test_run_analysis_rate_limited_after_5_calls_per_minute(client):
         response = client.post("/analysis/run", json={})
 
     assert response.status_code == 429
+
+
+def test_run_analysis_is_429_after_the_monthly_limit(client, db_session):
+    db_session.query(AppUser).filter_by(id=USER_ID).update({"monthly_analysis_limit": 1})
+    db_session.commit()
+
+    def _close_coro(coro):
+        coro.close()
+        return MagicMock()
+
+    with (
+        patch("app.routers.analysis.create_job", AsyncMock(return_value="job-1")),
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
+    ):
+        first = client.post("/analysis/run", json={})
+        second = client.post("/analysis/run", json={})
+
+    assert first.status_code == 202
+    assert second.status_code == 429
+    assert "Monthly limit reached" in second.json()["detail"]
 
 
 def _rec(user_id, ticker="AAPL"):
