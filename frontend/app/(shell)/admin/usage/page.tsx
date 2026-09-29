@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell } from "@mui/material";
+import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell, Chip } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
@@ -17,6 +17,7 @@ export default function AdminUsagePage() {
         <TableHead>
           <TableRow>
             <TableCell>User</TableCell>
+            <TableCell>Status</TableCell>
             <TableCell>Analysis runs</TableCell>
             <TableCell>Chat messages</TableCell>
           </TableRow>
@@ -25,6 +26,9 @@ export default function AdminUsagePage() {
           {(users ?? []).map((user) => (
             <TableRow key={user.id}>
               <TableCell>{user.email}</TableCell>
+              <TableCell>
+                <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
+              </TableCell>
               <TableCell>
                 {user.monthly_analysis_used ?? 0} / {user.monthly_analysis_limit ?? "—"}
               </TableCell>

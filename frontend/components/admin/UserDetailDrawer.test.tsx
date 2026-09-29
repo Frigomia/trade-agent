@@ -65,6 +65,17 @@ describe("UserDetailDrawer", () => {
     expect(JSON.parse((init as { body: string }).body)).toEqual({ analysis_limit: 50 });
   });
 
+  it("does not call the limits endpoint when Save limits is clicked with both fields empty", () => {
+    render(<UserDetailDrawer user={USER} onClose={vi.fn()} onChanged={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /save limits/i }));
+
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      expect.stringContaining("/limits"),
+      expect.anything(),
+    );
+  });
+
   it("clears a limit by sending an explicit null, distinct from leaving it untouched", async () => {
     apiFetch.mockResolvedValue(USER);
     render(<UserDetailDrawer user={USER} onClose={vi.fn()} onChanged={vi.fn()} />);

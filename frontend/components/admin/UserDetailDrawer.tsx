@@ -38,10 +38,13 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
 
   async function handleSetLimits(event: FormEvent) {
     event.preventDefault();
-    setSubmitting(true);
     const body: Record<string, number> = {};
     if (analysisLimit !== "") body.analysis_limit = Number(analysisLimit);
     if (chatLimit !== "") body.chat_limit = Number(chatLimit);
+    if (Object.keys(body).length === 0) {
+      return;
+    }
+    setSubmitting(true);
     await patchLimits(body);
     setSubmitting(false);
   }
