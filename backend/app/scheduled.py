@@ -1,5 +1,7 @@
 """Scheduled job steps: daily portfolio snapshots and recommendation outcome evaluation."""
 
+import argparse
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
@@ -8,6 +10,7 @@ from datetime import UTC, datetime
 from app import db as app_db
 from app.memory.outcomes import evaluate_due_outcomes
 from app.models import AppUser, Holding, PortfolioSnapshot
+from app.redis_client import get_redis
 from app.snapshots import record_snapshot
 
 logger = logging.getLogger(__name__)
@@ -91,3 +94,45 @@ async def run_outcomes(summary: Summary) -> None:
         except Exception as exc:
             summary.failures += 1
             logger.warning("Outcome evaluation failed for user %s: %s", user_id, type(exc).__name__)
+
+
+COMMANDS = ("daily", "snapshots", "outcomes")
+LOCK_SECONDS = 3600
+
+
+async def run_command(command: str) -> int:
+    key = f"scheduled:{command}"
+    redis = get_redis()
+    try:
+        acquired = await redis.set(key, "1", nx=True, ex=LOCK_SECONDS)
+    except Exception as exc:
+        logger.error("Scheduled %s: cannot reach Redis (%s)", command, type(exc).__name__)
+        return 1
+    if not acquired:
+        logger.info("Scheduled %s: already running, nothing to do", command)
+        return 0
+    summary = Summary()
+    try:
+        if command in ("daily", "snapshots"):
+            await run_snapshots(summary)
+        if command in ("daily", "outcomes"):
+            await run_outcomes(summary)
+        logger.info("Scheduled %s done: %s", command, summary.line())
+    finally:
+        try:
+            await redis.delete(key)
+        except Exception as exc:
+            logger.warning("Scheduled %s: lock release failed (%s)", command, type(exc).__name__)
+    return 1 if summary.failures else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO)
+    parser = argparse.ArgumentParser(prog="python -m app.scheduled")
+    parser.add_argument("command", choices=COMMANDS)
+    args = parser.parse_args(argv)
+    return asyncio.run(run_command(args.command))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

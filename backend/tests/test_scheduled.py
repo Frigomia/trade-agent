@@ -5,8 +5,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+import app.redis_client as redis_client_module
 from app import scheduled
 from app.models import Holding, PortfolioSnapshot, Recommendation
+from app.redis_client import get_redis
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 THIRD_USER_ID = uuid.UUID("33333333-3333-3333-3333-333333333333")
@@ -225,3 +227,132 @@ def test_summary_line_lists_every_counter():
     assert line == (
         "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0"
     )
+
+
+def _arun(coro):
+    """Fresh Redis client per event loop (see tests/conftest.py)."""
+    redis_client_module._redis = None
+    return asyncio.run(coro)
+
+
+def _run_command(command, quote=PRICE_OK, compute=None):
+    with (
+        patch("app.snapshots.fetch_quote_and_history", quote),
+        patch("app.memory.outcomes.compute_outcome", compute or AsyncMock(return_value=0.05)),
+    ):
+        return _arun(scheduled.run_command(command))
+
+
+async def _lock_exists(key):
+    return bool(await get_redis().exists(key))
+
+
+def test_daily_runs_both_steps_exits_0_and_releases_the_lock(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID)
+    _due_rec(env, USER_ID)
+
+    code = _run_command("daily")
+
+    assert code == 0
+    assert len(_snapshots(env, USER_ID)) == 1
+    assert env.query(Recommendation).one().outcome_evaluated_at is not None
+    assert _arun(_lock_exists("scheduled:daily")) is False
+
+
+def test_snapshots_and_outcomes_commands_each_run_only_their_own_step(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID)
+    _due_rec(env, USER_ID)
+
+    assert _run_command("snapshots") == 0
+    assert len(_snapshots(env, USER_ID)) == 1
+    assert env.query(Recommendation).one().outcome_evaluated_at is None
+
+    assert _run_command("outcomes") == 0
+    assert env.query(Recommendation).one().outcome_evaluated_at is not None
+
+
+def test_the_exit_code_is_1_when_any_user_failed_but_the_others_still_ran(env):
+    add_app_user(env, USER_ID)
+    add_app_user(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "DELISTED")
+    _holding(env, OTHER_USER_ID, "AAPL")
+
+    async def quote(ticker):
+        return {"price": None if ticker == "DELISTED" else 200.0, "closes": []}
+
+    code = _run_command("daily", quote=AsyncMock(side_effect=quote))
+
+    assert code == 1
+    assert len(_snapshots(env, OTHER_USER_ID)) == 1
+
+
+def test_nothing_to_do_is_exit_0(env):
+    assert _run_command("daily") == 0  # no users at all
+
+
+def test_a_held_lock_makes_the_run_exit_0_without_work_and_keeps_the_lock(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID)
+
+    async def go():
+        redis = get_redis()
+        await redis.set("scheduled:daily", "1", nx=True, ex=60)
+        with patch("app.snapshots.fetch_quote_and_history", PRICE_OK):
+            code = await scheduled.run_command("daily")
+        still_held = await redis.exists("scheduled:daily")
+        await redis.delete("scheduled:daily")
+        return code, still_held
+
+    code, still_held = _arun(go())
+
+    assert code == 0
+    assert still_held == 1  # the other run's lock is not ours to release
+    assert _snapshots(env, USER_ID) == []
+
+
+def test_a_different_command_is_not_blocked_by_the_daily_lock(env):
+    add_app_user(env, USER_ID)
+    _due_rec(env, USER_ID)
+
+    async def go():
+        redis = get_redis()
+        await redis.set("scheduled:daily", "1", nx=True, ex=60)
+        with patch("app.memory.outcomes.compute_outcome", AsyncMock(return_value=0.05)):
+            code = await scheduled.run_command("outcomes")
+        await redis.delete("scheduled:daily")
+        return code
+
+    assert _arun(go()) == 0
+    assert env.query(Recommendation).one().outcome_evaluated_at is not None
+
+
+def test_an_unreachable_redis_exits_1_and_does_no_work(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID)
+
+    class BrokenRedis:
+        async def set(self, *args, **kwargs):
+            raise ConnectionError("redis down")
+
+    with patch("app.scheduled.get_redis", return_value=BrokenRedis()):
+        code = _run_command("daily")
+
+    assert code == 1
+    assert _snapshots(env, USER_ID) == []
+
+
+def test_main_dispatches_the_command_and_returns_its_exit_code():
+    with patch("app.scheduled.run_command", AsyncMock(return_value=0)) as run:
+        assert scheduled.main(["snapshots"]) == 0
+    run.assert_awaited_once_with("snapshots")
+
+    with patch("app.scheduled.run_command", AsyncMock(return_value=1)):
+        assert scheduled.main(["daily"]) == 1
+
+
+def test_main_rejects_an_unknown_command_with_exit_2():
+    with pytest.raises(SystemExit) as caught:
+        scheduled.main(["nope"])
+    assert caught.value.code == 2
