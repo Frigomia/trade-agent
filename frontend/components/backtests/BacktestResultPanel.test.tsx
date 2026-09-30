@@ -25,8 +25,8 @@ describe("BacktestResultPanel", () => {
     render(<BacktestResultPanel result={RESULT} />);
     expect(screen.getByRole("heading", { name: /AAPL, 2023-01-02 to 2026-09-30/ })).toBeInTheDocument();
     expect(screen.getByText("Both start from 10,000.00.")).toBeInTheDocument();
-    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
-    expect(screen.getByText("Buy-and-hold ends at 10,500.00")).toBeInTheDocument();
+    expect(screen.getByText("11,000.00")).toBeInTheDocument();
+    expect(screen.getByText("10,500.00")).toBeInTheDocument();
     expect(screen.getByText("Ahead of buy-and-hold by +4.8%")).toBeInTheDocument();
   });
 
@@ -54,7 +54,7 @@ describe("BacktestResultPanel", () => {
     expect(screen.getByRole("img", { name: /strategy value against buy-and-hold/i })).toBeInTheDocument();
     rerender(<BacktestResultPanel result={{ ...RESULT, equity_curve: null }} />);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(screen.getByText("11,000.00")).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /strong uptrend/i })).toBeInTheDocument();
   });
 

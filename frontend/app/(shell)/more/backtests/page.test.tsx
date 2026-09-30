@@ -119,11 +119,11 @@ describe("BacktestsPage", () => {
       start_date: (screen.getByLabelText("From") as HTMLInputElement).value,
       end_date: (screen.getByLabelText("To") as HTMLInputElement).value,
     });
-    expect(screen.queryByText(/Strategy ends at/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Strategy final value/)).not.toBeInTheDocument();
     await waitFor(() => expect(calls("/backtest/run/j1")).toHaveLength(1));
     const listCallsBefore = calls("/backtest/results").length;
     await step();
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     expect(calls("/backtest/results").length).toBeGreaterThan(listCallsBefore);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe("BacktestsPage", () => {
     startRun();
     expect(await screen.findByText(WARNING)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run backtest" })).toBeEnabled();
-    expect(screen.queryByText(/Strategy ends at/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Strategy final value/)).not.toBeInTheDocument();
     await step();
     expect(calls("/backtest/run/j1")).toHaveLength(1);
   });
@@ -187,9 +187,9 @@ describe("BacktestsPage", () => {
     renderFresh();
     const row = await screen.findByRole("button", { name: /AAPL/ });
     expect(row).toHaveTextContent("2023-01-02 to 2026-09-30");
-    expect(row).toHaveTextContent("Ahead of buy-and-hold by +4.8%");
+    expect(row).toHaveTextContent("+4.8%");
     fireEvent.click(row);
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     expect(calls("/backtest/results/7").length).toBeGreaterThanOrEqual(1);
     expect(row).toHaveClass("Mui-selected");
   });
@@ -201,7 +201,7 @@ describe("BacktestsPage", () => {
     });
     renderFresh();
     fireEvent.click(await screen.findByRole("button", { name: /AAPL/ }));
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /strong uptrend/i })).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
@@ -220,12 +220,12 @@ describe("BacktestsPage", () => {
     renderFresh();
     await screen.findByText("No backtests yet.");
     startRun();
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     await act(async () => {
       await swrMutate("/backtest/run/j1");
     });
     await waitFor(() => expect(calls("/backtest/run/j1")).toHaveLength(2));
-    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(screen.getByText("11,000.00")).toBeInTheDocument();
     expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
   });
 
@@ -261,10 +261,10 @@ describe("BacktestsPage", () => {
     });
     renderFresh();
     fireEvent.click(await screen.findByRole("button", { name: /AAPL/ }));
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     startRun();
-    expect(await screen.findByText("Strategy ends at 12,500.00")).toBeInTheDocument();
-    expect(screen.queryByText("Strategy ends at 11,000.00")).not.toBeInTheDocument();
+    expect(await screen.findByText("12,500.00")).toBeInTheDocument();
+    expect(screen.queryByText("11,000.00")).not.toBeInTheDocument();
   });
 
   it("hides the failure warning once a past run is selected", async () => {
@@ -279,7 +279,7 @@ describe("BacktestsPage", () => {
     startRun();
     expect(await screen.findByText(WARNING)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /AAPL/ }));
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
   });
 
@@ -297,10 +297,10 @@ describe("BacktestsPage", () => {
     renderFresh();
     await screen.findByText("No backtests yet.");
     startRun();
-    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(await screen.findByText("11,000.00")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
     expect(await screen.findByText("start_date must not be after end_date")).toBeInTheDocument();
-    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(screen.getByText("11,000.00")).toBeInTheDocument();
   });
 
   it("shows load errors for the list and for a single backtest", async () => {

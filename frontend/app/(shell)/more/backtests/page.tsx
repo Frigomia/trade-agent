@@ -1,16 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import useSWR from "swr";
 import { Alert, Box, List, ListItemButton, ListItemText, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import { excessLabel } from "@/lib/backtest";
 import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/lib/backtest";
 import { useAction } from "@/lib/useAction";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
 import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
+import { formatPct } from "@/lib/format";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 export default function BacktestsPage() {
@@ -59,7 +59,7 @@ export default function BacktestsPage() {
 
   return (
     <Box>
-      <PageHeader title="Backtests" actions={<Link href="/more">Back to More</Link>} />
+      <PageHeader title="Backtests" />
 
       <Box
         sx={{
@@ -108,8 +108,12 @@ export default function BacktestsPage() {
                 <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
                   <ListItemText
                     primary={item.ticker}
-                    secondary={`${item.start_date} to ${item.end_date}, ${excessLabel(item.excess_return_pct)}`}
+                    secondary={`${item.start_date} to ${item.end_date}`}
+                    slotProps={{ primary: { sx: { fontWeight: 650 } } }}
                   />
+                  <Pill tone={item.excess_return_pct < 0 ? "down" : "up"}>
+                    {formatPct(item.excess_return_pct * 100)}
+                  </Pill>
                 </ListItemButton>
               ))}
             </List>
