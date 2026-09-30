@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models import AppUser, Holding, Recommendation
@@ -442,3 +442,40 @@ def test_get_recommendation_by_id_404_for_another_users_row(client, db_session):
     db_session.refresh(rec)
 
     assert client.get(f"/analysis/recommendations/{rec.id}").status_code == 404
+
+
+def test_recommendation_exposes_outcome_fields(client, db_session):
+    evaluated = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["x"],
+        status="APPROVED",
+        price_at_recommendation=100.0,
+        outcome_forward_return_pct=0.0525,
+        outcome_evaluated_at=datetime(2026, 9, 1, 12, 0, 0),
+    )
+    unevaluated = Recommendation(
+        user_id=USER_ID,
+        ticker="MSFT",
+        asset_type="STOCK",
+        action="HOLD",
+        reasoning=["y"],
+        status="REJECTED",
+    )
+    db_session.add_all([evaluated, unevaluated])
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 1.0, "closes": [1.0]}),
+    ):
+        response = client.get("/analysis/recommendations")
+
+    assert response.status_code == 200
+    by_ticker = {r["ticker"]: r for r in response.json()}
+    assert by_ticker["AAPL"]["outcome_forward_return_pct"] == 0.0525
+    assert by_ticker["AAPL"]["outcome_evaluated_at"] is not None
+    assert by_ticker["MSFT"]["outcome_forward_return_pct"] is None
+    assert by_ticker["MSFT"]["outcome_evaluated_at"] is None
