@@ -2,24 +2,34 @@ import { Box, Table, TableBody, TableCell, TableHead, TableRow, Typography } fro
 import { STARTING_VALUE, excessLabel, signalRows } from "@/lib/backtest";
 import type { BacktestResult } from "@/lib/backtest";
 import { formatAmount, formatPct } from "@/lib/format";
+import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
 import { BacktestChart } from "./BacktestChart";
 
 export function BacktestResultPanel({ result }: { result: BacktestResult }) {
   const rows = signalRows(result.hit_rate_by_signal);
   return (
-    <Box>
-      <Typography component="h2" variant="h6">
-        {result.ticker}, {result.start_date} to {result.end_date}
+    <Panel sx={{ p: "18px 20px", display: "grid", gap: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
+        <Typography component="h2" sx={{ fontSize: 17, fontWeight: 650, flex: 1 }}>
+          {result.ticker}, {result.start_date} to {result.end_date}
+        </Typography>
+        <Pill tone={result.excess_return_pct < 0 ? "down" : "up"}>{excessLabel(result.excess_return_pct)}</Pill>
+      </Box>
+      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+        Both start from {formatAmount(STARTING_VALUE)}.
       </Typography>
-      <Typography>Both start from {formatAmount(STARTING_VALUE)}.</Typography>
-      <Typography>{`Strategy ends at ${formatAmount(result.final_value)}`}</Typography>
-      <Typography>{`Buy-and-hold ends at ${formatAmount(result.buy_and_hold_value)}`}</Typography>
-      <Typography>{excessLabel(result.excess_return_pct)}</Typography>
+      <Box sx={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        <Typography sx={{ fontWeight: 650 }}>{`Strategy ends at ${formatAmount(result.final_value)}`}</Typography>
+        <Typography sx={{ color: "var(--text2)" }}>
+          {`Buy-and-hold ends at ${formatAmount(result.buy_and_hold_value)}`}
+        </Typography>
+      </Box>
       {result.equity_curve && (
         <BacktestChart curve={result.equity_curve} startDate={result.start_date} endDate={result.end_date} />
       )}
       {rows.length === 0 ? (
-        <Typography>No signals fired in this range.</Typography>
+        <Typography sx={{ color: "var(--text2)" }}>No signals fired in this range.</Typography>
       ) : (
         <Table size="small" aria-label="Signal hit rates">
           <TableHead>
@@ -43,11 +53,13 @@ export function BacktestResultPanel({ result }: { result: BacktestResult }) {
         </Table>
       )}
       {rows.some((r) => r.small) && (
-        <Typography>Some signals were seen fewer than 5 times; treat those rows as anecdotes.</Typography>
+        <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+          Some signals were seen fewer than 5 times; treat those rows as anecdotes.
+        </Typography>
       )}
-      <Typography>
+      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
         Past performance is not a forecast. Simulated on past prices only; nothing is sent to a broker.
       </Typography>
-    </Box>
+    </Panel>
   );
 }

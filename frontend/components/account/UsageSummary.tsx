@@ -9,20 +9,18 @@ const CUE = { ok: "", warn: "Near limit", limit: "At limit" } as const;
 function UsageRow({ label, detail }: { label: string; detail: UsageDetail }) {
   const level = usageLevel(detail);
   return (
-    <Box>
-      <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "baseline" }}>
-        <Typography variant="body2">{label}</Typography>
-        <Typography variant="body2">
-          {CUE[level] && <strong>{CUE[level]} </strong>}
-          <span>{`${detail.used} / ${detail.limit}`}</span>
-        </Typography>
-      </Stack>
+    <Box sx={{ display: "grid", gridTemplateColumns: "110px 1fr auto", alignItems: "center", gap: 1.5 }}>
+      <Typography variant="body2">{label}</Typography>
       <LinearProgress
         variant="determinate"
         aria-label={label}
         value={usageFraction(detail) * 100}
         color={level === "ok" ? "primary" : "warning"}
       />
+      <Typography variant="body2" sx={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        {CUE[level] && <strong>{CUE[level]} </strong>}
+        <span>{`${detail.used} / ${detail.limit}`}</span>
+      </Typography>
     </Box>
   );
 }
@@ -38,11 +36,15 @@ export function UsageSummary({ usage, now }: { usage: Usage; now?: Date }) {
           You have used your monthly allowance. It resets on {resetDate}. Ask your administrator if you need more.
         </Alert>
       )}
+      <Box sx={{ display: "flex", alignItems: "baseline" }}>
+        <Typography sx={{ fontWeight: 650 }}>Your usage</Typography>
+        <Box sx={{ flex: 1 }} />
+        <Typography variant="caption" color="text.secondary">
+          Resets on {resetDate}
+        </Typography>
+      </Box>
       <UsageRow label="Analysis runs" detail={usage.analysis_runs} />
       <UsageRow label="Chat messages" detail={usage.chat_messages} />
-      <Typography variant="caption" color="text.secondary">
-        Resets on {resetDate}
-      </Typography>
     </Stack>
   );
 }

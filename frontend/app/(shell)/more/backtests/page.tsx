@@ -61,45 +61,61 @@ export default function BacktestsPage() {
     <Box>
       <PageHeader title="Backtests" actions={<Link href="/more">Back to More</Link>} />
 
-      <Box sx={{ maxWidth: 560 }}>
-        <RunForm onRun={start} running={submitting || jobRunning} error={error} />
-      </Box>
-
-      {jobFailed && selectedId === null && (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          The backtest could not run for that ticker and range. Check the ticker and dates.
-        </Alert>
-      )}
-      {resultError && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          Could not load that backtest.
-        </Alert>
-      )}
-      {result && (
-        <Box sx={{ mt: 2 }}>
-          <BacktestResultPanel result={result} />
-        </Box>
-      )}
-
-      <Typography component="h2" variant="h6" sx={{ mt: 3 }}>
-        Recent runs
-      </Typography>
-      {listError && <Alert severity="error">Could not load your recent runs.</Alert>}
-      {list && list.length === 0 && <Typography sx={{ color: "var(--text2)" }}>No backtests yet.</Typography>}
-      {list && list.length > 0 && (
-        <Panel sx={{ p: "4px 8px" }}>
-        <List>
-          {list.map((item) => (
-            <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
-              <ListItemText
-                primary={item.ticker}
-                secondary={`${item.start_date} to ${item.end_date}, ${excessLabel(item.excess_return_pct)}`}
-              />
-            </ListItemButton>
-          ))}
-        </List>
+      <Box
+        sx={{
+          display: "grid",
+          gap: 2,
+          alignItems: "start",
+          gridTemplateColumns: { md: "minmax(0, 340px) minmax(0, 1fr)" },
+          gridTemplateAreas: {
+            xs: '"form" "result" "runs"',
+            md: '"form result" "runs result"',
+          },
+        }}
+      >
+        <Panel sx={{ gridArea: "form", p: "16px 18px" }}>
+          <Typography component="h2" sx={{ fontSize: 17, fontWeight: 650, mb: 0.5 }}>
+            Run a backtest
+          </Typography>
+          <RunForm onRun={start} running={submitting || jobRunning} error={error} />
         </Panel>
-      )}
+
+        <Box sx={{ gridArea: "result", minWidth: 0 }}>
+          {jobFailed && selectedId === null && (
+            <Alert severity="warning">
+              The backtest could not run for that ticker and range. Check the ticker and dates.
+            </Alert>
+          )}
+          {resultError && <Alert severity="error">Could not load that backtest.</Alert>}
+          {result && <BacktestResultPanel result={result} />}
+        </Box>
+
+        <Panel sx={{ gridArea: "runs", p: "14px 10px" }}>
+          <Typography component="h2" sx={{ fontSize: 15, fontWeight: 650, px: 1.5 }}>
+            Recent runs
+          </Typography>
+          {listError && (
+            <Alert severity="error" sx={{ mt: 1 }}>
+              Could not load your recent runs.
+            </Alert>
+          )}
+          {list && list.length === 0 && (
+            <Typography sx={{ color: "var(--text2)", px: 1.5, mt: 1 }}>No backtests yet.</Typography>
+          )}
+          {list && list.length > 0 && (
+            <List>
+              {list.map((item) => (
+                <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
+                  <ListItemText
+                    primary={item.ticker}
+                    secondary={`${item.start_date} to ${item.end_date}, ${excessLabel(item.excess_return_pct)}`}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          )}
+        </Panel>
+      </Box>
     </Box>
   );
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { mutate } from "swr";
+import { Download, Trash2 } from "lucide-react";
 import { Alert, Box, Button, TextField, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import { downloadJson } from "@/lib/download";
@@ -36,12 +37,24 @@ export function DataActions({ email }: { email: string }) {
 
   return (
     <Box sx={{ display: "grid", gap: 2 }}>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-        <Button variant="outlined" onClick={handleExport} disabled={submitting}>
+      <Box sx={{ display: "grid" }}>
+        <Button
+          variant="text"
+          startIcon={<Download size={18} />}
+          onClick={handleExport}
+          disabled={submitting}
+          sx={{ justifyContent: "flex-start", color: "var(--text)" }}
+        >
           Export my data
         </Button>
         {!confirming && (
-          <Button color="error" variant="outlined" onClick={() => setConfirming(true)}>
+          <Button
+            color="error"
+            variant="text"
+            startIcon={<Trash2 size={18} />}
+            onClick={() => setConfirming(true)}
+            sx={{ justifyContent: "flex-start" }}
+          >
             Delete my data
           </Button>
         )}
