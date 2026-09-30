@@ -2,9 +2,9 @@ import { scaleLinear } from "d3-scale";
 import { line } from "d3-shape";
 import type { EquityCurve } from "@/lib/backtest";
 
-export const CHART_WIDTH = 360;
-export const CHART_HEIGHT = 200;
-export const CHART_MARGIN = { top: 10, right: 12, bottom: 12, left: 52 };
+export const CHART_WIDTH = 600;
+export const CHART_HEIGHT = 170;
+export const CHART_MARGIN = { top: 10, right: 4, bottom: 4, left: 4 };
 
 export interface ChartGeometry {
   count: number;

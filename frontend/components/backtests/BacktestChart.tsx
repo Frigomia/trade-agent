@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { Box, Typography } from "@mui/material";
 import type { EquityCurve } from "@/lib/backtest";
-import { CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH, buildChart, formatTick } from "@/lib/backtestChart";
+import { CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH, buildChart } from "@/lib/backtestChart";
 import { formatAmount } from "@/lib/format";
 
 const NOTE_SX = { fontSize: 12, color: "var(--muted)" };
@@ -19,6 +19,7 @@ export function BacktestChart({
   endDate: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const gradientId = useId();
   const geometry = buildChart(curve);
   if (!geometry) return null;
 
@@ -46,6 +47,8 @@ export function BacktestChart({
 
   const range = (values: number[]) => `${formatAmount(values[0])} to ${formatAmount(values[count - 1])}`;
 
+  const bottom = CHART_HEIGHT - CHART_MARGIN.bottom;
+
   return (
     <Box>
       <svg
@@ -53,65 +56,75 @@ export function BacktestChart({
         aria-label="Strategy value against buy-and-hold over the tested period"
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
         tabIndex={0}
-        style={{ width: "100%", maxWidth: 560, height: "auto", display: "block" }}
+        style={{ width: "100%", height: "auto", display: "block", marginTop: 10 }}
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHover(null)}
         onBlur={() => setHover(null)}
         onKeyDown={onKeyDown}
       >
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--accent)" stopOpacity={0.25} />
+            <stop offset="1" stopColor="var(--accent)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
         {geometry.yTicks.map((t) => (
-          <g key={t.value}>
-            <line
-              x1={CHART_MARGIN.left}
-              x2={CHART_WIDTH - CHART_MARGIN.right}
-              y1={t.y}
-              y2={t.y}
-              stroke="var(--line)"
-              strokeWidth={0.5}
-            />
-            <text
-              x={CHART_MARGIN.left - 6}
-              y={t.y}
-              textAnchor="end"
-              fontSize={10}
-              fill="var(--muted)"
-              dominantBaseline="middle"
-            >
-              {formatTick(t.value)}
-            </text>
-          </g>
+          <line
+            key={t.value}
+            x1={CHART_MARGIN.left}
+            x2={CHART_WIDTH - CHART_MARGIN.right}
+            y1={t.y}
+            y2={t.y}
+            stroke="var(--line)"
+            strokeWidth={0.5}
+          />
         ))}
-        <path d={geometry.strategyPath} fill="none" stroke="var(--accent)" strokeWidth={1.5} />
+        <path
+          d={`${geometry.strategyPath}L${xAt(last)},${bottom}L${xAt(0)},${bottom}Z`}
+          fill={`url(#${gradientId})`}
+        />
         <path
           d={geometry.buyAndHoldPath}
           fill="none"
           stroke="var(--muted)"
-          strokeWidth={1.5}
-          strokeDasharray="4 3"
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          strokeLinejoin="round"
         />
+        <path d={geometry.strategyPath} fill="none" stroke="var(--accent)" strokeWidth={2.25} strokeLinejoin="round" />
         {hover !== null && (
           <>
             <line
               x1={xAt(hover)}
               x2={xAt(hover)}
               y1={CHART_MARGIN.top}
-              y2={CHART_HEIGHT - CHART_MARGIN.bottom}
+              y2={bottom}
               stroke="var(--muted)"
               strokeWidth={0.5}
             />
-            <circle cx={xAt(hover)} cy={yAt(strategy[hover])} r={3} fill="var(--accent)" />
-            <circle cx={xAt(hover)} cy={yAt(buyAndHold[hover])} r={3} fill="var(--muted)" />
+            <circle cx={xAt(hover)} cy={yAt(strategy[hover])} r={3.5} fill="var(--accent)" />
+            <circle cx={xAt(hover)} cy={yAt(buyAndHold[hover])} r={3.5} fill="var(--muted)" />
           </>
         )}
       </svg>
-      <Box sx={{ display: "flex", justifyContent: "space-between", maxWidth: 560, mt: 0.5 }}>
+      <Box sx={{ display: "flex", gap: 2, fontSize: 12, color: "var(--muted)", mt: 0.5, flexWrap: "wrap" }}>
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+          <Box component="i" sx={{ width: 14, height: 3, bgcolor: "var(--accent)", borderRadius: "2px", display: "block" }} />
+          Signal strategy
+        </Box>
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+          <Box component="i" sx={{ width: 14, borderTop: "2px dashed var(--muted)", display: "block" }} />
+          Buy and hold
+        </Box>
+      </Box>
+      <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
         <Typography sx={NOTE_SX}>{startDate}</Typography>
         <Typography sx={NOTE_SX}>Points are evenly spaced trading days.</Typography>
         <Typography sx={NOTE_SX}>{endDate}</Typography>
       </Box>
-      <Typography sx={{ fontSize: 13, mt: 1 }}>Strategy (solid line): {range(strategy)}</Typography>
-      <Typography sx={{ fontSize: 13 }}>Buy-and-hold (dashed line): {range(buyAndHold)}</Typography>
-      <Typography aria-live="polite" sx={{ fontSize: 13, mt: 1 }}>
+      <Typography sx={{ ...NOTE_SX, mt: 1 }}>Strategy (solid line): {range(strategy)}</Typography>
+      <Typography sx={NOTE_SX}>Buy-and-hold (dashed line): {range(buyAndHold)}</Typography>
+      <Typography aria-live="polite" sx={{ ...NOTE_SX, mt: 1 }}>
         {hover === null
           ? "Hover, or use the arrow keys, to read a point."
           : `Point ${hover + 1} of ${count}: Strategy ${formatAmount(strategy[hover])}, Buy-and-hold ${formatAmount(buyAndHold[hover])}`}

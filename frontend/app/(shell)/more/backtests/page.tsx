@@ -11,6 +11,8 @@ import { useAction } from "@/lib/useAction";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
 import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
+import { formatPct } from "@/lib/format";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 export default function BacktestsPage() {
@@ -108,8 +110,12 @@ export default function BacktestsPage() {
                 <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
                   <ListItemText
                     primary={item.ticker}
-                    secondary={`${item.start_date} to ${item.end_date}, ${excessLabel(item.excess_return_pct)}`}
+                    secondary={`${item.start_date} to ${item.end_date}`}
+                    slotProps={{ primary: { sx: { fontWeight: 650 } } }}
                   />
+                  <Pill tone={item.excess_return_pct < 0 ? "down" : "up"}>
+                    <span title={excessLabel(item.excess_return_pct)}>{formatPct(item.excess_return_pct * 100)}</span>
+                  </Pill>
                 </ListItemButton>
               ))}
             </List>

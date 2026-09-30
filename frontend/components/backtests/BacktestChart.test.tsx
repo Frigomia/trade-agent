@@ -16,12 +16,13 @@ function fakeRect(el: Element) {
 }
 
 describe("BacktestChart", () => {
-  it("draws a solid and a dashed line, axis labels, a text legend and the dates", () => {
+  it("draws a solid and a dashed line, a legend and the dates", () => {
     const { container } = chart();
     const series = container.querySelectorAll('path[fill="none"]');
     expect(series).toHaveLength(2);
     expect([...series].filter((p) => p.getAttribute("stroke-dasharray"))).toHaveLength(1);
-    expect(screen.getAllByText(/^\d{2},\d{3}$/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Signal strategy")).toBeInTheDocument();
+    expect(screen.getByText("Buy and hold")).toBeInTheDocument();
     expect(screen.getByText("Strategy (solid line): 10,000.00 to 11,234.50")).toBeInTheDocument();
     expect(screen.getByText("Buy-and-hold (dashed line): 10,000.00 to 10,500.00")).toBeInTheDocument();
     expect(screen.getByText("2023-01-02")).toBeInTheDocument();
