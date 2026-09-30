@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import math
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,12 +11,17 @@ from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.schemas import (
     HoldingIn,
     HoldingOut,
+    HoldingSummaryOut,
     PortfolioSnapshotOut,
+    PortfolioSummaryOut,
     TradeIn,
     TradeOut,
     WatchlistItemIn,
     WatchlistItemOut,
+    WatchlistSummaryOut,
 )
+
+logger = logging.getLogger(__name__)
 
 # The router-level dependency makes authentication run before anything else on every route,
 # even one whose handler forgets to ask for the user.
@@ -159,4 +166,89 @@ def list_snapshots(
         .filter_by(user_id=user.id)
         .order_by(PortfolioSnapshot.created_at, PortfolioSnapshot.id)
         .all()
+    )
+
+
+async def _prices_for(tickers: set[str]) -> dict[str, float | None]:
+    """Live price per ticker; None when the fetch fails or returns a non-finite price."""
+    ordered = sorted(tickers)
+
+    async def one(ticker: str) -> float | None:
+        try:
+            data = await fetch_quote_and_history(ticker)
+        except Exception as exc:
+            logger.warning("Live price fetch failed for %s: %s", ticker, type(exc).__name__)
+            return None
+        price = data.get("price")
+        # NaN/inf would survive the Redis JSON round-trip and then fail response serialization.
+        return price if price is not None and math.isfinite(price) else None
+
+    results = await asyncio.gather(*(one(t) for t in ordered))
+    return dict(zip(ordered, results, strict=True))
+
+
+@router.get("/summary", response_model=PortfolioSummaryOut)
+async def get_summary(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> PortfolioSummaryOut:
+    holdings = db.query(Holding).filter_by(user_id=user.id).order_by(Holding.ticker).all()
+    watchlist = (
+        db.query(WatchlistItem).filter_by(user_id=user.id).order_by(WatchlistItem.ticker).all()
+    )
+    rows = [
+        HoldingSummaryOut(
+            ticker=h.ticker,
+            name=h.name,
+            asset_type=h.asset_type,
+            shares=float(h.shares),
+            cost_basis=float(h.cost_basis),
+            first_purchase_date=h.first_purchase_date,
+            sector=h.sector,
+            target_weight=float(h.target_weight) if h.target_weight is not None else None,
+        )
+        for h in holdings
+    ]
+    watch_rows = [
+        WatchlistSummaryOut(ticker=w.ticker, asset_type=w.asset_type, note=w.note)
+        for w in watchlist
+    ]
+    # Everything needed is copied out; release the pooled connection before awaiting quotes, which
+    # can take seconds (retries) during a market-data outage.
+    db.close()
+
+    open_rows = [r for r in rows if r.shares > 0]  # a fully sold holding stays a row, unpriced
+    prices = await _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows})
+
+    for w in watch_rows:
+        w.current_price = prices[w.ticker]
+
+    total_market_value = 0.0
+    total_cost_basis = 0.0
+    for r in open_rows:
+        price = prices[r.ticker]
+        if price is None:
+            continue
+        market_value = r.shares * price
+        cost = r.shares * r.cost_basis
+        r.current_price = price
+        r.market_value = market_value
+        r.unrealized_pl = market_value - cost
+        r.unrealized_pl_pct = (market_value - cost) / cost * 100 if cost > 0 else None
+        total_market_value += market_value
+        total_cost_basis += cost
+
+    if total_market_value > 0:
+        for r in open_rows:
+            if r.market_value is not None:
+                r.weight = r.market_value / total_market_value
+
+    total_pl = total_market_value - total_cost_basis
+    return PortfolioSummaryOut(
+        holdings=rows,
+        watchlist=watch_rows,
+        total_market_value=total_market_value,
+        total_cost_basis=total_cost_basis,
+        total_pl=total_pl,
+        total_pl_pct=total_pl / total_cost_basis * 100 if total_cost_basis > 0 else None,
+        unpriced_count=sum(1 for r in open_rows if r.current_price is None),
     )

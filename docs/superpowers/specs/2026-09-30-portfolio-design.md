@@ -46,7 +46,7 @@ this router). No new tables, no migration.
 
 Response:
 - `holdings`: for each holding, the stored `ticker`, `name`, `asset_type`, `shares`, `cost_basis`
-  (average cost per share), plus computed `current_price`, `market_value`, `unrealized_pl`,
+  (average cost per share), `first_purchase_date`, `sector` and `target_weight` (carried so an edit can round-trip them — `POST /portfolio/holdings` is a full replace and would otherwise wipe sector and target weight), plus computed `current_price`, `market_value`, `unrealized_pl`,
   `unrealized_pl_pct`, `weight` (its share of the priced total). All computed fields are `null` when
   that holding's quote fails.
 - `watchlist`: each item (`ticker`, `asset_type`, `note`) with computed `current_price`.

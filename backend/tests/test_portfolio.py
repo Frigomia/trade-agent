@@ -411,3 +411,151 @@ def test_identity_comes_from_the_token_not_a_default_user(client, db_session):
 
     assert response.status_code == 200
     assert [h["ticker"] for h in response.json()] == ["MSFT"]
+
+
+def _hold(client, ticker, shares, cost_basis):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": ticker,
+            "name": ticker,
+            "asset_type": "STOCK",
+            "shares": shares,
+            "cost_basis": cost_basis,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+
+def _summary(client, prices):
+    """GET /portfolio/summary with quotes faked from {ticker: price or an Exception}."""
+
+    async def fake_quote(ticker):
+        value = prices[ticker]
+        if isinstance(value, Exception):
+            raise value
+        return {"price": value, "closes": [value]}
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=fake_quote)
+    ) as mock:
+        response = client.get("/portfolio/summary")
+    return response, mock
+
+
+def test_summary_empty_portfolio(client):
+    response, mock = _summary(client, {})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "holdings": [],
+        "watchlist": [],
+        "total_market_value": 0,
+        "total_cost_basis": 0,
+        "total_pl": 0,
+        "total_pl_pct": None,
+        "unpriced_count": 0,
+    }
+    mock.assert_not_awaited()
+
+
+def test_summary_computes_value_pl_and_weights(client):
+    _hold(client, "AAPL", 10, 150.0)
+    _hold(client, "MSFT", 5, 400.0)
+
+    response, _ = _summary(client, {"AAPL": 200.0, "MSFT": 380.0})
+
+    body = response.json()
+    aapl, msft = body["holdings"]  # ordered by ticker
+    assert aapl["ticker"] == "AAPL"
+    assert aapl["first_purchase_date"] == "2024-01-01"
+    assert aapl["market_value"] == 2000.0
+    assert aapl["unrealized_pl"] == 500.0
+    assert aapl["unrealized_pl_pct"] == pytest.approx(500 / 1500 * 100)
+    assert aapl["weight"] == pytest.approx(2000 / 3900)
+    assert msft["unrealized_pl"] == -100.0
+    assert body["total_market_value"] == 3900.0
+    assert body["total_cost_basis"] == 3500.0
+    assert body["total_pl"] == 400.0
+    assert body["total_pl_pct"] == pytest.approx(400 / 3500 * 100)
+    assert body["unpriced_count"] == 0
+
+
+def test_summary_leaves_a_failed_quote_out_of_the_totals(client):
+    _hold(client, "AAPL", 10, 150.0)
+    _hold(client, "MSFT", 5, 400.0)
+
+    response, _ = _summary(client, {"AAPL": 200.0, "MSFT": RuntimeError("yfinance is down")})
+
+    body = response.json()
+    assert response.status_code == 200
+    msft = next(h for h in body["holdings"] if h["ticker"] == "MSFT")
+    assert msft["current_price"] is None
+    assert msft["market_value"] is None
+    assert msft["weight"] is None
+    assert body["unpriced_count"] == 1
+    assert body["total_market_value"] == 2000.0
+    assert body["total_cost_basis"] == 1500.0  # MSFT's cost is left out too: like with like
+
+
+def test_summary_treats_a_nan_price_as_unpriced_not_a_500(client):
+    _hold(client, "AAPL", 10, 150.0)
+
+    response, _ = _summary(client, {"AAPL": float("nan")})
+
+    assert response.status_code == 200
+    assert response.json()["unpriced_count"] == 1
+    assert response.json()["holdings"][0]["current_price"] is None
+
+
+def test_summary_fetches_each_ticker_once_and_prices_the_watchlist(client):
+    _hold(client, "AAPL", 10, 150.0)
+    client.post("/portfolio/watchlist", json={"ticker": "AAPL", "asset_type": "STOCK"})
+    client.post(
+        "/portfolio/watchlist", json={"ticker": "ASML", "asset_type": "STOCK", "note": "chips"}
+    )
+
+    response, mock = _summary(client, {"AAPL": 200.0, "ASML": 700.0})
+
+    assert mock.await_count == 2  # AAPL is held and watched, but fetched once
+    watch = {w["ticker"]: w for w in response.json()["watchlist"]}
+    assert watch["ASML"]["current_price"] == 700.0
+    assert watch["ASML"]["note"] == "chips"
+
+
+def test_summary_excludes_a_sold_out_holding_from_totals_and_never_prices_it(client):
+    _hold(client, "AAPL", 10, 150.0)
+    _hold(client, "OLD", 0, 10.0)
+
+    response, mock = _summary(client, {"AAPL": 200.0})
+
+    body = response.json()
+    old = next(h for h in body["holdings"] if h["ticker"] == "OLD")
+    assert old["current_price"] is None
+    assert body["unpriced_count"] == 0  # a closed position is not "unpriced"
+    assert body["total_market_value"] == 2000.0
+    mock.assert_awaited_once_with("AAPL")
+
+
+def test_summary_excludes_other_users_holdings(client, db_session):
+    db_session.add(
+        Holding(
+            user_id=OTHER_USER_ID,
+            ticker="ZZZZ",
+            name="Theirs",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    response, mock = _summary(client, {})
+
+    assert response.json()["holdings"] == []
+    mock.assert_not_awaited()
+
+
+def test_summary_requires_authentication(anon_client):
+    assert anon_client.get("/portfolio/summary").status_code == 401
