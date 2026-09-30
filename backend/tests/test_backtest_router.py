@@ -173,3 +173,89 @@ def test_backtest_results_only_include_the_token_users_rows(client, db_session):
     assert [r["ticker"] for r in client.get("/backtest/results").json()] == ["AAPL"]
     theirs = client.get("/backtest/results", headers=auth_headers(OTHER_USER_ID)).json()
     assert [r["ticker"] for r in theirs] == ["MSFT"]
+
+
+def test_export_includes_the_equity_curve(client, db_session):
+    row = _result(USER_ID)
+    row.equity_curve = {"strategy": [10000.0, 11000.0], "buy_and_hold": [10000.0, 10500.0]}
+    db_session.add(row)
+    db_session.commit()
+
+    exported = client.get("/me/export").json()["backtest_results"]
+    assert exported[0]["equity_curve"] == {
+        "strategy": [10000.0, 11000.0],
+        "buy_and_hold": [10000.0, 10500.0],
+    }
+
+
+CURVE = {"strategy": [10000.0, 11000.0], "buy_and_hold": [10000.0, 10500.0]}
+
+
+def test_get_result_returns_the_row_with_its_curve(client, db_session):
+    row = _result(USER_ID)
+    row.equity_curve = CURVE
+    db_session.add(row)
+    db_session.commit()
+    db_session.refresh(row)
+
+    response = client.get(f"/backtest/results/{row.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ticker"] == "AAPL"
+    assert body["equity_curve"] == CURVE
+    assert "hit_rate_by_signal" in body
+
+
+def test_get_result_for_an_older_row_has_a_null_curve(client, db_session):
+    row = _result(USER_ID)
+    db_session.add(row)
+    db_session.commit()
+    db_session.refresh(row)
+
+    response = client.get(f"/backtest/results/{row.id}")
+
+    assert response.status_code == 200
+    assert response.json()["equity_curve"] is None
+
+
+def test_export_works_for_an_older_row_with_a_null_curve(client, db_session):
+    db_session.add(_result(USER_ID))
+    db_session.commit()
+
+    response = client.get("/me/export")
+
+    assert response.status_code == 200
+    assert response.json()["backtest_results"][0]["equity_curve"] is None
+
+
+def test_get_result_of_another_user_is_404(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    row = _result(OTHER_USER_ID, "MSFT")
+    db_session.add(row)
+    db_session.commit()
+    db_session.refresh(row)
+
+    assert client.get(f"/backtest/results/{row.id}").status_code == 404
+    assert client.get("/backtest/results/999999").status_code == 404
+
+
+def test_get_result_requires_authentication(anon_client):
+    assert anon_client.get("/backtest/results/1").status_code == 401
+
+
+def test_list_results_is_newest_first_capped_at_20_and_has_no_curve(client, db_session):
+    rows = []
+    for n in range(22):
+        row = _result(USER_ID, f"T{n:02d}")
+        row.equity_curve = CURVE
+        rows.append(row)
+    db_session.add_all(rows)
+    db_session.commit()
+
+    body = client.get("/backtest/results").json()
+
+    assert len(body) == 20
+    assert body[0]["ticker"] == "T21"  # same created_at inside one transaction: id breaks the tie
+    assert body[-1]["ticker"] == "T02"
+    assert "equity_curve" not in body[0]

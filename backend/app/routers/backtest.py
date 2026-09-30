@@ -10,13 +10,14 @@ from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.backtest.jobs import create_job, get_job_status, run_job
 from app.models import BacktestResult
-from app.schemas import BacktestResultOut, Ticker
+from app.schemas import BacktestListItemOut, BacktestResultOut, Ticker
 
 router = APIRouter(prefix="/backtest", tags=["backtest"], dependencies=[Depends(get_current_user)])
 
 _track_background_task = make_task_tracker("backtest")
 
 MAX_BACKTEST_RANGE = timedelta(days=365 * 30)
+RESULTS_LIMIT = 20
 
 
 class BacktestRunIn(BaseModel):
@@ -55,7 +56,7 @@ async def get_run_status(
     return status
 
 
-@router.get("/results", response_model=list[BacktestResultOut])
+@router.get("/results", response_model=list[BacktestListItemOut])
 def list_results(
     ticker: str | None = None,
     user: CurrentUser = Depends(get_current_user),
@@ -64,4 +65,21 @@ def list_results(
     query = db.query(BacktestResult).filter_by(user_id=user.id)
     if ticker:
         query = query.filter_by(ticker=ticker)
-    return query.all()
+    # Newest first; id breaks ties between rows created in the same transaction.
+    return (
+        query.order_by(BacktestResult.created_at.desc(), BacktestResult.id.desc())
+        .limit(RESULTS_LIMIT)
+        .all()
+    )
+
+
+@router.get("/results/{result_id}", response_model=BacktestResultOut)
+def get_result(
+    result_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> BacktestResult:
+    row = db.query(BacktestResult).filter_by(id=result_id, user_id=user.id).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Backtest result not found")
+    return row

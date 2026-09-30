@@ -164,7 +164,9 @@ BacktestResult
   final_value, buy_and_hold_value (Numeric(18,2)),
   excess_return_pct (Numeric(8,4)),
   hit_rate_by_signal (JSON: {signal: {count, avg_forward_return_pct, hit_rate}}),
-  status ("DONE" -- only successful runs persist a row)
+  status ("DONE" -- only successful runs persist a row),
+  equity_curve (JSON, nullable: {"strategy": [...], "buy_and_hold": [...]}, at most 250 evenly
+  spaced points each incl. first and last day; NULL for runs made before the column existed)
 
 InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
@@ -251,7 +253,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/analysis/recommendations/{id}/reject` | — | |
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
-| GET | `/backtest/results?ticker=` | — | List persisted `BacktestResult` rows; filter by ticker |
+| GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
+| GET | `/backtest/results/{id}` | — | A single result including `equity_curve`; 404 if missing or not the caller's |
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar` |
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct` |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
