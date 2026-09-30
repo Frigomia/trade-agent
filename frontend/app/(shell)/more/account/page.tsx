@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { DataActions } from "@/components/account/DataActions";
@@ -26,6 +26,7 @@ export default function AccountPage() {
 
   function handleSignOut() {
     void run(async () => {
+      await mutate(() => true, undefined, { revalidate: false });
       await createClient().auth.signOut();
       router.push("/login");
     });

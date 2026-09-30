@@ -15,7 +15,7 @@ export function DataActions({ email }: { email: string }) {
   const { run, submitting, error } = useAction();
   const [confirming, setConfirming] = useState(false);
   const [typed, setTyped] = useState("");
-  const matches = typed.trim().toLowerCase() === email.toLowerCase();
+  const matches = email !== "" && typed.trim().toLowerCase() === email.toLowerCase();
 
   function handleExport() {
     void run(async () => downloadJson(`trade-agent-export-${todayIso()}.json`, await apiFetch("/me/export")));
@@ -25,7 +25,11 @@ export function DataActions({ email }: { email: string }) {
     void run(async () => {
       await apiFetch("/me/data", { method: "DELETE", body: JSON.stringify({ confirm: true }) });
       await mutate(() => true, undefined, { revalidate: false });
-      await createClient().auth.signOut();
+      try {
+        await createClient().auth.signOut();
+      } catch {
+        // data is already deleted; still end at login
+      }
       router.push("/login");
     });
   }

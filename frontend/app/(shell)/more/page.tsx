@@ -13,7 +13,7 @@ const ITEMS = [
 export default function MorePage() {
   return (
     <div>
-      <Typography variant="h5" sx={{ fontWeight: 650, mb: 1 }}>
+      <Typography variant="h5" component="h1" sx={{ fontWeight: 650, mb: 1 }}>
         More
       </Typography>
       <List>

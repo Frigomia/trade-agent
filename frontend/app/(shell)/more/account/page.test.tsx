@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SWRConfig } from "swr";
 
+const mutateMock = vi.fn();
+vi.mock("swr", async (orig) => ({ ...(await orig<typeof import("swr")>()), mutate: (...a: unknown[]) => mutateMock(...a) }));
 const apiFetch = vi.fn();
 vi.mock("@/lib/api/client", () => ({ apiFetch: (...a: unknown[]) => apiFetch(...a) }));
 const signOut = vi.fn();
@@ -25,6 +27,7 @@ describe("AccountPage", () => {
   beforeEach(() => {
     apiFetch.mockReset();
     signOut.mockReset();
+    mutateMock.mockReset();
     push.mockReset();
     apiFetch.mockImplementation(async (path: string) =>
       path === "/me"
@@ -51,6 +54,8 @@ describe("AccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign out/i }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/login"));
     expect(signOut).toHaveBeenCalled();
+    expect(mutateMock).toHaveBeenCalledWith(expect.any(Function), undefined, { revalidate: false });
+    expect(mutateMock.mock.invocationCallOrder[0]).toBeLessThan(signOut.mock.invocationCallOrder[0]);
   });
 
   it("shows an error when the account cannot load", async () => {

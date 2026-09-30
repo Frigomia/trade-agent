@@ -40,7 +40,7 @@ export default function TrackRecordPage() {
   return (
     <Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
+        <Typography variant="h5" component="h1" sx={{ fontWeight: 650 }}>
           Track record
         </Typography>
         <Box sx={{ flex: 1 }} />

@@ -60,6 +60,31 @@ describe("DataActions", () => {
     expect(confirmButton).toBeEnabled();
   });
 
+  it("keeps delete disabled when the account email is empty", () => {
+    render(<DataActions email="" />);
+    openAndType("");
+    expect(screen.getByRole("button", { name: /confirm delete my data/i })).toBeDisabled();
+  });
+
+  it("keeps delete disabled for near-miss emails", () => {
+    render(<DataActions email="me@example.com" />);
+    openAndType("me@example.co");
+    const confirmButton = screen.getByRole("button", { name: /confirm delete my data/i });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/type your email/i), { target: { value: "me@example.com." } });
+    expect(confirmButton).toBeDisabled();
+  });
+
+  it("still goes to login when sign-out fails after a successful delete", async () => {
+    apiFetch.mockResolvedValue(undefined);
+    signOut.mockRejectedValue(new Error("network"));
+    render(<DataActions email="me@example.com" />);
+    openAndType("me@example.com");
+    fireEvent.click(screen.getByRole("button", { name: /confirm delete my data/i }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/login"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("says what is and is not deleted", () => {
     render(<DataActions email="me@example.com" />);
     fireEvent.click(screen.getByRole("button", { name: /^delete my data$/i }));
