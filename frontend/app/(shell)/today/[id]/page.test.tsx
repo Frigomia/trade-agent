@@ -82,6 +82,18 @@ describe("RecommendationDetailPage", () => {
     expect(screen.getByText(/conflicts with the fundamentals reading/i)).toBeInTheDocument();
   });
 
+  it("says a newer analysis replaced a superseded recommendation, with no approve/dismiss", async () => {
+    apiFetch.mockResolvedValue(rec({ status: "SUPERSEDED" }));
+    renderFresh(<RecommendationDetailPage />);
+
+    await waitFor(() => expect(screen.getByText(/newer analysis replaced/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /back to today/i }));
+    expect(push).toHaveBeenCalledWith("/today");
+  });
+
   it("shows the reasoning list for a legacy row with no structured evidence", async () => {
     apiFetch.mockResolvedValue(rec({ fundamental_score: null, technical_signal: null }));
     renderFresh(<RecommendationDetailPage />);

@@ -86,9 +86,15 @@ async def context_agent(state: AnalysisState) -> dict[str, Any]:
 async def news_agent(state: AnalysisState) -> dict[str, Any]:
     if state["action"] is None or state["action"] == "HOLD":
         return {"ai_analysis": None}
-    ai_analysis = await news.run_news_agent(
-        state["ticker"], state["action"], state["reasoning"], state["context"]
-    )
+    # The web second opinion is optional colour on top of an already-computed recommendation, so a
+    # failure here (billing, rate limit, outage) must not discard the whole ticker's result.
+    try:
+        ai_analysis = await news.run_news_agent(
+            state["ticker"], state["action"], state["reasoning"], state["context"]
+        )
+    except Exception as exc:
+        logger.warning("Web second opinion failed for %s: %s", state["ticker"], type(exc).__name__)
+        ai_analysis = None
     return {"ai_analysis": ai_analysis}
 
 

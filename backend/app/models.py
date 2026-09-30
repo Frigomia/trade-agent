@@ -59,6 +59,8 @@ class Recommendation(Base):
     reasoning: Mapped[list[str]] = mapped_column(JSON)
     ai_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
     suggested_position_pct: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    # PENDING | APPROVED | REJECTED | SUPERSEDED (a newer run replaced an unreviewed one; exactly
+    # 10 characters, so it fits String(10))
     status: Mapped[str] = mapped_column(String(10), default="PENDING")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)

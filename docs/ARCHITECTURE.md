@@ -146,7 +146,7 @@ Recommendation
   fundamental_score (nullable -- fundamental node's score, persisted for the
       frontend evidence display),
   technical_signal (nullable str -- technical node's signal, persisted likewise),
-  suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"),
+  suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"|"SUPERSEDED"),
   reviewed_at,
   price_at_recommendation (Numeric(18,6), nullable -- quote price captured
       when the job created this row),
@@ -315,7 +315,7 @@ graph TD;
 | `technical_agent` | 50/200-day SMA trend, 14-day RSI, drawdown from 52w high — `analysis/technical.py` |
 | `synthesizer` | Combines both into one recommendation. **Fundamentals gate the decision; technicals only time entries within that gate** — never the reverse. Logic in `analysis/recommend.py` |
 | `context_agent` | Assembles qualitative context for the LLM's reasoning: investment preferences, similar past recommendations with outcomes, and relevant session memory from chat history. Calls `build_context()` — see §15.1 step 4c |
-| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Skipped if `ANTHROPIC_API_KEY` is unset — degrades gracefully to quant-only |
+| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Skipped if `ANTHROPIC_API_KEY` is unset — degrades gracefully to quant-only. Also degrades to quant-only (`ai_analysis` null, exception class logged) if the call fails (billing, rate limit, outage): the second opinion never discards an already-computed recommendation |
 
 Guardrails to build into every AI prompt (`agents/prompts.py`):
 not a licensed advisor, measured language only, treat quant signals as
@@ -333,7 +333,10 @@ command).
 
 ## 7. Human-in-the-loop approval workflow
 
-Every recommendation is written with `status="PENDING"`. The dashboard's
+Every recommendation is written with `status="PENDING"`. When a new analysis run writes a
+recommendation for a ticker, that ticker's older `PENDING` (unreviewed) ones are marked
+`SUPERSEDED` — kept for history, never shown as awaiting review, and excluded from
+`?status=PENDING`; reviewed (`APPROVED`/`REJECTED`) rows are untouched. The dashboard's
 "Approve"/"Dismiss" buttons call the approve/reject endpoints, which only
 flip the status flag. **Nothing in this system calls a broker API or
 executes a trade.** The loop closes when the human, having approved a

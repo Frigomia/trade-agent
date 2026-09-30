@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Box, Typography, Alert } from "@mui/material";
+import { Box, Typography, Alert, Button } from "@mui/material";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, PriceBlock } from "@/components/recommendations/RecommendationCard";
@@ -43,6 +43,19 @@ export default function RecommendationDetailPage() {
 
   if (!recommendation) {
     return null;
+  }
+
+  if (recommendation.status === "SUPERSEDED") {
+    return (
+      <Box sx={{ maxWidth: 480, mt: 2 }}>
+        <Alert severity="info">
+          A newer analysis replaced this recommendation for {recommendation.ticker}.
+        </Alert>
+        <Button variant="outlined" fullWidth sx={{ mt: 2 }} onClick={() => router.push("/today")}>
+          Back to Today
+        </Button>
+      </Box>
+    );
   }
 
   if (recommendation.status !== "PENDING") {
