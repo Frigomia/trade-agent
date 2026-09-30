@@ -243,7 +243,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker |
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
-| POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot` |
+| POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable) |
@@ -257,7 +257,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
 | GET | `/backtest/results/{id}` | — | A single result including `equity_curve`; 404 if missing or not the caller's |
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar`. Rate limited: 5/min per user |
-| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened) |
+| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
@@ -486,6 +486,51 @@ Postgres (via Docker Compose, `pgvector/pgvector:pg16`) is the local
 default — same dialect and models as production, started with
 `docker compose up -d`.
 
+### Scheduled jobs
+
+`backend/app/scheduled.py` is a one-shot command, not a long-running process:
+`python -m app.scheduled <command>` runs and exits.
+
+| Command | What it does |
+|---|---|
+| `daily` | Snapshots, then outcome evaluation, for every active user |
+| `snapshots` | Portfolio snapshots only |
+| `outcomes` | Recommendation outcome evaluation only |
+
+- **Runtime role:** same `DATABASE_URL` as the API; each user is processed in
+  its own `scoped_session`, so RLS applies exactly as for a request.
+- **Snapshots:** a user with no open holding, or with a snapshot already dated
+  today (UTC), is skipped, so the page-open snapshot hook and the job coexist.
+- **Outcomes:** per user, up to 20 batches of 50 due recommendations per run;
+  anything left over is picked up by the next run.
+- **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
+  expiry. If it is held, the run logs it and exits 0 without doing any work.
+- **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
+  user failed, or Redis unreachable; `2` unknown command (argparse). One
+  user's failure never stops the others.
+- **Cadence:** weekdays around 23:00 UTC, after the EU and US closes.
+
+Triggers (copy-paste):
+
+```bash
+# cron (weekdays 23:00, server in UTC)
+0 23 * * 1-5 cd /path/to/backend && uv run python -m app.scheduled daily
+```
+
+Windows Task Scheduler: action `uv`, arguments `run python -m app.scheduled daily`,
+start in the `backend` folder, trigger weekdays at 23:00 UTC converted to local
+time.
+
+Fly.io (§13), guidance for later since nothing is deployed yet: a scheduled
+machine on the same image.
+
+```bash
+fly machine run <image> --schedule daily -- python -m app.scheduled daily
+```
+
+Fly's built-in schedules are hourly, daily, weekly or monthly. Because the job
+is idempotent, a daily run at whatever hour the machine was created is fine.
+
 ---
 
 ## 13. Deployment plan
@@ -493,7 +538,7 @@ default — same dialect and models as production, started with
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint |
+| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint. A scheduled machine (or any cron) runs `python -m app.scheduled daily` (see §12) |
 | Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
@@ -682,10 +727,11 @@ just believed done.
       periodic export
 
 **Operational**
-- [ ] Scheduling for `/analysis/run` — still manual (`POST /analysis/run`),
-      matching this project's deliberate no-scheduler style everywhere
-      else (`/backtest/run`, `/memory/embed`, `/memory/evaluate-outcomes`
-      are all manual too); revisit only if that style changes
+- [x] Snapshots and outcomes run as a scheduled one-shot command
+      (`app/scheduled.py`, see §12)
+- [ ] `/analysis/run`, `/backtest/run` and `/memory/embed` stay manual by
+      design (analysis costs Anthropic money: needs the cost/budget alert
+      below first)
 - [ ] Notifications — nothing currently surfaces a new recommendation
       outside the dashboard (no dashboard exists yet either)
 - [ ] Cost/budget alert in the Anthropic console before anything runs
