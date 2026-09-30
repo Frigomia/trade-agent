@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -89,15 +90,15 @@ async def get_run_status(
 async def _quote_for_ticker(ticker: str) -> tuple[float, float | None] | None:
     try:
         data = await fetch_quote_and_history(ticker)
-    except Exception:
-        logger.exception("Live quote fetch failed for %s", ticker)
+    except Exception as exc:
+        logger.warning("Live quote fetch failed for %s: %s", ticker, type(exc).__name__)
         return None
     price = data.get("price")
-    if price is None:
+    if price is None or not math.isfinite(price):
         return None
     closes = data.get("closes") or []
     change_pct: float | None = None
-    if len(closes) >= 2 and closes[-2]:
+    if len(closes) >= 2 and math.isfinite(closes[-1]) and math.isfinite(closes[-2]) and closes[-2]:
         change_pct = (closes[-1] - closes[-2]) / closes[-2] * 100
     return price, change_pct
 

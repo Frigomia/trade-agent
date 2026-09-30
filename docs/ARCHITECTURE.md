@@ -143,6 +143,9 @@ Recommendation
   id, user_id, created_at, ticker, asset_type, action
       ("BUY"|"ADD"|"HOLD"|"TRIM"|"SELL"|"WATCH"),
   reasoning (JSON-encoded list[str]), ai_analysis (nullable text),
+  fundamental_score (nullable -- fundamental node's score, persisted for the
+      frontend evidence display),
+  technical_signal (nullable str -- technical node's signal, persisted likewise),
   suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"),
   reviewed_at,
   price_at_recommendation (Numeric(18,6), nullable -- quote price captured
@@ -241,7 +244,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable) |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
-| GET | `/analysis/recommendations?status=` | — | Filter by status |
+| GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500 |
+| GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
 | POST | `/analysis/recommendations/{id}/reject` | — | |
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |

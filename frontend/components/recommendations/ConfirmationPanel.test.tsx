@@ -57,7 +57,7 @@ describe("ConfirmationPanel", () => {
     expect(screen.getByText(/decision recorded/i)).toBeInTheDocument();
     expect(screen.getByText(/NVDA/)).toBeInTheDocument();
     expect(screen.getByText(/TRIM/)).toBeInTheDocument();
-    expect(screen.getByText(/nothing was sold/i)).toBeInTheDocument();
+    expect(screen.getByText(/no order was placed/i)).toBeInTheDocument();
   });
 
   it("calls onBackToToday when that button is clicked", () => {

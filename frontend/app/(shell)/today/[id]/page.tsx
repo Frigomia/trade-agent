@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Box, Typography, Button, Alert, Chip } from "@mui/material";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { ACTION_COLOR, PriceBlock } from "@/components/recommendations/RecommendationCard";
 import { EvidencePanel } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
@@ -69,7 +70,17 @@ export default function RecommendationDetailPage() {
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {current.ticker}
         </Typography>
-        <Chip label={current.action} size="small" />
+        <Chip
+          label={current.action}
+          size="small"
+          sx={{
+            bgcolor: ACTION_COLOR[current.action].bg,
+            color: ACTION_COLOR[current.action].fg,
+            fontWeight: 700,
+          }}
+        />
+        <Box sx={{ flex: 1 }} />
+        <PriceBlock recommendation={current} />
       </Box>
       <EvidencePanel recommendation={current} />
       <Box sx={{ mt: 1.5 }}>

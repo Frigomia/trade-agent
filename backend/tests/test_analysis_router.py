@@ -363,6 +363,31 @@ def test_recommendations_quote_failure_degrades_to_null_not_500(client, db_sessi
     assert body["price_change_pct"] is None
 
 
+def test_recommendations_nan_quote_degrades_to_null_not_500(client, db_session):
+    db_session.add(
+        Recommendation(
+            user_id=USER_ID,
+            ticker="AAPL",
+            asset_type="STOCK",
+            action="BUY",
+            reasoning=["x"],
+            status="PENDING",
+        )
+    )
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": float("nan"), "closes": [150.0, float("nan")]}),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["current_price"] is None
+    assert body["price_change_pct"] is None
+
+
 def test_recommendations_quote_augmentation_skipped_for_non_pending(client, db_session):
     rec = Recommendation(
         user_id=USER_ID,

@@ -45,6 +45,11 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 }
 
 describe("RecommendationCard", () => {
+  it("links the ticker to the detail page", () => {
+    render(<RecommendationCard recommendation={rec()} onDecided={vi.fn()} />);
+    expect(screen.getByRole("link", { name: /AAPL/i })).toHaveAttribute("href", "/today/1");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

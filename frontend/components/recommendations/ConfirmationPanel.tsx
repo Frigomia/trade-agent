@@ -75,7 +75,7 @@ export function ConfirmationPanel({
         >
           <AlertTriangle size={17} color="var(--warn)" style={{ flexShrink: 0 }} />
           <Typography sx={{ fontSize: 13 }}>
-            <b>Nothing was sold.</b> trade-agent never trades. If you decide to act, do it in your
+            <b>No order was placed.</b> trade-agent never trades. If you decide to act, do it in your
             broker app.
           </Typography>
         </Box>
