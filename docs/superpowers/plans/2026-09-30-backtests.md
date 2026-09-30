@@ -4,9 +4,9 @@
 
 **Goal:** Store a downsampled equity curve on each backtest result and build the Backtests screen (run form, polling, result with two-line chart and per-signal table, recent runs).
 
-**Architecture:** The pure engine records per-day strategy and buy-and-hold values and downsamples them; a nullable JSON column stores them; a by-id route and a lean, newest-first list serve them. The frontend keeps `{ jobId, selectedId }` state, polls the job with SWR, and derives everything else; the chart is hand-rolled SVG.
+**Architecture:** The pure engine records per-day strategy and buy-and-hold values and downsamples them; a nullable JSON column stores them; a by-id route and a lean, newest-first list serve them. The frontend keeps `{ jobId, selectedId }` state, polls the job with SWR, and derives everything else; the chart uses `d3-scale` and `d3-shape` for the maths while React renders the SVG.
 
-**Tech Stack:** FastAPI, SQLAlchemy 2, Alembic (autogenerate only), Pydantic v2, pytest against real Postgres; Next.js 16, TypeScript strict, MUI 9 (`slotProps`), SWR, Vitest + React Testing Library.
+**Tech Stack:** FastAPI, SQLAlchemy 2, Alembic (autogenerate only), Pydantic v2, pytest against real Postgres; Next.js 16, TypeScript strict, MUI 9 (`slotProps`), SWR, `d3-scale` + `d3-shape`, Vitest + React Testing Library.
 
 **Spec:** `docs/superpowers/specs/2026-09-30-backtests-design.md`
 
@@ -15,7 +15,7 @@
 - The system never places a trade. The screen simulates on past prices only, offers no Buy/Sell, and says nothing is sent to a broker.
 - Backend: thin routers, Pydantic v2 idioms (`model_validate`), every function typed, no `print`. Migrations only through `uv run alembic revision --autogenerate` (never hand-written). Tests hit real Postgres (`docker compose up -d` from the repo root); never call real yfinance/Anthropic in tests.
 - Existing engine numbers (`final_value`, `buy_and_hold_value`, `excess_return_pct`, `hit_rate_by_signal`) must not change; the existing engine, job and router tests stay green. `BacktestMetrics.equity_curve` therefore defaults to `None` so existing `BacktestMetrics(...)` constructions keep working.
-- Frontend: named exports (page files `export default`), all calls through `apiFetch` from `@/lib/api/client`, SWR for reads, `useAction` (`@/lib/useAction`) for submits, no `useEffect` for anything derivable, MUI 9 `slotProps` (never `SelectProps`/`InputLabelProps`), no chart library.
+- Frontend: named exports (page files `export default`), all calls through `apiFetch` from `@/lib/api/client`, SWR for reads, `useAction` (`@/lib/useAction`) for submits, no `useEffect` for anything derivable, MUI 9 `slotProps` (never `SelectProps`/`InputLabelProps`). Chart maths uses only `d3-scale` and `d3-shape` (individual modules, no `d3` umbrella, no `d3-selection`): React renders every SVG element and d3 never selects or mutates the DOM. No other chart library.
 - No currency symbol; `formatAmount`/`formatPct` from `@/lib/format`. Colour is never the only carrier of meaning (direct labels, dash styles, signs, words). No exclamation marks or urgency wording.
 - `excess_return_pct`, `avg_forward_return_pct` and `hit_rate` are **fractions** (0.05 = 5%); multiply by 100 for display.
 - Starting value is 10,000 (`STARTING_CAPITAL`). Backend range limit is `end - start <= 365 * 30 = 10,950 days`, `start <= end`. Ticker rule: `^[A-Za-z0-9.\-^]{1,20}$`, uppercased.
@@ -24,11 +24,11 @@
 
 ## Review Focus
 
-- A result row created before this change (null `equity_curve`) still loads and shows numbers and table, with the chart hidden (T3, T6).
+- A result row created before this change (null `equity_curve`) still loads and shows numbers and table, with the chart hidden (T3, T7).
 - Another user's result id returns 404, never their data (T3).
-- A flat curve (all values equal) or a 1-point curve draws no NaN coordinates and no broken chart (T4, T5).
-- A `FAILED` job, an expired job (404) and an empty date range (no trading days, engine crashes → `FAILED`) show the calm message and leave the form usable for a retry (T8).
-- Range boundary: exactly 10,950 days is accepted and 10,951 rejected; From equal To is allowed; a lowercase ticker is sent uppercased (T4, T7).
+- A flat curve (all values equal) or a 1-point curve draws no NaN coordinates and no broken chart (T5, T6).
+- A `FAILED` job, an expired job (404) and an empty date range (no trading days, engine crashes → `FAILED`) show the calm message and leave the form usable for a retry (T9).
+- Range boundary: exactly 10,950 days is accepted and 10,951 rejected; From equal To is allowed; a lowercase ticker is sent uppercased (T4, T8).
 
 ---
 
@@ -358,7 +358,6 @@ git commit -m "feat: backtest result by id and a newest-first lean list"
   export function defaultRange(now: Date): { start: string; end: string }   // end = today UTC, start = same day 3 years earlier
   export function validateRun(input: RunInput): string | null               // first problem, or null
   export function excessLabel(fraction: number): string
-  export function toChartPoints(curve: EquityCurve): { strategy: string; buyAndHold: string } | null
   export interface SignalRow { key: string; label: string; count: number; avgMovePct: number; risePct: number; small: boolean }
   export function signalRows(stats: Record<string, SignalStats>): SignalRow[]
   ```
@@ -367,14 +366,13 @@ Rules:
 - `validateRun` messages, in this check order: ticker (trimmed) not matching `^[A-Za-z0-9.\-^]{1,20}$` → `"Enter a ticker: letters, digits, . - or ^, up to 20 characters."`; empty start or end → `"Choose a start and an end date."`; start after end → `"The start date must not be after the end date."`; `(Date.parse(end) - Date.parse(start)) / 86_400_000 > MAX_RANGE_DAYS` → `"The range can be at most 30 years."`. From equal to To is valid; exactly 10,950 days is valid.
 - `defaultRange(now)`: `end = now.toISOString().slice(0, 10)`; `start` = a copy of `now` with `setUTCFullYear(getUTCFullYear() - 3)`, same format.
 - `excessLabel(f)`: `pct = f * 100`; if `Math.abs(pct) < 0.05` → `"Level with buy-and-hold"`; else `` `${pct > 0 ? "Ahead of" : "Behind"} buy-and-hold by ${formatPct(pct)}` ``.
-- `toChartPoints(curve)`: `null` when either list has fewer than 2 points. Otherwise both lines share one y-range (min and max across both lists; `span = max - min || 1`), points are `"x,y"` strings joined by spaces with `x = i / (n - 1) * 100` (using each list's own `n`) and `y = 40 - ((v - min) / span) * 36` (same box as `PortfolioChart`: viewBox `0 0 100 44`). A flat curve must give finite numbers.
 - `signalRows`: labels `OVERSOLD → "Oversold"`, `STRONG_UPTREND → "Strong uptrend"`, `WEAK_DOWNTREND → "Weak downtrend"`, `NEUTRAL → "Neutral"`, unknown keys fall back to the raw key; `count` is `Math.round(stats.count)`; `avgMovePct = avg_forward_return_pct * 100`; `risePct = hit_rate * 100`; `small = count < 5`; sorted by `count` descending, ties by label.
 
 - [ ] **Step 1: Write the failing tests** — `frontend/lib/backtest.test.ts`
 
 ```ts
 import { describe, it, expect } from "vitest";
-import { defaultRange, excessLabel, signalRows, toChartPoints, validateRun } from "./backtest";
+import { defaultRange, excessLabel, signalRows, validateRun } from "./backtest";
 
 const OK = { ticker: "AAPL", start: "2023-01-01", end: "2024-01-01" };
 
@@ -420,25 +418,6 @@ describe("excessLabel", () => {
   });
 });
 
-describe("toChartPoints", () => {
-  it("returns null with fewer than two points", () => {
-    expect(toChartPoints({ strategy: [1], buy_and_hold: [1] })).toBeNull();
-    expect(toChartPoints({ strategy: [], buy_and_hold: [] })).toBeNull();
-  });
-
-  it("draws both lines on one shared scale", () => {
-    const pts = toChartPoints({ strategy: [10000, 12000], buy_and_hold: [10000, 11000] })!;
-    expect(pts.strategy).toBe("0,40 100,4");
-    expect(pts.buyAndHold).toBe("0,40 100,22");
-  });
-
-  it("never emits NaN for a flat curve", () => {
-    const pts = toChartPoints({ strategy: [10000, 10000, 10000], buy_and_hold: [10000, 10000, 10000] })!;
-    expect(pts.strategy).not.toMatch(/NaN|Infinity/);
-    expect(pts.buyAndHold).not.toMatch(/NaN|Infinity/);
-  });
-});
-
 describe("signalRows", () => {
   it("converts fractions to percentages, labels signals, sorts by count and flags small samples", () => {
     const rows = signalRows({
@@ -475,61 +454,231 @@ git commit -m "feat: backtest types and pure helpers"
 
 ---
 
-### Task 5: BacktestChart component
+### Task 5: Chart dependencies and geometry
+
+**Files:**
+- Modify: `frontend/package.json`, `frontend/package-lock.json` (via npm)
+- Create: `frontend/lib/backtestChart.ts`
+- Test: `frontend/lib/backtestChart.test.ts`
+
+**Interfaces:**
+- Consumes: `EquityCurve` from `@/lib/backtest` (Task 4).
+- Produces:
+  ```ts
+  export const CHART_WIDTH = 360;
+  export const CHART_HEIGHT = 200;
+  export const CHART_MARGIN = { top: 10, right: 12, bottom: 12, left: 52 };
+  export interface ChartGeometry {
+    count: number;                                   // points per line (the shorter of the two lists)
+    strategyPath: string;                            // SVG path "d" string
+    buyAndHoldPath: string;
+    yTicks: { value: number; y: number }[];          // gridline / label positions, y in viewBox units
+    xAt: (index: number) => number;
+    yAt: (value: number) => number;
+    indexAtX: (x: number) => number;                 // nearest point index for an x in viewBox units, clamped to 0..count-1
+  }
+  export function buildChart(curve: EquityCurve): ChartGeometry | null   // null when count < 2
+  export function formatTick(value: number): string                      // "10,000" (thousands separators, no decimals)
+  ```
+
+Design (d3 does the maths only; React renders the SVG; never let d3 select or mutate the DOM):
+- Install only the modules needed: `npm install d3-scale d3-shape` and `npm install -D @types/d3-scale @types/d3-shape` (in `frontend/`). No `d3` umbrella package, no `d3-selection`.
+- `count = Math.min(strategy.length, buy_and_hold.length)`; slice both lists to `count`; return `null` when `count < 2`.
+- `x = scaleLinear().domain([0, count - 1]).range([CHART_MARGIN.left, CHART_WIDTH - CHART_MARGIN.right])`.
+- `y = scaleLinear().domain([min, max]).nice().range([CHART_HEIGHT - CHART_MARGIN.bottom, CHART_MARGIN.top])` where `min`/`max` span **both** lists (one shared scale). If `min === max` pad the domain first (by 1% of the value, or by 1 when the value is 0) so ticks and positions stay finite.
+- Paths: `line<number>().x((_, i) => x(i)).y((d) => y(d))`; its call returns `string | null`, use `?? ""`.
+- `yTicks = y.ticks(4).map((value) => ({ value, y: y(value) }))`.
+- `indexAtX = (px) => Math.min(count - 1, Math.max(0, Math.round(x.invert(px))))`.
+- Hover needs no `d3-array`: the points are evenly spaced, so the nearest index comes straight from the inverted scale.
+
+- [ ] **Step 1: Install the dependencies** (in `frontend/`)
+
+```bash
+npm install d3-scale d3-shape
+npm install -D @types/d3-scale @types/d3-shape
+```
+Confirm `package.json` lists exactly those four additions and no other package changed.
+
+- [ ] **Step 2: Write the failing tests** — `frontend/lib/backtestChart.test.ts`
+
+```ts
+import { describe, it, expect } from "vitest";
+import { buildChart, CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH, formatTick } from "./backtestChart";
+
+describe("buildChart", () => {
+  it("returns null with fewer than two points", () => {
+    expect(buildChart({ strategy: [10000], buy_and_hold: [10000] })).toBeNull();
+    expect(buildChart({ strategy: [], buy_and_hold: [] })).toBeNull();
+  });
+
+  it("puts both lines on one shared scale with higher values higher on screen", () => {
+    const g = buildChart({ strategy: [10000, 12000], buy_and_hold: [10000, 11000] })!;
+    expect(g.count).toBe(2);
+    expect(g.yAt(12000)).toBeLessThan(g.yAt(11000));
+    expect(g.yAt(11000)).toBeLessThan(g.yAt(10000));
+    expect(g.xAt(0)).toBe(CHART_MARGIN.left);
+    expect(g.xAt(1)).toBe(CHART_WIDTH - CHART_MARGIN.right);
+    expect(g.strategyPath).toMatch(/^M/);
+    expect(g.buyAndHoldPath).toMatch(/^M/);
+  });
+
+  it("gives tick positions inside the drawing area", () => {
+    const g = buildChart({ strategy: [10000, 12000], buy_and_hold: [10000, 11000] })!;
+    expect(g.yTicks.length).toBeGreaterThanOrEqual(2);
+    for (const tick of g.yTicks) {
+      expect(tick.y).toBeGreaterThanOrEqual(CHART_MARGIN.top);
+      expect(tick.y).toBeLessThanOrEqual(CHART_HEIGHT - CHART_MARGIN.bottom);
+    }
+  });
+
+  it("never emits NaN or Infinity for a flat curve", () => {
+    const g = buildChart({ strategy: [10000, 10000, 10000], buy_and_hold: [10000, 10000, 10000] })!;
+    expect(g.strategyPath).not.toMatch(/NaN|Infinity/);
+    expect(g.buyAndHoldPath).not.toMatch(/NaN|Infinity/);
+    expect(Number.isFinite(g.yAt(10000))).toBe(true);
+    for (const tick of g.yTicks) expect(Number.isFinite(tick.y)).toBe(true);
+  });
+
+  it("maps an x position to the nearest point and clamps at the ends", () => {
+    const g = buildChart({
+      strategy: [1, 2, 3, 4, 5],
+      buy_and_hold: [1, 2, 3, 4, 5],
+    })!;
+    expect(g.indexAtX(g.xAt(2))).toBe(2);
+    expect(g.indexAtX(g.xAt(3) - 1)).toBe(3);
+    expect(g.indexAtX(-50)).toBe(0);
+    expect(g.indexAtX(9999)).toBe(4);
+  });
+
+  it("uses the shorter list when lengths differ", () => {
+    const g = buildChart({ strategy: [1, 2, 3], buy_and_hold: [1, 2] })!;
+    expect(g.count).toBe(2);
+  });
+});
+
+describe("formatTick", () => {
+  it("uses thousands separators and no decimals", () => {
+    expect(formatTick(10000)).toBe("10,000");
+    expect(formatTick(10250.6)).toBe("10,251");
+  });
+});
+```
+
+- [ ] **Step 3: Run to verify failure** — `npx vitest run lib/backtestChart.test.ts`. Expected: FAIL (module missing).
+
+- [ ] **Step 4: Implement** `frontend/lib/backtestChart.ts` per Design (`formatTick` via `value.toLocaleString("en-US", { maximumFractionDigits: 0 })`).
+
+- [ ] **Step 5: Run to verify pass** — `npx vitest run lib/backtestChart.test.ts && npx tsc --noEmit && npm run lint`. Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add frontend/package.json frontend/package-lock.json frontend/lib/backtestChart.ts frontend/lib/backtestChart.test.ts
+git commit -m "feat: backtest chart geometry with d3-scale and d3-shape"
+```
+
+---
+
+### Task 6: BacktestChart component (axes, legend, hover)
 
 **Files:**
 - Create: `frontend/components/backtests/BacktestChart.tsx`
 - Test: `frontend/components/backtests/BacktestChart.test.tsx`
 
 **Interfaces:**
-- Consumes: `EquityCurve`, `toChartPoints` (Task 4); `formatAmount` from `@/lib/format`.
-- Produces: `export function BacktestChart(props: { curve: EquityCurve; startDate: string; endDate: string }): JSX.Element | null` — returns `null` when `toChartPoints` is `null`.
+- Consumes: `EquityCurve` (Task 4); `buildChart`, `formatTick`, `CHART_WIDTH`, `CHART_HEIGHT`, `CHART_MARGIN` (Task 5); `formatAmount` from `@/lib/format`.
+- Produces: `export function BacktestChart(props: { curve: EquityCurve; startDate: string; endDate: string }): JSX.Element | null` — `null` when `buildChart` is `null`.
 
-Rendering: an `svg` with `role="img"`, `aria-label="Strategy value against buy-and-hold over the tested period"`, `viewBox="0 0 100 44"`, `preserveAspectRatio="none"`, width 100%, height 140. Two `polyline`s, both `fill="none"`, `strokeWidth={1.5}`, `vectorEffect="non-scaling-stroke"`: strategy solid `stroke="var(--accent)"`; buy-and-hold `stroke="var(--muted)"` with `strokeDasharray="3 2"`. Below the svg: the start and end dates (two spans, `startDate` left, `endDate` right, with the note "Trading days, evenly spaced"), and a text legend (the chart's text alternative): `Strategy (solid line): {formatAmount(first)} to {formatAmount(last)}` and `Buy-and-hold (dashed line): {formatAmount(first)} to {formatAmount(last)}` using each list's first and last values.
+Rendering (React renders every element; d3 only supplied the numbers):
+- One `<svg>` with `role="img"`, `aria-label="Strategy value against buy-and-hold over the tested period"`, `viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}`, `tabIndex={0}`, `style={{ width: "100%", maxWidth: 560, height: "auto", display: "block" }}` (no `preserveAspectRatio="none"`, so text is not stretched). If a jsx-a11y lint rule objects to `tabIndex` on `role="img"`, add a one-line `eslint-disable-next-line` with the reason (the chart is keyboard-operable on purpose).
+- Gridlines: for each `yTicks` entry a `<line>` from `CHART_MARGIN.left` to `CHART_WIDTH - CHART_MARGIN.right` (`stroke="var(--border)"`, `strokeWidth={0.5}`) and a `<text>` at `x = CHART_MARGIN.left - 6`, `textAnchor="end"`, `fontSize={10}`, `fill="var(--muted)"`, `dominantBaseline="middle"`, content `formatTick(value)`.
+- Series paths (`fill="none"`, `strokeWidth={1.5}`): strategy solid, `stroke="var(--accent)"`; buy-and-hold `stroke="var(--muted)"` and `strokeDasharray="4 3"`.
+- Hover/keyboard state: `const [hover, setHover] = useState<number | null>(null)`.
+  - `onMouseMove`: `const rect = e.currentTarget.getBoundingClientRect(); setHover(geometry.indexAtX(((e.clientX - rect.left) / rect.width) * CHART_WIDTH))`; `onMouseLeave` and `onBlur` set `null`.
+  - `onKeyDown`: `ArrowRight` moves to the next point (from `null`, selects the first point); `ArrowLeft` moves to the previous (from `null`, selects the last); `Home` selects the first, `End` the last; `Escape` clears; all clamped to `0..count-1`; call `preventDefault` for the keys it handles.
+  - When `hover !== null` draw a vertical `<line>` at `xAt(hover)` (`stroke="var(--muted)"`, `strokeWidth={0.5}`) and two `<circle r={3}>` at the strategy and buy-and-hold values for that point.
+- Below the svg (MUI `Box`/`Typography`): a row with `startDate` on the left and `endDate` on the right plus the note `Points are evenly spaced trading days.`; then the text legend (the chart's text alternative): `Strategy (solid line): {formatAmount(first)} to {formatAmount(last)}` and `Buy-and-hold (dashed line): {formatAmount(first)} to {formatAmount(last)}` using each list's first and last value; then a readout line with `aria-live="polite"`: when `hover !== null`, `Point {hover + 1} of {count}: Strategy {formatAmount(s)}, Buy-and-hold {formatAmount(b)}`; otherwise `Hover, or use the arrow keys, to read a point.` The stored curve is downsampled, which is why the wording is "point", not "day".
 
 - [ ] **Step 1: Write the failing tests**
 
 ```tsx
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { BacktestChart } from "./BacktestChart";
 
-const CURVE = { strategy: [10000, 11234.5], buy_and_hold: [10000, 10500] };
+const CURVE = { strategy: [10000, 10500, 11234.5], buy_and_hold: [10000, 10200, 10500] };
+const NAME = /strategy value against buy-and-hold/i;
+
+function chart(curve = CURVE) {
+  return render(<BacktestChart curve={curve} startDate="2023-01-02" endDate="2026-09-30" />);
+}
+
+function fakeRect(el: Element) {
+  vi.spyOn(el, "getBoundingClientRect").mockReturnValue({
+    left: 0, top: 0, right: 360, bottom: 200, width: 360, height: 200, x: 0, y: 0, toJSON: () => ({}),
+  } as DOMRect);
+}
 
 describe("BacktestChart", () => {
-  it("draws a solid and a dashed line with a text legend and the date range", () => {
-    const { container } = render(<BacktestChart curve={CURVE} startDate="2023-01-02" endDate="2026-09-30" />);
-    const lines = container.querySelectorAll("polyline");
-    expect(lines).toHaveLength(2);
-    const dashed = [...lines].filter((l) => l.getAttribute("stroke-dasharray"));
-    expect(dashed).toHaveLength(1);
-    expect(screen.getByRole("img", { name: /strategy value against buy-and-hold/i })).toBeInTheDocument();
+  it("draws a solid and a dashed line, axis labels, a text legend and the dates", () => {
+    const { container } = chart();
+    const series = container.querySelectorAll('path[fill="none"]');
+    expect(series).toHaveLength(2);
+    expect([...series].filter((p) => p.getAttribute("stroke-dasharray"))).toHaveLength(1);
+    expect(screen.getAllByText(/^\d{2},\d{3}$/).length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Strategy (solid line): 10,000.00 to 11,234.50")).toBeInTheDocument();
     expect(screen.getByText("Buy-and-hold (dashed line): 10,000.00 to 10,500.00")).toBeInTheDocument();
     expect(screen.getByText("2023-01-02")).toBeInTheDocument();
     expect(screen.getByText("2026-09-30")).toBeInTheDocument();
+    expect(screen.getByText(/hover, or use the arrow keys/i)).toBeInTheDocument();
   });
 
-  it("renders nothing for a curve with fewer than two points", () => {
-    const { container } = render(
-      <BacktestChart curve={{ strategy: [10000], buy_and_hold: [10000] }} startDate="2024-01-01" endDate="2024-01-01" />,
-    );
+  it("renders nothing for fewer than two points", () => {
+    const { container } = chart({ strategy: [10000], buy_and_hold: [10000] });
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("does not produce NaN coordinates for a flat curve", () => {
-    const flat = { strategy: [10000, 10000, 10000], buy_and_hold: [10000, 10000, 10000] };
-    const { container } = render(<BacktestChart curve={flat} startDate="2024-01-01" endDate="2024-02-01" />);
-    for (const line of container.querySelectorAll("polyline")) {
-      expect(line.getAttribute("points")).not.toMatch(/NaN|Infinity/);
+  it("does not produce NaN in any path for a flat curve", () => {
+    const { container } = chart({ strategy: [10000, 10000, 10000], buy_and_hold: [10000, 10000, 10000] });
+    for (const path of container.querySelectorAll("path")) {
+      expect(path.getAttribute("d") ?? "").not.toMatch(/NaN|Infinity/);
     }
+  });
+
+  it("reads both values for the point under the mouse and clears on leave", () => {
+    chart();
+    const svg = screen.getByRole("img", { name: NAME });
+    fakeRect(svg);
+    fireEvent.mouseMove(svg, { clientX: 348 }); // right edge of the plot: the last point
+    expect(screen.getByText("Point 3 of 3: Strategy 11,234.50, Buy-and-hold 10,500.00")).toBeInTheDocument();
+    fireEvent.mouseMove(svg, { clientX: 52 }); // left edge of the plot: the first point
+    expect(screen.getByText("Point 1 of 3: Strategy 10,000.00, Buy-and-hold 10,000.00")).toBeInTheDocument();
+    fireEvent.mouseLeave(svg);
+    expect(screen.queryByText(/^Point \d of 3/)).not.toBeInTheDocument();
+  });
+
+  it("can be read with the keyboard", () => {
+    chart();
+    const svg = screen.getByRole("img", { name: NAME });
+    fireEvent.keyDown(svg, { key: "ArrowLeft" });
+    expect(screen.getByText(/^Point 3 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "ArrowLeft" });
+    expect(screen.getByText(/^Point 2 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    expect(screen.getByText(/^Point 3 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "ArrowRight" }); // clamped at the last point
+    expect(screen.getByText(/^Point 3 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "Home" });
+    expect(screen.getByText(/^Point 1 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "Escape" });
+    expect(screen.queryByText(/^Point \d of 3/)).not.toBeInTheDocument();
   });
 });
 ```
 
 - [ ] **Step 2: Run to verify failure** — `npx vitest run components/backtests/BacktestChart.test.tsx`. Expected: FAIL (module missing).
 
-- [ ] **Step 3: Implement** `BacktestChart.tsx` per the rendering description (MUI `Box`/`Typography` for the text lines; `svg` written by hand like `PortfolioChart`).
+- [ ] **Step 3: Implement** `BacktestChart.tsx` per Rendering.
 
 - [ ] **Step 4: Run to verify pass** — `npx vitest run components/backtests && npx tsc --noEmit && npm run lint`. Expected: PASS.
 
@@ -537,19 +686,19 @@ describe("BacktestChart", () => {
 
 ```bash
 git add frontend/components/backtests/BacktestChart.tsx frontend/components/backtests/BacktestChart.test.tsx
-git commit -m "feat: backtest two-line chart"
+git commit -m "feat: backtest two-line chart with axes and hover"
 ```
 
 ---
 
-### Task 6: BacktestResultPanel
+### Task 7: BacktestResultPanel
 
 **Files:**
 - Create: `frontend/components/backtests/BacktestResultPanel.tsx`
 - Test: `frontend/components/backtests/BacktestResultPanel.test.tsx`
 
 **Interfaces:**
-- Consumes: `BacktestResult`, `STARTING_VALUE`, `excessLabel`, `signalRows` (Task 4); `BacktestChart` (Task 5); `formatAmount`, `formatPct`.
+- Consumes: `BacktestResult`, `STARTING_VALUE`, `excessLabel`, `signalRows` (Task 4); `BacktestChart` (Task 6); `formatAmount`, `formatPct`.
 - Produces: `export function BacktestResultPanel(props: { result: BacktestResult }): JSX.Element`.
 
 Content, in order:
@@ -641,7 +790,7 @@ git commit -m "feat: backtest result panel"
 
 ---
 
-### Task 7: RunForm component
+### Task 8: RunForm component
 
 **Files:**
 - Create: `frontend/components/backtests/RunForm.tsx`
@@ -725,14 +874,14 @@ git commit -m "feat: backtest run form"
 
 ---
 
-### Task 8: Backtests page (run, polling, result, recent runs)
+### Task 9: Backtests page (run, polling, result, recent runs)
 
 **Files:**
 - Modify: `frontend/app/(shell)/more/backtests/page.tsx` (currently a "Coming in sub-project 8" placeholder)
 - Test: `frontend/app/(shell)/more/backtests/page.test.tsx` (create)
 
 **Interfaces:**
-- Consumes: `RunForm` (T7), `BacktestResultPanel` (T6), `BacktestListItem`, `BacktestResult`, `JobStatus`, `RunInput`, `excessLabel` (T4), `useAction`, `apiFetch`.
+- Consumes: `RunForm` (T8), `BacktestResultPanel` (T7), `BacktestListItem`, `BacktestResult`, `JobStatus`, `RunInput`, `excessLabel` (T4), `useAction`, `apiFetch`.
 - Endpoints: `POST /backtest/run` `{ticker, start_date, end_date}` → `{job_id}`; `GET /backtest/run/{jobId}` → `JobStatus`; `GET /backtest/results` → `BacktestListItem[]`; `GET /backtest/results/{id}` → `BacktestResult`.
 
 State and flow (no effects):
@@ -772,7 +921,7 @@ git commit -m "feat: backtests page"
 
 ## Self-review notes
 
-- **Spec coverage:** engine curve + `downsample` + cap 250 (T1); nullable column, autogenerated migration, job persistence, `BacktestResultOut`/`BacktestListItemOut`/`EquityCurveOut`, export completeness (T2); by-id route, 404 on other user, newest-first, cap 20, lean list, ARCHITECTURE §4/§5 (T3); form with default range and validation (T4, T7); polling, FAILED and expired-job handling, recent runs, selecting a past run (T8); result panel with 10,000 start note, signed excess with words, per-signal table, small-sample note, disclaimer (T6); two-line hand-rolled SVG chart with text alternative and null-curve handling (T4–T6).
-- **Type consistency:** `EquityCurve`/`BacktestResult`/`BacktestListItem`/`JobStatus`/`RunInput` defined in T4 and used unchanged in T5–T8; `equity_curve` is `dict[str, list[float]] | None` on the engine/model and `EquityCurveOut | None` on the API.
-- **Ruling recorded:** `BacktestMetrics.equity_curve` defaults to `None` (the existing job test constructs `BacktestMetrics` with four arguments); `simulate()` always sets it.
-- **Known judgement calls for reviewers:** the chart x-axis is trading-day position (the stored curve has no dates); polling stops on any job error, not only 404; the migration is autogenerate-only and the task stops if it emits anything beyond the single column.
+- **Spec coverage:** engine curve + `downsample` + cap 250 (T1); nullable column, autogenerated migration, job persistence, `BacktestResultOut`/`BacktestListItemOut`/`EquityCurveOut`, export completeness (T2); by-id route, 404 on other user, newest-first, cap 20, lean list, ARCHITECTURE §4/§5 (T3); form with default range and validation (T4, T8); polling, FAILED and expired-job handling, recent runs, selecting a past run (T9); result panel with 10,000 start note, signed excess with words, per-signal table, small-sample note, disclaimer (T7); d3-based chart geometry (T5) and the two-line chart with axes, text alternative, hover/keyboard readout and null-curve handling (T6, T7).
+- **Type consistency:** `EquityCurve`/`BacktestResult`/`BacktestListItem`/`JobStatus`/`RunInput` defined in T4 and used unchanged in T5-T9; `ChartGeometry` defined in T5 and consumed only by T6; `equity_curve` is `dict[str, list[float]] | None` on the engine/model and `EquityCurveOut | None` on the API.
+- **Ruling recorded:** `BacktestMetrics.equity_curve` defaults to `None` (the existing job test constructs `BacktestMetrics` with four arguments); `simulate()` always sets it. Chart: owner chose d3 modules with axes and hover; hover uses the inverted x scale, so `d3-array` is not needed.
+- **Known judgement calls for reviewers:** the chart x-axis is point position, labelled with the run's start and end dates (the stored curve has no dates and is downsampled, hence "Point k of n"); polling stops on any job error, not only 404; the migration is autogenerate-only and the task stops if it emits anything beyond the single column; SVG text is sized in viewBox units (10) for a 360-wide box, capped at 560px width.

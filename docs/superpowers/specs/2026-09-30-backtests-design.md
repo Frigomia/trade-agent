@@ -14,7 +14,7 @@ curve the two-line chart needs, one read route, and the screen.
   `alembic revision --autogenerate` (never hand-edited), tests against real Postgres, no real yfinance
   calls in tests. Frontend rules from `frontend/CLAUDE.md`: named exports, `apiFetch`, SWR for reads,
   `useAction` for submits, no effects for derivable values, MUI 9 `slotProps`.
-- No chart library: the chart is hand-rolled SVG in the style of `PortfolioChart.tsx`.
+- Chart maths uses `d3-scale` and `d3-shape` only (individual modules, not the `d3` umbrella, no `d3-selection`); React renders every SVG element and d3 never touches the DOM. No other chart library.
 - No currency symbol. Colour is never the only carrier of meaning. No exclamation marks or urgency
   wording.
 - The existing engine numbers (signals, `final_value`, `buy_and_hold_value`, `excess_return_pct`,
@@ -87,8 +87,11 @@ Page order: run form, result panel, recent runs.
 - Strategy final value against buy-and-hold final value, both from a 10,000 start (stated on screen),
   and the excess return as a signed percentage with a word (ahead of / behind buy-and-hold).
   `excess_return_pct` is a fraction: multiply by 100 for display.
-- Two-line chart (`BacktestChart`): strategy and buy-and-hold, distinguished by direct text labels and
-  different dash styles, not colour alone. The x-axis is trading-day position, labelled with the run's
+- Two-line chart (`BacktestChart`, geometry in `lib/backtestChart.ts`): strategy (solid) and buy-and-hold
+  (dashed) on one shared y scale with gridlines and y-axis tick labels, distinguished by dash style and
+  direct text labels, not colour alone. Hovering, or using the arrow keys, Home, End and Escape on the
+  focused chart, shows a readout of both values for the nearest point ("Point k of n": the stored curve is
+  downsampled); the nearest point comes from the inverted x scale, so `d3-array` is not needed. The x-axis is trading-day position, labelled with the run's
   start and end dates (the stored curve carries no per-day dates). The numbers shown beside the chart are
   its text alternative. When `equity_curve` is null (an older run) the chart is hidden and the numbers
   and table still show.
@@ -105,19 +108,19 @@ Selecting a row sets `selectedId`. Empty state: "No backtests yet."
 ### Logic module
 
 `lib/backtest.ts` holds the types (`BacktestResult`, `BacktestListItem`, `EquityCurve`), the pure form
-validation, `excessLabel`, and `toChartPoints`; all unit tested.
+validation, `excessLabel` and `signalRows`; all unit tested.
 
 ### Frontend tests
 
 Form validation (bad ticker, From after To, range over 30 years); run, polling and result with a mocked
 `apiFetch` and fake `Date` timers; `FAILED` and job 404; selecting a past run; an old run with no curve;
-signal table conversions and the small-sample note; chart draws two paths with labels and the numbers as
-text; the recent-runs empty state; load errors.
+signal table conversions and the small-sample note; chart geometry (shared scale, ticks, flat curve, nearest-point mapping); chart draws two paths with axis labels
+and the numbers as text, plus hover and keyboard readout; the recent-runs empty state; load errors.
 
 ## Non-goals
 
 Per-day dates on the curve, deleting or renaming runs, comparing two runs, extra strategy parameters,
-running against a portfolio, a chart library, changing the trading rules or the 10,000 starting value.
+running against a portfolio, zoom or brush on the chart, any chart library beyond `d3-scale`/`d3-shape`, changing the trading rules or the 10,000 starting value.
 
 ## Dependencies
 
