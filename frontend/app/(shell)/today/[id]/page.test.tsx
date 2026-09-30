@@ -22,9 +22,10 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 const push = vi.fn();
+let routeId = "1";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
-  useParams: () => ({ id: "1" }),
+  useParams: () => ({ id: routeId }),
 }));
 
 import RecommendationDetailPage from "./page";
@@ -58,17 +59,36 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 describe("RecommendationDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routeId = "1";
   });
 
-  it("shows the full evidence, reasoning list, and web opinion", async () => {
+  it("never calls the API for a non-numeric id", () => {
+    routeId = "..%2F..%2Fadmin%2Fusers";
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(screen.getByText("Recommendation not found.")).toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("shows the structured evidence and web opinion, without repeating the raw reasoning", async () => {
     apiFetch.mockResolvedValue(rec());
     renderFresh(<RecommendationDetailPage />);
 
     await waitFor(() => expect(screen.getByText("NVDA")).toBeInTheDocument());
-    expect(screen.getByText("Fundamental score 52/100")).toBeInTheDocument();
-    expect(screen.getByText("Technical signal: NEUTRAL")).toBeInTheDocument();
+    expect(screen.getByText("52/100")).toBeInTheDocument();
+    expect(screen.getByText("Neutral")).toBeInTheDocument();
+    expect(screen.queryByText("Technical signal: NEUTRAL")).not.toBeInTheDocument();
     expect(screen.getByText(/not part of the score/i)).toBeInTheDocument();
     expect(screen.getByText(/conflicts with the fundamentals reading/i)).toBeInTheDocument();
+  });
+
+  it("says a newer analysis replaced a superseded recommendation, with no approve/dismiss", async () => {
+    apiFetch.mockResolvedValue(rec({ status: "SUPERSEDED" }));
+    renderFresh(<RecommendationDetailPage />);
+
+    await waitFor(() => expect(screen.getByText(/newer analysis replaced/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
   });
 
   it("shows an inline error when the recommendation fails to load", async () => {

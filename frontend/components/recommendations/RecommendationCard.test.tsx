@@ -75,10 +75,11 @@ describe("RecommendationCard", () => {
     expect(screen.queryByText(/186\.4/)).not.toBeInTheDocument();
   });
 
-  it("falls back to the technical-signal reasoning line when ai_analysis is null", () => {
+  it("does not repeat the raw reasoning wording next to the structured evidence", () => {
     render(<RecommendationCard recommendation={rec({ ai_analysis: null })} onDecided={vi.fn()} />);
 
-    expect(screen.getByText("Technical signal: OVERSOLD")).toBeInTheDocument();
+    expect(screen.getByText("Oversold")).toBeInTheDocument();
+    expect(screen.queryByText(/Technical signal: OVERSOLD/)).not.toBeInTheDocument();
   });
 
   it("approves and calls onDecided with the updated recommendation", async () => {

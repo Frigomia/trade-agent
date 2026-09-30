@@ -29,12 +29,13 @@ export function ActionChip({ action }: { action: Action }) {
   );
 }
 
+// The card's one-line take: the web opinion's first sentence. `reasoning` is deliberately not
+// shown — it is only the raw wording of the score/signal EvidencePanel already renders.
 function reasoningLine(recommendation: RecommendationOut): string | null {
-  if (recommendation.ai_analysis) {
-    const end = recommendation.ai_analysis.indexOf(". ");
-    return end === -1 ? recommendation.ai_analysis : recommendation.ai_analysis.slice(0, end + 1);
-  }
-  return recommendation.reasoning.at(-1) ?? null;
+  const text = recommendation.ai_analysis;
+  if (!text) return null;
+  const end = text.indexOf(". ");
+  return end === -1 ? text : text.slice(0, end + 1);
 }
 
 export function PriceBlock({ recommendation }: { recommendation: RecommendationOut }) {

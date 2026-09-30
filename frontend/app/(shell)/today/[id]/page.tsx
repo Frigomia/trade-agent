@@ -14,24 +14,39 @@ import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPane
 export default function RecommendationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  // The id goes straight into an authenticated API path, so only ever accept a plain integer:
+  // a crafted /today/..%2Fsomething link must not steer the request to a different route.
+  const validId = /^\d+$/.test(id);
   const { data: recommendation, error: loadError, mutate } = useSWR<RecommendationOut>(
-    `/analysis/recommendations/${id}`,
+    validId ? `/analysis/recommendations/${id}` : null,
     apiFetch,
   );
   // A decision (or a changed decision) is written straight into the SWR cache — no separate
   // local copy to keep in sync with it.
   const setDecided = (updated: RecommendationOut) => mutate(updated, { revalidate: false });
 
-  if (loadError) {
+  if (!validId || loadError) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        {loadError instanceof ApiError ? loadError.detail : "Could not load this recommendation."}
+        {!validId
+          ? "Recommendation not found."
+          : loadError instanceof ApiError
+            ? loadError.detail
+            : "Could not load this recommendation."}
       </Alert>
     );
   }
 
   if (!recommendation) {
     return null;
+  }
+
+  if (recommendation.status === "SUPERSEDED") {
+    return (
+      <Alert severity="info" sx={{ mt: 2 }}>
+        A newer analysis replaced this recommendation for {recommendation.ticker}.
+      </Alert>
+    );
   }
 
   if (recommendation.status !== "PENDING") {
@@ -55,13 +70,6 @@ export default function RecommendationDetailPage() {
         <PriceBlock recommendation={recommendation} />
       </Box>
       <EvidencePanel recommendation={recommendation} />
-      <Box sx={{ mt: 1.5 }}>
-        {recommendation.reasoning.map((line, i) => (
-          <Typography key={i} sx={{ fontSize: 13, color: "var(--text2)", mt: 0.5 }}>
-            {line}
-          </Typography>
-        ))}
-      </Box>
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
     </Box>

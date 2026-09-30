@@ -87,3 +87,54 @@ def test_get_job_status_hides_other_users_jobs():
         assert await get_job_status(job_id, OTHER_USER_ID) is None
 
     asyncio.run(_run())
+
+
+def test_a_new_run_supersedes_the_tickers_unreviewed_recommendations(
+    session_local, app_session_local
+):
+    def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool) -> dict:
+        return FAKE_STATE_BUY
+
+    async def _run() -> None:
+        seed = session_local()
+        try:
+            for ticker, status in [("AAPL", "PENDING"), ("AAPL", "APPROVED"), ("MSFT", "PENDING")]:
+                seed.add(
+                    Recommendation(
+                        user_id=OTHER_USER_ID,
+                        ticker=ticker,
+                        asset_type="STOCK",
+                        action="BUY",
+                        reasoning=["old"],
+                        status=status,
+                    )
+                )
+            seed.commit()
+        finally:
+            seed.close()
+
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        with (
+            patch(
+                "app.agents.jobs.run_graph_for_ticker",
+                AsyncMock(side_effect=_fake_run_graph),
+            ),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, OTHER_USER_ID, tickers)
+
+        check = session_local()
+        try:
+            rows = check.query(Recommendation).filter_by(user_id=OTHER_USER_ID).all()
+            by_key = {(r.ticker, r.status) for r in rows}
+            # The old PENDING AAPL is superseded, a new one is PENDING, the reviewed AAPL and the
+            # other ticker's PENDING are untouched.
+            assert ("AAPL", "SUPERSEDED") in by_key
+            assert ("AAPL", "APPROVED") in by_key
+            assert ("MSFT", "PENDING") in by_key
+            assert sum(1 for r in rows if r.ticker == "AAPL" and r.status == "PENDING") == 1
+        finally:
+            check.close()
+
+    asyncio.run(_run())

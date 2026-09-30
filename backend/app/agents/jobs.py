@@ -55,6 +55,11 @@ async def _process_ticker(
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
             else:
                 with scoped_session(user_id) as db:
+                    # A new run replaces this ticker's earlier unreviewed recommendations, so Today
+                    # never piles up stale duplicates. Marked, not deleted: the history stays.
+                    db.query(Recommendation).filter_by(
+                        user_id=user_id, ticker=ticker_info["ticker"], status="PENDING"
+                    ).update({"status": "SUPERSEDED"})
                     rec = Recommendation(
                         user_id=user_id,
                         ticker=ticker_info["ticker"],

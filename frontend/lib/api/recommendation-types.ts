@@ -1,6 +1,6 @@
 export type Action = "BUY" | "ADD" | "HOLD" | "TRIM" | "SELL" | "WATCH";
 export type TechnicalSignal = "NEUTRAL" | "OVERSOLD" | "STRONG_UPTREND" | "WEAK_DOWNTREND";
-export type RecommendationStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type RecommendationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
 
 export interface RecommendationOut {
   id: number;

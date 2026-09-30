@@ -77,3 +77,31 @@ def test_run_graph_for_stock_with_no_fundamentals_data_skips_scoring():
     mock_context.assert_not_called()
     assert result["context"] is None
     mock_news.assert_not_called()
+
+
+def test_a_failing_web_opinion_does_not_discard_the_recommendation():
+    quote = {
+        "price": 86.0,
+        "closes": [100.0] * 200 + [100.0 - i for i in range(1, 15)],
+    }
+    fundamentals = {
+        "peg_ratio": 0.9,
+        "roe": 0.22,
+        "debt_to_equity": 0.3,
+        "revenue_growth": 0.18,
+        "profit_margin": 0.20,
+    }
+    with (
+        patch("app.agents.market_data.fetch_quote_and_history", AsyncMock(return_value=quote)),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value=fundamentals)),
+        patch("app.agents.context.build_context", AsyncMock(return_value="Some context")),
+        patch(
+            "app.agents.news.run_news_agent",
+            AsyncMock(side_effect=RuntimeError("credit balance is too low")),
+        ),
+    ):
+        result = asyncio.run(run_graph_for_ticker(USER_ID, "AAPL", "STOCK", is_held=False))
+
+    assert result["action"] == "BUY"
+    assert result["fundamental_score"] == 100
+    assert result["ai_analysis"] is None
