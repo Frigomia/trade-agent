@@ -84,7 +84,7 @@ def upsert_watchlist_item(
         item = WatchlistItem(user_id=user.id, **payload.model_dump())
         db.add(item)
     else:
-        for field, value in payload.model_dump().items():
+        for field, value in payload.model_dump(exclude_unset=True).items():
             setattr(item, field, value)
     db.commit()
     db.refresh(item)
@@ -136,6 +136,8 @@ async def create_snapshot(
     total_market_value = 0.0
     total_cost_basis = 0.0
     for holding in holdings:
+        if float(holding.shares) == 0:
+            continue  # fully sold: not priced, matching /summary
         quote = await fetch_quote_and_history(holding.ticker)
         price = quote["price"]
         if price is None or not math.isfinite(price):
@@ -173,9 +175,12 @@ async def _prices_for(tickers: set[str]) -> dict[str, float | None]:
     """Live price per ticker; None when the fetch fails or returns a non-finite price."""
     ordered = sorted(tickers)
 
+    sem = asyncio.Semaphore(8)  # bound fan-out so unquotable tickers can't saturate the thread pool
+
     async def one(ticker: str) -> float | None:
         try:
-            data = await fetch_quote_and_history(ticker)
+            async with sem:
+                data = await fetch_quote_and_history(ticker)
         except Exception as exc:
             logger.warning("Live price fetch failed for %s: %s", ticker, type(exc).__name__)
             return None

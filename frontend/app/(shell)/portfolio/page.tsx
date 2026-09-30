@@ -85,7 +85,11 @@ export default function PortfolioPage() {
     error: summaryError,
     mutate: mutateSummary,
   } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
-  const { data: snapshots, mutate: mutateSnapshots } = useSWR<Snapshot[]>(
+  const {
+    data: snapshots,
+    error: snapshotsError,
+    mutate: mutateSnapshots,
+  } = useSWR<Snapshot[]>(
     "/portfolio/snapshots",
     apiFetch,
   );
@@ -144,7 +148,7 @@ export default function PortfolioPage() {
         <Button
           variant="outlined"
           startIcon={<Camera size={16} />}
-          disabled={recording}
+          disabled={recording || open.length === 0}
           onClick={recordSnapshot}
         >
           Record snapshot
@@ -213,9 +217,15 @@ export default function PortfolioPage() {
         </>
       )}
 
-      <Box sx={{ my: 2 }}>
-        <PortfolioChart snapshots={snapshots ?? []} />
-      </Box>
+      {open.length > 0 && (
+        <Box sx={{ my: 2 }}>
+          {snapshotsError ? (
+            <Alert severity="error">Could not load your value history.</Alert>
+          ) : (
+            <PortfolioChart snapshots={snapshots ?? []} />
+          )}
+        </Box>
+      )}
 
       {open.length > 0 && (
         <Box sx={{ mb: 3 }}>

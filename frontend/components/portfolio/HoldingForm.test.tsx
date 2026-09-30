@@ -138,6 +138,30 @@ describe("HoldingForm", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it("rejects 0 shares when adding a holding", () => {
+    setup();
+
+    type("Ticker", "AAPL");
+    type("Name", "Apple");
+    type("Shares", "0");
+    type("Average cost", "10");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+
+    expect(screen.getByText(/enter a ticker, a name/i)).toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("still sends 0 shares when editing (closing a position)", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: HELD });
+
+    type("Shares", "0");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody().shares).toBe(0);
+  });
+
   it("removes a holding only after an explicit confirm", async () => {
     apiFetch.mockResolvedValue(undefined);
     const { onSaved, onClose } = setup({ holding: HELD });

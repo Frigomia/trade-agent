@@ -58,8 +58,9 @@ function HoldingFormBody({
       !name.trim() ||
       shares === "" ||
       costBasis === "" ||
-      !(sharesNum >= 0) ||
-      !(costNum >= 0) ||
+      // Editing shares to 0 is how a position is closed; a new holding must be positive.
+      !(editing ? sharesNum >= 0 : sharesNum > 0) ||
+      !(editing ? costNum >= 0 : costNum > 0) ||
       !firstPurchase
     ) {
       setError("Enter a ticker, a name, shares, an average cost and a date.");

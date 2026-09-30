@@ -122,6 +122,22 @@ def test_create_and_upsert_watchlist_item(client):
     assert len(response.json()) == 1
 
 
+def test_readding_watchlist_ticker_without_note_keeps_the_note(client):
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK", "note": "n"})
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK"})
+
+    assert client.get("/portfolio/watchlist").json()[0]["note"] == "n"
+
+
+def test_readding_watchlist_ticker_with_null_note_clears_it(client):
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK", "note": "n"})
+    client.post(
+        "/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK", "note": None}
+    )
+
+    assert client.get("/portfolio/watchlist").json()[0]["note"] is None
+
+
 def test_create_watchlist_item_rejects_ticker_with_path_metacharacters(client):
     payload = {"ticker": "NVDA/../etc", "asset_type": "STOCK", "note": "watching earnings"}
     response = client.post("/portfolio/watchlist", json=payload)
@@ -260,6 +276,27 @@ def test_snapshot_computes_totals_from_holdings(client):
     body = response.json()
     assert body["total_market_value"] == 2000.0  # 10 shares * $200
     assert body["total_cost_basis"] == 1500.0  # 10 shares * $150 cost basis
+
+
+def test_snapshot_skips_zero_share_holdings(client):
+    _add_holding(client)
+    _hold(client, "OLD", 0, 50.0)
+
+    async def fake_quote(ticker):
+        if ticker != "AAPL":
+            raise RuntimeError("no quote")
+        return {"price": 200.0, "closes": [200.0]}
+
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=fake_quote)
+    ) as mock:
+        response = client.post("/portfolio/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_market_value"] == 2000.0
+    assert body["total_cost_basis"] == 1500.0
+    mock.assert_awaited_once_with("AAPL")
 
 
 def test_snapshot_fails_when_price_fetch_raises(client):
