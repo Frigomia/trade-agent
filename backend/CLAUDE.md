@@ -45,6 +45,7 @@ Existing single-user data (all rows on the old default `user_id`) must be reassi
 | Lint + format  | `uv run ruff check . && uv run ruff format .`                                  |
 | Type check     | `uv run mypy app`                                                              |
 | New migration  | `uv run alembic revision --autogenerate -m "..."` after any `models.py` change |
+| Scheduled jobs | `uv run python -m app.scheduled daily` (or `snapshots` / `outcomes`) |
 
 Prefix everything with `uv run` — never activate the venv manually.
 Lint + typecheck + tests before treating any change as done; there's no

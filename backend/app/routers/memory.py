@@ -1,5 +1,4 @@
 import logging
-from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -8,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.config import settings
 from app.memory.embeddings import embed_text
-from app.memory.outcomes import compute_outcome
+from app.memory.outcomes import evaluate_due_outcomes
 from app.memory.similarity import find_similar
 from app.models import Recommendation
 from app.rate_limit import rate_limiter
@@ -19,7 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/memory", tags=["memory"], dependencies=[Depends(get_current_user)])
 
 BATCH_SIZE = 50
-OUTCOME_LOOKBACK_DAYS = 20
 # Per user, per minute. /embed and /similar call the embedding API (they cost money);
 # /evaluate-outcomes makes yfinance calls and is fired automatically when Track record opens.
 EMBED_LIMIT_PER_MINUTE = 5
@@ -75,49 +73,7 @@ async def embed_recommendations(
 async def evaluate_outcomes(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> dict[str, int]:
-    # Recommendation.created_at is DateTime (no tz) — this comparison is only
-    # correct because the Postgres session's TimeZone is UTC (true for this
-    # project's Docker Postgres image). Not enforced at the schema level.
-    cutoff = datetime.now(UTC) - timedelta(days=OUTCOME_LOOKBACK_DAYS)
-    due_filter = (
-        Recommendation.user_id == user.id,
-        Recommendation.outcome_evaluated_at.is_(None),
-        Recommendation.price_at_recommendation.isnot(None),
-        Recommendation.created_at <= cutoff,
-    )
-    pending = (
-        db.query(Recommendation)
-        .filter(*due_filter)
-        .order_by(Recommendation.id)
-        .limit(BATCH_SIZE)
-        .all()
-    )
-
-    evaluated = 0
-    for rec in pending:
-        try:
-            price = rec.price_at_recommendation
-            if price is None:  # due_filter excludes these; belt-and-braces for mypy
-                continue
-            rec.outcome_forward_return_pct = await compute_outcome(
-                rec.ticker, float(price), rec.created_at.date(), OUTCOME_LOOKBACK_DAYS
-            )
-            rec.outcome_evaluated_at = datetime.now(UTC)
-            db.commit()
-            evaluated += 1
-        except Exception:
-            logger.exception("Failed to evaluate outcome for recommendation %s", rec.id)
-            db.rollback()
-            # compute_outcome's only failure mode (no price history for the
-            # ticker) is permanent, not transient -- stamp evaluated_at even
-            # on failure so this row stops matching due_filter and blocking
-            # the batch forever. outcome_forward_return_pct stays None,
-            # which is how a caller tells "resolved, no valid outcome" apart
-            # from "not due yet".
-            rec.outcome_evaluated_at = datetime.now(UTC)
-            db.commit()
-
-    remaining = db.query(Recommendation).filter(*due_filter).count()
+    evaluated, remaining = await evaluate_due_outcomes(db, user.id)
     return {"evaluated": evaluated, "remaining": remaining}
 
 

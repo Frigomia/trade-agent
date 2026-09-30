@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.admin.service import AdminError
 from app.config import settings
 from app.routers import admin, analysis, backtest, chat, me, memory, portfolio, preferences
+from app.snapshots import PriceUnavailable
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
 app = FastAPI(title="Trading Agent API")
@@ -40,6 +41,12 @@ def usage_limit_handler(request: Request, exc: UsageLimitExceeded) -> JSONRespon
         "Resets next month, or ask your admin to raise it."
     )
     return JSONResponse(status_code=429, content={"detail": detail})
+
+
+@app.exception_handler(PriceUnavailable)
+def price_unavailable_handler(request: Request, exc: PriceUnavailable) -> JSONResponse:
+    """Services raise domain errors; this is the one place they become HTTP responses."""
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
 @app.get("/health")
