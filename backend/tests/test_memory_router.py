@@ -46,7 +46,7 @@ def test_evaluate_outcomes_evaluates_due_rows(client, db_session, monkeypatch):
     db_session.add(rec)
     db_session.commit()
 
-    with patch("app.routers.memory.compute_outcome", AsyncMock(return_value=0.05)):
+    with patch("app.memory.outcomes.compute_outcome", AsyncMock(return_value=0.05)):
         response = client.post("/memory/evaluate-outcomes")
 
     assert response.status_code == 200
@@ -108,7 +108,7 @@ def test_evaluate_outcomes_skips_failed_row_and_continues(client, db_session, mo
     db_session.commit()
 
     with patch(
-        "app.routers.memory.compute_outcome",
+        "app.memory.outcomes.compute_outcome",
         AsyncMock(side_effect=[RuntimeError("boom"), 0.05]),
     ):
         response = client.post("/memory/evaluate-outcomes")
@@ -136,7 +136,7 @@ def test_evaluate_outcomes_marks_permanently_failed_row_resolved(client, db_sess
     db_session.commit()
 
     with patch(
-        "app.routers.memory.compute_outcome",
+        "app.memory.outcomes.compute_outcome",
         AsyncMock(side_effect=ValueError("No price history for DELISTED")),
     ):
         first = client.post("/memory/evaluate-outcomes")
@@ -203,7 +203,7 @@ def test_evaluate_outcomes_only_touches_the_token_users_rows(client, db_session)
     db_session.add_all([mine, theirs])
     db_session.commit()
 
-    with patch("app.routers.memory.compute_outcome", AsyncMock(return_value=0.05)):
+    with patch("app.memory.outcomes.compute_outcome", AsyncMock(return_value=0.05)):
         response = client.post("/memory/evaluate-outcomes", headers=auth_headers(OTHER_USER_ID))
 
     assert response.status_code == 200
