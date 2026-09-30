@@ -118,11 +118,6 @@ export function BacktestChart({
           </Box>
         ))}
       </Box>
-        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-          <Box component="i" sx={{ width: 14, borderTop: "2px dashed var(--muted)", display: "block" }} />
-          Buy and hold
-        </Box>
-      </Box>
       <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
         <Typography sx={NOTE_SX}>{startDate}</Typography>
         <Typography sx={NOTE_SX}>Points are evenly spaced trading days.</Typography>
