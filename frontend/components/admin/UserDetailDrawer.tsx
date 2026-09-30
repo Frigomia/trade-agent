@@ -157,7 +157,11 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
   );
 }
 
-export function UserDetailDrawer({ user, onClose, onChanged }: Omit<UserDetailProps, "user"> & { user: AdminUserOut | null }) {
+interface UserDetailDrawerProps extends Omit<UserDetailProps, "user"> {
+  user: AdminUserOut | null;
+}
+
+export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerProps) {
   if (!user) return null;
   return (
     <Drawer anchor="right" open onClose={onClose}>

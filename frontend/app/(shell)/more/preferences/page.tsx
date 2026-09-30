@@ -38,7 +38,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   const dirty =
     risk !== initial.risk_tolerance ||
     notes !== (initial.notes ?? "") ||
-    sectors.join("\n") !== initial.sector_avoid_list.join("\n");
+    sectors.join() !== initial.sector_avoid_list.join();
 
   function discard() {
     setRisk(initial.risk_tolerance);
@@ -151,12 +151,8 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
           <Box sx={{ flex: 1 }}>
             {dirty ? (
               <Pill tone="warn">Unsaved changes</Pill>
-            ) : saved ? (
-              <Typography color="text.secondary">Saved</Typography>
             ) : (
-              <Typography sx={{ fontSize: 12, color: "var(--muted)", display: { xs: "none", sm: "block" } }}>
-                Changes apply to the next analysis.
-              </Typography>
+              saved && <Typography color="text.secondary">Saved</Typography>
             )}
           </Box>
           <Button variant="outlined" disabled={!dirty || submitting} onClick={discard}>

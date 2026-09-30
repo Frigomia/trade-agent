@@ -79,10 +79,12 @@ export default function AdminPage() {
         sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
       >
       <Panel sx={{ p: "4px 18px" }}>
-      {filtered.map((user) => (
+      {filtered.map((user) => {
+        const clickable = isDesktop && hasDetail(user);
+        return (
         <Box
           key={user.id}
-          onClick={isDesktop && hasDetail(user) ? () => setSelectedUserId(user.id) : undefined}
+          onClick={clickable ? () => setSelectedUserId(user.id) : undefined}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -90,8 +92,8 @@ export default function AdminPage() {
             py: 1.5,
             borderBottom: "1px solid var(--line)",
             "&:last-of-type": { borderBottom: 0 },
-            cursor: isDesktop && hasDetail(user) ? "pointer" : "default",
-            ...(user.id === selectedUserId && isDesktop && { bgcolor: "var(--up-bg)", mx: -1.25, px: 1.25, borderRadius: "12px" }),
+            cursor: clickable ? "pointer" : "default",
+            ...(clickable && user.id === selectedUserId && { bgcolor: "var(--up-bg)", borderRadius: "12px" }),
           }}
         >
           <Avatar email={user.email} />
@@ -125,7 +127,8 @@ export default function AdminPage() {
             </IconButton>
           )}
         </Box>
-      ))}
+        );
+      })}
       </Panel>
       {isDesktop && (
         <Panel sx={{ p: "20px 22px", position: "sticky", top: 24, maxHeight: "calc(100vh - 48px)", overflowY: "auto" }}>
@@ -145,12 +148,14 @@ export default function AdminPage() {
       )}
       </Box>
       <InviteDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={() => mutate()} />
-      <UserDetailDrawer
-        key={selectedUserId ?? "none"}
-        user={isDesktop ? null : selectedUser}
-        onClose={() => setSelectedUserId(null)}
-        onChanged={() => mutate()}
-      />
+      {!isDesktop && (
+        <UserDetailDrawer
+          key={selectedUserId ?? "none"}
+          user={selectedUser}
+          onClose={() => setSelectedUserId(null)}
+          onChanged={() => mutate()}
+        />
+      )}
     </Box>
   );
 }
