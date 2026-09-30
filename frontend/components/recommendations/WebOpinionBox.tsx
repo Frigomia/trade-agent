@@ -7,10 +7,10 @@ export function WebOpinionBox({ text, article = false }: { text: string; article
   return (
     <Box
       sx={{
-        mt: article ? 2.5 : 1.5,
-        p: article ? "20px 26px" : "9px 11px",
+        ...(article
+          ? { mt: 2.5, p: "20px 26px", borderRadius: "16px" }
+          : { mt: 1.5, p: "9px 11px", borderRadius: "12px" }),
         border: "1px dashed var(--line2)",
-        borderRadius: article ? "16px" : "12px",
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>

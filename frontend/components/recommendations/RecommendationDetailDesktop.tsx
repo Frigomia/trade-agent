@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, LinearProgress, Typography } from "@mui/material";
-import type { RecommendationOut, TechnicalSignal } from "@/lib/api/recommendation-types";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { Amount } from "@/components/portfolio/Amount";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
@@ -9,6 +9,8 @@ import { DecisionActions } from "./DecisionActions";
 import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
 import { ActionChip, ChangePill } from "./RecommendationCard";
 import { WebOpinionBox } from "./WebOpinionBox";
+
+const BIG = { fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 } as const;
 
 /**
  * The desktop detail page: one centred column. A hero panel holds the call, the price and the
@@ -23,7 +25,6 @@ export function RecommendationDetailDesktop({
   onDecided: (updated: RecommendationOut) => void;
 }) {
   const { fundamental_score, technical_signal, suggested_position_pct } = recommendation;
-  const signal: TechnicalSignal | null = technical_signal;
 
   return (
     <Box sx={{ maxWidth: 760, mx: "auto", pb: 1 }}>
@@ -56,7 +57,7 @@ export function RecommendationDetailDesktop({
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Fundamentals</Typography>
             {fundamental_score !== null ? (
               <>
-                <Typography sx={{ fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+                <Typography sx={BIG}>
                   {fundamental_score}
                   <Box component="span" sx={{ fontSize: 13, fontWeight: 400, color: "var(--muted)", letterSpacing: 0 }}>
                     {" "}/100
@@ -65,18 +66,22 @@ export function RecommendationDetailDesktop({
                 <LinearProgress variant="determinate" value={fundamental_score} sx={{ mt: 1 }} />
               </>
             ) : (
-              <Typography sx={{ fontSize: 26, fontWeight: 650 }}>—</Typography>
+              <Typography sx={BIG}>—</Typography>
             )}
           </Box>
           <Box>
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Technical timing</Typography>
             <Box sx={{ mt: 1 }}>
-              {signal ? <Pill tone={SIGNAL_TONE[signal]}>{SIGNAL_LABEL[signal]}</Pill> : <Typography>—</Typography>}
+              {technical_signal ? (
+                <Pill tone={SIGNAL_TONE[technical_signal]}>{SIGNAL_LABEL[technical_signal]}</Pill>
+              ) : (
+                <Typography>—</Typography>
+              )}
             </Box>
           </Box>
           <Box>
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Suggested position</Typography>
-            <Typography sx={{ fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 }}>
+            <Typography sx={BIG}>
               {suggested_position_pct !== null ? `${(suggested_position_pct * 100).toFixed(1)}%` : "—"}
             </Typography>
           </Box>
@@ -91,14 +96,11 @@ export function RecommendationDetailDesktop({
           bottom: 24,
           mt: 3,
           p: "14px 18px",
-          display: "flex",
-          alignItems: "center",
-          gap: 1.75,
           bgcolor: "var(--tab-bg)",
           backdropFilter: "blur(18px)",
         }}
       >
-        <DecisionActions id={recommendation.id} onDecided={onDecided} bar={`Your decision on ${recommendation.ticker}`} />
+        <DecisionActions id={recommendation.id} onDecided={onDecided} title={`Your decision on ${recommendation.ticker}`} />
       </Panel>
     </Box>
   );

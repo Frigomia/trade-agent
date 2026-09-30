@@ -46,7 +46,7 @@ export function ActionChip({ action }: { action: Action }) {
 // shown — it is only the raw wording of the score/signal EvidencePanel already renders.
 function reasoningLine(recommendation: RecommendationOut): string | null {
   // The text is markdown; drop its markers so the card shows plain words.
-  const text = recommendation.ai_analysis?.replace(/[#*_`>]/g, "").trim();
+  const text = recommendation.ai_analysis?.replace(/[#*`>]/g, "").trim();
   if (!text) return null;
   const end = text.indexOf(". ");
   return end === -1 ? text : text.slice(0, end + 1);
