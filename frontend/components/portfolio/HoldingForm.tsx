@@ -3,8 +3,10 @@
 
 import { useState, type FormEvent } from "react";
 import { Alert, Box, Button, Drawer, TextField, Typography } from "@mui/material";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 import type { AssetType, HoldingSummary } from "@/lib/api/portfolio-types";
+import { todayIso } from "@/lib/format";
+import { useAction } from "@/lib/useAction";
 
 export interface HoldingFormProps {
   open: boolean;
@@ -14,8 +16,6 @@ export interface HoldingFormProps {
   prefillTicker?: string;
   onSaved: () => void;
 }
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 // The body lives in an inner component so its state resets each time the drawer closes.
 export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
@@ -39,9 +39,8 @@ function HoldingFormBody({
   const [assetType, setAssetType] = useState<AssetType>(holding?.asset_type ?? "STOCK");
   const [shares, setShares] = useState(holding ? String(holding.shares) : "");
   const [costBasis, setCostBasis] = useState(holding ? String(holding.cost_basis) : "");
-  const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? today());
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? todayIso());
+  const { run, submitting, error, setError } = useAction();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const normalizedTicker = ticker.trim().toUpperCase();
@@ -50,7 +49,6 @@ function HoldingFormBody({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (submitting) return;
     const sharesNum = Number(shares);
     const costNum = Number(costBasis);
     if (
@@ -66,9 +64,7 @@ function HoldingFormBody({
       setError("Enter a ticker, a name, shares, an average cost and a date.");
       return;
     }
-    setSubmitting(true);
-    setError(null);
-    try {
+    await run(async () => {
       await apiFetch("/portfolio/holdings", {
         method: "POST",
         body: JSON.stringify({
@@ -85,28 +81,18 @@ function HoldingFormBody({
       });
       onSaved();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   async function handleRemove() {
-    if (!holding || submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
+    if (!holding) return;
+    await run(async () => {
       await apiFetch(`/portfolio/holdings/${encodeURIComponent(holding.ticker)}`, {
         method: "DELETE",
       });
       onSaved();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (

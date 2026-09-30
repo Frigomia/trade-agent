@@ -200,23 +200,8 @@ async def get_summary(
     watchlist = (
         db.query(WatchlistItem).filter_by(user_id=user.id).order_by(WatchlistItem.ticker).all()
     )
-    rows = [
-        HoldingSummaryOut(
-            ticker=h.ticker,
-            name=h.name,
-            asset_type=h.asset_type,
-            shares=float(h.shares),
-            cost_basis=float(h.cost_basis),
-            first_purchase_date=h.first_purchase_date,
-            sector=h.sector,
-            target_weight=float(h.target_weight) if h.target_weight is not None else None,
-        )
-        for h in holdings
-    ]
-    watch_rows = [
-        WatchlistSummaryOut(ticker=w.ticker, asset_type=w.asset_type, note=w.note)
-        for w in watchlist
-    ]
+    rows = [HoldingSummaryOut.model_validate(h, from_attributes=True) for h in holdings]
+    watch_rows = [WatchlistSummaryOut.model_validate(w, from_attributes=True) for w in watchlist]
     # Everything needed is copied out; release the pooled connection before awaiting quotes, which
     # can take seconds (retries) during a market-data outage.
     db.close()

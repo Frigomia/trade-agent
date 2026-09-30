@@ -166,16 +166,7 @@ class PortfolioSnapshotOut(BaseModel):
     total_cost_basis: float
 
 
-class HoldingSummaryOut(BaseModel):
-    ticker: str
-    name: str
-    asset_type: str
-    shares: float
-    cost_basis: float  # average cost per share
-    # Carried so an edit can round-trip them: POST /portfolio/holdings is a full replace.
-    first_purchase_date: date
-    sector: str | None
-    target_weight: float | None
+class HoldingSummaryOut(HoldingIn):
     # Computed at request time, never stored; all None when the quote fails (or shares == 0).
     current_price: float | None = None
     market_value: float | None = None
@@ -184,10 +175,7 @@ class HoldingSummaryOut(BaseModel):
     weight: float | None = None
 
 
-class WatchlistSummaryOut(BaseModel):
-    ticker: str
-    asset_type: str
-    note: str | None
+class WatchlistSummaryOut(WatchlistItemIn):
     current_price: float | None = None
 
 

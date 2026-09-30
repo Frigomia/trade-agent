@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import { useAction } from "@/lib/useAction";
 import { LogTradeCta } from "@/components/portfolio/LogTradeCta";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
@@ -16,28 +16,20 @@ export function ConfirmationPanel({
   onChanged: (updated: RecommendationOut) => void;
   onBackToToday: () => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { run, submitting, error } = useAction();
 
-  async function changeDecision() {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    // Neither endpoint guards on the current status — calling the opposite action on an
-    // already-decided recommendation cleanly reverses it. No backend change needed.
-    const oppositeAction = recommendation.status === "APPROVED" ? "reject" : "approve";
-    try {
-      const updated = await apiFetch<RecommendationOut>(
-        `/analysis/recommendations/${recommendation.id}/${oppositeAction}`,
-        { method: "POST" },
+  // Neither endpoint guards on the current status — calling the opposite action on an
+  // already-decided recommendation cleanly reverses it. No backend change needed.
+  const changeDecision = () =>
+    run(async () => {
+      const oppositeAction = recommendation.status === "APPROVED" ? "reject" : "approve";
+      onChanged(
+        await apiFetch<RecommendationOut>(
+          `/analysis/recommendations/${recommendation.id}/${oppositeAction}`,
+          { method: "POST" },
+        ),
       );
-      onChanged(updated);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    });
 
   const approved = recommendation.status === "APPROVED";
 

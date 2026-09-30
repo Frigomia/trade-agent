@@ -14,8 +14,10 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
 import type { TradeAction } from "@/lib/api/portfolio-types";
+import { todayIso } from "@/lib/format";
+import { useAction } from "@/lib/useAction";
 
 export interface TradeSheetProps {
   open: boolean;
@@ -24,8 +26,6 @@ export interface TradeSheetProps {
   prefill?: { ticker?: string; action?: TradeAction };
   onLogged: () => void;
 }
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 // A bottom sheet on phones, a right drawer on desktop. The form lives in an inner component so its
 // state resets every time the drawer closes (MUI unmounts a closed drawer's children).
@@ -49,33 +49,25 @@ function TradeForm({
   const [action, setAction] = useState<TradeAction>(prefill?.action ?? "BUY");
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState("");
-  const [date, setDate] = useState(today);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [date, setDate] = useState(todayIso);
+  const { run, submitting, error, setError } = useAction();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (submitting) return;
     const sharesNum = Number(shares);
     const priceNum = Number(price);
     if (!ticker || !(sharesNum > 0) || !(priceNum > 0)) {
       setError("Choose a ticker and enter shares and a price above zero.");
       return;
     }
-    setSubmitting(true);
-    setError(null);
-    try {
+    await run(async () => {
       await apiFetch("/portfolio/trades", {
         method: "POST",
         body: JSON.stringify({ date, ticker, action, shares: sharesNum, price: priceNum }),
       });
       onLogged();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (

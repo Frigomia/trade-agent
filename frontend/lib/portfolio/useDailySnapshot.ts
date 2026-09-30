@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import useSWR from "swr";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
+import { todayIso } from "@/lib/format";
 
 // Module-level so moving between Today and Portfolio (each mounts the hook) never retries the same
 // day, whether the first attempt worked or not.
@@ -30,7 +31,7 @@ export function useDailySnapshot(): void {
     if (!summary || !snapshots) return;
     if (!summary.holdings.some((h) => h.shares > 0) || summary.unpriced_count > 0) return;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIso();
     const latest = snapshots.at(-1); // the API lists oldest first
     if (latest && latest.created_at.slice(0, 10) === today) return;
     if (attemptedDay === today) return;

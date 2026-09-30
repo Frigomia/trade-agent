@@ -4,7 +4,8 @@ import { useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { Alert, Box, Button, ButtonBase, TextField, Typography } from "@mui/material";
 import { Camera, Plus } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import { useAction } from "@/lib/useAction";
 import type {
   AssetType,
   HoldingSummary,
@@ -99,43 +100,31 @@ export default function PortfolioPage() {
   const [holdingForm, setHoldingForm] = useState<{ open: boolean; holding?: HoldingSummary }>({
     open: false,
   });
-  const [recording, setRecording] = useState(false);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const snapshot = useAction();
+  const watch = useAction();
   const [watchTicker, setWatchTicker] = useState("");
   const [watchType, setWatchType] = useState<AssetType>("STOCK");
-  const [watchError, setWatchError] = useState<string | null>(null);
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
 
-  async function recordSnapshot() {
-    if (recording) return;
-    setRecording(true);
-    setSnapshotError(null);
-    try {
+  const recordSnapshot = () =>
+    snapshot.run(async () => {
       await apiFetch("/portfolio/snapshot", { method: "POST" });
       mutateSnapshots();
-    } catch (err) {
-      setSnapshotError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setRecording(false);
-    }
-  }
+    });
 
-  async function addToWatchlist() {
+  function addToWatchlist() {
     const ticker = watchTicker.trim().toUpperCase();
     if (!ticker) return;
-    setWatchError(null);
-    try {
+    return watch.run(async () => {
       await apiFetch("/portfolio/watchlist", {
         method: "POST",
         body: JSON.stringify({ ticker, asset_type: watchType }),
       });
       setWatchTicker("");
       mutateSummary();
-    } catch (err) {
-      setWatchError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
+    });
   }
 
   return (
@@ -148,7 +137,7 @@ export default function PortfolioPage() {
         <Button
           variant="outlined"
           startIcon={<Camera size={16} />}
-          disabled={recording || open.length === 0}
+          disabled={snapshot.submitting || open.length === 0}
           onClick={recordSnapshot}
         >
           Record snapshot
@@ -174,9 +163,9 @@ export default function PortfolioPage() {
           Could not load your portfolio.
         </Alert>
       )}
-      {snapshotError && (
+      {snapshot.error && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {snapshotError}
+          {snapshot.error}
         </Alert>
       )}
 
@@ -300,9 +289,9 @@ export default function PortfolioPage() {
             Add to watchlist
           </Button>
         </Box>
-        {watchError && (
+        {watch.error && (
           <Alert severity="error" sx={{ mt: 1 }}>
-            {watchError}
+            {watch.error}
           </Alert>
         )}
       </Box>

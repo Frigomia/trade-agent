@@ -8,6 +8,11 @@ export function formatAmount(value: number): string {
   return AMOUNT.format(value);
 }
 
+/** Today's UTC date as YYYY-MM-DD — the format date inputs and the API use. */
+export function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function formatSigned(value: number): string {
   return `${value >= 0 ? "+" : ""}${formatAmount(value)}`;
 }
