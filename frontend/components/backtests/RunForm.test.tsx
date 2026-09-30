@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { RunForm } from "./RunForm";
 
@@ -12,6 +12,10 @@ describe("RunForm", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-30T10:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("defaults to the last three years", () => {
@@ -41,6 +45,13 @@ describe("RunForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
     expect(screen.getByText(/at most 30 years/i)).toBeInTheDocument();
     expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("shows the local validation message over a server error", () => {
+    setup({ error: "Server said no" });
+    fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+    expect(screen.getByText(/enter a ticker/i)).toBeInTheDocument();
+    expect(screen.queryByText("Server said no")).not.toBeInTheDocument();
   });
 
   it("shows a server error and disables the button while running", () => {

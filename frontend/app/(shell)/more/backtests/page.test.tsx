@@ -267,6 +267,42 @@ describe("BacktestsPage", () => {
     expect(screen.queryByText("Strategy ends at 11,000.00")).not.toBeInTheDocument();
   });
 
+  it("hides the failure warning once a past run is selected", async () => {
+    mockApi({
+      "/backtest/results": () => [LIST_ITEM],
+      "/backtest/results/7": () => RESULT,
+      "/backtest/run": () => ({ job_id: "j1" }),
+      "/backtest/run/j1": () => ({ status: "FAILED", backtest_result_id: null }),
+    });
+    renderFresh();
+    await screen.findByRole("button", { name: /AAPL/ });
+    startRun();
+    expect(await screen.findByText(WARNING)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /AAPL/ }));
+    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+
+  it("keeps the shown result when the next run fails to start", async () => {
+    let n = 0;
+    mockApi({
+      "/backtest/results": () => [],
+      "/backtest/run": () => {
+        if (++n === 1) return { job_id: "j1" };
+        throw new FakeApiError(422, "start_date must not be after end_date");
+      },
+      "/backtest/run/j1": () => ({ status: "DONE", backtest_result_id: 7 }),
+      "/backtest/results/7": () => RESULT,
+    });
+    renderFresh();
+    await screen.findByText("No backtests yet.");
+    startRun();
+    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+    expect(await screen.findByText("start_date must not be after end_date")).toBeInTheDocument();
+    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+  });
+
   it("shows load errors for the list and for a single backtest", async () => {
     mockApi({
       "/backtest/results": () => {

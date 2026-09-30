@@ -43,6 +43,8 @@ export default function BacktestsPage() {
 
   function start({ ticker, start: startDate, end }: RunInput) {
     run(async () => {
+      // Pin a shown result so clearing the job keeps it visible if the POST fails.
+      if (resultId !== null) setSelectedId(resultId);
       setJobId(null); // clear any old failure warning while this request is in flight
       const { job_id } = await apiFetch<{ job_id: string }>("/backtest/run", {
         method: "POST",
@@ -65,7 +67,7 @@ export default function BacktestsPage() {
 
       <RunForm onRun={start} running={submitting || jobRunning} error={error} />
 
-      {jobFailed && (
+      {jobFailed && selectedId === null && (
         <Alert severity="warning" sx={{ mt: 2 }}>
           The backtest could not run for that ticker and range. Check the ticker and dates.
         </Alert>

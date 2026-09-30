@@ -14,8 +14,9 @@ export function RunForm({
   error: string | null;
 }) {
   const [ticker, setTicker] = useState("");
-  const [start, setStart] = useState(() => defaultRange(new Date()).start);
-  const [end, setEnd] = useState(() => defaultRange(new Date()).end);
+  const [initial] = useState(() => defaultRange(new Date()));
+  const [start, setStart] = useState(initial.start);
+  const [end, setEnd] = useState(initial.end);
   const [message, setMessage] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent) {

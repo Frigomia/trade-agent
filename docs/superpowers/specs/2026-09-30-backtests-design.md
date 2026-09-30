@@ -89,7 +89,7 @@ Page order: run form, result panel, recent runs.
   `excess_return_pct` is a fraction: multiply by 100 for display.
 - Two-line chart (`BacktestChart`, geometry in `lib/backtestChart.ts`): strategy (solid) and buy-and-hold
   (dashed) on one shared y scale with gridlines and y-axis tick labels, distinguished by dash style and
-  direct text labels, not colour alone. Hovering, or using the arrow keys, Home, End and Escape on the
+  a text legend naming each line, not colour alone. Hovering, or using the arrow keys, Home, End and Escape on the
   focused chart, shows a readout of both values for the nearest point ("Point k of n": the stored curve is
   downsampled); the nearest point comes from the inverted x scale, so `d3-array` is not needed. The x-axis is trading-day position, labelled with the run's
   start and end dates (the stored curve carries no per-day dates). The numbers shown beside the chart are

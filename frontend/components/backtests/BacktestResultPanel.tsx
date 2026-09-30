@@ -21,7 +21,7 @@ export function BacktestResultPanel({ result }: { result: BacktestResult }) {
       {rows.length === 0 ? (
         <Typography>No signals fired in this range.</Typography>
       ) : (
-        <Table size="small">
+        <Table size="small" aria-label="Signal hit rates">
           <TableHead>
             <TableRow>
               <TableCell>Signal</TableCell>

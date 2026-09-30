@@ -39,6 +39,16 @@ describe("BacktestResultPanel", () => {
     expect(screen.getByText(/seen fewer than 5 times/i)).toBeInTheDocument();
   });
 
+  it("shows the table without the small-sample note when every signal has 5 or more", () => {
+    const signals = {
+      STRONG_UPTREND: { count: 12, avg_forward_return_pct: 0.0238, hit_rate: 0.65 },
+      OVERSOLD: { count: 5, avg_forward_return_pct: -0.01, hit_rate: 0.4 },
+    };
+    render(<BacktestResultPanel result={{ ...RESULT, hit_rate_by_signal: signals }} />);
+    expect(screen.getByRole("table", { name: "Signal hit rates" })).toBeInTheDocument();
+    expect(screen.queryByText(/seen fewer than 5 times/i)).not.toBeInTheDocument();
+  });
+
   it("shows the chart when a curve is stored and hides it for an older run", () => {
     const { rerender } = render(<BacktestResultPanel result={RESULT} />);
     expect(screen.getByRole("img", { name: /strategy value against buy-and-hold/i })).toBeInTheDocument();
