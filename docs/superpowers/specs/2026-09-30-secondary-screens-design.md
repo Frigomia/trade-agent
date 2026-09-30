@@ -3,14 +3,16 @@
 Sub-project 8a of the frontend roadmap in
 `docs/superpowers/specs/2026-09-28-frontend-design-direction-design.md`. Sub-projects 2 to 6 are merged;
 Chat (7) is deferred by the owner. Sub-project 8 is split: this spec covers Preferences, Account and
-Track record, which are frontend only. Backtests (8b) is its own cycle because it needs a backend
+Track record, which are frontend plus one small backend schema addition (below). Backtests (8b) is its own cycle because it needs a backend
 change (a stored equity curve for the two-line chart).
 
 ## Constraints
 
 - The system never places a trade. Nothing here offers Buy, Sell, Deposit or Withdraw; screens that
   record something say nothing is sent to a broker.
-- No backend, model or migration change. Every endpoint used already exists.
+- No model or migration change. The only backend change is exposing two existing Recommendation
+  columns (`outcome_forward_return_pct`, `outcome_evaluated_at`) on `RecommendationOut`; every other
+  endpoint used already exists.
 - Stack and patterns as in `frontend/CLAUDE.md`: named exports, all calls through `lib/api/client`,
   SWR for reads, `useAction` for submits, no effects for anything derivable in render, MUI 9
   `slotProps` (no `SelectProps` / `InputLabelProps`).
@@ -38,6 +40,13 @@ Account. Backtests keeps its current placeholder page until 8b. New route `/more
 
 ### Track record (`/more/track-record`)
 
+- Backend: add `outcome_forward_return_pct: float | None` and `outcome_evaluated_at: datetime | None` to
+  `RecommendationOut` (columns already exist; no migration). The stored value is a fraction (0.05 means
+  +5%) despite the `_pct` name, so the UI multiplies by 100 for display. `outcome_evaluated_at` set with a
+  null return means "resolved, no valid outcome" and is not scored.
+- Nothing computes outcomes on a schedule, so opening Track record calls
+  `POST /memory/evaluate-outcomes` once (best effort, silent on failure, like the daily snapshot; it only
+  touches rows due after 20 days, batch of 50), then revalidates the list.
 - Reads `GET /analysis/recommendations`. Only rows with a non-null `outcome_forward_return_pct` are
   scored.
 - Scoring rule (UI side, from the stored 20-day return): BUY and ADD match when the return is above
@@ -84,11 +93,13 @@ predates the backend behaviour.
 
 Vitest and React Testing Library with a mocked `apiFetch`, as in earlier sub-projects.
 
-- `trackRecord.ts`: each action's rule, HOLD/WATCH unscored, null outcome skipped, REJECTED scored,
+- Backend: `RecommendationOut` includes the two outcome fields (evaluated and unevaluated rows), and
+  `docs/ARCHITECTURE.md` §5 notes it.
+- `trackRecord.ts`: each action's rule, fraction-to-percent conversion, HOLD/WATCH unscored, null outcome skipped, REJECTED scored,
   SUPERSEDED excluded, zero return, empty list.
 - Preferences: values load, chip add and remove (blank and duplicate ignored), 2000-character cap, saves
   the full body, error path, theme choice applied.
-- Track record page: summary wording, small-sample label, unscored rows, empty state, load error.
+- Track record page: evaluate-outcomes fires once on open and a failure is silent, summary wording, small-sample label, unscored rows, empty state, load error.
 - Account: usage bars and the 90% warn state, reset date across a December to January boundary, export
   triggers a download, delete gated on the typed email and sends `{confirm: true}`, password mismatch and
   short password blocked, sign out.
