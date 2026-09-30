@@ -22,13 +22,14 @@ export function BacktestChart({
   const geometry = buildChart(curve);
   if (!geometry) return null;
 
-  const { count, xAt, yAt } = geometry;
+  const { count, xAt, yAt, indexAtX } = geometry;
   const { strategy, buy_and_hold: buyAndHold } = curve;
   const last = count - 1;
 
   function onMouseMove(e: MouseEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    setHover(geometry!.indexAtX(((e.clientX - rect.left) / rect.width) * CHART_WIDTH));
+    if (rect.width === 0) return;
+    setHover(indexAtX(((e.clientX - rect.left) / rect.width) * CHART_WIDTH));
   }
 
   function onKeyDown(e: KeyboardEvent<SVGSVGElement>) {

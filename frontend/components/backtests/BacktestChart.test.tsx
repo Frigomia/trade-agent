@@ -53,6 +53,28 @@ describe("BacktestChart", () => {
     expect(screen.queryByText(/^Point \d of 3/)).not.toBeInTheDocument();
   });
 
+  it("ignores mouse moves over a zero-width rect", () => {
+    chart();
+    const svg = screen.getByRole("img", { name: NAME });
+    vi.spyOn(svg, "getBoundingClientRect").mockReturnValue({
+      left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.mouseMove(svg, { clientX: 100 });
+    expect(screen.getByText("Hover, or use the arrow keys, to read a point.")).toBeInTheDocument();
+    expect(screen.queryByText(/^Point/)).not.toBeInTheDocument();
+  });
+
+  it("supports End, ArrowRight from nothing, and clears on blur", () => {
+    chart();
+    const svg = screen.getByRole("img", { name: NAME });
+    fireEvent.keyDown(svg, { key: "ArrowRight" });
+    expect(screen.getByText(/^Point 1 of 3/)).toBeInTheDocument();
+    fireEvent.keyDown(svg, { key: "End" });
+    expect(screen.getByText(/^Point 3 of 3/)).toBeInTheDocument();
+    fireEvent.blur(svg);
+    expect(screen.queryByText(/^Point \d of 3/)).not.toBeInTheDocument();
+  });
+
   it("can be read with the keyboard", () => {
     chart();
     const svg = screen.getByRole("img", { name: NAME });
