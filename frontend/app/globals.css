@@ -84,9 +84,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: var(--accent);
-  text-underline-offset: 3px;
+/* In the base layer so MUI components rendered as links (buttons) keep their own colours. */
+@layer base {
+  a {
+    color: var(--accent);
+    text-underline-offset: 3px;
+  }
 }
 
 ::selection {
