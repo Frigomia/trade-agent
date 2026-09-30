@@ -471,6 +471,17 @@ def test_outcomes_log_a_line_per_user_and_warn_at_the_batch_cap(env, caplog):
     assert f"Outcomes user {USER_ID}: batch cap reached, 1 still due" in caplog.text
 
 
+def test_outcomes_log_the_per_user_total_across_batches(env, caplog):
+    add_app_user(env, USER_ID)
+    for _ in range(51):
+        _due_rec(env, USER_ID)
+
+    with caplog.at_level(logging.INFO, logger="app.scheduled"):
+        _run_outcomes()
+
+    assert f"Outcomes user {USER_ID}: evaluated=51 remaining=0" in caplog.text
+
+
 def test_main_dispatches_the_command_and_returns_its_exit_code():
     with patch("app.scheduled.run_command", AsyncMock(return_value=0)) as run:
         assert scheduled.main(["snapshots"]) == 0

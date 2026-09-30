@@ -89,14 +89,15 @@ async def run_outcomes(summary: Summary) -> None:
     for user_id in ids:
         try:
             with app_db.scoped_session(user_id) as db:
-                evaluated = remaining = 0
+                total = remaining = 0
                 for _ in range(MAX_OUTCOME_BATCHES):
                     evaluated, remaining = await evaluate_due_outcomes(db, user_id)
+                    total += evaluated
                     summary.outcomes_evaluated += evaluated
                     if remaining == 0:
                         break
                 logger.info(
-                    "Outcomes user %s: evaluated=%d remaining=%d", user_id, evaluated, remaining
+                    "Outcomes user %s: evaluated=%d remaining=%d", user_id, total, remaining
                 )
                 if remaining > 0:
                     logger.warning(
