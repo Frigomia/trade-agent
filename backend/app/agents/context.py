@@ -11,6 +11,10 @@ from app.models import ChatMessage, InvestmentPreferences
 
 logger = logging.getLogger(__name__)
 
+# Same bounds the API enforces on new writes (schemas.PreferencesIn); applied again here so an
+# older, over-long row cannot inflate the prompt.
+MAX_PROMPT_SECTORS = 20
+MAX_PROMPT_SECTOR_LENGTH = 50
 CHAT_HISTORY_LIMIT = 5
 CHAT_MESSAGE_DISPLAY_LIMIT = 500
 SIMILAR_RECOMMENDATIONS_LIMIT = 3
@@ -32,7 +36,10 @@ def _build_preferences_section(db: Session, user_id: uuid.UUID) -> str:
         if pref.risk_tolerance:
             parts.append(f"Risk tolerance: {pref.risk_tolerance}")
         if pref.sector_avoid_list:
-            avoid = ", ".join(_quote(sector) for sector in pref.sector_avoid_list)
+            avoid = ", ".join(
+                _quote(sector[:MAX_PROMPT_SECTOR_LENGTH])
+                for sector in pref.sector_avoid_list[:MAX_PROMPT_SECTORS]
+            )
             parts.append(f"Avoid sectors: {avoid}")
         if pref.notes:
             parts.append(f"Notes: {_quote(pref.notes)}")
@@ -58,7 +65,7 @@ async def _build_memory_section(
 
     lines = []
     for rec in similar:
-        rec_reasoning = "; ".join(rec.reasoning)
+        rec_reasoning = _quote("; ".join(rec.reasoning))
         line = f"- {rec.ticker}: {rec.action}. {rec_reasoning}"
         if rec.outcome_forward_return_pct is not None:
             line += f" (outcome: {float(rec.outcome_forward_return_pct):+.2%})"

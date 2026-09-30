@@ -2,7 +2,7 @@
 // `ruff check --fix` on it (from backend/, so pyproject.toml applies). Migrations are skipped
 // (pyproject already excludes migrations/versions). Whatever ruff cannot fix is sent back to Claude
 // (exit 2) so it gets fixed; a missing `uv` is a non-blocking notice (exit 1).
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,10 +11,24 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const BACKEND = path.join(ROOT, "backend");
 const VERSIONS = path.join(BACKEND, "migrations", "versions");
 
-const norm = (p) => (process.platform === "win32" ? p.toLowerCase() : p);
+// Windows and macOS file systems are case-insensitive by default.
+const norm = (p) => (["win32", "darwin"].includes(process.platform) ? p.toLowerCase() : p);
+
+// Follows symlinks (of the file, or of its folder when the file does not exist yet).
+function real(p) {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    try {
+      return path.join(realpathSync.native(path.dirname(p)), path.basename(p));
+    } catch {
+      return p;
+    }
+  }
+}
 
 function isInside(dir, file) {
-  const relative = path.relative(norm(dir), norm(file));
+  const relative = path.relative(norm(real(dir)), norm(real(file)));
   return relative !== "" && !path.isAbsolute(relative) && !relative.split(path.sep).includes("..");
 }
 

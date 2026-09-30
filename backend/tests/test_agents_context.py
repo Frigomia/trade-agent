@@ -321,3 +321,24 @@ def test_build_context_keeps_hostile_chat_text_on_one_line(db_session):
         "## Similar past recommendations",
         "## Relevant chat history",
     ]
+
+
+def test_build_context_bounds_an_old_over_long_sector_list(db_session):
+    # A row saved before the API bounds existed must not inflate the prompt.
+    db_session.add(
+        InvestmentPreferences(
+            user_id=USER_ID,
+            sector_avoid_list=["y" * 200] + [f"sector{n}" for n in range(40)],
+        )
+    )
+    db_session.commit()
+
+    with patch("app.agents.context.embed_text", AsyncMock(return_value=[0.1] * 1024)):
+        context = asyncio.run(
+            build_context(db_session, USER_ID, "AAPL", "STOCK", "BUY", ["PEG 1.1"])
+        )
+
+    assert "y" * 51 not in context
+    assert "y" * 50 in context
+    assert "sector18" in context  # 20th item overall (the long one is the first)
+    assert "sector19" not in context

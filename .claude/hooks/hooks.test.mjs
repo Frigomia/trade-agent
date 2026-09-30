@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { decide } from "./guard-migrations.mjs";
@@ -49,6 +50,44 @@ test("guard script exits 2 with a reason for a blocked edit and 0 otherwise", ()
   assert.match(blocked.stderr, /alembic revision --autogenerate/);
   assert.equal(run("guard-migrations.mjs", payload("Edit", path.join(ROOT, "README.md"))).status, 0);
   assert.equal(spawnSync("node", [path.join(HERE, "guard-migrations.mjs")], { input: "not json" }).status, 0);
+});
+
+test("guard and ruff follow symlinks", (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), "hook-links-"));
+  const link = path.join(dir, "innocent.py");
+  try {
+    symlinkSync(existing, link);
+  } catch (error) {
+    rmSync(dir, { recursive: true, force: true });
+    return t.skip(`cannot create symlinks here (${error.code})`);
+  }
+  try {
+    assert.equal(decide(payload("Edit", link)).block, true);
+    const backendLink = path.join(ROOT, "backend", "_hook_link_tmp.py");
+    symlinkSync(path.join(dir, "outside.py"), backendLink);
+    try {
+      writeFileSync(path.join(dir, "outside.py"), "x = 1\n");
+      assert.equal(targetFor(payload("Edit", backendLink)), null);
+    } finally {
+      rmSync(backendLink, { force: true });
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("guard follows a directory link (junction on Windows) into migrations/versions", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "hook-junction-"));
+  try {
+    const viaLink = path.join(dir, "linked");
+    symlinkSync(VERSIONS, viaLink, "junction");
+    assert.equal(decide(payload("Edit", path.join(viaLink, "bc2cf87d8334_add_equity_curve_to_backtest_results.py"))).block, true);
+    // A brand-new file below the linked folder is still a Write into migrations/versions: allowed.
+    assert.equal(decide(payload("Write", path.join(viaLink, "0000_new_probe.py"))).block, false);
+    assert.equal(decide(payload("Edit", path.join(viaLink, "0000_new_probe.py"))).block, true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("ruff target is only a .py file under backend, never a migration", () => {
