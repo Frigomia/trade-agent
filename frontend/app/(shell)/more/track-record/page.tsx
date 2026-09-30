@@ -72,7 +72,7 @@ export default function TrackRecordPage() {
             <Box
               component="li"
               key={rec.id}
-              sx={{ display: "flex", gap: 1.5, alignItems: "baseline", py: 1, borderBottom: "1px solid var(--border)" }}
+              sx={{ display: "flex", gap: 1.5, alignItems: "baseline", py: 1, borderBottom: "1px solid var(--line)" }}
             >
               <Typography sx={{ fontWeight: 600, width: 64 }}>{rec.ticker}</Typography>
               <Typography sx={{ width: 56 }}>{rec.action}</Typography>
