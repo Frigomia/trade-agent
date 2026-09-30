@@ -4,7 +4,6 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Alert, Box, List, ListItemButton, ListItemText, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import { excessLabel } from "@/lib/backtest";
 import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/lib/backtest";
 import { useAction } from "@/lib/useAction";
 import { RunForm } from "@/components/backtests/RunForm";
@@ -113,7 +112,7 @@ export default function BacktestsPage() {
                     slotProps={{ primary: { sx: { fontWeight: 650 } } }}
                   />
                   <Pill tone={item.excess_return_pct < 0 ? "down" : "up"}>
-                    <span title={excessLabel(item.excess_return_pct)}>{formatPct(item.excess_return_pct * 100)}</span>
+                    {formatPct(item.excess_return_pct * 100)}
                   </Pill>
                 </ListItemButton>
               ))}

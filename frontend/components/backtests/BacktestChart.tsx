@@ -108,10 +108,16 @@ export function BacktestChart({
         )}
       </svg>
       <Box sx={{ display: "flex", gap: 2, fontSize: 12, color: "var(--muted)", mt: 0.5, flexWrap: "wrap" }}>
-        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-          <Box component="i" sx={{ width: 14, height: 3, bgcolor: "var(--accent)", borderRadius: "2px", display: "block" }} />
-          Signal strategy
-        </Box>
+        {[
+          ["Signal strategy", { height: 3, bgcolor: "var(--accent)", borderRadius: "2px" }],
+          ["Buy and hold", { borderTop: "2px dashed var(--muted)" }],
+        ].map(([label, swatch]) => (
+          <Box key={label as string} component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+            <Box component="i" sx={{ width: 14, display: "block", ...(swatch as object) }} />
+            {label as string}
+          </Box>
+        ))}
+      </Box>
         <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
           <Box component="i" sx={{ width: 14, borderTop: "2px dashed var(--muted)", display: "block" }} />
           Buy and hold

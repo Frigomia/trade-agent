@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildChart, CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH, formatTick } from "./backtestChart";
+import { buildChart, CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH } from "./backtestChart";
 
 describe("buildChart", () => {
   it("returns null with fewer than two points", () => {
@@ -49,12 +49,5 @@ describe("buildChart", () => {
   it("uses the shorter list when lengths differ", () => {
     const g = buildChart({ strategy: [1, 2, 3], buy_and_hold: [1, 2] })!;
     expect(g.count).toBe(2);
-  });
-});
-
-describe("formatTick", () => {
-  it("uses thousands separators and no decimals", () => {
-    expect(formatTick(10000)).toBe("10,000");
-    expect(formatTick(10250.6)).toBe("10,251");
   });
 });

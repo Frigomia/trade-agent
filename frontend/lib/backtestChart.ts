@@ -52,7 +52,3 @@ export function buildChart(curve: EquityCurve): ChartGeometry | null {
     indexAtX: (px) => Math.min(count - 1, Math.max(0, Math.round(x.invert(px)))),
   };
 }
-
-export function formatTick(value: number): string {
-  return value.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
