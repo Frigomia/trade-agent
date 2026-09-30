@@ -43,7 +43,7 @@ export function DataActions({ email }: { email: string }) {
           startIcon={<Download size={18} />}
           onClick={handleExport}
           disabled={submitting}
-          sx={{ justifyContent: "flex-start", color: "var(--text)" }}
+          sx={{ justifyContent: "flex-start", "&.MuiButton-colorPrimary": { color: "var(--text)" } }}
         >
           Export my data
         </Button>

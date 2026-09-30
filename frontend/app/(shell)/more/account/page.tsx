@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight, History, ListChecks, LogOut, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, History, ListChecks, Lock, LogOut, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { Alert, Box, Button, Typography } from "@mui/material";
@@ -23,6 +24,7 @@ const LINKS = [
 
 export default function AccountPage() {
   const router = useRouter();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const { run, submitting, error } = useAction();
   const { data: me, error: meError } = useSWR<{ email: string }>("/me", apiFetch);
   const { data: usage, error: usageError } = useSWR<Usage>("/me/usage", apiFetch);
@@ -76,8 +78,34 @@ export default function AccountPage() {
               </Box>
             ))}
           </Panel>
-          <Panel sx={{ p: "16px 18px" }}>
-            <ChangePasswordForm />
+          <Panel sx={{ p: "4px 18px" }}>
+            <Box
+              component="button"
+              type="button"
+              aria-expanded={passwordOpen}
+              onClick={() => setPasswordOpen((open) => !open)}
+              sx={{
+                all: "unset",
+                boxSizing: "border-box",
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                py: 1.5,
+                cursor: "pointer",
+              }}
+            >
+              <Lock size={18} color="var(--muted)" />
+              <Box component="span" sx={{ flex: 1 }}>
+                Change password
+              </Box>
+              <ChevronRight size={18} color="var(--muted)" style={{ transform: passwordOpen ? "rotate(90deg)" : undefined }} />
+            </Box>
+            {passwordOpen && (
+              <Box sx={{ pb: 2 }}>
+                <ChangePasswordForm />
+              </Box>
+            )}
           </Panel>
           <Panel sx={{ p: "8px 12px" }}>
             <DataActions email={me.email} />
