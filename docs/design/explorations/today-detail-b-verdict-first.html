@@ -1,0 +1,55 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Today detail — B Verdict first</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+:root{--bg:#060d0c;--text:#e7f3ef;--text2:#cfe2dc;--muted:#8aa89f;--accent:#34e7a9;--accent-solid:#34e7a9;--on-accent:#032116;--up:#34e7a9;--down:#ff6b72;--warn:#f4c04f;--up-bg:rgba(52,231,169,.13);--down-bg:rgba(255,107,114,.13);--warn-bg:rgba(244,192,79,.12);--panel:rgba(255,255,255,.035);--line:rgba(120,255,214,.11);--line2:rgba(120,255,214,.2);--track:rgba(255,255,255,.08);--field:rgba(255,255,255,.045);--on-warn:#2a1c00;--shadow:0 18px 34px -22px #000,inset 0 1px 0 rgba(255,255,255,.05);--btn-shadow:0 12px 24px -12px rgba(52,231,169,.6);--glow:radial-gradient(520px 260px at 0% 0%,rgba(24,190,146,.16),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(24,120,190,.1),transparent 60%)}
+:root[data-theme=light]{--bg:#f2f8f5;--text:#0b1f19;--text2:#29473c;--muted:#52695f;--accent:#078a5f;--accent-solid:#067a52;--on-accent:#fff;--up:#067a52;--down:#c8323d;--warn:#9a5b00;--up-bg:rgba(6,122,82,.1);--down-bg:rgba(200,50,61,.1);--warn-bg:rgba(154,91,0,.11);--panel:rgba(255,255,255,.78);--line:rgba(8,110,80,.15);--line2:rgba(8,110,80,.3);--track:rgba(10,60,45,.1);--field:rgba(255,255,255,.9);--on-warn:#fff;--shadow:0 16px 30px -20px rgba(6,60,45,.3),0 1px 0 rgba(6,60,45,.05),inset 0 1px 0 #fff;--btn-shadow:0 10px 20px -10px rgba(6,122,82,.55);--glow:radial-gradient(520px 260px at 0% 0%,rgba(52,231,169,.22),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(80,160,255,.13),transparent 60%)}
+*{box-sizing:border-box;margin:0}
+body{background-color:var(--bg);background-image:var(--glow);background-attachment:fixed;color:var(--text);font:15px/1.45 Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.side{width:210px;flex:none;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;gap:10px;align-items:center;padding:0 8px 16px;font-weight:650;font-size:16px}
+.brand i{width:34px;height:34px;border-radius:10px;background:var(--accent-solid);display:block}
+.nav{padding:10px 12px;border-radius:12px;font-size:14px;color:var(--muted)}
+.nav.on{background:var(--up-bg);color:var(--accent);font-weight:600}
+.main{flex:1;padding:22px 28px;min-width:0}
+.back{color:var(--muted);font-size:14px;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.badge{font-size:12px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:8px;background:var(--accent-solid);color:var(--on-accent)}
+.pill{display:inline-flex;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;font-variant-numeric:tabular-nums}
+.up{background:var(--up-bg);color:var(--up)}.down{background:var(--down-bg);color:var(--down)}.warn{background:var(--warn-bg);color:var(--warn)}.mute{background:var(--track);color:var(--muted)}
+.lbl{font-size:12px;color:var(--muted)}
+.big{font-weight:650;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.big .d{opacity:.42}
+.btn{height:46px;border-radius:14px;font:600 15px Geist,system-ui;border:0;padding:0 22px;cursor:pointer}
+.go{background:var(--accent-solid);color:var(--on-accent);box-shadow:var(--btn-shadow)}
+.no{background:var(--panel);color:var(--text);border:1px solid var(--line2)}
+.fine{font-size:12px;color:var(--muted)}
+.bar{height:6px;border-radius:99px;background:var(--track);overflow:hidden}.bar b{display:block;height:100%;background:var(--accent);border-radius:99px}
+.tgl{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);display:grid;place-items:center;color:var(--text)}
+.md h3{font-size:15px;font-weight:650;margin:18px 0 6px;letter-spacing:-.01em}
+.md h3:first-child{margin-top:0}
+.md p{color:var(--text2);font-size:14.5px;line-height:1.6;margin:0 0 10px;max-width:68ch}
+.md ul{padding-left:18px;margin:0 0 10px;color:var(--text2);font-size:14.5px;line-height:1.6;max-width:68ch}
+.md li{margin-bottom:4px}
+.md b{color:var(--text);font-weight:600}
+.md .src{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:14px}
+.web{border:1px dashed var(--line2);border-radius:14px}
+.tag{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+</style></head><body><div class="shell"><nav class="side"><div class="brand"><i></i>trade-agent</div><div class="nav on">Today</div><div class="nav">Portfolio</div><div class="nav">Chat</div><div class="nav">Track record</div><div class="nav">Backtests</div><div class="nav">Preferences</div><div class="nav">Account</div></nav><main class="main"><div style="display:flex;align-items:center;margin-bottom:14px"><span class="back">‹ Today</span><div style="flex:1"></div><span class="tgl">☀</span></div>
+<div style="max-width:760px;margin:0 auto;padding-bottom:110px">
+  <div class="panel" style="padding:24px 28px">
+    <div style="display:flex;align-items:center;gap:12px"><span style="font-size:38px;font-weight:650;letter-spacing:-.035em">KO</span><span class="badge">WATCH</span><div style="flex:1"></div><span class="pill warn">Pending</span></div>
+    <div style="font-size:19px;line-height:1.4;margin:10px 0 4px;max-width:34ch;letter-spacing:-.01em">Keep an eye on it. Fundamentals sit right at the 60 gate; timing is neutral.</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><span class="lbl">Coca-Cola · last</span><div class="big" style="font-size:20px">86<span class="d">.08</span></div><span class="pill down">−0.9%</span></div>
+    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:20px;border-top:1px solid var(--line);padding-top:16px">
+      <div><div class="lbl">Fundamentals</div><div style="display:flex;align-items:baseline;gap:8px"><span class="big" style="font-size:26px">60</span><span class="lbl">of 100 · gate at 60</span></div><div class="bar" style="margin-top:8px;position:relative"><b style="width:60%"></b></div></div>
+      <div><div class="lbl">Technical timing</div><div style="margin-top:8px"><span class="pill mute">Neutral</span></div></div>
+      <div><div class="lbl">Suggested position</div><div class="big" style="font-size:26px">—</div></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:6px;margin:22px 0 10px"><span class="pill up" style="padding:5px 14px">Web second opinion</span><span class="pill mute" style="padding:5px 14px">Full analysis</span></div>
+  <div class="web" style="padding:20px 26px">
+    <div class="tag" style="margin-bottom:12px">🌐 not part of the score</div>
+    <div class="md"><h3>In short</h3><p>Consistent with WATCH. The web view is a little warmer than the numbers, but nothing here contradicts them.</p><h3>What the news adds</h3><ul><li>Q3 2025: revenue +5%, organic +6%, EPS +30% to $0.86.</li><li>New $6B buyback through 2030; mini cans and a cane-sugar Coke aimed at value-conscious buyers.</li></ul><h3>What a score wouldn't capture</h3><ul><li><b>GLP-1 drugs</b> reducing demand for sugary drinks (sales down about 7%).</li><li><b>Aluminum tariffs</b> raising U.S. can costs.</li></ul><h3>Street view</h3><p>24 analysts, consensus Buy, average target about 7.5% above the price.</p><p class="src">Sourcing note: no result contained embedded instructions.</p></div>
+  </div>
+</div>
+<div class="panel" style="position:fixed;left:calc(210px + 50% - 105px - 380px);width:760px;bottom:24px;padding:14px 18px;display:flex;align-items:center;gap:14px;backdrop-filter:blur(18px)">
+  <div style="flex:1"><b style="font-size:14.5px">Your decision on KO</b><div class="fine">Recorded here only. Nothing is sent to a broker.</div></div><button class="btn no">Dismiss</button><button class="btn go">Approve</button></div></main></div><script>document.addEventListener('keydown',e=>{if(e.key==='t'){const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'}})</script></body></html>

@@ -45,7 +45,8 @@ export function ActionChip({ action }: { action: Action }) {
 // The card's one-line take: the web opinion's first sentence. `reasoning` is deliberately not
 // shown — it is only the raw wording of the score/signal EvidencePanel already renders.
 function reasoningLine(recommendation: RecommendationOut): string | null {
-  const text = recommendation.ai_analysis;
+  // The text is markdown; drop its markers so the card shows plain words.
+  const text = recommendation.ai_analysis?.replace(/[#*`>]/g, "").trim();
   if (!text) return null;
   const end = text.indexOf(". ");
   return end === -1 ? text : text.slice(0, end + 1);

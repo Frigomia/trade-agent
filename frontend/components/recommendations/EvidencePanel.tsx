@@ -12,7 +12,7 @@ export const SIGNAL_LABEL: Record<TechnicalSignal, string> = {
 
 // Matches the mockups' pill convention: oversold/strong-uptrend read as favorable (green),
 // weak-downtrend as unfavorable (red), neutral as neither (muted). The word is always shown.
-const SIGNAL_TONE: Record<TechnicalSignal, PillTone> = {
+export const SIGNAL_TONE: Record<TechnicalSignal, PillTone> = {
   NEUTRAL: "mute",
   OVERSOLD: "up",
   STRONG_UPTREND: "up",

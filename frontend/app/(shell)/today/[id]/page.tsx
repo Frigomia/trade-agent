@@ -3,18 +3,18 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Box, Typography, Alert } from "@mui/material";
+import { Box, Typography, Alert, useMediaQuery, useTheme } from "@mui/material";
 import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
 import { Amount } from "@/components/portfolio/Amount";
-import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
 import { EvidenceDetail } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
+import { RecommendationDetailDesktop } from "@/components/recommendations/RecommendationDetailDesktop";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
 // The mockup's detail header: a quiet back link and the round theme toggle.
@@ -45,6 +45,7 @@ export default function RecommendationDetailPage() {
 }
 
 function RecommendationDetail() {
+  const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   // The id goes straight into an authenticated API path, so only ever accept a plain integer:
@@ -92,55 +93,32 @@ function RecommendationDetail() {
     );
   }
 
+  if (isDesktop) {
+    return <RecommendationDetailDesktop recommendation={recommendation} onDecided={setDecided} />;
+  }
+
+  // Phone: the evidence first, the actions pinned to the bottom of the screen.
   return (
-    <Box
-      sx={{
-        width: "100%",
-        maxWidth: { md: 980 },
-        display: { xs: "flex", md: "grid" },
-        flexDirection: "column",
-        minHeight: { xs: "calc(100dvh - 190px)", md: 0 },
-        gap: { md: 3 },
-        alignItems: { md: "start" },
-        gridTemplateColumns: { md: "minmax(0, 1.4fr) minmax(0, 1fr)" },
-      }}
-    >
-      <Box sx={{ maxWidth: { xs: 480, md: "none" } }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
-          <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
-            {recommendation.ticker}
-          </Typography>
-          <ActionChip action={recommendation.action} />
-          <Box sx={{ flex: 1 }} />
-          <Pill tone="warn">Pending</Pill>
-        </Box>
-        {recommendation.current_price !== null && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
-            <Amount value={recommendation.current_price} size={20} />
-            {recommendation.price_change_pct !== null && <ChangePill pct={recommendation.price_change_pct} />}
-          </Box>
-        )}
-        <EvidenceDetail recommendation={recommendation} />
-        {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
-      </Box>
-      <Panel
-        sx={{
-          maxWidth: { xs: 480, md: "none" },
-          p: { md: "18px 20px" },
-          position: { md: "sticky" },
-          top: 24,
-          // On phones the actions sit at the bottom of the screen without a card around them.
-          border: { xs: 0, md: "1px solid var(--line)" },
-          boxShadow: { xs: "none", md: "var(--shadow)" },
-          bgcolor: { xs: "transparent", md: "var(--panel)" },
-          mt: { xs: "auto", md: 0 },
-        }}
-      >
-        <Typography sx={{ display: { xs: "none", md: "block" }, fontSize: 17, fontWeight: 650 }}>
-          Your decision
+    <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+        <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
+          {recommendation.ticker}
         </Typography>
+        <ActionChip action={recommendation.action} />
+        <Box sx={{ flex: 1 }} />
+        <Pill tone="warn">Pending</Pill>
+      </Box>
+      {recommendation.current_price !== null && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
+          <Amount value={recommendation.current_price} size={20} />
+          {recommendation.price_change_pct !== null && <ChangePill pct={recommendation.price_change_pct} />}
+        </Box>
+      )}
+      <EvidenceDetail recommendation={recommendation} />
+      {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
+      <Box sx={{ mt: "auto", pt: 2 }}>
         <DecisionActions id={recommendation.id} onDecided={setDecided} />
-      </Panel>
+      </Box>
     </Box>
   );
 }

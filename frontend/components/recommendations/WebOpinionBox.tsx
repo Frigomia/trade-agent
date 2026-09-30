@@ -1,15 +1,16 @@
 import { Box, Typography } from "@mui/material";
 import { Globe } from "lucide-react";
+import { Markdown } from "@/components/ui/Markdown";
 
 // The mockups' `.web`: dashed always means web-derived and not part of the score.
-export function WebOpinionBox({ text }: { text: string }) {
+export function WebOpinionBox({ text, article = false }: { text: string; article?: boolean }) {
   return (
     <Box
       sx={{
-        mt: 1.5,
-        p: "9px 11px",
+        ...(article
+          ? { mt: 2.5, p: "20px 26px", borderRadius: "16px" }
+          : { mt: 1.5, p: "9px 11px", borderRadius: "12px" }),
         border: "1px dashed var(--line2)",
-        borderRadius: "12px",
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
@@ -18,9 +19,9 @@ export function WebOpinionBox({ text }: { text: string }) {
           Web second opinion &middot; not part of the score
         </Typography>
       </Box>
-      <Typography sx={{ fontSize: 12.5, color: "var(--text2)", mt: 0.5, lineHeight: 1.5 }}>
-        {text}
-      </Typography>
+      <Box sx={{ mt: article ? 1.5 : 0.5 }}>
+        <Markdown size={article ? 14.5 : 12.5}>{text}</Markdown>
+      </Box>
     </Box>
   );
 }
