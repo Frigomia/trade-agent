@@ -28,6 +28,17 @@ body {
   --track: rgba(255, 255, 255, 0.08);
   --field: rgba(255, 255, 255, 0.045);
   --scrim: rgba(0, 0, 0, 0.55);
+  --on-warn: #2a1c00;
+  --tab-bg: rgba(6, 13, 12, 0.7);
+  --bubble: rgba(52, 231, 169, 0.14);
+  --focus: #34e7a9;
+  /* Depth is a soft ambient shadow plus a 1px top highlight; the button glow is the one luminous accent. */
+  --shadow: 0 18px 34px -22px #000, inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --btn-shadow: 0 12px 24px -12px rgba(52, 231, 169, 0.6);
+  --pop: 0 30px 60px -20px #000, 0 0 0 1px rgba(120, 255, 214, 0.14);
+  --page-glow:
+    radial-gradient(520px 260px at 0% 0%, rgba(24, 190, 146, 0.16), transparent 62%),
+    radial-gradient(420px 260px at 100% 100%, rgba(24, 120, 190, 0.1), transparent 60%);
   color-scheme: dark;
 }
 
@@ -51,12 +62,40 @@ body {
   --track: rgba(10, 60, 45, 0.1);
   --field: rgba(255, 255, 255, 0.9);
   --scrim: rgba(11, 31, 25, 0.35);
+  --on-warn: #ffffff;
+  --tab-bg: rgba(255, 255, 255, 0.82);
+  --bubble: rgba(7, 138, 95, 0.12);
+  --focus: #067a52;
+  --shadow: 0 16px 30px -20px rgba(6, 60, 45, 0.3), 0 1px 0 rgba(6, 60, 45, 0.05), inset 0 1px 0 #fff;
+  --btn-shadow: 0 10px 20px -10px rgba(6, 122, 82, 0.55);
+  --pop: 0 30px 60px -22px rgba(6, 60, 45, 0.45), 0 0 0 1px rgba(8, 110, 80, 0.14);
+  --page-glow:
+    radial-gradient(520px 260px at 0% 0%, rgba(52, 231, 169, 0.22), transparent 62%),
+    radial-gradient(420px 260px at 100% 100%, rgba(80, 160, 255, 0.13), transparent 60%);
   color-scheme: light;
 }
 
 body {
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--page-glow);
+  background-attachment: fixed;
   color: var(--text);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+::selection {
+  background: rgba(52, 231, 169, 0.3);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: no-preference) {

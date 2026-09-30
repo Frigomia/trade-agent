@@ -6,6 +6,8 @@ import { Box, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
 import { formatPct } from "@/lib/format";
+import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
 import { Amount } from "./Amount";
 import { PortfolioChart } from "./PortfolioChart";
 
@@ -20,26 +22,25 @@ export function PortfolioTile() {
   const hasPositions = summary.holdings.some((h) => h.shares > 0);
 
   return (
-    <Box sx={{ p: 2, border: "1px solid var(--line)", borderRadius: 2, mb: 2 }}>
-      <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>Portfolio</Typography>
+    <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
+      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Portfolio</Typography>
       {hasPositions ? (
         <>
-          <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-            <Amount value={summary.total_market_value} size={26} />
-            {summary.total_pl_pct !== null && (
-              <Typography
-                sx={{
-                  fontSize: 12,
-                  color: summary.total_pl_pct < 0 ? "var(--down)" : "var(--up)",
-                }}
-              >
-                {formatPct(summary.total_pl_pct)}
-              </Typography>
-            )}
+          <Box sx={{ mt: 0.5 }}>
+            <Amount value={summary.total_market_value} size={22} />
           </Box>
-          <PortfolioChart snapshots={snapshots ?? []} variant="sparkline" />
+          {summary.total_pl_pct !== null && (
+            <Box sx={{ mt: 0.75 }}>
+              <Pill tone={summary.total_pl_pct < 0 ? "down" : "up"}>
+                {formatPct(summary.total_pl_pct)}
+              </Pill>
+            </Box>
+          )}
+          <Box sx={{ display: { xs: "none", md: "block" }, mt: 1, color: "var(--up)" }}>
+            <PortfolioChart snapshots={snapshots ?? []} variant="sparkline" />
+          </Box>
           {summary.unpriced_count > 0 && (
-            <Typography sx={{ fontSize: 12, color: "var(--warn)" }}>
+            <Typography sx={{ fontSize: 12, color: "var(--warn)", mt: 0.5 }}>
               {summary.unpriced_count} not priced
             </Typography>
           )}
@@ -49,6 +50,6 @@ export function PortfolioTile() {
           Add your holdings in <Link href="/portfolio">Portfolio</Link>.
         </Typography>
       )}
-    </Box>
+    </Panel>
   );
 }

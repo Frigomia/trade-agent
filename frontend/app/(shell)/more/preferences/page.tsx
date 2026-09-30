@@ -14,6 +14,7 @@ import {
   type RiskTolerance,
 } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const RISKS: RiskTolerance[] = ["conservative", "moderate", "aggressive"];
 
@@ -46,12 +47,10 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 560 }}>
-      <Typography variant="h5" component="h1">
-        Preferences
-      </Typography>
-      <Typography color="text.secondary">
-        Preferences shape the explanations and the web second opinion. They never change the score or the call.
-      </Typography>
+      <PageHeader
+        title="Preferences"
+        subtitle="Preferences shape the explanations and the web second opinion. They never change the score or the call."
+      />
 
       <Typography variant="subtitle2" component="h2">
         Risk tolerance

@@ -39,7 +39,20 @@ export function ThemeToggle() {
   }
 
   return (
-    <IconButton onClick={toggle} aria-label="Switch theme" size="small">
+    <IconButton
+      onClick={toggle}
+      aria-label="Switch theme"
+      size="small"
+      sx={{
+        width: 34,
+        height: 34,
+        color: "var(--text)",
+        bgcolor: "var(--panel)",
+        border: "1px solid var(--line)",
+        boxShadow: "var(--shadow)",
+        "&:hover": { color: "var(--accent)", bgcolor: "var(--panel)" },
+      }}
+    >
       {theme === "light" ? (
         <Moon size={17} strokeWidth={1.75} />
       ) : (

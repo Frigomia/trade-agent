@@ -18,6 +18,7 @@ import { Amount } from "@/components/portfolio/Amount";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const DASH = "—";
 const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr" };
@@ -129,11 +130,10 @@ export default function PortfolioPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
-          Portfolio
-        </Typography>
-        <Box sx={{ flex: 1 }} />
+      <PageHeader
+        title="Portfolio"
+        actions={
+          <>
         <Button
           variant="outlined"
           startIcon={<Camera size={16} />}
@@ -156,7 +156,9 @@ export default function PortfolioPage() {
         >
           Log a trade
         </Button>
-      </Box>
+          </>
+        }
+      />
 
       {summaryError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -265,9 +267,10 @@ export default function PortfolioPage() {
             </Typography>
           </Box>
         ))}
-        <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
           <TextField
             size="small"
+            sx={{ flex: "1 1 120px" }}
             label="Watchlist ticker"
             value={watchTicker}
             onChange={(e) => setWatchTicker(e.target.value)}
@@ -275,6 +278,7 @@ export default function PortfolioPage() {
           <TextField
             select
             size="small"
+            sx={{ minWidth: 100 }}
             slotProps={{
               select: { native: true },
               htmlInput: { "aria-label": "Watchlist type" },
@@ -285,7 +289,7 @@ export default function PortfolioPage() {
             <option value="STOCK">Stock</option>
             <option value="ETF">ETF</option>
           </TextField>
-          <Button variant="outlined" onClick={addToWatchlist}>
+          <Button variant="outlined" onClick={addToWatchlist} sx={{ whiteSpace: "nowrap" }}>
             Add to watchlist
           </Button>
         </Box>

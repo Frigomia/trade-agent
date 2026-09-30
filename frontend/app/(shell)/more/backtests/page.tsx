@@ -10,6 +10,7 @@ import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/li
 import { useAction } from "@/lib/useAction";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 export default function BacktestsPage() {
   const [jobId, setJobId] = useState<string | null>(null);
@@ -57,15 +58,11 @@ export default function BacktestsPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 650 }}>
-          Backtests
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Link href="/more">Back to More</Link>
-      </Box>
+      <PageHeader title="Backtests" actions={<Link href="/more">Back to More</Link>} />
 
-      <RunForm onRun={start} running={submitting || jobRunning} error={error} />
+      <Box sx={{ maxWidth: 560 }}>
+        <RunForm onRun={start} running={submitting || jobRunning} error={error} />
+      </Box>
 
       {jobFailed && selectedId === null && (
         <Alert severity="warning" sx={{ mt: 2 }}>

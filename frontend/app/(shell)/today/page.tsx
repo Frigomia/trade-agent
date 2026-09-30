@@ -2,15 +2,47 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Box, Typography, Alert, Button } from "@mui/material";
+import { Box, Typography, Alert, Button, useMediaQuery, useTheme } from "@mui/material";
 import { Play } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
+import { toTime } from "@/components/portfolio/PortfolioChart";
 import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
+import { PageHeader } from "@/components/shell/PageHeader";
+import { Panel } from "@/components/ui/Panel";
+import { CostBasisTile, TodayDesktop } from "@/components/recommendations/TodayDesktop";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 
+const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
+
+// Time the newest pending recommendation was made, in local time.
+function lastAnalysis(recs: RecommendationOut[] | undefined): string | null {
+  if (!recs || recs.length === 0) return null;
+  const newest = recs.map((r) => r.created_at).sort().at(-1)!;
+  return new Date(toTime(newest)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function AwaitingTile({ recommendations }: { recommendations: RecommendationOut[] }) {
+  const parts = ACTION_ORDER.flatMap((action) => {
+    const count = recommendations.filter((r) => r.action === action).length;
+    return count > 0 ? [`${count} ${action}`] : [];
+  });
+  return (
+    <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
+      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Awaiting you</Typography>
+      <Typography sx={{ fontSize: 22, fontWeight: 650, letterSpacing: "-0.035em", mt: 0.5 }}>
+        {recommendations.length}
+      </Typography>
+      {parts.length > 0 && (
+        <Typography sx={{ fontSize: 11.5, color: "var(--muted)", mt: 1 }}>{parts.join(" · ")}</Typography>
+      )}
+    </Panel>
+  );
+}
+
 export default function TodayPage() {
+  const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   useDailySnapshot();
   const {
     data: recommendations,
@@ -47,26 +79,39 @@ export default function TodayPage() {
 
   const failedCount = job?.status === "DONE" ? job.results.filter((r) => r.error).length : 0;
 
+  const pending = recommendations ?? [];
+  const lastRun = lastAnalysis(recommendations);
+
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
-          Today
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
-          Awaiting you: {recommendations?.length ?? 0}
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<Play size={14} />}
-          disabled={running}
-          onClick={runAnalysis}
-        >
-          {running ? "Running…" : "Run analysis"}
-        </Button>
+      <PageHeader
+        title="Today"
+        subtitle={lastRun ? `Last analysis ${lastRun}` : undefined}
+        actions={
+          <Button
+            variant="text"
+            startIcon={<Play size={14} />}
+            disabled={running}
+            onClick={runAnalysis}
+            sx={{
+              minHeight: 0,
+              px: 1.5,
+              py: 0.9,
+              borderRadius: 999,
+              fontSize: 12.5,
+              bgcolor: "var(--up-bg)",
+              "&:hover": { bgcolor: "var(--up-bg)", filter: "brightness(1.1)" },
+            }}
+          >
+            {running ? "Running…" : "Run analysis"}
+          </Button>
+        }
+      />
+      <Box sx={{ display: "flex", gap: 1.25 }}>
+        <PortfolioTile />
+        {isDesktop && <CostBasisTile />}
+        <AwaitingTile recommendations={pending} />
       </Box>
-      <PortfolioTile />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.
@@ -92,7 +137,8 @@ export default function TodayPage() {
           No recommendations right now.
         </Typography>
       )}
-      {recommendations?.map((recommendation) => (
+      {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
+      {!isDesktop && recommendations?.map((recommendation) => (
         // No inline confirmation here — approving/dismissing just revalidates the list, and the
         // card disappears because it's no longer PENDING. The full "Decision recorded" screen is
         // the detail page's job (/today/[id], Task 7); "Back to Today" would be nonsensical copy

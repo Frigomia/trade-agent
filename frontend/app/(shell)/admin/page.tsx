@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
 import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
@@ -45,16 +46,17 @@ export default function AdminPage() {
           {loadError ? "Could not load users." : actionError}
         </Alert>
       )}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
-          Users
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Link href="/admin/usage">View usage</Link>
-        <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setInviteOpen(true)}>
-          Invite user
-        </Button>
-      </Box>
+      <PageHeader
+        title="Users"
+        actions={
+          <>
+            <Link href="/admin/usage">View usage</Link>
+            <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setInviteOpen(true)}>
+              Invite user
+            </Button>
+          </>
+        }
+      />
       <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
         {(["all", "active", "invited", "disabled"] as const).map((value) => {
           const count =
