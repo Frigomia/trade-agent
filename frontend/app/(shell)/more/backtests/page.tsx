@@ -10,6 +10,7 @@ import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/li
 import { useAction } from "@/lib/useAction";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
+import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 export default function BacktestsPage() {
@@ -86,6 +87,7 @@ export default function BacktestsPage() {
       {listError && <Alert severity="error">Could not load your recent runs.</Alert>}
       {list && list.length === 0 && <Typography sx={{ color: "var(--text2)" }}>No backtests yet.</Typography>}
       {list && list.length > 0 && (
+        <Panel sx={{ p: "4px 8px" }}>
         <List>
           {list.map((item) => (
             <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
@@ -96,6 +98,7 @@ export default function BacktestsPage() {
             </ListItemButton>
           ))}
         </List>
+        </Panel>
       )}
     </Box>
   );

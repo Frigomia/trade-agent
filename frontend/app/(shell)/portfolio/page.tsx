@@ -18,6 +18,7 @@ import { Amount } from "@/components/portfolio/Amount";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
+import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 const DASH = "—";
@@ -218,14 +219,22 @@ export default function PortfolioPage() {
         </Box>
       )}
 
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { md: "minmax(0, 1fr) 320px" },
+          gap: 2,
+          alignItems: "start",
+        }}
+      >
       {open.length > 0 && (
-        <Box sx={{ mb: 3 }}>
+        <Panel sx={{ p: "8px 18px" }}>
           <Box
             sx={{
               display: { xs: "none", md: "grid" },
               gridTemplateColumns: COLUMNS,
               gap: 2,
-              pb: 1,
+              py: 1,
               fontSize: 12,
               color: "var(--muted)",
               textAlign: "right",
@@ -246,10 +255,10 @@ export default function PortfolioPage() {
               onEdit={() => setHoldingForm({ open: true, holding })}
             />
           ))}
-        </Box>
+        </Panel>
       )}
 
-      <Box sx={{ p: 2, border: "1px solid var(--line)", borderRadius: 2, maxWidth: 420 }}>
+      <Panel sx={{ p: "16px 18px" }}>
         <Typography sx={{ fontWeight: 600, mb: 1 }}>Watchlist</Typography>
         {(summary?.watchlist ?? []).map((item) => (
           <Box
@@ -298,6 +307,7 @@ export default function PortfolioPage() {
             {watch.error}
           </Alert>
         )}
+      </Panel>
       </Box>
 
       <TradeSheet

@@ -46,7 +46,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 560 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, "& > :not(:first-child)": { maxWidth: 560 } }}>
       <PageHeader
         title="Preferences"
         subtitle="Preferences shape the explanations and the web second opinion. They never change the score or the call."

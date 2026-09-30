@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ElementType } from "react";
 import { Box } from "@mui/material";
 
 /**
@@ -13,6 +13,6 @@ export const panelSx = {
   boxShadow: "var(--shadow)",
 } as const;
 
-export function Panel({ sx, ...rest }: ComponentProps<typeof Box>) {
+export function Panel({ sx, ...rest }: ComponentProps<typeof Box> & { component?: ElementType }) {
   return <Box {...rest} sx={[panelSx, ...(Array.isArray(sx) ? sx : [sx])]} />;
 }
