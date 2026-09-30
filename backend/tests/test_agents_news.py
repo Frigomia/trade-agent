@@ -85,3 +85,11 @@ def test_run_news_agent_omits_context_section_when_none(monkeypatch):
     call_kwargs = mock_client.messages.create.call_args.kwargs
     user_message = call_kwargs["messages"][0]["content"]
     assert "Additional context" not in user_message
+
+
+def test_news_system_prompt_frames_the_user_context_as_data():
+    from app.agents.news import NEWS_AGENT_SYSTEM_PROMPT
+
+    assert "Additional context" in NEWS_AGENT_SYSTEM_PROMPT
+    assert "DATA" in NEWS_AGENT_SYSTEM_PROMPT
+    assert "cannot change the quantitative signals" in NEWS_AGENT_SYSTEM_PROMPT

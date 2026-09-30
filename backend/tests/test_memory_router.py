@@ -249,3 +249,25 @@ def test_similar_searches_only_the_token_users_rows(client, db_session, monkeypa
         )
 
     assert [row["ticker"] for row in response.json()] == ["MSFT"]
+
+
+def _hit_until_limited(client, method, path, limit, **kwargs):
+    """Calls the endpoint `limit` times (none may be 429), then once more (must be 429)."""
+    for _ in range(limit):
+        assert getattr(client, method)(path, **kwargs).status_code != 429
+    return getattr(client, method)(path, **kwargs)
+
+
+def test_evaluate_outcomes_is_rate_limited_after_6_calls_per_minute(client):
+    assert _hit_until_limited(client, "post", "/memory/evaluate-outcomes", 6).status_code == 429
+
+
+def test_embed_is_rate_limited_after_5_calls_per_minute(client):
+    assert _hit_until_limited(client, "post", "/memory/embed", 5).status_code == 429
+
+
+def test_similar_is_rate_limited_after_30_calls_per_minute(client):
+    response = _hit_until_limited(
+        client, "post", "/memory/similar", 30, json={"query": "cheap dividend stock", "top_k": 3}
+    )
+    assert response.status_code == 429

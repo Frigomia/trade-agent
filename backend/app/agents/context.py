@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 import uuid
@@ -15,6 +16,12 @@ CHAT_MESSAGE_DISPLAY_LIMIT = 500
 SIMILAR_RECOMMENDATIONS_LIMIT = 3
 
 
+def _quote(text: str) -> str:
+    """User-written text as one JSON-quoted line, so it can carry no newline and therefore cannot
+    fake a `## ...` section heading (or any other line-structured instruction) in the prompt."""
+    return json.dumps(text, ensure_ascii=False)
+
+
 def _build_preferences_section(db: Session, user_id: uuid.UUID) -> str:
     try:
         pref = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
@@ -25,9 +32,10 @@ def _build_preferences_section(db: Session, user_id: uuid.UUID) -> str:
         if pref.risk_tolerance:
             parts.append(f"Risk tolerance: {pref.risk_tolerance}")
         if pref.sector_avoid_list:
-            parts.append(f"Avoid sectors: {', '.join(pref.sector_avoid_list)}")
+            avoid = ", ".join(_quote(sector) for sector in pref.sector_avoid_list)
+            parts.append(f"Avoid sectors: {avoid}")
         if pref.notes:
-            parts.append(f"Notes: {pref.notes}")
+            parts.append(f"Notes: {_quote(pref.notes)}")
         return "\n".join(parts) if parts else "No stated investment preferences."
     except Exception:
         logger.exception("Investment preferences lookup failed")
@@ -82,7 +90,7 @@ def _build_session_memory_section(db: Session, user_id: uuid.UUID, ticker: str) 
         if not messages:
             return "No relevant chat history."
 
-        lines = [f"- {m.role}: {m.content[:CHAT_MESSAGE_DISPLAY_LIMIT]}" for m in messages]
+        lines = [f"- {m.role}: {_quote(m.content[:CHAT_MESSAGE_DISPLAY_LIMIT])}" for m in messages]
         return "\n".join(lines)
     except Exception:
         logger.exception("Session memory lookup failed for %s", ticker)

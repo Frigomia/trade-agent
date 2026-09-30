@@ -161,14 +161,31 @@ class MemorySimilarOut(BaseModel):
 RiskTolerance = Literal["conservative", "moderate", "aggressive"]
 
 
+# One sector name: stripped, 1-50 characters, no control characters (so no newlines).
+SectorName = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=50, pattern=r"^[^\x00-\x1f\x7f]+$"
+    ),
+]
+MAX_AVOID_SECTORS = 20
+
+
 class PreferencesIn(BaseModel):
     risk_tolerance: RiskTolerance | None = None
-    sector_avoid_list: list[str] = Field(default_factory=list)
+    sector_avoid_list: list[SectorName] = Field(default_factory=list, max_length=MAX_AVOID_SECTORS)
     notes: str | None = Field(default=None, max_length=2000)
 
 
-class PreferencesOut(PreferencesIn):
+class PreferencesOut(BaseModel):
+    """Deliberately not a subclass of PreferencesIn: output must stay lenient so a row saved before
+    the input bounds existed can still be read (and exported) instead of failing validation."""
+
     model_config = ConfigDict(from_attributes=True)
+
+    risk_tolerance: RiskTolerance | None = None
+    sector_avoid_list: list[str] = Field(default_factory=list)
+    notes: str | None = None
 
 
 class PortfolioSnapshotOut(BaseModel):
