@@ -7,10 +7,10 @@ import {
   TextField,
   Button,
   Alert,
-  Typography,
   Checkbox,
   FormControlLabel,
 } from "@mui/material";
+import { AuthHeading, AuthShell } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
@@ -58,62 +58,76 @@ export default function AcceptInvitationPage() {
 
   if (!email) {
     return (
-      <Box sx={{ maxWidth: 380, mx: "auto", mt: 8, p: 2 }}>
+      <AuthShell>
         <Alert severity="warning">
           This invitation link is no longer valid — it may have expired or already been used. Ask
           your administrator to resend it.
         </Alert>
-      </Box>
+      </AuthShell>
     );
   }
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 380, mx: "auto", mt: 8, p: 2 }}>
-      <Typography variant="h5" sx={{ fontWeight: 650 }}>
-        Set your password
-      </Typography>
-      <Typography sx={{ color: "var(--muted)", mt: 0.5 }}>
-        The administrator invited you to trade-agent. This link expires in 24 hours.
-      </Typography>
-      <TextField label="Email" value={email} fullWidth margin="normal" disabled />
-      <TextField
-        label="Create password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        fullWidth
-        margin="normal"
-        required
-      />
-      <TextField
-        label="Confirm password"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        fullWidth
-        margin="normal"
-        required
-      />
-      <FormControlLabel
-        control={
-          <Checkbox checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
-        }
-        label="I understand trade-agent gives advisory information only and is not investment advice."
-      />
-      {error && (
-        <Alert severity="error" sx={{ mt: 1 }}>
-          {error}
-        </Alert>
-      )}
-      <Button
-        type="submit"
-        variant="contained"
-        fullWidth
-        sx={{ mt: 2 }}
-        disabled={!acceptedTerms || submitting}
-      >
-        Create account
-      </Button>
-    </Box>
+    <AuthShell>
+      <Box component="form" onSubmit={handleSubmit}>
+        <AuthHeading
+          title="Set your password"
+          subtitle="The administrator invited you to trade-agent. This link expires in 24 hours."
+        />
+        <TextField
+          label="Email"
+          value={email}
+          fullWidth
+          margin="normal"
+          disabled
+          sx={{ mt: 3.25 }}
+        />
+        <TextField
+          label="Create password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          fullWidth
+          margin="normal"
+          required
+          autoComplete="new-password"
+        />
+        <TextField
+          label="Confirm password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          fullWidth
+          margin="normal"
+          required
+          autoComplete="new-password"
+        />
+        <FormControlLabel
+          sx={{ alignItems: "flex-start", mt: 1.5, mx: 0, "& .MuiFormControlLabel-label": { fontSize: 12.5, color: "var(--text2)", lineHeight: 1.45, pt: 0.5 } }}
+          control={
+            <Checkbox
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              sx={{ p: 0.5, mr: 1 }}
+            />
+          }
+          label="I understand trade-agent gives advisory information only and is not investment advice."
+        />
+        {error && (
+          <Alert severity="error" sx={{ mt: 1.5 }}>
+            {error}
+          </Alert>
+        )}
+        <Button
+          type="submit"
+          variant="contained"
+          fullWidth
+          sx={{ mt: 2.25 }}
+          disabled={!acceptedTerms || submitting}
+        >
+          Create account
+        </Button>
+      </Box>
+    </AuthShell>
   );
 }
