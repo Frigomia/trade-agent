@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import type { Usage } from "@/lib/usage";
 import { useAction } from "@/lib/useAction";
+import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 const LINKS = [
@@ -34,34 +35,36 @@ export default function AccountPage() {
   }
 
   return (
-    <Box sx={{ display: "grid", gap: 3 }}>
+    <Box sx={{ display: "grid", gap: 2, maxWidth: 560 }}>
       <PageHeader title="Account" />
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
         <>
-          <Typography>
-            Signed in as <strong>{me.email}</strong>
-          </Typography>
-          {usage && <UsageSummary usage={usage} />}
-          {usageError && <Alert severity="error">Could not load your usage.</Alert>}
-          <Box component="nav" sx={{ display: "grid", gap: 1 }}>
+          <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }}>
+            <Typography>
+              Signed in as <strong>{me.email}</strong>
+            </Typography>
+            {usage && <UsageSummary usage={usage} />}
+            {usageError && <Alert severity="error">Could not load your usage.</Alert>}
+          </Panel>
+          <Panel component="nav" sx={{ p: "14px 18px", display: "grid", gap: 1 }}>
             {LINKS.map((l) => (
               <Link key={l.href} href={l.href}>
                 {l.label}
               </Link>
             ))}
-          </Box>
-          <Box>
+          </Panel>
+          <Panel sx={{ p: "16px 18px" }}>
             <ChangePasswordForm />
-          </Box>
-          <Box>
+          </Panel>
+          <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }}>
             <DataActions email={me.email} />
-          </Box>
-          <Box>
-            <Button variant="outlined" onClick={handleSignOut} disabled={submitting}>
-              Sign out
-            </Button>
-          </Box>
+            <Box>
+              <Button variant="outlined" onClick={handleSignOut} disabled={submitting}>
+                Sign out
+              </Button>
+            </Box>
+          </Panel>
           {error && <Alert severity="error">{error}</Alert>}
         </>
       )}

@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Box, Typography, Alert } from "@mui/material";
+import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, PriceBlock } from "@/components/recommendations/RecommendationCard";
@@ -10,6 +12,21 @@ import { DecisionActions } from "@/components/recommendations/DecisionActions";
 import { EvidencePanel } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
+import { ThemeToggle } from "@/components/shell/ThemeToggle";
+
+// The mockup's detail header: a quiet back link and the round theme toggle.
+function BackRow() {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+      <Link href="/today" style={{ display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none", color: "var(--muted)", fontSize: 14 }}>
+        <ChevronLeft size={18} />
+        Today
+      </Link>
+      <Box sx={{ flex: 1 }} />
+      <ThemeToggle />
+    </Box>
+  );
+}
 
 export default function RecommendationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,13 +44,16 @@ export default function RecommendationDetailPage() {
 
   if (!validId || loadError) {
     return (
-      <Alert severity="error" sx={{ mt: 2 }}>
+      <>
+        <BackRow />
+        <Alert severity="error">
         {!validId
           ? "Recommendation not found."
           : loadError instanceof ApiError
             ? loadError.detail
             : "Could not load this recommendation."}
-      </Alert>
+        </Alert>
+      </>
     );
   }
 
@@ -43,24 +63,32 @@ export default function RecommendationDetailPage() {
 
   if (recommendation.status === "SUPERSEDED") {
     return (
-      <Alert severity="info" sx={{ mt: 2 }}>
-        A newer analysis replaced this recommendation for {recommendation.ticker}.
-      </Alert>
+      <>
+        <BackRow />
+        <Alert severity="info">
+          A newer analysis replaced this recommendation for {recommendation.ticker}.
+        </Alert>
+      </>
     );
   }
 
   if (recommendation.status !== "PENDING") {
     return (
-      <ConfirmationPanel
-        recommendation={recommendation}
-        onChanged={setDecided}
-        onBackToToday={() => router.push("/today")}
-      />
+      <>
+        <BackRow />
+        <ConfirmationPanel
+          recommendation={recommendation}
+          onChanged={setDecided}
+          onBackToToday={() => router.push("/today")}
+        />
+      </>
     );
   }
 
   return (
-    <Box sx={{ maxWidth: 480 }}>
+    <Box>
+      <BackRow />
+      <Box sx={{ maxWidth: 480 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
@@ -72,6 +100,7 @@ export default function RecommendationDetailPage() {
       <EvidencePanel recommendation={recommendation} />
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
+      </Box>
     </Box>
   );
 }

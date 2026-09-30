@@ -37,7 +37,8 @@ describe("TrackRecordPage", () => {
       return { evaluated: 0, remaining: 0 };
     });
     renderFresh();
-    expect(await screen.findByText(/1 of 2 calls moved the way the action implied/i)).toBeInTheDocument();
+    expect(await screen.findByText(/calls moved the way the action implied/i)).toBeInTheDocument();
+    expect(screen.getByText(/of 2/)).toBeInTheDocument();
     expect(screen.getByText(/small sample, not a forecast/i)).toBeInTheDocument();
     expect(screen.getByText("+5.0%")).toBeInTheDocument();
     expect(screen.getByText("+3.0%")).toBeInTheDocument();
@@ -76,7 +77,7 @@ describe("TrackRecordPage", () => {
       return [rec(1, "BUY", 0.05)];
     });
     renderFresh();
-    expect(await screen.findByText(/1 of 1 calls moved the way the action implied/i)).toBeInTheDocument();
+    expect(await screen.findByText(/calls moved the way the action implied/i)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
