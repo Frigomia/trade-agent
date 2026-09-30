@@ -56,8 +56,8 @@ export default function TrackRecordPage() {
         <Panel sx={{ p: "18px 20px", mb: 1.75 }}>
           <Typography sx={{ fontSize: 40, fontWeight: 650, letterSpacing: "-0.035em", lineHeight: 1.1 }}>
             {summary.matched}
-            <Box component="span" sx={{ color: "var(--muted)", fontSize: 28 }}>
-              {" "}of {summary.scored}
+            <Box component="span" sx={{ color: "var(--muted)", fontSize: 28, ml: 1 }}>
+              of {summary.scored}
             </Box>
           </Typography>
           <Typography sx={{ fontSize: 15, mt: 0.5 }}>calls moved the way the action implied</Typography>
