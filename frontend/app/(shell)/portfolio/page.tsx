@@ -267,9 +267,10 @@ export default function PortfolioPage() {
             </Typography>
           </Box>
         ))}
-        <Box sx={{ display: "flex", gap: 1, mt: 1.5 }}>
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
           <TextField
             size="small"
+            sx={{ flex: "1 1 120px" }}
             label="Watchlist ticker"
             value={watchTicker}
             onChange={(e) => setWatchTicker(e.target.value)}
@@ -277,6 +278,7 @@ export default function PortfolioPage() {
           <TextField
             select
             size="small"
+            sx={{ minWidth: 100 }}
             slotProps={{
               select: { native: true },
               htmlInput: { "aria-label": "Watchlist type" },
@@ -287,7 +289,7 @@ export default function PortfolioPage() {
             <option value="STOCK">Stock</option>
             <option value="ETF">ETF</option>
           </TextField>
-          <Button variant="outlined" onClick={addToWatchlist}>
+          <Button variant="outlined" onClick={addToWatchlist} sx={{ whiteSpace: "nowrap" }}>
             Add to watchlist
           </Button>
         </Box>

@@ -17,13 +17,12 @@ export function PageHeader({
 }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ flex: "1 1 180px", minWidth: 0 }}>
         <Typography variant="h5" component="h1">
           {title}
         </Typography>
         {subtitle && <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{subtitle}</Typography>}
       </Box>
-      <Box sx={{ flex: 1 }} />
       {actions}
       <ThemeToggle />
     </Box>

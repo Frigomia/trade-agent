@@ -84,6 +84,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
 ::selection {
   background: rgba(52, 231, 169, 0.3);
 }

@@ -60,7 +60,9 @@ export default function BacktestsPage() {
     <Box>
       <PageHeader title="Backtests" actions={<Link href="/more">Back to More</Link>} />
 
-      <RunForm onRun={start} running={submitting || jobRunning} error={error} />
+      <Box sx={{ maxWidth: 560 }}>
+        <RunForm onRun={start} running={submitting || jobRunning} error={error} />
+      </Box>
 
       {jobFailed && selectedId === null && (
         <Alert severity="warning" sx={{ mt: 2 }}>
