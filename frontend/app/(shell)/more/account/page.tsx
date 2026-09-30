@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ElementType } from "react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { ChevronRight, History, ListChecks, Lock, LogOut, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -21,6 +22,48 @@ const LINKS = [
   { href: "/more/backtests", label: "Backtests", icon: History },
   { href: "/more/preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
+
+// A settings-list row: muted icon, label, chevron. Renders as a link or a button via `component`.
+function SettingsRow({
+  icon: Icon,
+  label,
+  open,
+  ...rest
+}: {
+  icon: LucideIcon;
+  label: string;
+  open?: boolean;
+  component: ElementType;
+  href?: string;
+  type?: "button";
+  onClick?: () => void;
+  "aria-expanded"?: boolean;
+}) {
+  return (
+    <Box
+      {...rest}
+      sx={{
+        all: "unset",
+        boxSizing: "border-box",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 1.5,
+        py: 1.5,
+        cursor: "pointer",
+        color: "var(--text)",
+        borderBottom: "1px solid var(--line)",
+        "&:last-of-type": { borderBottom: 0 },
+      }}
+    >
+      <Icon size={18} color="var(--muted)" />
+      <Box component="span" sx={{ flex: 1, color: "var(--text)" }}>
+        {label}
+      </Box>
+      <ChevronRight size={18} color="var(--muted)" style={{ transform: open ? "rotate(90deg)" : undefined }} />
+    </Box>
+  );
+}
 
 export default function AccountPage() {
   const router = useRouter();
@@ -55,52 +98,19 @@ export default function AccountPage() {
           {usageError && <Alert severity="error">Could not load your usage.</Alert>}
           <Panel component="nav" sx={{ p: "4px 18px" }}>
             {LINKS.map((l) => (
-              <Box
-                key={l.href}
-                component={Link}
-                href={l.href}
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1.5,
-                  py: 1.5,
-                  color: "var(--text)",
-                  textDecoration: "none",
-                  borderBottom: "1px solid var(--line)",
-                  "&:last-of-type": { borderBottom: 0 },
-                }}
-              >
-                <l.icon size={18} color="var(--muted)" />
-                <Box component="span" sx={{ flex: 1, color: "var(--text)" }}>
-                  {l.label}
-                </Box>
-                <ChevronRight size={18} color="var(--muted)" />
-              </Box>
+              <SettingsRow key={l.href} icon={l.icon} label={l.label} component={Link} href={l.href} />
             ))}
           </Panel>
           <Panel sx={{ p: "4px 18px" }}>
-            <Box
+            <SettingsRow
+              icon={Lock}
+              label="Change password"
               component="button"
               type="button"
               aria-expanded={passwordOpen}
               onClick={() => setPasswordOpen((open) => !open)}
-              sx={{
-                all: "unset",
-                boxSizing: "border-box",
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                py: 1.5,
-                cursor: "pointer",
-              }}
-            >
-              <Lock size={18} color="var(--muted)" />
-              <Box component="span" sx={{ flex: 1 }}>
-                Change password
-              </Box>
-              <ChevronRight size={18} color="var(--muted)" style={{ transform: passwordOpen ? "rotate(90deg)" : undefined }} />
-            </Box>
+              open={passwordOpen}
+            />
             {passwordOpen && (
               <Box sx={{ pb: 2 }}>
                 <ChangePasswordForm />

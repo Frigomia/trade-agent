@@ -51,6 +51,15 @@ function reasoningLine(recommendation: RecommendationOut): string | null {
   return end === -1 ? text : text.slice(0, end + 1);
 }
 
+export function ChangePill({ pct }: { pct: number }) {
+  return (
+    <Pill tone={pct >= 0 ? "up" : "down"}>
+      {pct >= 0 ? "+" : ""}
+      {pct.toFixed(1)}%
+    </Pill>
+  );
+}
+
 export function PriceBlock({ recommendation }: { recommendation: RecommendationOut }) {
   if (recommendation.current_price === null) return null;
   const change = recommendation.price_change_pct;
@@ -59,12 +68,7 @@ export function PriceBlock({ recommendation }: { recommendation: RecommendationO
       <Typography sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
         {recommendation.current_price.toFixed(2)}
       </Typography>
-      {change !== null && (
-        <Pill tone={change >= 0 ? "up" : "down"}>
-          {change >= 0 ? "+" : ""}
-          {change.toFixed(1)}%
-        </Pill>
-      )}
+      {change !== null && <ChangePill pct={change} />}
     </Box>
   );
 }
