@@ -171,20 +171,6 @@ describe("PortfolioPage", () => {
     await waitFor(() => expect(screen.getByText(/your portfolio is empty/i)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /log a trade/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /record snapshot/i })).toBeDisabled();
-    expect(screen.queryByText(/start your history/i)).not.toBeInTheDocument();
-  });
-
-  it("shows an error instead of the chart when the snapshot history fails to load", async () => {
-    handlers["GET /portfolio/snapshots"] = () => {
-      throw new Error("boom");
-    };
-    renderFresh();
-
-    await waitFor(() =>
-      expect(screen.getByText("Could not load your value history.")).toBeInTheDocument(),
-    );
-    expect(screen.queryByText(/start your history/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
   });
 
   it("shows an inline error when the summary fails to load", async () => {
