@@ -88,6 +88,11 @@ class RecommendationOut(BaseModel):
     fundamental_score: int | None
     technical_signal: str | None
     price_at_recommendation: float | None
+    # Stored by POST /memory/evaluate-outcomes ~20 days after the call. A fraction (0.05 = +5%)
+    # despite the column name. evaluated_at set with a null return means "resolved, no valid
+    # outcome" (no price history), which is different from "not due yet" (both null).
+    outcome_forward_return_pct: float | None = None
+    outcome_evaluated_at: datetime | None = None
     # Computed at request time (see app/routers/analysis.py's quote augmentation), never
     # persisted — defaults let model_validate build this from a plain ORM row before those are
     # attached.
