@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import useSWR from "swr";
 import { Box, LinearProgress, Table, TableHead, TableBody, TableRow, TableCell, Typography, Alert } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
@@ -50,7 +49,7 @@ export default function AdminUsagePage() {
           Could not load usage.
         </Alert>
       )}
-      <PageHeader title="Usage and limits" actions={<Link href="/admin">Back to users</Link>} />
+      <PageHeader title="Usage and limits" />
       <Alert severity="info" sx={{ mb: 2 }}>
         You manage access, not data. Usage shows how much each person used the service, never what
         they asked or received.

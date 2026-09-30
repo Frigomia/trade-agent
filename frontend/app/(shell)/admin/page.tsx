@@ -4,7 +4,6 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Box, Typography, Alert, Button, Chip, IconButton } from "@mui/material";
 import { Plus, MoreHorizontal } from "lucide-react";
-import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
@@ -48,12 +47,9 @@ export default function AdminPage() {
       <PageHeader
         title="Users"
         actions={
-          <>
-            <Link href="/admin/usage">View usage</Link>
-            <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setInviteOpen(true)}>
-              Invite user
-            </Button>
-          </>
+          <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => setInviteOpen(true)}>
+            Invite user
+          </Button>
         }
       />
       <Alert severity="info" sx={{ mb: 2 }}>
