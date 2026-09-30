@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct } from "@/lib/format";
 import { buildTrackRecord, type Verdict } from "@/lib/trackRecord";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const VERDICT_WORD: Record<Verdict, string> = {
   matched: "Matched",
@@ -39,13 +40,7 @@ export default function TrackRecordPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 650 }}>
-          Track record
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Link href="/more">Back to More</Link>
-      </Box>
+      <PageHeader title="Track record" actions={<Link href="/more">Back to More</Link>} />
 
       {error && <Alert severity="error">Could not load your track record.</Alert>}
 

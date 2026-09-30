@@ -11,6 +11,7 @@ import { apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import type { Usage } from "@/lib/usage";
 import { useAction } from "@/lib/useAction";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const LINKS = [
   { href: "/more/track-record", label: "Track record" },
@@ -34,9 +35,7 @@ export default function AccountPage() {
 
   return (
     <Box sx={{ display: "grid", gap: 3 }}>
-      <Typography variant="h1" sx={{ fontSize: 24, fontWeight: 600 }}>
-        Account
-      </Typography>
+      <PageHeader title="Account" />
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
         <>

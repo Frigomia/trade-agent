@@ -1,31 +1,44 @@
 "use client";
 
 import Link from "next/link";
-import { Box, Typography, Chip } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { Globe } from "lucide-react";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
+import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
 import { DecisionActions } from "./DecisionActions";
 import { EvidencePanel } from "./EvidencePanel";
 
-// Matches the mockups' badge convention: BUY/ADD/HOLD/WATCH share the default accent badge,
-// TRIM gets the warning color, SELL the down color (the one action styled inline, not via a
-// shared class, in the original mockup — folded into this same lookup for one consistent path).
+// The mockups' action badge: a small rounded square (not a pill). BUY/ADD/HOLD/WATCH share the
+// emerald fill, TRIM is amber, SELL is coral; the word is always shown.
 const ACCENT = { bg: "var(--accent-solid)", fg: "var(--on-accent)" };
 const ACTION_COLOR: Record<Action, { bg: string; fg: string }> = {
   BUY: ACCENT,
   ADD: ACCENT,
   HOLD: ACCENT,
   WATCH: ACCENT,
-  TRIM: { bg: "var(--warn)", fg: "var(--on-accent)" },
+  TRIM: { bg: "var(--warn)", fg: "var(--on-warn)" },
   SELL: { bg: "var(--down)", fg: "#fff" },
 };
 
 export function ActionChip({ action }: { action: Action }) {
   return (
-    <Chip
-      label={action}
-      size="small"
-      sx={{ bgcolor: ACTION_COLOR[action].bg, color: ACTION_COLOR[action].fg, fontWeight: 700 }}
-    />
+    <Box
+      component="span"
+      sx={{
+        fontSize: 12,
+        fontWeight: 700,
+        letterSpacing: "0.06em",
+        px: "9px",
+        py: "3px",
+        borderRadius: "8px",
+        bgcolor: ACTION_COLOR[action].bg,
+        color: ACTION_COLOR[action].fg,
+        lineHeight: 1.45,
+      }}
+    >
+      {action}
+    </Box>
   );
 }
 
@@ -40,19 +53,17 @@ function reasoningLine(recommendation: RecommendationOut): string | null {
 
 export function PriceBlock({ recommendation }: { recommendation: RecommendationOut }) {
   if (recommendation.current_price === null) return null;
+  const change = recommendation.price_change_pct;
   return (
     <Box sx={{ textAlign: "right" }}>
-      <Typography sx={{ fontWeight: 600 }}>{recommendation.current_price.toFixed(2)}</Typography>
-      {recommendation.price_change_pct !== null && (
-        <Typography
-          sx={{
-            fontSize: 12,
-            color: recommendation.price_change_pct >= 0 ? "var(--up)" : "var(--down)",
-          }}
-        >
-          {recommendation.price_change_pct >= 0 ? "+" : ""}
-          {recommendation.price_change_pct.toFixed(1)}%
-        </Typography>
+      <Typography sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+        {recommendation.current_price.toFixed(2)}
+      </Typography>
+      {change !== null && (
+        <Pill tone={change >= 0 ? "up" : "down"}>
+          {change >= 0 ? "+" : ""}
+          {change.toFixed(1)}%
+        </Pill>
       )}
     </Box>
   );
@@ -68,7 +79,7 @@ export function RecommendationCard({
   const line = reasoningLine(recommendation);
 
   return (
-    <Box sx={{ p: 2, border: "1px solid var(--line)", borderRadius: 2, mb: 1.5 }}>
+    <Panel sx={{ p: "14px", mt: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
         <Link
           href={`/today/${recommendation.id}`}
@@ -84,9 +95,15 @@ export function RecommendationCard({
       </Box>
       <EvidencePanel recommendation={recommendation} />
       {line && (
-        <Typography sx={{ fontSize: 13, color: "var(--text2)", mt: 1.5 }}>{line}</Typography>
+        <Box sx={{ mt: 1.5, pt: "11px", borderTop: "1px solid var(--line)" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "var(--muted)" }}>
+            <Globe size={15} />
+            <Typography sx={{ fontSize: 12 }}>Second opinion, from web search</Typography>
+          </Box>
+          <Typography sx={{ fontSize: 13, color: "var(--text2)", mt: 0.625 }}>{line}</Typography>
+        </Box>
       )}
       <DecisionActions id={recommendation.id} onDecided={onDecided} />
-    </Box>
+    </Panel>
   );
 }

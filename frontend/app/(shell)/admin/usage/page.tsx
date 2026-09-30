@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { Box, Typography, Table, TableHead, TableBody, TableRow, TableCell, Chip, Alert } from "@mui/material";
+import { Box, Table, TableHead, TableBody, TableRow, TableCell, Chip, Alert } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 export default function AdminUsagePage() {
   const { data: users, error: loadError } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
@@ -19,13 +20,7 @@ export default function AdminUsagePage() {
           Could not load usage.
         </Alert>
       )}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
-          Usage and limits
-        </Typography>
-        <Box sx={{ flex: 1 }} />
-        <Link href="/admin">Back to users</Link>
-      </Box>
+      <PageHeader title="Usage and limits" actions={<Link href="/admin">Back to users</Link>} />
       <Table>
         <TableHead>
           <TableRow>

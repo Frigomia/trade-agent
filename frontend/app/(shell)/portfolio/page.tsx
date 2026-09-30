@@ -18,6 +18,7 @@ import { Amount } from "@/components/portfolio/Amount";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const DASH = "—";
 const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr" };
@@ -129,11 +130,10 @@ export default function PortfolioPage() {
 
   return (
     <Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2, flexWrap: "wrap" }}>
-        <Typography variant="h5" sx={{ fontWeight: 650 }}>
-          Portfolio
-        </Typography>
-        <Box sx={{ flex: 1 }} />
+      <PageHeader
+        title="Portfolio"
+        actions={
+          <>
         <Button
           variant="outlined"
           startIcon={<Camera size={16} />}
@@ -156,7 +156,9 @@ export default function PortfolioPage() {
         >
           Log a trade
         </Button>
-      </Box>
+          </>
+        }
+      />
 
       {summaryError && (
         <Alert severity="error" sx={{ mb: 2 }}>

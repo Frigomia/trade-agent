@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { List, ListItemButton, ListItemText, Typography } from "@mui/material";
+import { List, ListItemButton, ListItemText } from "@mui/material";
+import { PageHeader } from "@/components/shell/PageHeader";
 
 const ITEMS = [
   { label: "Track record", href: "/more/track-record", hint: "How past calls moved after 20 days" },
@@ -13,9 +14,7 @@ const ITEMS = [
 export default function MorePage() {
   return (
     <div>
-      <Typography variant="h5" component="h1" sx={{ fontWeight: 650, mb: 1 }}>
-        More
-      </Typography>
+      <PageHeader title="More" />
       <List>
         {ITEMS.map((item) => (
           <ListItemButton key={item.href} component={Link} href={item.href}>
