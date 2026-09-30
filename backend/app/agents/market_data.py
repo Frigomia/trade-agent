@@ -23,14 +23,14 @@ async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
     for attempt in range(RETRY_ATTEMPTS):
         try:
             return await asyncio.to_thread(fetch)
-        except Exception:
+        except Exception as exc:
             if attempt == RETRY_ATTEMPTS - 1:
                 raise
             logger.warning(
-                "yfinance call failed (attempt %d/%d), retrying",
+                "yfinance call failed (attempt %d/%d), retrying: %s",
                 attempt + 1,
                 RETRY_ATTEMPTS,
-                exc_info=True,
+                type(exc).__name__,
             )
             await asyncio.sleep(RETRY_BASE_DELAY_SECONDS * (2**attempt))
     raise AssertionError("unreachable: loop always returns or raises")

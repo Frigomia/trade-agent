@@ -19,6 +19,8 @@ vi.mock("@/lib/api/client", () => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
   ApiError: FakeApiError,
 }));
+// Tested on its own; here it would only add a portfolio request to the shared apiFetch mock.
+vi.mock("@/components/portfolio/LogTradeCta", () => ({ LogTradeCta: () => "log-trade-cta" }));
 
 import { ConfirmationPanel } from "./ConfirmationPanel";
 
@@ -47,6 +49,26 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 describe("ConfirmationPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("offers to log the trade after an approval", () => {
+    render(
+      <ConfirmationPanel recommendation={rec()} onChanged={vi.fn()} onBackToToday={vi.fn()} />,
+    );
+
+    expect(screen.getByText("log-trade-cta")).toBeInTheDocument();
+  });
+
+  it("does not offer it after a dismissal", () => {
+    render(
+      <ConfirmationPanel
+        recommendation={rec({ status: "REJECTED" })}
+        onChanged={vi.fn()}
+        onBackToToday={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("log-trade-cta")).not.toBeInTheDocument();
   });
 
   it("shows what was decided, for an approved recommendation", () => {

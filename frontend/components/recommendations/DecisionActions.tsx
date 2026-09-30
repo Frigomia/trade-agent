@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import { useAction } from "@/lib/useAction";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
 export function DecisionActions({
@@ -12,25 +12,16 @@ export function DecisionActions({
   id: number;
   onDecided: (updated: RecommendationOut) => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { run, submitting, error } = useAction();
 
-  async function decide(action: "approve" | "reject") {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
+  const decide = (action: "approve" | "reject") =>
+    run(async () =>
       onDecided(
         await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, {
           method: "POST",
         }),
-      );
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
+      ),
+    );
 
   return (
     <>

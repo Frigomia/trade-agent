@@ -166,6 +166,31 @@ class PortfolioSnapshotOut(BaseModel):
     total_cost_basis: float
 
 
+class HoldingSummaryOut(HoldingIn):
+    # Computed at request time, never stored; all None when the quote fails (or shares == 0).
+    current_price: float | None = None
+    market_value: float | None = None
+    unrealized_pl: float | None = None
+    unrealized_pl_pct: float | None = None
+    weight: float | None = None
+
+
+class WatchlistSummaryOut(WatchlistItemIn):
+    current_price: float | None = None
+
+
+class PortfolioSummaryOut(BaseModel):
+    holdings: list[HoldingSummaryOut]
+    watchlist: list[WatchlistSummaryOut]
+    # Totals cover only priced, open (shares > 0) holdings — cost basis included, so P/L
+    # compares like with like. unpriced_count says how many open holdings were left out.
+    total_market_value: float
+    total_cost_basis: float
+    total_pl: float
+    total_pl_pct: float | None
+    unpriced_count: int
+
+
 # Light shape check only; the real check is that Supabase can deliver the invitation. Lowercased
 # and trimmed so the same person is never two rows.
 Email = Annotated[
