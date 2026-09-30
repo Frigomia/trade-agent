@@ -16,7 +16,6 @@ import { formatAmount, formatPct, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { Amount } from "@/components/portfolio/Amount";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
-import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -88,14 +87,7 @@ export default function PortfolioPage() {
     error: summaryError,
     mutate: mutateSummary,
   } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
-  const {
-    data: snapshots,
-    error: snapshotsError,
-    mutate: mutateSnapshots,
-  } = useSWR<Snapshot[]>(
-    "/portfolio/snapshots",
-    apiFetch,
-  );
+  const { mutate: mutateSnapshots } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
   useDailySnapshot();
 
   const [tradeOpen, setTradeOpen] = useState(false);
@@ -209,21 +201,12 @@ export default function PortfolioPage() {
         </>
       )}
 
-      {open.length > 0 && (
-        <Box sx={{ my: 2 }}>
-          {snapshotsError ? (
-            <Alert severity="error">Could not load your value history.</Alert>
-          ) : (
-            <PortfolioChart snapshots={snapshots ?? []} />
-          )}
-        </Box>
-      )}
-
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: { md: "minmax(0, 1fr) 320px" },
           gap: 2,
+          mt: "20px",
           alignItems: "start",
         }}
       >
