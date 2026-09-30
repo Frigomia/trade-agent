@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Decided in `docs/ARCHITECTURE.md` §3, not by this record: Next.js (React) + TypeScript + Tailwind, SWR for data fetching, path-filtered CI, deployed to Vercel. Lives in a new `frontend/` directory of the existing monorepo; the FastAPI backend already exists.
+Decided in `docs/ARCHITECTURE.md` §3, not by this record: Next.js (React) + TypeScript + MUI (Tailwind v4 is installed but unused), SWR for data fetching, path-filtered CI, deployed to Vercel. Lives in a new `frontend/` directory of the existing monorepo; the FastAPI backend already exists.
 
 ## Users
 

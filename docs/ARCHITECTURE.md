@@ -110,7 +110,7 @@ flowchart TB
 | API framework | FastAPI | Async, typed, auto OpenAPI docs, first-class WebSocket support for future streaming |
 | Agent orchestration | LangGraph | Explicit state graph; fan-out/fan-in for parallel specialist agents; `interrupt()` primitive for human approval gates (see §6) |
 | LLM | Claude (Anthropic API), `claude-sonnet-5` default, overridable via env | Web search tool built in server-side; no separate search API needed |
-| Frontend | Next.js (React) + TypeScript + Tailwind | Richest ecosystem for AI-native dashboards (streaming chat UIs, agent trace components) |
+| Frontend | Next.js (React) + TypeScript + MUI | Richest ecosystem for AI-native dashboards (streaming chat UIs, agent trace components) |
 | Data fetching (FE) | SWR | Lightweight, no backend coupling; swap for the Vercel AI SDK later if chat moves to streaming |
 | Database | Postgres via **Supabase** (local dev: Postgres+pgvector in Docker Compose — same SQLAlchemy models, same dialect as production) | Bundling DB + Auth in one project avoids running a separate auth service; matching the local and production dialect exactly avoids SQLite/Postgres drift in query behavior |
 | Auth | **Supabase Auth** | Hosted login, public sign-up disabled, invitation-only (admin invites by email); issues a JWT the backend verifies against the project's JWKS on every request (see §13). Roles and status live in our own `app_users` table |

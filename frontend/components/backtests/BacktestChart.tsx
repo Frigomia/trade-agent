@@ -66,7 +66,7 @@ export function BacktestChart({
               x2={CHART_WIDTH - CHART_MARGIN.right}
               y1={t.y}
               y2={t.y}
-              stroke="var(--border)"
+              stroke="var(--line)"
               strokeWidth={0.5}
             />
             <text
