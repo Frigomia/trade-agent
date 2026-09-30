@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
 import useSWR from "swr";
 import { Alert, Box, LinearProgress, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
@@ -42,7 +41,7 @@ export default function TrackRecordPage() {
 
   return (
     <Box>
-      <PageHeader title="Track record" subtitle="How past calls looked 20 trading days later" actions={<Link href="/more">Back to More</Link>} />
+      <PageHeader title="Track record" subtitle="How past calls looked 20 trading days later" />
 
       {error && <Alert severity="error">Could not load your track record.</Alert>}
 

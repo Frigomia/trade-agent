@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import useSWR from "swr";
 import { Alert, Box, List, ListItemButton, ListItemText, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
@@ -61,7 +60,7 @@ export default function BacktestsPage() {
 
   return (
     <Box>
-      <PageHeader title="Backtests" actions={<Link href="/more">Back to More</Link>} />
+      <PageHeader title="Backtests" />
 
       <Box
         sx={{
