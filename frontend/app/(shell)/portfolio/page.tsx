@@ -221,14 +221,14 @@ export default function PortfolioPage() {
 
       <Box
         sx={{
-          display: { md: "grid" },
+          display: "grid",
           gridTemplateColumns: { md: "minmax(0, 1fr) 320px" },
           gap: 2,
           alignItems: "start",
         }}
       >
       {open.length > 0 && (
-        <Panel sx={{ p: "8px 18px", mb: { xs: 2, md: 0 } }}>
+        <Panel sx={{ p: "8px 18px" }}>
           <Box
             sx={{
               display: { xs: "none", md: "grid" },

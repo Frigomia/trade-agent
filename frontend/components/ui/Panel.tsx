@@ -13,9 +13,6 @@ export const panelSx = {
   boxShadow: "var(--shadow)",
 } as const;
 
-export function Panel({
-  sx,
-  ...rest
-}: ComponentProps<typeof Box> & { component?: ElementType }) {
+export function Panel({ sx, ...rest }: ComponentProps<typeof Box> & { component?: ElementType }) {
   return <Box {...rest} sx={[panelSx, ...(Array.isArray(sx) ? sx : [sx])]} />;
 }

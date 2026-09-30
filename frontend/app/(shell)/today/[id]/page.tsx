@@ -18,10 +18,14 @@ import { ThemeToggle } from "@/components/shell/ThemeToggle";
 function BackRow() {
   return (
     <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-      <Link href="/today" style={{ display: "inline-flex", alignItems: "center", gap: 4, textDecoration: "none", color: "var(--muted)", fontSize: 14 }}>
+      <Box
+        component={Link}
+        href="/today"
+        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, textDecoration: "none", color: "var(--muted)", fontSize: 14 }}
+      >
         <ChevronLeft size={18} />
         Today
-      </Link>
+      </Box>
       <Box sx={{ flex: 1 }} />
       <ThemeToggle />
     </Box>
@@ -29,6 +33,15 @@ function BackRow() {
 }
 
 export default function RecommendationDetailPage() {
+  return (
+    <>
+      <BackRow />
+      <RecommendationDetail />
+    </>
+  );
+}
+
+function RecommendationDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   // The id goes straight into an authenticated API path, so only ever accept a plain integer:
@@ -44,16 +57,13 @@ export default function RecommendationDetailPage() {
 
   if (!validId || loadError) {
     return (
-      <>
-        <BackRow />
-        <Alert severity="error">
+      <Alert severity="error">
         {!validId
           ? "Recommendation not found."
           : loadError instanceof ApiError
             ? loadError.detail
             : "Could not load this recommendation."}
-        </Alert>
-      </>
+      </Alert>
     );
   }
 
@@ -63,32 +73,24 @@ export default function RecommendationDetailPage() {
 
   if (recommendation.status === "SUPERSEDED") {
     return (
-      <>
-        <BackRow />
-        <Alert severity="info">
-          A newer analysis replaced this recommendation for {recommendation.ticker}.
-        </Alert>
-      </>
+      <Alert severity="info">
+        A newer analysis replaced this recommendation for {recommendation.ticker}.
+      </Alert>
     );
   }
 
   if (recommendation.status !== "PENDING") {
     return (
-      <>
-        <BackRow />
-        <ConfirmationPanel
-          recommendation={recommendation}
-          onChanged={setDecided}
-          onBackToToday={() => router.push("/today")}
-        />
-      </>
+      <ConfirmationPanel
+        recommendation={recommendation}
+        onChanged={setDecided}
+        onBackToToday={() => router.push("/today")}
+      />
     );
   }
 
   return (
-    <Box>
-      <BackRow />
-      <Box sx={{ maxWidth: 480 }}>
+    <Box sx={{ maxWidth: 480 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
@@ -100,7 +102,6 @@ export default function RecommendationDetailPage() {
       <EvidencePanel recommendation={recommendation} />
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
-      </Box>
     </Box>
   );
 }
