@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import { Box, Typography, Alert, Button } from "@mui/material";
 import { Play } from "lucide-react";
@@ -17,26 +17,15 @@ export default function TodayPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
-  const { data: job } = useSWR<JobStatus>(
-    jobId ? `/analysis/run/${jobId}` : null,
-    apiFetch,
-    { refreshInterval: (data) => (data?.status === "RUNNING" ? 2000 : 0) },
-  );
-
-  // Once a job reaches a terminal state (DONE or FAILED), pull in whatever new recommendations
-  // exist. This runs once per job id — deliberately NOT by nulling jobId back out here: doing
-  // that synchronously during render (a plausible first instinct) discards the very render that
-  // would have shown the FAILED/DONE banner, since React re-runs the component immediately with
-  // the cleared id before ever committing, and the job's SWR key (and so `job` itself) goes back
-  // to undefined. Leaving jobId set keeps `job` cached — polling just stops — so the banner below
-  // keeps rendering; a second Run-analysis click starts fresh regardless, since it sets a new id.
-  const settledJobId = useRef<string | null>(null);
-  useEffect(() => {
-    if (jobId && job && job.status !== "RUNNING" && settledJobId.current !== jobId) {
-      settledJobId.current = jobId;
-      mutate();
-    }
-  }, [jobId, job, mutate]);
+  // jobId is deliberately never cleared once set: `job` stays cached after polling stops, so the
+  // FAILED/DONE banners below keep rendering. A second Run-analysis click just sets a new id.
+  const { data: job } = useSWR<JobStatus>(jobId ? `/analysis/run/${jobId}` : null, apiFetch, {
+    refreshInterval: (data) => (data?.status === "RUNNING" ? 2000 : 0),
+    // A terminal status is the last response polling fetches: pull in the new recommendations.
+    onSuccess: (data) => {
+      if (data.status !== "RUNNING") mutate();
+    },
+  });
 
   const running = jobId !== null && (!job || job.status === "RUNNING");
 
@@ -65,19 +54,14 @@ export default function TodayPage() {
         <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
           Awaiting you: {recommendations?.length ?? 0}
         </Typography>
-        {recommendations && recommendations.length > 0 && (
-          // Hidden once the list is empty: the empty state below owns the "Run analysis" call
-          // to action then, and showing it in both places would duplicate the same button
-          // (identically labeled) on screen at once.
-          <Button
-            variant="outlined"
-            startIcon={<Play size={14} />}
-            disabled={running}
-            onClick={runAnalysis}
-          >
-            {running ? "Running…" : "Run analysis"}
-          </Button>
-        )}
+        <Button
+          variant="outlined"
+          startIcon={<Play size={14} />}
+          disabled={running}
+          onClick={runAnalysis}
+        >
+          {running ? "Running…" : "Run analysis"}
+        </Button>
       </Box>
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -100,12 +84,9 @@ export default function TodayPage() {
         </Alert>
       )}
       {recommendations?.length === 0 && (
-        <Box sx={{ textAlign: "center", py: 6 }}>
-          <Typography sx={{ color: "var(--muted)", mb: 2 }}>No recommendations right now.</Typography>
-          <Button variant="contained" startIcon={<Play size={14} />} disabled={running} onClick={runAnalysis}>
-            Run analysis
-          </Button>
-        </Box>
+        <Typography sx={{ color: "var(--muted)", textAlign: "center", py: 6 }}>
+          No recommendations right now.
+        </Typography>
       )}
       {recommendations?.map((recommendation) => (
         // No inline confirmation here — approving/dismissing just revalidates the list, and the

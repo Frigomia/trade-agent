@@ -1,23 +1,33 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Box, Typography, Button, Alert, Chip } from "@mui/material";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { Box, Typography, Chip } from "@mui/material";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
+import { DecisionActions } from "./DecisionActions";
 import { EvidencePanel } from "./EvidencePanel";
 
 // Matches the mockups' badge convention: BUY/ADD/HOLD/WATCH share the default accent badge,
 // TRIM gets the warning color, SELL the down color (the one action styled inline, not via a
 // shared class, in the original mockup — folded into this same lookup for one consistent path).
-export const ACTION_COLOR: Record<Action, { bg: string; fg: string }> = {
-  BUY: { bg: "var(--accent-solid)", fg: "var(--on-accent)" },
-  ADD: { bg: "var(--accent-solid)", fg: "var(--on-accent)" },
-  HOLD: { bg: "var(--accent-solid)", fg: "var(--on-accent)" },
-  WATCH: { bg: "var(--accent-solid)", fg: "var(--on-accent)" },
+const ACCENT = { bg: "var(--accent-solid)", fg: "var(--on-accent)" };
+const ACTION_COLOR: Record<Action, { bg: string; fg: string }> = {
+  BUY: ACCENT,
+  ADD: ACCENT,
+  HOLD: ACCENT,
+  WATCH: ACCENT,
   TRIM: { bg: "var(--warn)", fg: "var(--on-accent)" },
   SELL: { bg: "var(--down)", fg: "#fff" },
 };
+
+export function ActionChip({ action }: { action: Action }) {
+  return (
+    <Chip
+      label={action}
+      size="small"
+      sx={{ bgcolor: ACTION_COLOR[action].bg, color: ACTION_COLOR[action].fg, fontWeight: 700 }}
+    />
+  );
+}
 
 function reasoningLine(recommendation: RecommendationOut): string | null {
   if (recommendation.ai_analysis) {
@@ -54,28 +64,7 @@ export function RecommendationCard({
   recommendation: RecommendationOut;
   onDecided: (updated: RecommendationOut) => void;
 }) {
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function decide(action: "approve" | "reject") {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const updated = await apiFetch<RecommendationOut>(
-        `/analysis/recommendations/${recommendation.id}/${action}`,
-        { method: "POST" },
-      );
-      onDecided(updated);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   const line = reasoningLine(recommendation);
-  const colors = ACTION_COLOR[recommendation.action];
 
   return (
     <Box sx={{ p: 2, border: "1px solid var(--line)", borderRadius: 2, mb: 1.5 }}>
@@ -88,11 +77,7 @@ export function RecommendationCard({
             {recommendation.ticker}
           </Typography>
         </Link>
-        <Chip
-          label={recommendation.action}
-          size="small"
-          sx={{ bgcolor: colors.bg, color: colors.fg, fontWeight: 700 }}
-        />
+        <ActionChip action={recommendation.action} />
         <Box sx={{ flex: 1 }} />
         <PriceBlock recommendation={recommendation} />
       </Box>
@@ -100,22 +85,7 @@ export function RecommendationCard({
       {line && (
         <Typography sx={{ fontSize: 13, color: "var(--text2)", mt: 1.5 }}>{line}</Typography>
       )}
-      {error && (
-        <Alert severity="error" sx={{ mt: 1.5 }}>
-          {error}
-        </Alert>
-      )}
-      <Box sx={{ display: "flex", gap: 1.25, mt: 1.5 }}>
-        <Button variant="outlined" fullWidth disabled={submitting} onClick={() => decide("reject")}>
-          Dismiss
-        </Button>
-        <Button variant="contained" fullWidth disabled={submitting} onClick={() => decide("approve")}>
-          Approve
-        </Button>
-      </Box>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 1, textAlign: "center" }}>
-        Approving records your decision. Nothing is sent to a broker.
-      </Typography>
+      <DecisionActions id={recommendation.id} onDecided={onDecided} />
     </Box>
   );
 }
