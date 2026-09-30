@@ -20,6 +20,7 @@ from app.schemas import (
     WatchlistItemOut,
     WatchlistSummaryOut,
 )
+from app.snapshots import record_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -131,32 +132,7 @@ def log_trade(
 async def create_snapshot(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> PortfolioSnapshot:
-    holdings = db.query(Holding).filter_by(user_id=user.id).all()
-
-    total_market_value = 0.0
-    total_cost_basis = 0.0
-    for holding in holdings:
-        if float(holding.shares) == 0:
-            continue  # fully sold: not priced, matching /summary
-        quote = await fetch_quote_and_history(holding.ticker)
-        price = quote["price"]
-        if price is None or not math.isfinite(price):
-            raise HTTPException(
-                status_code=500,
-                detail=f"No current price available for {holding.ticker}",
-            )
-        total_market_value += float(holding.shares) * price
-        total_cost_basis += float(holding.shares) * float(holding.cost_basis)
-
-    snapshot = PortfolioSnapshot(
-        user_id=user.id,
-        total_market_value=total_market_value,
-        total_cost_basis=total_cost_basis,
-    )
-    db.add(snapshot)
-    db.commit()
-    db.refresh(snapshot)
-    return snapshot
+    return await record_snapshot(db, user.id)
 
 
 @router.get("/snapshots", response_model=list[PortfolioSnapshotOut])

@@ -267,7 +267,7 @@ def test_snapshot_computes_totals_from_holdings(client):
     _add_holding(client)
 
     with patch(
-        "app.routers.portfolio.fetch_quote_and_history",
+        "app.snapshots.fetch_quote_and_history",
         AsyncMock(return_value={"price": 200.0, "closes": [200.0]}),
     ):
         response = client.post("/portfolio/snapshot")
@@ -287,9 +287,7 @@ def test_snapshot_skips_zero_share_holdings(client):
             raise RuntimeError("no quote")
         return {"price": 200.0, "closes": [200.0]}
 
-    with patch(
-        "app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=fake_quote)
-    ) as mock:
+    with patch("app.snapshots.fetch_quote_and_history", AsyncMock(side_effect=fake_quote)) as mock:
         response = client.post("/portfolio/snapshot")
 
     assert response.status_code == 200
@@ -304,7 +302,7 @@ def test_snapshot_fails_when_price_fetch_raises(client):
 
     with (
         patch(
-            "app.routers.portfolio.fetch_quote_and_history",
+            "app.snapshots.fetch_quote_and_history",
             AsyncMock(side_effect=RuntimeError("yfinance unavailable")),
         ),
         pytest.raises(RuntimeError, match="yfinance unavailable"),
@@ -318,7 +316,7 @@ def test_snapshot_fails_when_price_is_none(client):
     _add_holding(client, ticker="DELISTED", name="Delisted Co")
 
     with patch(
-        "app.routers.portfolio.fetch_quote_and_history",
+        "app.snapshots.fetch_quote_and_history",
         AsyncMock(return_value={"price": None, "closes": []}),
     ):
         response = client.post("/portfolio/snapshot")
@@ -331,7 +329,7 @@ def test_snapshot_fails_when_price_is_nan(client):
     _add_holding(client, ticker="DELISTED", name="Delisted Co")
 
     with patch(
-        "app.routers.portfolio.fetch_quote_and_history",
+        "app.snapshots.fetch_quote_and_history",
         AsyncMock(return_value={"price": float("nan"), "closes": []}),
     ):
         response = client.post("/portfolio/snapshot")
