@@ -14,13 +14,24 @@ import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPane
 export default function RecommendationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  // The id goes straight into an authenticated API path, so only ever accept a plain integer:
+  // a crafted /today/..%2Fsomething link must not steer the request to a different route.
+  const validId = /^\d+$/.test(id);
   const { data: recommendation, error: loadError, mutate } = useSWR<RecommendationOut>(
-    `/analysis/recommendations/${id}`,
+    validId ? `/analysis/recommendations/${id}` : null,
     apiFetch,
   );
   // A decision (or a changed decision) is written straight into the SWR cache — no separate
   // local copy to keep in sync with it.
   const setDecided = (updated: RecommendationOut) => mutate(updated, { revalidate: false });
+
+  if (!validId) {
+    return (
+      <Alert severity="error" sx={{ mt: 2 }}>
+        Recommendation not found.
+      </Alert>
+    );
+  }
 
   if (loadError) {
     return (

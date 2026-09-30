@@ -129,6 +129,9 @@ async def list_recommendations(
     if status:
         query = query.filter_by(status=status)
     outs = [RecommendationOut.model_validate(r) for r in query.all()]
+    # Rows are copied out; release the pooled connection before awaiting live quotes, which can
+    # take seconds (retries) during a yfinance outage.
+    db.close()
     await _attach_live_quotes(outs)
     return outs
 
@@ -143,6 +146,7 @@ async def get_recommendation(
     if rec is None:
         raise HTTPException(status_code=404, detail="Recommendation not found")
     out = RecommendationOut.model_validate(rec)
+    db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
     await _attach_live_quotes([out])
     return out
 

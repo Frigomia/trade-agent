@@ -22,9 +22,10 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 const push = vi.fn();
+let routeId = "1";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
-  useParams: () => ({ id: "1" }),
+  useParams: () => ({ id: routeId }),
 }));
 
 import RecommendationDetailPage from "./page";
@@ -58,6 +59,15 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 describe("RecommendationDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    routeId = "1";
+  });
+
+  it("never calls the API for a non-numeric id", () => {
+    routeId = "..%2F..%2Fadmin%2Fusers";
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(screen.getByText("Recommendation not found.")).toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalled();
   });
 
   it("shows the full evidence, reasoning list, and web opinion", async () => {
