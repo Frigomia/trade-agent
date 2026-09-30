@@ -85,6 +85,14 @@ class RecommendationOut(BaseModel):
     suggested_position_pct: float | None
     status: str
     reviewed_at: datetime | None
+    fundamental_score: int | None
+    technical_signal: str | None
+    price_at_recommendation: float | None
+    # Computed at request time (see app/routers/analysis.py's quote augmentation), never
+    # persisted — defaults let model_validate build this from a plain ORM row before those are
+    # attached.
+    current_price: float | None = None
+    price_change_pct: float | None = None
 
 
 class BacktestResultOut(BaseModel):

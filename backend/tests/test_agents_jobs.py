@@ -11,6 +11,8 @@ FAKE_STATE_BUY = {
     "ai_analysis": None,
     "suggested_position_pct": 0.15,
     "quote": {"price": 150.0, "closes": [150.0]},
+    "fundamental_score": 78,
+    "technical_signal": "OVERSOLD",
 }
 FAKE_STATE_SKIP = {
     "action": None,
@@ -18,6 +20,8 @@ FAKE_STATE_SKIP = {
     "ai_analysis": None,
     "suggested_position_pct": None,
     "quote": {"price": None, "closes": []},
+    "fundamental_score": None,
+    "technical_signal": "NEUTRAL",
 }
 
 

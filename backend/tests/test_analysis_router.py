@@ -69,7 +69,11 @@ def test_list_and_approve_recommendation(client, db_session):
     db_session.commit()
     db_session.refresh(rec)
 
-    response = client.get("/analysis/recommendations?status=PENDING")
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 150.0, "closes": [148.0, 150.0]}),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
     assert response.status_code == 200
     assert len(response.json()) == 1
 
@@ -233,7 +237,11 @@ def test_recommendations_list_and_review_only_touch_the_token_users_rows(client,
     db_session.commit()
     headers = auth_headers(OTHER_USER_ID)
 
-    listed = client.get("/analysis/recommendations", headers=headers).json()
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 300.0, "closes": [298.0, 300.0]}),
+    ):
+        listed = client.get("/analysis/recommendations", headers=headers).json()
     assert [r["ticker"] for r in listed] == ["MSFT"]
 
     approve = client.post(f"/analysis/recommendations/{theirs.id}/approve", headers=headers)
@@ -244,3 +252,193 @@ def test_recommendations_list_and_review_only_touch_the_token_users_rows(client,
     db_session.refresh(theirs)
     assert theirs.status == "APPROVED"
     assert mine.status == "PENDING"
+
+
+def test_recommendation_exposes_evidence_fields(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["Fundamental score 78/100", "Technical signal: OVERSOLD"],
+        status="PENDING",
+        fundamental_score=78,
+        technical_signal="OVERSOLD",
+        price_at_recommendation=186.40,
+    )
+    db_session.add(rec)
+    db_session.commit()
+    db_session.refresh(rec)
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["fundamental_score"] == 78
+    assert body["technical_signal"] == "OVERSOLD"
+    assert body["price_at_recommendation"] == 186.40
+
+
+def test_recommendations_list_attaches_live_quotes_for_pending_rows(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["x"],
+        status="PENDING",
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ) as mock_fetch:
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    mock_fetch.assert_awaited_once_with("AAPL")
+    body = response.json()[0]
+    assert body["current_price"] == 186.40
+    assert round(body["price_change_pct"], 4) == round((186.40 - 184.0) / 184.0 * 100, 4)
+
+
+def test_recommendations_list_dedupes_quote_fetches_by_ticker(client, db_session):
+    db_session.add_all(
+        [
+            Recommendation(
+                user_id=USER_ID,
+                ticker="AAPL",
+                asset_type="STOCK",
+                action="BUY",
+                reasoning=["x"],
+                status="PENDING",
+            ),
+            Recommendation(
+                user_id=USER_ID,
+                ticker="AAPL",
+                asset_type="STOCK",
+                action="ADD",
+                reasoning=["y"],
+                status="PENDING",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ) as mock_fetch:
+        client.get("/analysis/recommendations?status=PENDING")
+
+    mock_fetch.assert_awaited_once_with("AAPL")
+
+
+def test_recommendations_quote_failure_degrades_to_null_not_500(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["x"],
+        status="PENDING",
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(side_effect=RuntimeError("yfinance is down")),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["current_price"] is None
+    assert body["price_change_pct"] is None
+
+
+def test_recommendations_nan_quote_degrades_to_null_not_500(client, db_session):
+    db_session.add(
+        Recommendation(
+            user_id=USER_ID,
+            ticker="AAPL",
+            asset_type="STOCK",
+            action="BUY",
+            reasoning=["x"],
+            status="PENDING",
+        )
+    )
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": float("nan"), "closes": [150.0, float("nan")]}),
+    ):
+        response = client.get("/analysis/recommendations?status=PENDING")
+
+    assert response.status_code == 200
+    body = response.json()[0]
+    assert body["current_price"] is None
+    assert body["price_change_pct"] is None
+
+
+def test_recommendations_quote_augmentation_skipped_for_non_pending(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["x"],
+        status="APPROVED",
+    )
+    db_session.add(rec)
+    db_session.commit()
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock()) as mock_fetch:
+        response = client.get("/analysis/recommendations?status=APPROVED")
+
+    mock_fetch.assert_not_awaited()
+    assert response.json()[0]["current_price"] is None
+
+
+def test_get_recommendation_by_id(client, db_session):
+    rec = Recommendation(
+        user_id=USER_ID,
+        ticker="AAPL",
+        asset_type="STOCK",
+        action="BUY",
+        reasoning=["x"],
+        status="PENDING",
+    )
+    db_session.add(rec)
+    db_session.commit()
+    db_session.refresh(rec)
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ):
+        response = client.get(f"/analysis/recommendations/{rec.id}")
+
+    assert response.status_code == 200
+    assert response.json()["ticker"] == "AAPL"
+    assert response.json()["current_price"] == 186.40
+
+
+def test_get_recommendation_by_id_404_when_missing(client):
+    assert client.get("/analysis/recommendations/999").status_code == 404
+
+
+def test_get_recommendation_by_id_404_for_another_users_row(client, db_session):
+    rec = _rec(OTHER_USER_ID)
+    db_session.add(rec)
+    db_session.commit()
+    db_session.refresh(rec)
+
+    assert client.get(f"/analysis/recommendations/{rec.id}").status_code == 404

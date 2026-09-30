@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import math
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -8,12 +10,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.agents.jobs import create_job, get_job_status, run_job
+from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut
 from app.usage import check_monthly_usage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 
@@ -82,16 +87,64 @@ async def get_run_status(
     return status
 
 
+async def _quote_for_ticker(ticker: str) -> tuple[float, float | None] | None:
+    try:
+        data = await fetch_quote_and_history(ticker)
+    except Exception as exc:
+        logger.warning("Live quote fetch failed for %s: %s", ticker, type(exc).__name__)
+        return None
+    price = data.get("price")
+    if price is None or not math.isfinite(price):
+        return None
+    closes = data.get("closes") or []
+    change_pct: float | None = None
+    if len(closes) >= 2 and math.isfinite(closes[-1]) and math.isfinite(closes[-2]) and closes[-2]:
+        change_pct = (closes[-1] - closes[-2]) / closes[-2] * 100
+    return price, change_pct
+
+
+async def _attach_live_quotes(recs: list[RecommendationOut]) -> None:
+    """Mutates PENDING rows in place with a live price/day-change; everything else, and any row
+    whose fetch fails, is left at the schema's None default — degrading quietly rather than
+    ever failing the request over a flaky quote."""
+    pending = [r for r in recs if r.status == "PENDING"]
+    tickers = {r.ticker for r in pending}
+    if not tickers:
+        return
+    results = await asyncio.gather(*(_quote_for_ticker(t) for t in tickers))
+    quotes = dict(zip(tickers, results, strict=True))
+    for rec in pending:
+        quote = quotes.get(rec.ticker)
+        if quote is not None:
+            rec.current_price, rec.price_change_pct = quote
+
+
 @router.get("/recommendations", response_model=list[RecommendationOut])
-def list_recommendations(
+async def list_recommendations(
     status: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
-) -> list[Recommendation]:
+) -> list[RecommendationOut]:
     query = db.query(Recommendation).filter_by(user_id=user.id)
     if status:
         query = query.filter_by(status=status)
-    return query.all()
+    outs = [RecommendationOut.model_validate(r) for r in query.all()]
+    await _attach_live_quotes(outs)
+    return outs
+
+
+@router.get("/recommendations/{recommendation_id}", response_model=RecommendationOut)
+async def get_recommendation(
+    recommendation_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> RecommendationOut:
+    rec = db.query(Recommendation).filter_by(id=recommendation_id, user_id=user.id).one_or_none()
+    if rec is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+    out = RecommendationOut.model_validate(rec)
+    await _attach_live_quotes([out])
+    return out
 
 
 @router.post("/recommendations/{recommendation_id}/approve", response_model=RecommendationOut)
