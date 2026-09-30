@@ -12,6 +12,9 @@ Tailwind v4 is installed and its theme/utilities layers are imported in
 theme, driven by CSS variables (`--bg`, `--accent`, `--up`, `--down`, ...).
 Don't start writing Tailwind classes unless asked.
 
+The visual design system (tokens, colours, type, components, do's and don'ts) is
+recorded in [`../DESIGN.md`](../DESIGN.md); read it before building or restyling a screen.
+
 **Do not introduce, unless explicitly asked:** Redux or any global state
 library, styled-components/CSS Modules, a second component library next to MUI,
 a chart library (charts are hand-built SVG; d3 modules only compute numbers),
