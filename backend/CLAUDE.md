@@ -45,9 +45,12 @@ Existing single-user data (all rows on the old default `user_id`) must be reassi
 | Lint + format  | `uv run ruff check . && uv run ruff format .`                                  |
 | Type check     | `uv run mypy app`                                                              |
 | New migration  | `uv run alembic revision --autogenerate -m "..."` after any `models.py` change |
-| Scheduled jobs | `uv run python -m app.scheduled daily` (or `snapshots` / `outcomes`) |
+| Scheduled jobs | `uv run python -m app.scheduled daily` (or `snapshots` / `outcomes`); see `docs/ARCHITECTURE.md` §12 |
 
 Prefix everything with `uv run` — never activate the venv manually.
+Never hand-edit an existing file in `migrations/versions/`: generate it with
+`alembic revision --autogenerate` (a Claude Code hook in `.claude/hooks/` blocks
+the edit). A hand-written body, for example an RLS policy, goes in a new file.
 Lint + typecheck + tests before treating any change as done; there's no
 human Python reviewer here, so these three commands are the review.
 
@@ -62,12 +65,14 @@ human Python reviewer here, so these three commands are the review.
   `ValueError`/custom exceptions from `analysis/`/`agents/`; let one
   exception handler in `main.py` map them to HTTP responses. Keeps that
   logic callable from the MCP server and from tests with no FastAPI in the way.
-- **Routes are sync `def`, not `async def`, for now.** The stack mixes
-  sync SQLAlchemy, `yfinance`, and the sync Anthropic client — putting
-  blocking calls inside `async def` stalls the event loop for every
-  concurrent request, the single most common FastAPI throughput bug.
-  Don't reach for `async def` until the async job queue (ARCHITECTURE.md
-  §5) is actually built with async clients throughout.
+- **Sync `def` routes for database-only work; `async def` where the route
+  awaits something async** (live quotes and price history, Redis, embeddings,
+  the LangGraph agents, background job kickoff). SQLAlchemy stays sync and is
+  called from inside async routes and services as-is, so keep those sessions
+  short. Never put a blocking call (raw `yfinance`, the sync Anthropic client)
+  directly in an `async def`: wrap it with `asyncio.to_thread`, as
+  `agents/market_data.py` and the agents do, or it stalls the event loop for
+  every concurrent request.
 - **One SQLAlchemy session per request**, via `Depends(get_user_db)`
   (app/auth/deps.py). It is scoped to the authenticated user: never open a
   session for user data any other way; background jobs use
@@ -121,6 +126,16 @@ human Python reviewer here, so these three commands are the review.
   `client` fixture at a superuser, or RLS is silently bypassed.
   `tests/test_rls.py` fails if a table with a `user_id` column is missing from
   `app/rls.py`
+- Patch an external call by the name the code under test looks it up by
+  (`app.snapshots.fetch_quote_and_history`, `app.memory.outcomes.compute_outcome`),
+  not where it is defined. When logic moves between modules its tests' patch
+  targets move with it
+- Redis is real in tests too. A test that calls `asyncio.run()` more than once
+  must reset `app.redis_client._redis = None` in between (the cached client is
+  bound to one event loop); `conftest.py` already does it around every test
+- Background jobs run through `scoped_session`: tests set data up with the owner
+  `session_local` and patch `app.db.SessionLocal` to `app_session_local` (the
+  restricted role) so the job runs under RLS
 - The session-scoped fixture in `conftest.py` gives the local Docker
   `trading_agent_app` role LOGIN with the known test password
   `trading_agent_app` (local Docker Postgres only; the migration itself creates

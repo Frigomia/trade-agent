@@ -10,15 +10,22 @@ the trade yourself in your broker's app.
 
 ## Status
 
+Everything below is built and merged. The one screen still to come is **Chat**.
+
 - **Backend:** multi-user, invitation-only. Supabase Auth + JWT verification, Row Level Security,
   an admin API for inviting/managing users, per-user monthly usage limits, and self-service data
-  export/deletion are all built and merged (PRs [#21](../../pull/21), [#22](../../pull/22),
-  [#23](../../pull/23)).
-- **Frontend:** foundation ([#24](../../pull/24)), login and admin screens
-  ([#27](../../pull/27)), and the recommendation review loop ([#29](../../pull/29)) are built
-  and merged — theming, shell navigation, a typed API client, session-backed route protection,
-  invite/login/reset flows, the admin users/usage screens, and the Today list, recommendation
-  detail, and approve/dismiss flow. The portfolio and chat screens are the next cycles.
+  export/deletion (PRs [#21](../../pull/21), [#22](../../pull/22), [#23](../../pull/23)). The
+  analysis agents, portfolio, watchlist, trade log and snapshots, recommendations with 20-day
+  outcomes, backtests with a stored equity curve ([#33](../../pull/33)), long-term memory,
+  per-user rate limits and bounded preferences ([#34](../../pull/34)), and scheduled daily
+  snapshot and outcome jobs ([#35](../../pull/35)). The chat endpoint exists; its screen does not.
+- **Frontend:** foundation ([#24](../../pull/24)), login and admin ([#27](../../pull/27)), the
+  recommendation review loop ([#29](../../pull/29)), Portfolio ([#31](../../pull/31)), and the
+  secondary screens ([#32](../../pull/32)) and Backtests ([#33](../../pull/33)). That is Today,
+  recommendation detail and approve/dismiss, Portfolio (holdings, watchlist, "log a trade",
+  value-over-time chart), Track record, Backtests, Preferences, Account (usage, export, delete my
+  data), and the admin users/usage screens, with light and dark themes, a phone-first shell, and
+  session-backed route protection.
 
 ## Layout
 
@@ -58,9 +65,24 @@ npm run dev
 Full setup details (Supabase project configuration, the first-admin bootstrap command, running
 tests) are in each side's `CLAUDE.md`.
 
+### Scheduled jobs
+
+The daily portfolio snapshot and the 20-day outcome evaluation also run without anyone opening a
+page, through a one-shot command that an external scheduler (cron, Task Scheduler, a Fly scheduled
+machine) triggers:
+
+```bash
+cd backend
+uv run python -m app.scheduled daily   # or: snapshots / outcomes
+```
+
+What it does, its exit codes, and copy-paste triggers are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §12.
+
 ## Documentation
 
 - [PRODUCT.md](PRODUCT.md) — who this is for, what it does and doesn't do, product principles.
+- [DESIGN.md](DESIGN.md) — the visual design system as built: colours, type, layout, components.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the technical design: data model, API contract,
   agent design, deployment.
 - [docs/superpowers/specs/](docs/superpowers/specs/) and
