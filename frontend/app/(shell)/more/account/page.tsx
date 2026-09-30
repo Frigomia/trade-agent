@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ChevronRight, History, ListChecks, Lock, LogOut, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
-import { Alert, Box, Button, Typography } from "@mui/material";
+import { Alert, Box, Button, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
 import { DataActions } from "@/components/account/DataActions";
 import { UsageSummary } from "@/components/account/UsageSummary";
@@ -67,6 +67,7 @@ function SettingsRow({
 
 export default function AccountPage() {
   const router = useRouter();
+  const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   const [passwordOpen, setPasswordOpen] = useState(false);
   const { run, submitting, error } = useAction();
   const { data: me, error: meError } = useSWR<{ email: string }>("/me", apiFetch);
@@ -81,11 +82,12 @@ export default function AccountPage() {
   }
 
   return (
-    <Box sx={{ display: "grid", gap: 2, maxWidth: 560 }}>
+    <Box>
       <PageHeader title="Account" />
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
-        <>
+        <Box sx={{ display: "grid", gap: 2, alignItems: "start", maxWidth: 960, gridTemplateColumns: { md: "1fr 1fr" } }}>
+          <Box sx={{ display: "grid", gap: 2 }}>
           <Panel sx={{ p: "16px 18px" }}>
             <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>Signed in as</Typography>
             <Typography sx={{ fontSize: 18, fontWeight: 650, mt: 0.25 }}>{me.email}</Typography>
@@ -101,22 +103,30 @@ export default function AccountPage() {
               <SettingsRow key={l.href} icon={l.icon} label={l.label} component={Link} href={l.href} />
             ))}
           </Panel>
-          <Panel sx={{ p: "4px 18px" }}>
-            <SettingsRow
-              icon={Lock}
-              label="Change password"
-              component="button"
-              type="button"
-              aria-expanded={passwordOpen}
-              onClick={() => setPasswordOpen((open) => !open)}
-              open={passwordOpen}
-            />
-            {passwordOpen && (
-              <Box sx={{ pb: 2 }}>
-                <ChangePasswordForm />
-              </Box>
-            )}
-          </Panel>
+          </Box>
+          <Box sx={{ display: "grid", gap: 2 }}>
+          {isDesktop ? (
+            <Panel sx={{ p: "16px 18px" }}>
+              <ChangePasswordForm />
+            </Panel>
+          ) : (
+            <Panel sx={{ p: "4px 18px" }}>
+              <SettingsRow
+                icon={Lock}
+                label="Change password"
+                component="button"
+                type="button"
+                aria-expanded={passwordOpen}
+                onClick={() => setPasswordOpen((open) => !open)}
+                open={passwordOpen}
+              />
+              {passwordOpen && (
+                <Box sx={{ pb: 2 }}>
+                  <ChangePasswordForm />
+                </Box>
+              )}
+            </Panel>
+          )}
           <Panel sx={{ p: "8px 12px" }}>
             <DataActions email={me.email} />
           </Panel>
@@ -130,7 +140,8 @@ export default function AccountPage() {
             Sign out
           </Button>
           {error && <Alert severity="error">{error}</Alert>}
-        </>
+          </Box>
+        </Box>
       )}
     </Box>
   );
