@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
+import { LogTradeCta } from "@/components/portfolio/LogTradeCta";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
 export function ConfirmationPanel({
@@ -80,6 +81,7 @@ export function ConfirmationPanel({
           </Typography>
         </Box>
       )}
+      {approved && <LogTradeCta recommendation={recommendation} />}
       {error && (
         <Alert severity="error" sx={{ mt: 2, textAlign: "left" }}>
           {error}

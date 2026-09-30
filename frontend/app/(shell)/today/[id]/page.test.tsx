@@ -28,6 +28,8 @@ vi.mock("next/navigation", () => ({
   useParams: () => ({ id: routeId }),
 }));
 
+vi.mock("@/components/portfolio/LogTradeCta", () => ({ LogTradeCta: () => null }));
+
 import RecommendationDetailPage from "./page";
 
 function renderFresh(ui: React.ReactElement) {
