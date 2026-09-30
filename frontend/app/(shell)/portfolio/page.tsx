@@ -206,6 +206,7 @@ export default function PortfolioPage() {
           display: "grid",
           gridTemplateColumns: { md: "minmax(0, 1fr) 320px" },
           gap: 2,
+          mt: "20px",
           alignItems: "start",
         }}
       >
