@@ -36,6 +36,11 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
 
 function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () => void }) {
   const cell = { display: { xs: "none", md: "block" }, textAlign: "right" as const };
+  const value = holding.market_value !== null ? formatAmount(holding.market_value) : DASH;
+  const pl =
+    holding.unrealized_pl !== null && holding.unrealized_pl_pct !== null
+      ? `${formatSigned(holding.unrealized_pl)} · ${formatPct(holding.unrealized_pl_pct)}`
+      : DASH;
   return (
     <ButtonBase
       aria-label={`Edit ${holding.ticker}`}
@@ -64,16 +69,12 @@ function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () =
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
       </Typography>
-      <Box sx={{ textAlign: "right" }}>
-        <Typography sx={{ fontWeight: 600 }}>
-          {holding.market_value !== null ? formatAmount(holding.market_value) : DASH}
-        </Typography>
-        <Typography sx={{ fontSize: 12, color: plColor(holding.unrealized_pl) }}>
-          {holding.unrealized_pl !== null && holding.unrealized_pl_pct !== null
-            ? `${formatSigned(holding.unrealized_pl)} · ${formatPct(holding.unrealized_pl_pct)}`
-            : DASH}
-        </Typography>
+      <Box sx={{ textAlign: "right", display: { xs: "block", md: "none" } }}>
+        <Typography sx={{ fontWeight: 600 }}>{value}</Typography>
+        <Typography sx={{ fontSize: 12, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
       </Box>
+      <Typography sx={{ ...cell, fontWeight: 600 }}>{value}</Typography>
+      <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
     </ButtonBase>
   );
 }
