@@ -17,6 +17,8 @@ export interface RecommendationOut {
   fundamental_score: number | null;
   technical_signal: TechnicalSignal | null;
   price_at_recommendation: number | null;
+  outcome_forward_return_pct?: number | null; // fraction: 0.05 = +5%
+  outcome_evaluated_at?: string | null;
   current_price: number | null;
   price_change_pct: number | null;
 }
