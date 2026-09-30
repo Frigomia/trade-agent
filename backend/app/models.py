@@ -95,6 +95,8 @@ class BacktestResult(Base):
     buy_and_hold_value: Mapped[float] = mapped_column(Numeric(18, 2))
     excess_return_pct: Mapped[float] = mapped_column(Numeric(8, 4))
     hit_rate_by_signal: Mapped[dict[str, dict[str, float]]] = mapped_column(JSON)
+    # {"strategy": [...], "buy_and_hold": [...]}, <= 250 points each; NULL for older runs
+    equity_curve: Mapped[dict[str, list[float]] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(10))  # "DONE" -- only successful runs persist a row
 
 

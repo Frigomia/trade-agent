@@ -14,6 +14,7 @@ def test_backtest_job_completes_and_persists_result(session_local, app_session_l
         buy_and_hold_value=10500.0,
         excess_return_pct=0.0476,
         hit_rate_by_signal={"OVERSOLD": {"count": 3.0, "avg_forward_return_pct": 0.02}},
+        equity_curve={"strategy": [10000.0, 11000.0], "buy_and_hold": [10000.0, 10500.0]},
     )
 
     async def _run() -> None:
@@ -42,6 +43,10 @@ def test_backtest_job_completes_and_persists_result(session_local, app_session_l
             saved = owner.get(BacktestResult, final["backtest_result_id"])
             assert saved is not None
             assert saved.user_id == OTHER_USER_ID
+            assert saved.equity_curve == {
+                "strategy": [10000.0, 11000.0],
+                "buy_and_hold": [10000.0, 10500.0],
+            }
         finally:
             owner.close()
 

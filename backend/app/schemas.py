@@ -100,7 +100,12 @@ class RecommendationOut(BaseModel):
     price_change_pct: float | None = None
 
 
-class BacktestResultOut(BaseModel):
+class EquityCurveOut(BaseModel):
+    strategy: list[float]
+    buy_and_hold: list[float]
+
+
+class BacktestListItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -114,6 +119,10 @@ class BacktestResultOut(BaseModel):
     excess_return_pct: float
     hit_rate_by_signal: dict[str, dict[str, float]]
     status: str
+
+
+class BacktestResultOut(BacktestListItemOut):
+    equity_curve: EquityCurveOut | None = None
 
 
 class ChatIn(BaseModel):

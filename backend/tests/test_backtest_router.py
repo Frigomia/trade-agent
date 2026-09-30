@@ -173,3 +173,16 @@ def test_backtest_results_only_include_the_token_users_rows(client, db_session):
     assert [r["ticker"] for r in client.get("/backtest/results").json()] == ["AAPL"]
     theirs = client.get("/backtest/results", headers=auth_headers(OTHER_USER_ID)).json()
     assert [r["ticker"] for r in theirs] == ["MSFT"]
+
+
+def test_export_includes_the_equity_curve(client, db_session):
+    row = _result(USER_ID)
+    row.equity_curve = {"strategy": [10000.0, 11000.0], "buy_and_hold": [10000.0, 10500.0]}
+    db_session.add(row)
+    db_session.commit()
+
+    exported = client.get("/me/export").json()["backtest_results"]
+    assert exported[0]["equity_curve"] == {
+        "strategy": [10000.0, 11000.0],
+        "buy_and_hold": [10000.0, 10500.0],
+    }

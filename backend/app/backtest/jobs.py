@@ -51,6 +51,7 @@ async def run_job(job_id: str, user_id: uuid.UUID, ticker: str, start: date, end
                 buy_and_hold_value=metrics.buy_and_hold_value,
                 excess_return_pct=metrics.excess_return_pct,
                 hit_rate_by_signal=metrics.hit_rate_by_signal,
+                equity_curve=metrics.equity_curve,
                 status="DONE",
             )
             db.add(result)
