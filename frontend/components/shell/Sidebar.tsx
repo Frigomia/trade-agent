@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Box, Typography } from "@mui/material";
@@ -37,10 +38,15 @@ export function Sidebar({ role }: { role: Role }) {
       </Box>
       {items.map((item) => {
         const Icon = item.icon;
-        const on = isActive(pathname, item.href);
+        const on = isActive(pathname, item.href, item.exact);
         return (
+          <Fragment key={item.href}>
+            {item.section && (
+              <Typography sx={{ fontSize: 12, color: "var(--muted)", px: 1.5, pt: 2, pb: 0.5 }}>
+                {item.section}
+              </Typography>
+            )}
           <Link
-            key={item.href}
             href={item.href}
             aria-current={on ? "page" : undefined}
             style={{
@@ -59,6 +65,7 @@ export function Sidebar({ role }: { role: Role }) {
             <Icon size={18} strokeWidth={1.75} />
             {item.label}
           </Link>
+          </Fragment>
         );
       })}
       <Box sx={{ flex: 1 }} />

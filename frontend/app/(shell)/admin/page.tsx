@@ -10,6 +10,8 @@ import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
 import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Avatar } from "@/components/ui/Avatar";
+import { Panel } from "@/components/ui/Panel";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
@@ -38,9 +40,6 @@ export default function AdminPage() {
 
   return (
     <Box>
-      <Alert severity="info" sx={{ mb: 2 }}>
-        You manage access, not data.
-      </Alert>
       {(loadError || actionError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {loadError ? "Could not load users." : actionError}
@@ -57,6 +56,9 @@ export default function AdminPage() {
           </>
         }
       />
+      <Alert severity="info" sx={{ mb: 2 }}>
+        You manage access, not data.
+      </Alert>
       <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
         {(["all", "active", "invited", "disabled"] as const).map((value) => {
           const count =
@@ -71,12 +73,23 @@ export default function AdminPage() {
           );
         })}
       </Box>
+      <Panel sx={{ p: "4px 18px" }}>
       {filtered.map((user) => (
         <Box
           key={user.id}
-          sx={{ display: "flex", alignItems: "center", gap: 2, py: 1.5, borderBottom: "1px solid var(--line)" }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            py: 1.5,
+            borderBottom: "1px solid var(--line)",
+            "&:last-of-type": { borderBottom: 0 },
+          }}
         >
-          <Typography sx={{ fontWeight: 600, flex: 1 }}>{user.email}</Typography>
+          <Avatar email={user.email} />
+          <Typography sx={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+            {user.email}
+          </Typography>
           <Chip label={user.role} size="small" />
           <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
           {user.status === "invited" && (
@@ -105,6 +118,7 @@ export default function AdminPage() {
           )}
         </Box>
       ))}
+      </Panel>
       <InviteDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={() => mutate()} />
       <UserDetailDrawer
         key={selectedUserId ?? "none"}

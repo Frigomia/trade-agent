@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { List, ListItemButton, ListItemText } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { ChevronRight } from "lucide-react";
+import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 const ITEMS = [
@@ -15,13 +17,31 @@ export default function MorePage() {
   return (
     <div>
       <PageHeader title="More" />
-      <List>
+      <Panel sx={{ p: "4px 18px" }}>
         {ITEMS.map((item) => (
-          <ListItemButton key={item.href} component={Link} href={item.href}>
-            <ListItemText primary={item.label} secondary={item.hint} />
-          </ListItemButton>
+          <Box
+            key={item.href}
+            component={Link}
+            href={item.href}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              py: 1.75,
+              color: "var(--text)",
+              textDecoration: "none",
+              borderBottom: "1px solid var(--line)",
+              "&:last-of-type": { borderBottom: 0 },
+            }}
+          >
+            <Box sx={{ flex: 1 }}>
+              <Typography sx={{ fontWeight: 600 }}>{item.label}</Typography>
+              <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>{item.hint}</Typography>
+            </Box>
+            <ChevronRight size={18} color="var(--muted)" />
+          </Box>
         ))}
-      </List>
+      </Panel>
     </div>
   );
 }
