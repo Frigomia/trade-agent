@@ -11,6 +11,7 @@ from app.memory.embeddings import embed_text
 from app.memory.outcomes import compute_outcome
 from app.memory.similarity import find_similar
 from app.models import Recommendation
+from app.rate_limit import rate_limiter
 from app.schemas import MemorySimilarOut
 
 logger = logging.getLogger(__name__)
@@ -19,9 +20,16 @@ router = APIRouter(prefix="/memory", tags=["memory"], dependencies=[Depends(get_
 
 BATCH_SIZE = 50
 OUTCOME_LOOKBACK_DAYS = 20
+# Per user, per minute. /embed and /similar call the embedding API (they cost money);
+# /evaluate-outcomes makes yfinance calls and is fired automatically when Track record opens.
+EMBED_LIMIT_PER_MINUTE = 5
+EVALUATE_OUTCOMES_LIMIT_PER_MINUTE = 6
+SIMILAR_LIMIT_PER_MINUTE = 30
 
 
-@router.post("/embed")
+@router.post(
+    "/embed", dependencies=[Depends(rate_limiter("memory_embed", limit=EMBED_LIMIT_PER_MINUTE))]
+)
 async def embed_recommendations(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> dict[str, int]:
@@ -58,7 +66,12 @@ async def embed_recommendations(
     return {"embedded": embedded, "remaining": remaining}
 
 
-@router.post("/evaluate-outcomes")
+@router.post(
+    "/evaluate-outcomes",
+    dependencies=[
+        Depends(rate_limiter("evaluate_outcomes", limit=EVALUATE_OUTCOMES_LIMIT_PER_MINUTE))
+    ],
+)
 async def evaluate_outcomes(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> dict[str, int]:
@@ -113,7 +126,11 @@ class MemorySimilarIn(BaseModel):
     top_k: int = Field(default=5, ge=1, le=50)
 
 
-@router.post("/similar", response_model=list[MemorySimilarOut])
+@router.post(
+    "/similar",
+    response_model=list[MemorySimilarOut],
+    dependencies=[Depends(rate_limiter("memory_similar", limit=SIMILAR_LIMIT_PER_MINUTE))],
+)
 async def similar_recommendations(
     payload: MemorySimilarIn,
     user: CurrentUser = Depends(get_current_user),

@@ -98,3 +98,42 @@ def test_preferences_are_stored_for_the_token_user_not_a_default(client, db_sess
     assert db_session.query(InvestmentPreferences).one().user_id == OTHER_USER_ID
     assert client.get("/preferences", headers=as_other).json()["risk_tolerance"] == "moderate"
     assert client.get("/preferences").json()["risk_tolerance"] is None
+
+
+def test_post_preferences_accepts_the_maximum_sector_list(client):
+    sectors = [f"{n:02d}" + "x" * 48 for n in range(20)]  # 20 items of exactly 50 characters
+    response = client.post("/preferences", json={"sector_avoid_list": sectors})
+
+    assert response.status_code == 200
+    assert response.json()["sector_avoid_list"] == sectors
+
+
+def test_post_preferences_strips_sector_names(client):
+    response = client.post("/preferences", json={"sector_avoid_list": ["  tobacco "]})
+
+    assert response.status_code == 200
+    assert response.json()["sector_avoid_list"] == ["tobacco"]
+
+
+def test_post_preferences_rejects_too_many_sectors(client):
+    response = client.post("/preferences", json={"sector_avoid_list": [f"s{n}" for n in range(21)]})
+
+    assert response.status_code == 422
+
+
+def test_post_preferences_rejects_bad_sector_names(client):
+    for bad in ["", "   ", "x" * 51, "line\nbreak", "tab\there", "nul\x00byte"]:
+        response = client.post("/preferences", json={"sector_avoid_list": [bad]})
+        assert response.status_code == 422, repr(bad)
+
+
+def test_get_preferences_and_export_still_work_for_an_old_row_over_the_limits(client, db_session):
+    # A row saved before the bounds existed must never make reads fail (or the export with them).
+    old = ["y" * 80] + [f"s{n}" for n in range(30)]
+    db_session.add(InvestmentPreferences(user_id=USER_ID, sector_avoid_list=old))
+    db_session.commit()
+
+    assert client.get("/preferences").json()["sector_avoid_list"] == old
+    exported = client.get("/me/export")
+    assert exported.status_code == 200
+    assert exported.json()["investment_preferences"]["sector_avoid_list"] == old

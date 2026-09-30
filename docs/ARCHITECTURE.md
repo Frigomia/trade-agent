@@ -170,7 +170,8 @@ BacktestResult
 
 InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
-  sector_avoid_list (JSON list[str], not null, default []),
+  sector_avoid_list (JSON list[str], not null, default []; the API accepts at most 20 items, each
+  stripped, 1-50 characters, no control characters — reads stay lenient for older rows),
   notes (nullable), updated_at
 
 PortfolioSnapshot
@@ -255,9 +256,9 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
 | GET | `/backtest/results/{id}` | — | A single result including `equity_curve`; 404 if missing or not the caller's |
-| POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar` |
-| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct` |
-| POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations |
+| POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar`. Rate limited: 5/min per user |
+| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened) |
+| POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable) |
@@ -723,13 +724,19 @@ just believed done.
 **Security (deeper than auth/RLS alone)**
 - [x] Web search results treated explicitly as untrusted data in every AI
       prompt — present in both `news.py`'s and `chat.py`'s system prompts
+- [x] User-provided context (preference notes and sectors, similar past recommendations, earlier
+      chat messages, the portfolio context) is framed as background data, never instructions, in
+      the same prompts, and user-written free text is rendered as one JSON-quoted line
+      (`agents/context.py::_quote`) so it cannot forge a `## ...` section heading
 - [x] JWT decode pins the algorithm explicitly (`algorithms=["ES256","RS256"]`)
 - [x] RLS enabled and a policy created **in the same migration** per table
 - [x] Basic per-route rate limiting on `/analysis/run` and `/chat` — these
       cost real Anthropic API money per call, even for a single user.
       `app/rate_limit.py`: a Redis-backed per-minute limiter per user, applied via
       `dependencies=[Depends(rate_limiter(...))]`. `/analysis/run`: 5/min,
-      `/chat`: 20/min. Monthly caps per user (default 100 analysis/500 chat) enforced
+      `/chat`: 20/min; `/memory/embed`: 5/min, `/memory/evaluate-outcomes`: 6/min,
+      `/memory/similar`: 30/min (the embedding calls cost money; evaluate-outcomes is fired
+      automatically when Track record opens). Monthly caps per user (default 100 analysis/500 chat) enforced
       in a route dependency (`check_monthly_usage`, run before the handler; sub-project 2c)
 - [x] Exception text sanitized before it's persisted or returned — the
       original concern (`news_agent` interpolating raw `{exc}`) no longer

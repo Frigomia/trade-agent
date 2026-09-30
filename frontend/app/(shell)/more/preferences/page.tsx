@@ -5,7 +5,14 @@ import useSWR from "swr";
 import { Alert, Box, Button, Chip, SvgIcon, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
-import { addSector, NOTES_MAX, type Preferences, type RiskTolerance } from "@/lib/preferences";
+import {
+  addSector,
+  MAX_SECTORS,
+  NOTES_MAX,
+  SECTOR_MAX_LENGTH,
+  type Preferences,
+  type RiskTolerance,
+} from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 
 const RISKS: RiskTolerance[] = ["conservative", "moderate", "aggressive"];
@@ -85,8 +92,11 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
           size="small"
           value={sectorInput}
           onChange={(e) => setSectorInput(e.target.value)}
+          slotProps={{ htmlInput: { maxLength: SECTOR_MAX_LENGTH } }}
+          helperText={sectors.length >= MAX_SECTORS ? `At most ${MAX_SECTORS} sectors.` : undefined}
         />
         <Button
+          disabled={sectors.length >= MAX_SECTORS}
           onClick={() => {
             setSectors((l) => addSector(l, sectorInput));
             setSectorInput("");
