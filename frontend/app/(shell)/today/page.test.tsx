@@ -21,6 +21,10 @@ vi.mock("@/lib/api/client", () => ({
   ApiError: FakeApiError,
 }));
 
+// Each is tested on its own; here they would only add unrelated requests to the shared apiFetch mock.
+vi.mock("@/components/portfolio/PortfolioTile", () => ({ PortfolioTile: () => "portfolio-tile" }));
+vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} }));
+
 import TodayPage from "./page";
 
 function renderFresh(ui: React.ReactElement) {
@@ -61,6 +65,13 @@ describe("TodayPage", () => {
     renderFresh(<TodayPage />);
 
     await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+  });
+
+  it("shows the portfolio tile", async () => {
+    apiFetch.mockResolvedValue([]);
+    renderFresh(<TodayPage />);
+
+    await waitFor(() => expect(screen.getByText("portfolio-tile")).toBeInTheDocument());
   });
 
   it("shows a calm empty state with no pending recommendations", async () => {

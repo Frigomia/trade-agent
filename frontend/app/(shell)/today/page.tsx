@@ -7,8 +7,11 @@ import { Play } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
+import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
+import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 
 export default function TodayPage() {
+  useDailySnapshot();
   const {
     data: recommendations,
     error: loadError,
@@ -63,6 +66,7 @@ export default function TodayPage() {
           {running ? "Running…" : "Run analysis"}
         </Button>
       </Box>
+      <PortfolioTile />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.
