@@ -8,9 +8,12 @@ import type { RecommendationOut } from "@/lib/api/recommendation-types";
 export function DecisionActions({
   id,
   onDecided,
+  bar,
 }: {
   id: number;
   onDecided: (updated: RecommendationOut) => void;
+  /** Lay the actions out as one row with this title on the left (the desktop detail bar). */
+  bar?: string;
 }) {
   const { run, submitting, error } = useAction();
 
@@ -22,6 +25,32 @@ export function DecisionActions({
         }),
       ),
     );
+
+  if (bar) {
+    return (
+      <Box sx={{ width: "100%" }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1.5 }}>
+            {error}
+          </Alert>
+        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontWeight: 600, fontSize: 14.5 }}>{bar}</Typography>
+            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+              Recorded here only. Nothing is sent to a broker.
+            </Typography>
+          </Box>
+          <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")}>
+            Dismiss
+          </Button>
+          <Button variant="contained" disabled={submitting} onClick={() => decide("approve")}>
+            Approve
+          </Button>
+        </Box>
+      </Box>
+    );
+  }
 
   return (
     <>
