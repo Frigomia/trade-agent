@@ -15,6 +15,7 @@ import {
 } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Panel } from "@/components/ui/Panel";
 
 const RISKS: RiskTolerance[] = ["conservative", "moderate", "aggressive"];
 
@@ -46,12 +47,14 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, "& > :not(:first-child)": { maxWidth: 560 } }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2, "& > :not(:first-child)": { maxWidth: 980 } }}>
       <PageHeader
         title="Preferences"
         subtitle="Preferences shape the explanations and the web second opinion. They never change the score or the call."
       />
 
+      <Box sx={{ display: "grid", gap: 2, alignItems: "start", gridTemplateColumns: { md: "1fr 1fr" } }}>
+      <Panel sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="subtitle2" component="h2">
         Risk tolerance
       </Typography>
@@ -105,6 +108,8 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         </Button>
       </Box>
 
+      </Panel>
+      <Panel sx={{ p: "16px 18px", display: "flex", flexDirection: "column", gap: 2 }}>
       <Typography variant="subtitle2" component="h2">
         Notes
       </Typography>
@@ -122,6 +127,8 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         Appearance
       </Typography>
       <AppearanceSetting />
+      </Panel>
+      </Box>
 
       {error && <Alert severity="error">{error}</Alert>}
       {saved && <Typography color="text.secondary">Saved</Typography>}
