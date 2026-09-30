@@ -5,25 +5,21 @@ import { Drawer, Box, Typography, TextField, Button, Alert, Divider } from "@mui
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
-interface UserDetailDrawerProps {
-  user: AdminUserOut | null;
+interface UserDetailProps {
+  user: AdminUserOut;
   onClose: () => void;
   onChanged: () => void;
 }
 
-export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerProps) {
+/** A user's limits, access and removal controls. Shown in a drawer on phones and inline on desktop. */
+export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps) {
   const [analysisLimit, setAnalysisLimit] = useState("");
   const [chatLimit, setChatLimit] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  if (!user) {
-    return null;
-  }
-
   async function patchLimits(body: Record<string, number | null>) {
-    if (!user) return;
     setError(null);
     try {
       await apiFetch(`/admin/users/${user.id}/limits`, {
@@ -50,7 +46,6 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
   }
 
   async function handleStatusAction(action: "disable" | "enable") {
-    if (!user) return;
     setError(null);
     try {
       await apiFetch(`/admin/users/${user.id}/${action}`, { method: "POST" });
@@ -62,7 +57,6 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
   }
 
   async function handleRemove() {
-    if (!user) return;
     setError(null);
     try {
       await apiFetch(`/admin/users/${user.id}`, {
@@ -77,8 +71,7 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
   }
 
   return (
-    <Drawer anchor="right" open={Boolean(user)} onClose={onClose}>
-      <Box sx={{ width: 400, p: 3 }}>
+    <Box>
         <Typography variant="h6" sx={{ fontWeight: 650 }}>
           {user.email}
         </Typography>
@@ -160,6 +153,20 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
             {error}
           </Alert>
         )}
+    </Box>
+  );
+}
+
+interface UserDetailDrawerProps extends Omit<UserDetailProps, "user"> {
+  user: AdminUserOut | null;
+}
+
+export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerProps) {
+  if (!user) return null;
+  return (
+    <Drawer anchor="right" open onClose={onClose}>
+      <Box sx={{ width: 400, p: 3 }}>
+        <UserDetailContent user={user} onClose={onClose} onChanged={onChanged} />
       </Box>
     </Drawer>
   );
