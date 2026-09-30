@@ -61,7 +61,7 @@ describe("BacktestChart", () => {
     } as DOMRect);
     fireEvent.mouseMove(svg, { clientX: 100 });
     expect(screen.getByText("Hover, or use the arrow keys, to read a point.")).toBeInTheDocument();
-    expect(screen.queryByText(/^Point d/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Point \d/)).not.toBeInTheDocument();
   });
 
   it("supports End, ArrowRight from nothing, and clears on blur", () => {
