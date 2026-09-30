@@ -7,9 +7,11 @@ import { Box, Typography, Alert } from "@mui/material";
 import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
-import { ActionChip, PriceBlock } from "@/components/recommendations/RecommendationCard";
+import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
+import { Amount } from "@/components/portfolio/Amount";
+import { Pill } from "@/components/ui/Pill";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
-import { EvidencePanel } from "@/components/recommendations/EvidencePanel";
+import { EvidenceDetail } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
@@ -90,17 +92,31 @@ function RecommendationDetail() {
   }
 
   return (
-    <Box sx={{ maxWidth: 480 }}>
+    <Box
+      sx={{
+        maxWidth: 480,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: { xs: "calc(100dvh - 190px)", md: 0 },
+      }}
+    >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
         </Typography>
         <ActionChip action={recommendation.action} />
         <Box sx={{ flex: 1 }} />
-        <PriceBlock recommendation={recommendation} />
+        <Pill tone="warn">Pending</Pill>
       </Box>
-      <EvidencePanel recommendation={recommendation} />
+      {recommendation.current_price !== null && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
+          <Amount value={recommendation.current_price} size={20} />
+          {recommendation.price_change_pct !== null && <ChangePill pct={recommendation.price_change_pct} />}
+        </Box>
+      )}
+      <EvidenceDetail recommendation={recommendation} />
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
+      <Box sx={{ flex: 1, minHeight: 16 }} />
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
     </Box>
   );

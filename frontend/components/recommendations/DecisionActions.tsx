@@ -31,11 +31,11 @@ export function DecisionActions({
         </Alert>
       )}
       <Box sx={{ display: "flex", gap: 1.25, mt: 1.5 }}>
-        <Button variant="outlined" fullWidth disabled={submitting} onClick={() => decide("reject")}>
-          Dismiss
-        </Button>
-        <Button variant="contained" fullWidth disabled={submitting} onClick={() => decide("approve")}>
+        <Button variant="contained" disabled={submitting} onClick={() => decide("approve")} sx={{ flex: 1.3 }}>
           Approve
+        </Button>
+        <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} sx={{ flex: 1 }}>
+          Dismiss
         </Button>
       </Box>
       <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 1, textAlign: "center" }}>

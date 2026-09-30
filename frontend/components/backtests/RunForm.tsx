@@ -39,24 +39,26 @@ export function RunForm({
         fullWidth
         margin="normal"
       />
-      <TextField
-        label="From"
-        type="date"
-        value={start}
-        onChange={(e) => setStart(e.target.value)}
-        slotProps={{ inputLabel: { shrink: true } }}
-        fullWidth
-        margin="normal"
-      />
-      <TextField
-        label="To"
-        type="date"
-        value={end}
-        onChange={(e) => setEnd(e.target.value)}
-        slotProps={{ inputLabel: { shrink: true } }}
-        fullWidth
-        margin="normal"
-      />
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+        <TextField
+          label="From"
+          type="date"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          fullWidth
+          margin="normal"
+        />
+        <TextField
+          label="To"
+          type="date"
+          value={end}
+          onChange={(e) => setEnd(e.target.value)}
+          slotProps={{ inputLabel: { shrink: true } }}
+          fullWidth
+          margin="normal"
+        />
+      </Box>
       {shown && (
         <Alert severity="error" sx={{ mt: 1 }}>
           {shown}
@@ -67,9 +69,12 @@ export function RunForm({
           Running the backtest. This can take a little while.
         </Typography>
       )}
-      <Button type="submit" variant="contained" sx={{ mt: 2 }} disabled={running}>
+      <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={running}>
         Run backtest
       </Button>
+      <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 1.5 }}>
+        Starts with 10,000 and replays the technical signal on past prices.
+      </Typography>
     </Box>
   );
 }

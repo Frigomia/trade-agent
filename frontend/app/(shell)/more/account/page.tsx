@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, type ElementType } from "react";
+import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { ChevronRight, History, ListChecks, Lock, LogOut, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { Alert, Box, Button, Typography } from "@mui/material";
@@ -15,13 +18,56 @@ import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 const LINKS = [
-  { href: "/more/track-record", label: "Track record" },
-  { href: "/more/backtests", label: "Backtests" },
-  { href: "/more/preferences", label: "Preferences" },
+  { href: "/more/track-record", label: "Track record", icon: ListChecks },
+  { href: "/more/backtests", label: "Backtests", icon: History },
+  { href: "/more/preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
+
+// A settings-list row: muted icon, label, chevron. Renders as a link or a button via `component`.
+function SettingsRow({
+  icon: Icon,
+  label,
+  open,
+  ...rest
+}: {
+  icon: LucideIcon;
+  label: string;
+  open?: boolean;
+  component: ElementType;
+  href?: string;
+  type?: "button";
+  onClick?: () => void;
+  "aria-expanded"?: boolean;
+}) {
+  return (
+    <Box
+      {...rest}
+      sx={{
+        all: "unset",
+        boxSizing: "border-box",
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        gap: 1.5,
+        py: 1.5,
+        cursor: "pointer",
+        color: "var(--text)",
+        borderBottom: "1px solid var(--line)",
+        "&:last-of-type": { borderBottom: 0 },
+      }}
+    >
+      <Icon size={18} color="var(--muted)" />
+      <Box component="span" sx={{ flex: 1, color: "var(--text)" }}>
+        {label}
+      </Box>
+      <ChevronRight size={18} color="var(--muted)" style={{ transform: open ? "rotate(90deg)" : undefined }} />
+    </Box>
+  );
+}
 
 export default function AccountPage() {
   const router = useRouter();
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const { run, submitting, error } = useAction();
   const { data: me, error: meError } = useSWR<{ email: string }>("/me", apiFetch);
   const { data: usage, error: usageError } = useSWR<Usage>("/me/usage", apiFetch);
@@ -40,31 +86,49 @@ export default function AccountPage() {
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
         <>
-          <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }}>
-            <Typography>
-              Signed in as <strong>{me.email}</strong>
-            </Typography>
-            {usage && <UsageSummary usage={usage} />}
-            {usageError && <Alert severity="error">Could not load your usage.</Alert>}
+          <Panel sx={{ p: "16px 18px" }}>
+            <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>Signed in as</Typography>
+            <Typography sx={{ fontSize: 18, fontWeight: 650, mt: 0.25 }}>{me.email}</Typography>
           </Panel>
-          <Panel component="nav" sx={{ p: "14px 18px", display: "grid", gap: 1 }}>
+          {usage && (
+            <Panel sx={{ p: "16px 18px" }}>
+              <UsageSummary usage={usage} />
+            </Panel>
+          )}
+          {usageError && <Alert severity="error">Could not load your usage.</Alert>}
+          <Panel component="nav" sx={{ p: "4px 18px" }}>
             {LINKS.map((l) => (
-              <Link key={l.href} href={l.href}>
-                {l.label}
-              </Link>
+              <SettingsRow key={l.href} icon={l.icon} label={l.label} component={Link} href={l.href} />
             ))}
           </Panel>
-          <Panel sx={{ p: "16px 18px" }}>
-            <ChangePasswordForm />
+          <Panel sx={{ p: "4px 18px" }}>
+            <SettingsRow
+              icon={Lock}
+              label="Change password"
+              component="button"
+              type="button"
+              aria-expanded={passwordOpen}
+              onClick={() => setPasswordOpen((open) => !open)}
+              open={passwordOpen}
+            />
+            {passwordOpen && (
+              <Box sx={{ pb: 2 }}>
+                <ChangePasswordForm />
+              </Box>
+            )}
           </Panel>
-          <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }}>
+          <Panel sx={{ p: "8px 12px" }}>
             <DataActions email={me.email} />
-            <Box>
-              <Button variant="outlined" onClick={handleSignOut} disabled={submitting}>
-                Sign out
-              </Button>
-            </Box>
           </Panel>
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<LogOut size={18} />}
+            onClick={handleSignOut}
+            disabled={submitting}
+          >
+            Sign out
+          </Button>
           {error && <Alert severity="error">{error}</Alert>}
         </>
       )}
