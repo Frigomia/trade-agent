@@ -14,7 +14,7 @@ const RANGES = [
 type RangeLabel = (typeof RANGES)[number]["label"];
 
 // The API returns naive UTC timestamps; Date.parse would otherwise read them as local time.
-function toTime(iso: string): number {
+export function toTime(iso: string): number {
   return Date.parse(/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : `${iso}Z`);
 }
 

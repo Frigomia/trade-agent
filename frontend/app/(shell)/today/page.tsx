@@ -7,6 +7,7 @@ import { Play } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
+import { toTime } from "@/components/portfolio/PortfolioChart";
 import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -15,20 +16,18 @@ import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 
 const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
 
-// API timestamps are naive UTC; show the time the newest pending recommendation was made, locally.
+// Time the newest pending recommendation was made, in local time.
 function lastAnalysis(recs: RecommendationOut[] | undefined): string | null {
   if (!recs || recs.length === 0) return null;
   const newest = recs.map((r) => r.created_at).sort().at(-1)!;
-  const parsed = new Date(/(Z|[+-]dd:?dd)$/i.test(newest) ? newest : `${newest}Z`);
-  return Number.isNaN(parsed.getTime())
-    ? null
-    : parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(toTime(newest)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function AwaitingTile({ recommendations }: { recommendations: RecommendationOut[] }) {
-  const parts = ACTION_ORDER.map((action) => [action, recommendations.filter((r) => r.action === action).length] as const)
-    .filter(([, count]) => count > 0)
-    .map(([action, count]) => `${count} ${action}`);
+  const parts = ACTION_ORDER.flatMap((action) => {
+    const count = recommendations.filter((r) => r.action === action).length;
+    return count > 0 ? [`${count} ${action}`] : [];
+  });
   return (
     <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
       <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Awaiting you</Typography>

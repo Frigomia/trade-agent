@@ -5,19 +5,13 @@ import useSWR from "swr";
 import { Box, Button, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
-import type { RecommendationOut, TechnicalSignal } from "@/lib/api/recommendation-types";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct, formatSigned } from "@/lib/format";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
+import { SIGNAL_LABEL } from "./EvidencePanel";
 import { ActionChip } from "./RecommendationCard";
-
-const SIGNAL_WORD: Record<TechnicalSignal, string> = {
-  NEUTRAL: "neutral",
-  OVERSOLD: "oversold",
-  STRONG_UPTREND: "strong uptrend",
-  WEAK_DOWNTREND: "weak downtrend",
-};
 
 /** The desktop part of Today from the mockup: value over time beside the compact review list. */
 export function TodayDesktop({ recommendations }: { recommendations: RecommendationOut[] }) {
@@ -71,7 +65,7 @@ export function TodayDesktop({ recommendations }: { recommendations: Recommendat
                 <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
                   {[
                     rec.fundamental_score !== null ? `Fundamentals ${rec.fundamental_score}` : null,
-                    rec.technical_signal ? SIGNAL_WORD[rec.technical_signal] : null,
+                    rec.technical_signal ? SIGNAL_LABEL[rec.technical_signal].toLowerCase() : null,
                   ]
                     .filter(Boolean)
                     .join(" · ") || "Open for the evidence"}

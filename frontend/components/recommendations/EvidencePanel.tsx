@@ -2,7 +2,7 @@ import { Box, Typography, LinearProgress } from "@mui/material";
 import type { RecommendationOut, TechnicalSignal } from "@/lib/api/recommendation-types";
 import { Pill, type PillTone } from "@/components/ui/Pill";
 
-const SIGNAL_LABEL: Record<TechnicalSignal, string> = {
+export const SIGNAL_LABEL: Record<TechnicalSignal, string> = {
   NEUTRAL: "Neutral",
   OVERSOLD: "Oversold",
   STRONG_UPTREND: "Strong uptrend",
