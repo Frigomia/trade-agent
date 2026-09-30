@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { SWRConfig } from "swr";
+import { useEffect } from "react";
+import { SWRConfig, useSWRConfig } from "swr";
 import type { BacktestListItem, BacktestResult } from "@/lib/backtest";
 
 const { FakeApiError } = vi.hoisted(() => ({
@@ -54,9 +55,19 @@ function mockApi(routes: Routes) {
 
 const calls = (path: string) => apiFetch.mock.calls.filter((c) => c[0] === path);
 
+let swrMutate: ReturnType<typeof useSWRConfig>["mutate"];
+function GrabMutate() {
+  const { mutate } = useSWRConfig();
+  useEffect(() => {
+    swrMutate = mutate;
+  }, [mutate]);
+  return null;
+}
+
 function renderFresh() {
   return render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <GrabMutate />
       <BacktestsPage />
     </SWRConfig>,
   );
@@ -110,9 +121,10 @@ describe("BacktestsPage", () => {
     });
     expect(screen.queryByText(/Strategy ends at/)).not.toBeInTheDocument();
     await waitFor(() => expect(calls("/backtest/run/j1")).toHaveLength(1));
+    const listCallsBefore = calls("/backtest/results").length;
     await step();
     expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
-    expect(calls("/backtest/results").length).toBeGreaterThanOrEqual(2);
+    expect(calls("/backtest/results").length).toBeGreaterThan(listCallsBefore);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -146,8 +158,9 @@ describe("BacktestsPage", () => {
     expect(await screen.findByText(WARNING)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run backtest" })).toBeEnabled();
     const before = calls("/backtest/run/j1").length;
-    await step();
-    await step();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
     expect(calls("/backtest/run/j1")).toHaveLength(before);
   });
 
@@ -191,6 +204,67 @@ describe("BacktestsPage", () => {
     expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
     expect(screen.getByRole("row", { name: /strong uptrend/i })).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("does not show the failure warning when a later job fetch fails after DONE", async () => {
+    let polls = 0;
+    mockApi({
+      "/backtest/results": () => [],
+      "/backtest/run": () => ({ job_id: "j1" }),
+      "/backtest/run/j1": () => {
+        if (++polls === 1) return { status: "DONE", backtest_result_id: 7 };
+        throw new FakeApiError(404, "Job not found");
+      },
+      "/backtest/results/7": () => RESULT,
+    });
+    renderFresh();
+    await screen.findByText("No backtests yet.");
+    startRun();
+    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    await act(async () => {
+      await swrMutate("/backtest/run/j1");
+    });
+    await waitFor(() => expect(calls("/backtest/run/j1")).toHaveLength(2));
+    expect(screen.getByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+
+  it("clears an old failure warning when the next run fails to start", async () => {
+    mockApi({
+      "/backtest/results": () => [],
+      "/backtest/run": (() => {
+        let n = 0;
+        return () => {
+          if (++n === 1) return { job_id: "j1" };
+          throw new FakeApiError(422, "start_date must not be after end_date");
+        };
+      })(),
+      "/backtest/run/j1": () => ({ status: "FAILED", backtest_result_id: null }),
+    });
+    renderFresh();
+    await screen.findByText("No backtests yet.");
+    startRun();
+    expect(await screen.findByText(WARNING)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+    expect(await screen.findByText("start_date must not be after end_date")).toBeInTheDocument();
+    expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+  });
+
+  it("shows the new run's result, not a previously selected past run", async () => {
+    const NEW = { ...RESULT, id: 8, ticker: "MSFT", final_value: 12500 };
+    mockApi({
+      "/backtest/results": () => [LIST_ITEM],
+      "/backtest/results/7": () => RESULT,
+      "/backtest/results/8": () => NEW,
+      "/backtest/run": () => ({ job_id: "j2" }),
+      "/backtest/run/j2": () => ({ status: "DONE", backtest_result_id: 8 }),
+    });
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: /AAPL/ }));
+    expect(await screen.findByText("Strategy ends at 11,000.00")).toBeInTheDocument();
+    startRun();
+    expect(await screen.findByText("Strategy ends at 12,500.00")).toBeInTheDocument();
+    expect(screen.queryByText("Strategy ends at 11,000.00")).not.toBeInTheDocument();
   });
 
   it("shows load errors for the list and for a single backtest", async () => {

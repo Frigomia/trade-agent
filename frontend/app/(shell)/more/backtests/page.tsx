@@ -21,6 +21,11 @@ export default function BacktestsPage() {
   // Poll every 2s while RUNNING; SWR stops on DONE, FAILED or any error (a 404 means the job expired).
   const { data: job, error: jobError } = useSWR<JobStatus>(jobId ? `/backtest/run/${jobId}` : null, apiFetch, {
     refreshInterval: (latest) => (latest?.status === "RUNNING" ? 2000 : 0),
+    // The key only needs the interval: no error retry (an expired job would 404 forever) and no
+    // focus/reconnect revalidation (a finished job's TTL can lapse and 404 next to a good result).
+    shouldRetryOnError: false,
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
     onSuccess: (latest) => {
       if (latest.status === "DONE") mutateList();
     },
@@ -28,7 +33,8 @@ export default function BacktestsPage() {
 
   const resultId = selectedId ?? (job?.status === "DONE" ? job.backtest_result_id : null);
   const jobRunning = jobId !== null && !jobError && (job === undefined || job.status === "RUNNING");
-  const jobFailed = job?.status === "FAILED" || jobError !== undefined;
+  // A later fetch error next to DONE data is not a failure: the run already finished.
+  const jobFailed = job?.status === "FAILED" || (jobError !== undefined && job?.status !== "DONE");
 
   const { data: result, error: resultError } = useSWR<BacktestResult>(
     resultId !== null ? `/backtest/results/${resultId}` : null,
@@ -37,6 +43,7 @@ export default function BacktestsPage() {
 
   function start({ ticker, start: startDate, end }: RunInput) {
     run(async () => {
+      setJobId(null); // clear any old failure warning while this request is in flight
       const { job_id } = await apiFetch<{ job_id: string }>("/backtest/run", {
         method: "POST",
         body: JSON.stringify({ ticker, start_date: startDate, end_date: end }),
