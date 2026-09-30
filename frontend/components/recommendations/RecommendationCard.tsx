@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Box, Typography, Chip } from "@mui/material";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
 import { DecisionActions } from "./DecisionActions";
-import { EvidencePanel } from "./EvidencePanel";
+import { EvidencePanel, hasStructuredEvidence } from "./EvidencePanel";
 
 // Matches the mockups' badge convention: BUY/ADD/HOLD/WATCH share the default accent badge,
 // TRIM gets the warning color, SELL the down color (the one action styled inline, not via a
@@ -34,6 +34,7 @@ function reasoningLine(recommendation: RecommendationOut): string | null {
     const end = recommendation.ai_analysis.indexOf(". ");
     return end === -1 ? recommendation.ai_analysis : recommendation.ai_analysis.slice(0, end + 1);
   }
+  if (hasStructuredEvidence(recommendation)) return null;
   return recommendation.reasoning.at(-1) ?? null;
 }
 

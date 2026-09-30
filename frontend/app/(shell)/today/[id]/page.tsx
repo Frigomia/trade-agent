@@ -7,7 +7,7 @@ import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, PriceBlock } from "@/components/recommendations/RecommendationCard";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
-import { EvidencePanel } from "@/components/recommendations/EvidencePanel";
+import { EvidencePanel, hasStructuredEvidence } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
 
@@ -66,13 +66,15 @@ export default function RecommendationDetailPage() {
         <PriceBlock recommendation={recommendation} />
       </Box>
       <EvidencePanel recommendation={recommendation} />
-      <Box sx={{ mt: 1.5 }}>
-        {recommendation.reasoning.map((line, i) => (
-          <Typography key={i} sx={{ fontSize: 13, color: "var(--text2)", mt: 0.5 }}>
-            {line}
-          </Typography>
-        ))}
-      </Box>
+      {!hasStructuredEvidence(recommendation) && (
+        <Box sx={{ mt: 1.5 }}>
+          {recommendation.reasoning.map((line, i) => (
+            <Typography key={i} sx={{ fontSize: 13, color: "var(--text2)", mt: 0.5 }}>
+              {line}
+            </Typography>
+          ))}
+        </Box>
+      )}
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
     </Box>

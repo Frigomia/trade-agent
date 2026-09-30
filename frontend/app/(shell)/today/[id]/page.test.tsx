@@ -70,15 +70,24 @@ describe("RecommendationDetailPage", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
-  it("shows the full evidence, reasoning list, and web opinion", async () => {
+  it("shows the structured evidence and web opinion, without repeating the raw reasoning", async () => {
     apiFetch.mockResolvedValue(rec());
     renderFresh(<RecommendationDetailPage />);
 
     await waitFor(() => expect(screen.getByText("NVDA")).toBeInTheDocument());
-    expect(screen.getByText("Fundamental score 52/100")).toBeInTheDocument();
-    expect(screen.getByText("Technical signal: NEUTRAL")).toBeInTheDocument();
+    expect(screen.getByText("52/100")).toBeInTheDocument();
+    expect(screen.getByText("Neutral")).toBeInTheDocument();
+    expect(screen.queryByText("Technical signal: NEUTRAL")).not.toBeInTheDocument();
     expect(screen.getByText(/not part of the score/i)).toBeInTheDocument();
     expect(screen.getByText(/conflicts with the fundamentals reading/i)).toBeInTheDocument();
+  });
+
+  it("shows the reasoning list for a legacy row with no structured evidence", async () => {
+    apiFetch.mockResolvedValue(rec({ fundamental_score: null, technical_signal: null }));
+    renderFresh(<RecommendationDetailPage />);
+
+    await waitFor(() => expect(screen.getByText("Technical signal: NEUTRAL")).toBeInTheDocument());
+    expect(screen.getByText("Fundamental score 52/100")).toBeInTheDocument();
   });
 
   it("shows an inline error when the recommendation fails to load", async () => {
