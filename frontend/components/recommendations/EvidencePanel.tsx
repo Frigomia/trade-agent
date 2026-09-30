@@ -17,13 +17,6 @@ const SIGNAL_COLOR: Record<TechnicalSignal, string> = {
   WEAK_DOWNTREND: "var(--down)",
 };
 
-// `reasoning` is only the raw wording of the structured fields (e.g. "Technical signal:
-// STRONG_UPTREND"), so once those exist the panel below already says everything it does. Callers
-// show `reasoning` only for legacy rows that predate the structured fields.
-export function hasStructuredEvidence(recommendation: RecommendationOut): boolean {
-  return recommendation.fundamental_score !== null || recommendation.technical_signal !== null;
-}
-
 export function EvidencePanel({ recommendation }: { recommendation: RecommendationOut }) {
   const { fundamental_score, technical_signal, suggested_position_pct } = recommendation;
 

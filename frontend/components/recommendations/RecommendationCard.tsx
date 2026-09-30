@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Box, Typography, Chip } from "@mui/material";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
 import { DecisionActions } from "./DecisionActions";
-import { EvidencePanel, hasStructuredEvidence } from "./EvidencePanel";
+import { EvidencePanel } from "./EvidencePanel";
 
 // Matches the mockups' badge convention: BUY/ADD/HOLD/WATCH share the default accent badge,
 // TRIM gets the warning color, SELL the down color (the one action styled inline, not via a
@@ -29,13 +29,13 @@ export function ActionChip({ action }: { action: Action }) {
   );
 }
 
+// The card's one-line take: the web opinion's first sentence. `reasoning` is deliberately not
+// shown — it is only the raw wording of the score/signal EvidencePanel already renders.
 function reasoningLine(recommendation: RecommendationOut): string | null {
-  if (recommendation.ai_analysis) {
-    const end = recommendation.ai_analysis.indexOf(". ");
-    return end === -1 ? recommendation.ai_analysis : recommendation.ai_analysis.slice(0, end + 1);
-  }
-  if (hasStructuredEvidence(recommendation)) return null;
-  return recommendation.reasoning.at(-1) ?? null;
+  const text = recommendation.ai_analysis;
+  if (!text) return null;
+  const end = text.indexOf(". ");
+  return end === -1 ? text : text.slice(0, end + 1);
 }
 
 export function PriceBlock({ recommendation }: { recommendation: RecommendationOut }) {

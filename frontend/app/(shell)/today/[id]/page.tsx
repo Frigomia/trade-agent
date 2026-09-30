@@ -2,12 +2,12 @@
 
 import { useParams, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Box, Typography, Alert, Button } from "@mui/material";
+import { Box, Typography, Alert } from "@mui/material";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, PriceBlock } from "@/components/recommendations/RecommendationCard";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
-import { EvidencePanel, hasStructuredEvidence } from "@/components/recommendations/EvidencePanel";
+import { EvidencePanel } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
 
@@ -25,18 +25,14 @@ export default function RecommendationDetailPage() {
   // local copy to keep in sync with it.
   const setDecided = (updated: RecommendationOut) => mutate(updated, { revalidate: false });
 
-  if (!validId) {
+  if (!validId || loadError) {
     return (
       <Alert severity="error" sx={{ mt: 2 }}>
-        Recommendation not found.
-      </Alert>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <Alert severity="error" sx={{ mt: 2 }}>
-        {loadError instanceof ApiError ? loadError.detail : "Could not load this recommendation."}
+        {!validId
+          ? "Recommendation not found."
+          : loadError instanceof ApiError
+            ? loadError.detail
+            : "Could not load this recommendation."}
       </Alert>
     );
   }
@@ -47,14 +43,9 @@ export default function RecommendationDetailPage() {
 
   if (recommendation.status === "SUPERSEDED") {
     return (
-      <Box sx={{ maxWidth: 480, mt: 2 }}>
-        <Alert severity="info">
-          A newer analysis replaced this recommendation for {recommendation.ticker}.
-        </Alert>
-        <Button variant="outlined" fullWidth sx={{ mt: 2 }} onClick={() => router.push("/today")}>
-          Back to Today
-        </Button>
-      </Box>
+      <Alert severity="info" sx={{ mt: 2 }}>
+        A newer analysis replaced this recommendation for {recommendation.ticker}.
+      </Alert>
     );
   }
 
@@ -79,15 +70,6 @@ export default function RecommendationDetailPage() {
         <PriceBlock recommendation={recommendation} />
       </Box>
       <EvidencePanel recommendation={recommendation} />
-      {!hasStructuredEvidence(recommendation) && (
-        <Box sx={{ mt: 1.5 }}>
-          {recommendation.reasoning.map((line, i) => (
-            <Typography key={i} sx={{ fontSize: 13, color: "var(--text2)", mt: 0.5 }}>
-              {line}
-            </Typography>
-          ))}
-        </Box>
-      )}
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       <DecisionActions id={recommendation.id} onDecided={setDecided} />
     </Box>

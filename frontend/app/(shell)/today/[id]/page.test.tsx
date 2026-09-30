@@ -89,17 +89,6 @@ describe("RecommendationDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/newer analysis replaced/i)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /back to today/i }));
-    expect(push).toHaveBeenCalledWith("/today");
-  });
-
-  it("shows the reasoning list for a legacy row with no structured evidence", async () => {
-    apiFetch.mockResolvedValue(rec({ fundamental_score: null, technical_signal: null }));
-    renderFresh(<RecommendationDetailPage />);
-
-    await waitFor(() => expect(screen.getByText("Technical signal: NEUTRAL")).toBeInTheDocument());
-    expect(screen.getByText("Fundamental score 52/100")).toBeInTheDocument();
   });
 
   it("shows an inline error when the recommendation fails to load", async () => {
