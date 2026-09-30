@@ -1,0 +1,85 @@
+<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><title>Settings B — Card grid</title><style>
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+:root{--bg:#060d0c;--text:#e7f3ef;--text2:#cfe2dc;--muted:#8aa89f;--accent:#34e7a9;--accent-solid:#34e7a9;--on-accent:#032116;--up:#34e7a9;--down:#ff6b72;--warn:#f4c04f;--up-bg:rgba(52,231,169,.13);--down-bg:rgba(255,107,114,.13);--warn-bg:rgba(244,192,79,.12);--panel:rgba(255,255,255,.035);--line:rgba(120,255,214,.11);--line2:rgba(120,255,214,.2);--track:rgba(255,255,255,.08);--field:rgba(255,255,255,.045);--on-warn:#2a1c00;--shadow:0 18px 34px -22px #000,inset 0 1px 0 rgba(255,255,255,.05);--btn-shadow:0 12px 24px -12px rgba(52,231,169,.6);--glow:radial-gradient(520px 260px at 0% 0%,rgba(24,190,146,.16),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(24,120,190,.1),transparent 60%)}
+:root[data-theme=light]{--bg:#f2f8f5;--text:#0b1f19;--text2:#29473c;--muted:#52695f;--accent:#078a5f;--accent-solid:#067a52;--on-accent:#fff;--up:#067a52;--down:#c8323d;--warn:#9a5b00;--up-bg:rgba(6,122,82,.1);--down-bg:rgba(200,50,61,.1);--warn-bg:rgba(154,91,0,.11);--panel:rgba(255,255,255,.78);--line:rgba(8,110,80,.15);--line2:rgba(8,110,80,.3);--track:rgba(10,60,45,.1);--field:rgba(255,255,255,.9);--on-warn:#fff;--shadow:0 16px 30px -20px rgba(6,60,45,.3),0 1px 0 rgba(6,60,45,.05),inset 0 1px 0 #fff;--btn-shadow:0 10px 20px -10px rgba(6,122,82,.55);--glow:radial-gradient(520px 260px at 0% 0%,rgba(52,231,169,.22),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(80,160,255,.13),transparent 60%)}
+*{box-sizing:border-box;margin:0}
+body{background-color:var(--bg);background-image:var(--glow);background-attachment:fixed;color:var(--text);font:15px/1.45 Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.side{width:210px;flex:none;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px}
+.brand{display:flex;gap:10px;align-items:center;padding:0 8px 16px;font-weight:650;font-size:16px}
+.brand i{width:34px;height:34px;border-radius:10px;background:var(--accent-solid);display:block}
+.nav{padding:10px 12px;border-radius:12px;font-size:14px;color:var(--muted)}
+.nav.on{background:var(--up-bg);color:var(--accent);font-weight:600}
+.main{flex:1;padding:22px 28px;min-width:0}
+.back{color:var(--muted);font-size:14px;margin-bottom:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.badge{font-size:12px;font-weight:700;letter-spacing:.06em;padding:3px 9px;border-radius:8px;background:var(--accent-solid);color:var(--on-accent)}
+.pill{display:inline-flex;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;font-variant-numeric:tabular-nums}
+.up{background:var(--up-bg);color:var(--up)}.down{background:var(--down-bg);color:var(--down)}.warn{background:var(--warn-bg);color:var(--warn)}.mute{background:var(--track);color:var(--muted)}
+.lbl{font-size:12px;color:var(--muted)}
+.big{font-weight:650;letter-spacing:-.035em;font-variant-numeric:tabular-nums}.big .d{opacity:.42}
+.btn{height:46px;border-radius:14px;font:600 15px Geist,system-ui;border:0;padding:0 22px;cursor:pointer}
+.go{background:var(--accent-solid);color:var(--on-accent);box-shadow:var(--btn-shadow)}
+.no{background:var(--panel);color:var(--text);border:1px solid var(--line2)}
+.fine{font-size:12px;color:var(--muted)}
+.bar{height:6px;border-radius:99px;background:var(--track);overflow:hidden}.bar b{display:block;height:100%;background:var(--accent);border-radius:99px}
+.tgl{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);display:grid;place-items:center;color:var(--text)}
+.md h3{font-size:15px;font-weight:650;margin:18px 0 6px;letter-spacing:-.01em}
+.md h3:first-child{margin-top:0}
+.md p{color:var(--text2);font-size:14.5px;line-height:1.6;margin:0 0 10px;max-width:68ch}
+.md ul{padding-left:18px;margin:0 0 10px;color:var(--text2);font-size:14.5px;line-height:1.6;max-width:68ch}
+.md li{margin-bottom:4px}
+.md b{color:var(--text);font-weight:600}
+.md .src{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px;margin-top:14px}
+.web{border:1px dashed var(--line2);border-radius:14px}
+.tag{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+
+.h1{font-size:24px;font-weight:650;letter-spacing:-.02em}
+.sub{font-size:13px;color:var(--muted);margin-top:2px}
+.seg{display:inline-flex;background:var(--field);border:1px solid var(--line);border-radius:13px;padding:3px;gap:2px}
+.seg span{padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;color:var(--muted)}
+.seg .on{background:var(--panel);color:var(--text);box-shadow:var(--shadow);border:1px solid var(--line2)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--track);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:600}
+.input{height:46px;border-radius:13px;background:var(--field);border:1px solid var(--line);padding:0 14px;display:flex;align-items:center;color:var(--muted);font-size:14.5px}
+.ta{min-height:110px;align-items:flex-start;padding-top:12px}
+.field{display:grid;gap:6px}.field>span{font-size:12.5px;font-weight:600}
+.row{display:flex;align-items:center;gap:12px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--field);border:1px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.sec{font-weight:650;font-size:16px;letter-spacing:-.01em}
+.line{border-bottom:1px solid var(--line)}
+.srow{display:grid;grid-template-columns:260px 1fr;gap:32px;padding:22px 0;border-bottom:1px solid var(--line)}
+.srow:last-child{border-bottom:0}
+.srow h3{font-size:15px;font-weight:650}.srow p{font-size:13px;color:var(--muted);margin-top:4px;max-width:30ch;line-height:1.5}
+.sidenav{display:grid;gap:2px;font-size:14px}.sidenav span{padding:8px 12px;border-radius:10px;color:var(--muted)}.sidenav .on{background:var(--up-bg);color:var(--accent);font-weight:600}
+.stat{padding:16px 18px}.stat .n{font-size:30px;font-weight:650;letter-spacing:-.03em}
+.sect{display:none}.sect:target,.sect.def{display:block}
+.note{display:flex;gap:10px;padding:11px 14px;border-radius:12px;background:var(--up-bg);font-size:13.5px}
+.bar2{position:sticky;bottom:22px;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:16px;background:var(--tab-bg,var(--panel));border:1px solid var(--line2);box-shadow:var(--shadow);backdrop-filter:blur(18px)}
+.tbl{width:100%;border-collapse:collapse}.tbl th{font-size:12px;color:var(--muted);font-weight:500;text-align:left;padding:10px 16px}.tbl td{padding:12px 16px;border-top:1px solid var(--line);font-size:14px}
+.prog{height:6px;border-radius:99px;background:var(--track);overflow:hidden;min-width:120px}.prog b{display:block;height:100%;background:var(--accent)}
+.icon{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--muted);flex:none}
+</style></head><body><div class="shell"><nav class="side"><div class="brand"><i></i>trade-agent</div><div class="nav">Today</div><div class="nav">Portfolio</div><div class="nav">Chat</div><div class="nav">Track record</div><div class="nav">Backtests</div><div class="nav" data-k="prefs">Preferences</div><div class="nav" data-k="account">Account</div><div class="nav" style="margin-top:14px;font-size:12px">Administration</div><div class="nav" data-k="users">Users</div><div class="nav">Usage &amp; limits</div></nav><main class="main">
+<section class="sect" id="prefs"><div class="row" style="margin-bottom:18px"><div><div class="h1">Preferences</div><div class="sub">Preferences shape the explanations and the web second opinion. They never change the score or the call.</div></div><div style="flex:1"></div><span class="tgl">☀</span></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1040px;align-items:start">
+    <div class="panel" style="padding:20px 22px;display:grid;gap:14px"><div class="row"><span class="sec">Risk tolerance</span><span style="flex:1"></span><span class="pill up">Moderate</span></div><div class="fine">Sets how bold explanations get about size.</div><div class="seg"><span>Conservative</span><span class="on">Moderate</span><span>Aggressive</span></div></div>
+    <div class="panel" style="padding:20px 22px;display:grid;gap:14px"><div class="sec">Appearance</div><div class="fine">Follows your system by default.</div><div class="seg"><span>System</span><span>Light</span><span class="on">Dark</span></div></div>
+    <div class="panel" style="padding:20px 22px;display:grid;gap:14px"><div class="row"><span class="sec">Sectors to avoid</span><span style="flex:1"></span><span class="fine">2 of 10</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">Guns ✕</span><span class="chip">Tobacco ✕</span></div><div class="row" style="margin-top:12px"><div class="input" style="width:260px">Add a sector</div><span style="color:var(--accent);font-weight:600">Add</span></div></div>
+    <div class="panel" style="padding:20px 22px;display:grid;gap:14px"><div class="sec">Notes</div><div class="input ta" style="width:100%">Anything the agent should keep in mind…</div><div class="fine" style="margin-top:6px">0 / 2000</div></div>
+    <div style="grid-column:1/-1"><div class="bar2"><span style="flex:1" class="fine">Changes apply to the next analysis.</span><button class="btn no">Discard</button><button class="btn go">Save preferences</button></div></div>
+  </div></section>
+<section class="sect" id="account"><div class="row" style="margin-bottom:18px"><div><div class="h1">Account</div></div><div style="flex:1"></div><span class="tgl">☀</span></div>
+  <div class="panel" style="max-width:1040px;padding:20px 24px;display:flex;align-items:center;gap:16px;margin-bottom:16px"><span class="av" style="width:52px;height:52px;font-size:16px">LK</span><div><div class="lbl">Signed in as</div><div style="font-size:19px;font-weight:650">lena.k@example.com</div></div><div style="flex:1"></div><span class="pill up">Admin</span><button class="btn no" style="height:40px">Sign out</button></div>
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;max-width:1040px;align-items:start">
+    <div style="display:grid;gap:16px">
+      <div class="panel" style="padding:20px 22px;display:grid;gap:14px"><div class="row"><span class="sec">Your usage</span><span style="flex:1"></span><span class="fine">Resets 1 Nov</span></div><div style="display:grid;gap:14px"><div class="row"><span style="width:120px;font-size:14px">Analysis runs</span><div class="prog" style="flex:1"><b style="width:30%"></b></div><span style="font-variant-numeric:tabular-nums">6 / 20</span></div><div class="row"><span style="width:120px;font-size:14px">Chat messages</span><div class="prog" style="flex:1"><b style="width:44%"></b></div><span style="font-variant-numeric:tabular-nums">44 / 100</span></div><div class="fine">Resets on 2026-11-01</div></div></div>
+      <div class="panel" style="padding:20px 22px;display:grid;gap:12px"><div class="sec">Password</div><div style="display:grid;gap:12px"><div class="field"><span>New password</span><div class="input"></div></div><div class="field"><span>Confirm new password</span><div class="input"></div></div><div><button class="btn go">Change password</button></div></div></div></div>
+    <div style="display:grid;gap:16px">
+      <div class="panel" style="padding:8px 22px"><div class="row line" style="padding:13px 0"><span class="icon"></span><span style="flex:1">Track record</span><span style="color:var(--muted)">›</span></div><div class="row line" style="padding:13px 0"><span class="icon"></span><span style="flex:1">Backtests</span><span style="color:var(--muted)">›</span></div><div class="row line" style="padding:13px 0"><span class="icon"></span><span style="flex:1">Preferences</span><span style="color:var(--muted)">›</span></div></div>
+      <div class="panel" style="padding:20px 22px;display:grid;gap:10px"><div class="sec">Your data</div><div class="fine">Export everything or delete holdings, trades and chats.</div><button class="btn no">Export my data</button><button class="btn no" style="color:var(--down)">Delete my data</button></div></div>
+  </div></section>
+<section class="sect" id="users"><div class="row" style="margin-bottom:18px"><div><div class="h1">Users</div></div><div style="flex:1"></div><button class="btn go" style="height:38px;border-radius:12px;margin-right:8px">Invite user</button><span class="tgl">☀</span></div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1040px;margin-bottom:16px"><div class="panel stat" style="border-color:var(--line2)"><div class="lbl">All</div><div class="n">5</div></div><div class="panel stat" ><div class="lbl">Active</div><div class="n">3</div></div><div class="panel stat" ><div class="lbl">Invited</div><div class="n">1</div></div><div class="panel stat" ><div class="lbl">Disabled</div><div class="n">1</div></div></div>
+  <div class="note" style="margin-bottom:14px;max-width:1040px">You manage access, not data.</div>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:1040px"><div class="panel" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><span class="av">LE</span><div style="flex:1;min-width:0"><b style="font-size:14.5px">lena.k@example.com</b><div class="row" style="gap:6px;margin-top:4px"><span class="pill mute">admin</span><span class="pill up">active</span></div></div><span style="color:var(--muted)">•••</span></div><div class="panel" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><span class="av">TO</span><div style="flex:1;min-width:0"><b style="font-size:14.5px">tom.r@example.com</b><div class="row" style="gap:6px;margin-top:4px"><span class="pill mute">user</span><span class="pill up">active</span></div></div><span style="color:var(--muted)">•••</span></div><div class="panel" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><span class="av">NI</span><div style="flex:1;min-width:0"><b style="font-size:14.5px">nina.w@example.com</b><div class="row" style="gap:6px;margin-top:4px"><span class="pill mute">user</span><span class="pill up">active</span></div></div><span style="color:var(--muted)">•••</span></div><div class="panel" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><span class="av">SA</span><div style="flex:1;min-width:0"><b style="font-size:14.5px">sam.b@example.com</b><div class="row" style="gap:6px;margin-top:4px"><span class="pill mute">user</span><span class="pill warn">invited</span></div></div><span style="color:var(--muted)">•••</span></div><div class="panel" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><span class="av">OL</span><div style="flex:1;min-width:0"><b style="font-size:14.5px">old.account@example.com</b><div class="row" style="gap:6px;margin-top:4px"><span class="pill mute">user</span><span class="pill down">disabled</span></div></div><span style="color:var(--muted)">•••</span></div></div></section></main></div><script>
+function show(){const k=(location.hash||'#prefs').slice(1);document.querySelectorAll('.sect').forEach(e=>e.style.display=e.id===k?'block':'none');document.querySelectorAll('.nav[data-k]').forEach(e=>e.classList.toggle('on',e.dataset.k===k))}
+addEventListener('hashchange',show);show();document.addEventListener('keydown',e=>{if(e.key==='t'){const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'}});</script></body></html>

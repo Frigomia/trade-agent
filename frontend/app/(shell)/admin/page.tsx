@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Box, Typography, Alert, Button, Chip, IconButton } from "@mui/material";
+import { Box, Typography, Alert, Button, Chip, IconButton, useMediaQuery, useTheme } from "@mui/material";
 import { Plus, MoreHorizontal } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
-import { UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
+import { UserDetailContent, UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Panel } from "@/components/ui/Panel";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
+
+// Only people who have signed in have limits and access to manage.
+const hasDetail = (user: AdminUserOut) => user.status === "active" || user.status === "disabled";
 
 export default function AdminPage() {
   const {
@@ -24,6 +27,9 @@ export default function AdminPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
+  const selectedUser = users?.find((u) => u.id === selectedUserId) ?? null;
 
   const filtered = (users ?? []).filter((u) => filter === "all" || u.status === filter);
 
@@ -69,10 +75,14 @@ export default function AdminPage() {
           );
         })}
       </Box>
+      <Box
+        sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
+      >
       <Panel sx={{ p: "4px 18px" }}>
       {filtered.map((user) => (
         <Box
           key={user.id}
+          onClick={isDesktop && hasDetail(user) ? () => setSelectedUserId(user.id) : undefined}
           sx={{
             display: "flex",
             alignItems: "center",
@@ -80,6 +90,8 @@ export default function AdminPage() {
             py: 1.5,
             borderBottom: "1px solid var(--line)",
             "&:last-of-type": { borderBottom: 0 },
+            cursor: isDesktop && hasDetail(user) ? "pointer" : "default",
+            ...(user.id === selectedUserId && isDesktop && { bgcolor: "var(--up-bg)", mx: -1.25, px: 1.25, borderRadius: "12px" }),
           }}
         >
           <Avatar email={user.email} />
@@ -103,7 +115,7 @@ export default function AdminPage() {
               Enable
             </Button>
           )}
-          {(user.status === "active" || user.status === "disabled") && (
+          {hasDetail(user) && (
             <IconButton
               size="small"
               aria-label="User details"
@@ -115,10 +127,27 @@ export default function AdminPage() {
         </Box>
       ))}
       </Panel>
+      {isDesktop && (
+        <Panel sx={{ p: "20px 22px", position: "sticky", top: 24, maxHeight: "calc(100vh - 48px)", overflowY: "auto" }}>
+          {selectedUser ? (
+            <UserDetailContent
+              key={selectedUser.id}
+              user={selectedUser}
+              onClose={() => setSelectedUserId(null)}
+              onChanged={() => mutate()}
+            />
+          ) : (
+            <Typography sx={{ fontSize: 13.5, color: "var(--muted)" }}>
+              Select a user to see their limits and access.
+            </Typography>
+          )}
+        </Panel>
+      )}
+      </Box>
       <InviteDrawer open={inviteOpen} onClose={() => setInviteOpen(false)} onInvited={() => mutate()} />
       <UserDetailDrawer
         key={selectedUserId ?? "none"}
-        user={users?.find((u) => u.id === selectedUserId) ?? null}
+        user={isDesktop ? null : selectedUser}
         onClose={() => setSelectedUserId(null)}
         onChanged={() => mutate()}
       />

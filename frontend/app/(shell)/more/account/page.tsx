@@ -86,7 +86,7 @@ export default function AccountPage() {
       <PageHeader title="Account" />
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
-        <Box sx={{ display: "grid", gap: 2, alignItems: "start", maxWidth: 960, gridTemplateColumns: { md: "1fr 1fr" } }}>
+        <Box sx={{ display: "grid", gap: 2, maxWidth: 680 }}>
           <Box sx={{ display: "grid", gap: 2 }}>
           <Panel sx={{ p: "16px 18px" }}>
             <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>Signed in as</Typography>
