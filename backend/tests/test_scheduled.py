@@ -1,7 +1,8 @@
 import asyncio
+import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -60,10 +61,12 @@ def env(session_local, app_session_local):
         yield owner
 
 
-PRICE_OK = AsyncMock(return_value={"price": 200.0, "closes": []})
+def _price_ok():
+    return AsyncMock(return_value={"price": 200.0, "closes": []})
 
 
-def _run_snapshots(quote=PRICE_OK):
+def _run_snapshots(quote=None):
+    quote = quote or _price_ok()
     summary = scheduled.Summary()
     with patch("app.snapshots.fetch_quote_and_history", quote):
         asyncio.run(scheduled.run_snapshots(summary))
@@ -235,7 +238,8 @@ def _arun(coro):
     return asyncio.run(coro)
 
 
-def _run_command(command, quote=PRICE_OK, compute=None):
+def _run_command(command, quote=None, compute=None):
+    quote = quote or _price_ok()
     with (
         patch("app.snapshots.fetch_quote_and_history", quote),
         patch("app.memory.outcomes.compute_outcome", compute or AsyncMock(return_value=0.05)),
@@ -299,7 +303,7 @@ def test_a_held_lock_makes_the_run_exit_0_without_work_and_keeps_the_lock(env):
     async def go():
         redis = get_redis()
         await redis.set("scheduled:daily", "1", nx=True, ex=60)
-        with patch("app.snapshots.fetch_quote_and_history", PRICE_OK):
+        with patch("app.snapshots.fetch_quote_and_history", _price_ok()):
             code = await scheduled.run_command("daily")
         still_held = await redis.exists("scheduled:daily")
         await redis.delete("scheduled:daily")
@@ -328,7 +332,7 @@ def test_a_different_command_is_not_blocked_by_the_daily_lock(env):
     assert env.query(Recommendation).one().outcome_evaluated_at is not None
 
 
-def test_an_unreachable_redis_exits_1_and_does_no_work(env):
+def test_an_unreachable_redis_exits_1_and_does_no_work(env, caplog):
     add_app_user(env, USER_ID)
     _holding(env, USER_ID)
 
@@ -341,6 +345,130 @@ def test_an_unreachable_redis_exits_1_and_does_no_work(env):
 
     assert code == 1
     assert _snapshots(env, USER_ID) == []
+    assert "ConnectionError" in caplog.text
+    assert "redis down" not in caplog.text
+
+
+def test_a_malformed_redis_url_is_logged_by_class_and_exits_1(env, caplog):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID)
+
+    with patch("app.scheduled.get_redis", side_effect=ValueError("secret-password")):
+        code = _run_command("daily")
+
+    assert code == 1
+    assert _snapshots(env, USER_ID) == []
+    assert "ValueError" in caplog.text
+    assert "secret-password" not in caplog.text
+
+
+def test_an_unexpected_error_exits_1_logs_the_class_only_and_releases_the_lock(env, caplog):
+    with patch("app.scheduled.active_user_ids", side_effect=RuntimeError("secret-password")):
+        code = _run_command("daily")
+
+    assert code == 1
+    assert _arun(_lock_exists("scheduled:daily")) is False
+    assert "RuntimeError" in caplog.text
+    assert "secret-password" not in caplog.text
+
+
+def test_main_logs_the_class_only_and_returns_1_when_the_run_raises(caplog):
+    with patch("app.scheduled.run_command", AsyncMock(side_effect=OSError("secret-password"))):
+        assert scheduled.main(["daily"]) == 1
+    assert "OSError" in caplog.text
+    assert "secret-password" not in caplog.text
+
+
+def test_outcomes_still_run_after_a_snapshot_failure(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID, "DELISTED")
+    _due_rec(env, USER_ID)
+
+    code = _run_command("daily", quote=AsyncMock(return_value={"price": None, "closes": []}))
+
+    assert code == 1
+    assert env.query(Recommendation).one().outcome_evaluated_at is not None
+
+
+def test_daily_runs_snapshots_before_outcomes():
+    parent = Mock()
+    parent.attach_mock(AsyncMock(), "snapshots")
+    parent.attach_mock(AsyncMock(), "outcomes")
+    with (
+        patch("app.scheduled.run_snapshots", parent.snapshots),
+        patch("app.scheduled.run_outcomes", parent.outcomes),
+    ):
+        assert _arun(scheduled.run_command("daily")) == 0
+
+    names = [c[0] for c in parent.mock_calls]
+    assert names == ["snapshots", "outcomes"]
+
+
+def test_the_lock_has_a_ttl_while_the_run_is_in_progress():
+    seen = {}
+
+    async def fake_snapshots(summary):
+        seen["ttl"] = await get_redis().ttl("scheduled:snapshots")
+
+    with patch("app.scheduled.run_snapshots", fake_snapshots):
+        assert _arun(scheduled.run_command("snapshots")) == 0
+
+    assert 0 < seen["ttl"] <= scheduled.LOCK_SECONDS
+
+
+def test_summary_users_is_the_active_user_count_after_daily(env):
+    add_app_user(env, USER_ID)
+    add_app_user(env, OTHER_USER_ID)
+    add_app_user(env, THIRD_USER_ID, status="invited")
+    summaries = []
+    real = scheduled.Summary
+
+    def spy():
+        summaries.append(real())
+        return summaries[-1]
+
+    with patch("app.scheduled.Summary", spy):
+        _run_command("daily")
+
+    assert summaries[0].users == 2
+
+
+def test_a_batch_evaluating_zero_with_remaining_keeps_looping(env):
+    add_app_user(env, USER_ID)
+    evaluate = AsyncMock(side_effect=[(0, 5), (0, 3), (2, 0)])
+    summary = scheduled.Summary()
+    with patch("app.scheduled.evaluate_due_outcomes", evaluate):
+        asyncio.run(scheduled.run_outcomes(summary))
+
+    assert summary.outcomes_evaluated == 2
+    assert evaluate.await_count == 3
+
+
+def test_snapshot_logs_one_line_per_user(env, caplog):
+    add_app_user(env, USER_ID)
+    add_app_user(env, OTHER_USER_ID)
+    _holding(env, USER_ID)
+
+    with caplog.at_level(logging.INFO, logger="app.scheduled"):
+        _run_snapshots()
+
+    assert f"Snapshot user {USER_ID}: recorded" in caplog.text
+    assert f"Snapshot user {OTHER_USER_ID}: skipped (no open holdings)" in caplog.text
+
+
+def test_outcomes_log_a_line_per_user_and_warn_at_the_batch_cap(env, caplog):
+    add_app_user(env, USER_ID)
+    for _ in range(51):
+        _due_rec(env, USER_ID)
+
+    with (
+        caplog.at_level(logging.INFO, logger="app.scheduled"),
+        patch.object(scheduled, "MAX_OUTCOME_BATCHES", 1),
+    ):
+        _run_outcomes()
+
+    assert f"Outcomes user {USER_ID}: evaluated=50 remaining=1" in caplog.text
+    assert f"Outcomes user {USER_ID}: batch cap reached, 1 still due" in caplog.text
 
 
 def test_main_dispatches_the_command_and_returns_its_exit_code():

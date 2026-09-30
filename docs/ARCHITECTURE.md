@@ -505,16 +505,19 @@ default — same dialect and models as production, started with
   anything left over is picked up by the next run.
 - **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
   expiry. If it is held, the run logs it and exits 0 without doing any work.
+- **Logging:** one info line per user per step, plus a final summary line.
 - **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
-  user failed, or Redis unreachable; `2` unknown command (argparse). One
-  user's failure never stops the others.
+  user failed (a holding that cannot be priced counts as a failure for that
+  user), or Redis unreachable; `2` unknown command (argparse). One user's
+  failure never stops the others.
 - **Cadence:** weekdays around 23:00 UTC, after the EU and US closes.
 
 Triggers (copy-paste):
 
 ```bash
-# cron (weekdays 23:00, server in UTC)
-0 23 * * 1-5 cd /path/to/backend && uv run python -m app.scheduled daily
+# cron (weekdays 23:00, server in UTC); cron has a minimal PATH, so use the
+# absolute path to uv (/home/you/.local/bin/uv is illustrative)
+0 23 * * 1-5 cd /path/to/backend && /home/you/.local/bin/uv run python -m app.scheduled daily
 ```
 
 Windows Task Scheduler: action `uv`, arguments `run python -m app.scheduled daily`,
@@ -525,11 +528,12 @@ Fly.io (§13), guidance for later since nothing is deployed yet: a scheduled
 machine on the same image.
 
 ```bash
-fly machine run <image> --schedule daily -- python -m app.scheduled daily
+fly machine run <image> --schedule daily "python -m app.scheduled daily"
 ```
 
-Fly's built-in schedules are hourly, daily, weekly or monthly. Because the job
-is idempotent, a daily run at whatever hour the machine was created is fine.
+Fly's built-in schedules are hourly, daily, weekly or monthly. The schedule is
+fuzzy (roughly daily) and starts when the machine is created. Because the job
+is idempotent, a daily run at whatever hour that turns out to be is fine.
 
 ---
 

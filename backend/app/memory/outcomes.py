@@ -56,8 +56,10 @@ async def evaluate_due_outcomes(db: Session, user_id: uuid.UUID) -> tuple[int, i
             rec.outcome_evaluated_at = datetime.now(UTC)
             db.commit()
             evaluated += 1
-        except Exception:
-            logger.exception("Failed to evaluate outcome for recommendation %s", rec.id)
+        except Exception as exc:
+            logger.warning(
+                "Failed to evaluate outcome for recommendation %s: %s", rec.id, type(exc).__name__
+            )
             db.rollback()
             # compute_outcome's only failure mode (no price history for the
             # ticker) is permanent, not transient -- stamp evaluated_at even

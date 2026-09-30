@@ -322,6 +322,7 @@ def test_snapshot_fails_when_price_is_none(client):
         response = client.post("/portfolio/snapshot")
 
     assert response.status_code == 500
+    assert response.json() == {"detail": "No current price available for DELISTED"}
     assert client.get("/portfolio/snapshots").json() == []
 
 
@@ -335,6 +336,7 @@ def test_snapshot_fails_when_price_is_nan(client):
         response = client.post("/portfolio/snapshot")
 
     assert response.status_code == 500
+    assert response.json() == {"detail": "No current price available for DELISTED"}
     assert client.get("/portfolio/snapshots").json() == []
 
 
