@@ -60,6 +60,21 @@ describe("PreferencesPage", () => {
     expect(screen.getByText("Tobacco")).toBeInTheDocument();
   });
 
+  it("limits a sector name to 50 characters", async () => {
+    renderFresh();
+    const input = await screen.findByLabelText(/add a sector/i);
+    expect(input).toHaveAttribute("maxlength", "50");
+  });
+
+  it("disables Add and says why once 20 sectors are listed", async () => {
+    const twenty = Array.from({ length: 20 }, (_, n) => `Sector ${n}`);
+    apiFetch.mockImplementation(async () => ({ ...LOADED, sector_avoid_list: twenty }));
+    renderFresh();
+    await screen.findByText("Sector 0");
+    expect(screen.getByRole("button", { name: /^add$/i })).toBeDisabled();
+    expect(screen.getByText(/at most 20 sectors/i)).toBeInTheDocument();
+  });
+
   it("removes a sector chip", async () => {
     renderFresh();
     fireEvent.click(await screen.findByRole("button", { name: /remove energy/i }));
