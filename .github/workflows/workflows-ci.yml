@@ -19,8 +19,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install actionlint
-        run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
-
       - name: Lint workflows
-        run: ./actionlint -color
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color

@@ -18,9 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     # Scheduled runs are always master; a manual dispatch from another branch must not use the production token.
     if: github.ref == 'refs/heads/master'
-    # The Environment `production` must exist with "Deployment branches: master only", and the secrets
-    # (FLY_API_TOKEN, BACKUP_DATABASE_URL, BACKUP_PASSPHRASE) must be Environment secrets: GitHub then
-    # enforces the branch rule. The `if:` above is defence in depth. See docs/RUNBOOK.md.
+    # Needs the GitHub Environment `production` (master only, holds the secrets): see docs/RUNBOOK.md.
     environment: production
     steps:
       - uses: actions/checkout@v7

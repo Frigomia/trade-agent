@@ -1,3 +1,4 @@
+import re
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import model_validator
@@ -7,10 +8,7 @@ _STRICT_SSLMODES = {"require", "verify-ca", "verify-full"}
 
 
 def _use_psycopg(url: str | None) -> str | None:
-    for plain in ("postgresql://", "postgres://"):
-        if url and url.startswith(plain):
-            return "postgresql+psycopg://" + url[len(plain) :]
-    return url
+    return re.sub(r"^postgres(ql)?://", "postgresql+psycopg://", url) if url else url
 
 
 class InsecureConfigError(RuntimeError):
