@@ -9,6 +9,9 @@ on:
     types: [completed]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-backend
   cancel-in-progress: false
@@ -21,14 +24,16 @@ jobs:
   deploy:
     name: fly deploy
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # workflow_run.branches matches only the head branch name, so PR runs (even from a branch named
+    # master) and other branches must never deploy: require a push run from this repo, or a master dispatch.
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
     steps:
       - uses: actions/checkout@v7
         with:
           # The commit Backend CI actually tested, not whatever master is by now.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
 
       - name: Deploy (migrations run as the release command)
         run: flyctl deploy --remote-only --ha=false
