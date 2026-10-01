@@ -98,3 +98,70 @@ def test_a_finished_job_frees_the_users_running_slot(app_session_local):
         await create_job(OTHER_USER_ID, "MSFT", date(2020, 1, 1), date(2024, 1, 1))
 
     asyncio.run(_run())
+
+
+def test_a_stale_job_does_not_remove_another_jobs_marker(app_session_local):
+    from app.backtest.jobs import _active_key
+    from app.redis_client import get_redis
+
+    async def _run() -> None:
+        redis = get_redis()
+        job_id = await create_job(OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+        # The marker expired and a newer job claimed the slot while the old one still ran.
+        await redis.set(_active_key(OTHER_USER_ID), "newer-job")
+
+        with patch("app.backtest.jobs.fetch_price_history", AsyncMock(side_effect=RuntimeError)):
+            await run_job(job_id, OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+
+        assert await redis.get(_active_key(OTHER_USER_ID)) == "newer-job"
+
+    asyncio.run(_run())
+
+
+def test_a_job_that_overruns_the_time_limit_fails_and_frees_the_slot(app_session_local):
+    async def _hang(*args, **kwargs):
+        await asyncio.sleep(30)
+
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+        with (
+            patch("app.backtest.jobs.JOB_MAX_SECONDS", 0.05),
+            patch("app.backtest.jobs.fetch_price_history", _hang),
+        ):
+            await run_job(job_id, OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+
+        status = await get_job_status(job_id, OTHER_USER_ID)
+        assert status is not None and status["status"] == "FAILED"
+        await create_job(OTHER_USER_ID, "MSFT", date(2020, 1, 1), date(2024, 1, 1))
+
+    asyncio.run(_run())
+
+
+def test_run_job_saves_its_result_off_the_event_loop(app_session_local):
+    import threading
+
+    saved_in: list[int] = []
+
+    def _fake_save(*args, **kwargs) -> int:
+        saved_in.append(threading.get_ident())
+        return 1
+
+    metrics = BacktestMetrics(
+        final_value=1.0,
+        buy_and_hold_value=1.0,
+        excess_return_pct=0.0,
+        hit_rate_by_signal={},
+        equity_curve={"strategy": [1.0], "buy_and_hold": [1.0]},
+    )
+
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+        with (
+            patch("app.backtest.jobs.fetch_price_history", AsyncMock(return_value=[1.0] * 300)),
+            patch("app.backtest.jobs.simulate", return_value=metrics),
+            patch("app.backtest.jobs._save_result", _fake_save),
+        ):
+            await run_job(job_id, OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+
+    asyncio.run(_run())
+    assert saved_in and saved_in[0] != threading.get_ident()

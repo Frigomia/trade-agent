@@ -655,3 +655,46 @@ def test_expensive_portfolio_routes_are_rate_limited(client, method, path):
         for _ in range(30):
             assert send(path).status_code != 429
         assert send(path).status_code == 429
+
+
+def _record_statements(app_engine):
+    from sqlalchemy import event
+
+    statements: list[str] = []
+
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(app_engine, "before_cursor_execute", _before)
+    return statements
+
+
+@pytest.mark.parametrize(
+    ("path", "payload", "count_table"),
+    [
+        ("/portfolio/holdings", _holding_payload("LOCKME"), "FROM holdings"),
+        ("/portfolio/watchlist", {"ticker": "LOCKME", "asset_type": "ETF"}, "FROM watchlist_items"),
+    ],
+)
+def test_creating_a_row_takes_the_per_user_lock_before_counting(
+    client, app_engine, path, payload, count_table
+):
+    statements = _record_statements(app_engine)
+    assert client.post(path, json=payload).status_code == 200
+
+    lock_at = next(i for i, s in enumerate(statements) if "pg_advisory_xact_lock" in s)
+    count_at = next(i for i, s in enumerate(statements) if "count(*)" in s and count_table in s)
+    assert lock_at < count_at
+
+
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/portfolio/holdings", _holding_payload("RATE")),
+        ("/portfolio/watchlist", {"ticker": "RATE", "asset_type": "ETF"}),
+    ],
+)
+def test_portfolio_writes_are_rate_limited(client, path, payload):
+    for _ in range(60):
+        assert client.post(path, json=payload).status_code == 200
+    assert client.post(path, json=payload).status_code == 429

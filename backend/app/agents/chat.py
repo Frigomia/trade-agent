@@ -18,6 +18,11 @@ WEB_HEADING = re.compile(r"## From the web:?[ \t]*(\n|$)", re.IGNORECASE)
 
 
 async def build_portfolio_context(db: Session, user_id: uuid.UUID) -> str:
+    # The queries are synchronous: run them in a worker thread, one at a time on this session.
+    return await asyncio.to_thread(_portfolio_context_sync, db, user_id)
+
+
+def _portfolio_context_sync(db: Session, user_id: uuid.UUID) -> str:
     holdings = db.query(Holding).filter(Holding.user_id == user_id).all()
     watchlist = db.query(WatchlistItem).filter(WatchlistItem.user_id == user_id).all()
     recent_recs = (

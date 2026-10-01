@@ -1,8 +1,10 @@
 import asyncio
 import logging
 import math
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
@@ -34,6 +36,7 @@ router = APIRouter(
 # Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
 MAX_HOLDINGS = 100
 MAX_WATCHLIST = 100
+WRITE_LIMIT_PER_MINUTE = 60  # per user, per route: the holdings/watchlist upserts
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
 
 
@@ -48,7 +51,18 @@ def list_holdings(
     return db.query(Holding).filter_by(user_id=user.id).all()
 
 
-@router.post("/holdings", response_model=HoldingOut)
+def _lock_user_for_insert(db: Session, user_id: uuid.UUID) -> None:
+    """Serialise one user's count-then-insert so two parallel requests cannot both pass the cap.
+    The lock is held until the transaction ends (the commit) and is Postgres-only; the tests and
+    the app both run on Postgres."""
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": str(user_id)})
+
+
+@router.post(
+    "/holdings",
+    response_model=HoldingOut,
+    dependencies=[Depends(rate_limiter("portfolio_holdings", limit=WRITE_LIMIT_PER_MINUTE))],
+)
 def upsert_holding(
     payload: HoldingIn,
     user: CurrentUser = Depends(get_current_user),
@@ -56,6 +70,7 @@ def upsert_holding(
 ) -> Holding:
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
+        _lock_user_for_insert(db, user.id)
         if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
             raise HTTPException(status_code=409, detail=_cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
@@ -86,7 +101,11 @@ def list_watchlist(
     return db.query(WatchlistItem).filter_by(user_id=user.id).all()
 
 
-@router.post("/watchlist", response_model=WatchlistItemOut)
+@router.post(
+    "/watchlist",
+    response_model=WatchlistItemOut,
+    dependencies=[Depends(rate_limiter("portfolio_watchlist", limit=WRITE_LIMIT_PER_MINUTE))],
+)
 def upsert_watchlist_item(
     payload: WatchlistItemIn,
     user: CurrentUser = Depends(get_current_user),
@@ -94,6 +113,7 @@ def upsert_watchlist_item(
 ) -> WatchlistItem:
     item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if item is None:
+        _lock_user_for_insert(db, user.id)
         if db.query(WatchlistItem).filter_by(user_id=user.id).count() >= MAX_WATCHLIST:
             raise HTTPException(
                 status_code=409, detail=_cap_message("watchlist items", MAX_WATCHLIST)

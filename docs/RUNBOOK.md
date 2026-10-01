@@ -67,6 +67,18 @@ either way, but a private repository means the encrypted file is not downloadabl
    query only confirms it. You can also turn the Supabase Data API off for the project (Project
    Settings, Data API), because the app only uses the database directly and the Auth API
    (UNVERIFIED: menu names, not checked here).
+10. After the same migration, confirm the runtime role can still call pgvector's functions (the
+    revoke also touches functions in `public`). This must return `true`:
+
+    ```sql
+    SELECT has_function_privilege('trading_agent_app', 'vector_in(cstring,oid,integer)', 'EXECUTE');
+    ```
+
+    Then ask a question in Chat or run an analysis, which exercises a memory/embedding query. If
+    the check returns `false` or those fail with "permission denied for function", run
+    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO trading_agent_app;` (UNVERIFIED that this
+    is ever needed: Supabase usually installs pgvector in the `extensions` schema, and `PUBLIC`
+    keeps execute on functions by default).
 
 ### Upstash
 

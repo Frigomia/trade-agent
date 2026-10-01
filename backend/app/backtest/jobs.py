@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any
 
 from app.agents.market_data import fetch_price_history
-from app.backtest.engine import simulate
+from app.backtest.engine import BacktestMetrics, simulate
 from app.db import scoped_session
 from app.models import BacktestResult
 from app.redis_client import get_redis
@@ -16,8 +16,19 @@ JOB_TTL_SECONDS = 3600
 
 
 # Marks "this user has a backtest in flight". It expires on its own in case the process dies
-# before the job finishes, so a crash cannot lock the user out for long.
-ACTIVE_TTL_SECONDS = 600
+# before the job finishes, so a crash cannot lock the user out for long. A job is cut off after
+# JOB_MAX_SECONDS and the marker outlives that, so a live job never loses its marker to expiry.
+JOB_MAX_SECONDS = 600
+ACTIVE_TTL_SECONDS = JOB_MAX_SECONDS + 60
+
+# Deletes the marker only if it still holds this job's id (a newer job may own it by now).
+# Lua runs atomically inside Redis, so the compare and the delete cannot be interleaved.
+_RELEASE_IF_MINE = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
 
 
 class BacktestAlreadyRunning(Exception):
@@ -52,29 +63,36 @@ async def get_job_status(job_id: str, user_id: uuid.UUID) -> dict[str, Any] | No
     }
 
 
+def _save_result(
+    user_id: uuid.UUID, ticker: str, start: date, end: date, metrics: BacktestMetrics
+) -> int:
+    with scoped_session(user_id) as db:
+        result = BacktestResult(
+            user_id=user_id,
+            ticker=ticker,
+            start_date=start,
+            end_date=end,
+            final_value=metrics.final_value,
+            buy_and_hold_value=metrics.buy_and_hold_value,
+            excess_return_pct=metrics.excess_return_pct,
+            hit_rate_by_signal=metrics.hit_rate_by_signal,
+            equity_curve=metrics.equity_curve,
+            status="DONE",
+        )
+        db.add(result)
+        db.commit()
+        db.refresh(result)
+        return result.id
+
+
 async def run_job(job_id: str, user_id: uuid.UUID, ticker: str, start: date, end: date) -> None:
     redis = get_redis()
     try:
-        closes = await fetch_price_history(ticker, start, end)
-        metrics = await asyncio.to_thread(simulate, closes)
-
-        with scoped_session(user_id) as db:
-            result = BacktestResult(
-                user_id=user_id,
-                ticker=ticker,
-                start_date=start,
-                end_date=end,
-                final_value=metrics.final_value,
-                buy_and_hold_value=metrics.buy_and_hold_value,
-                excess_return_pct=metrics.excess_return_pct,
-                hit_rate_by_signal=metrics.hit_rate_by_signal,
-                equity_curve=metrics.equity_curve,
-                status="DONE",
-            )
-            db.add(result)
-            db.commit()
-            db.refresh(result)
-            result_id = result.id
+        async with asyncio.timeout(JOB_MAX_SECONDS):  # a hung fetch ends as FAILED, not forever
+            closes = await fetch_price_history(ticker, start, end)
+            metrics = await asyncio.to_thread(simulate, closes)
+            # The session is opened, used and closed inside one worker thread.
+            result_id = await asyncio.to_thread(_save_result, user_id, ticker, start, end, metrics)
 
         await redis.hset(
             f"backtest_job:{job_id}",
@@ -84,4 +102,4 @@ async def run_job(job_id: str, user_id: uuid.UUID, ticker: str, start: date, end
         logger.exception("Backtest failed for ticker %s", ticker)
         await redis.hset(f"backtest_job:{job_id}", "status", "FAILED")
     finally:
-        await redis.delete(_active_key(user_id))
+        await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)

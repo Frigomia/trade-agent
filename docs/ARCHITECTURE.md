@@ -612,7 +612,10 @@ and invited users; nobody can sign up on their own.
   `app_settings` have no RLS. Migration `a7c3e91d5b20` revokes all privileges on tables,
   sequences and functions in `public` from both roles and revokes their default privileges, so
   later tables are born closed (a no-op where the roles do not exist, such as local Docker). Its
-  downgrade deliberately re-grants nothing. Deploy check: `SELECT grantee, privilege_type FROM
+  downgrade deliberately re-grants nothing. The functions step does not remove `PUBLIC`'s
+  default `EXECUTE`, which is harmless while no `SECURITY DEFINER` function exists (add none
+  without revisiting this). The startup role check also counts ownership through role
+  membership and refuses a member of Supabase's `postgres` role. Deploy check: `SELECT grantee, privilege_type FROM
   information_schema.role_table_grants WHERE table_schema = 'public' AND grantee IN ('anon',
   'authenticated');` must return zero rows (see RUNBOOK).
 - **Migrating existing single-user data.** Before auth, every row carries
