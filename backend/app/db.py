@@ -55,6 +55,46 @@ def scoped_session(user_id: uuid.UUID) -> Generator[Session, None, None]:
         session.close()
 
 
+class UnsafeRuntimeRoleError(RuntimeError):
+    """The runtime database role could bypass RLS. Like InsecureConfigError this is not a
+    ValueError, and its message never carries a URL or password."""
+
+
+def check_runtime_role(conn: Connection) -> None:
+    """Refuse a role that would silently skip row-level security: a superuser, a BYPASSRLS role,
+    or the owner of the tables, directly or through role membership (owners bypass RLS unless it
+    is forced), or a member of Supabase's `postgres` role."""
+    rolsuper, rolbypassrls = conn.execute(
+        text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+    ).one()
+    owned: int = conn.execute(
+        text(
+            "SELECT count(*) FROM pg_tables "
+            "WHERE schemaname = 'public' AND pg_has_role(current_user, tableowner, 'USAGE')"
+        )
+    ).scalar_one()
+    # CASE evaluates pg_has_role only when the role exists (it errors on an unknown role).
+    postgres_member: bool = conn.execute(
+        text(
+            "SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') "
+            "THEN pg_has_role(current_user, 'postgres', 'MEMBER') ELSE false END"
+        )
+    ).scalar_one()
+    problems: list[str] = []
+    if rolsuper:
+        problems.append("is a superuser")
+    if rolbypassrls:
+        problems.append("has BYPASSRLS")
+    if owned:
+        problems.append("owns tables in schema public")
+    if postgres_member:
+        problems.append("is a member of postgres")
+    if problems:
+        raise UnsafeRuntimeRoleError(
+            "DATABASE_URL role must not bypass row-level security, but it " + ", ".join(problems)
+        )
+
+
 def get_session_factory() -> sessionmaker[Session]:
     """FastAPI dependency so tests can swap in a factory bound to the restricted test role."""
     return SessionLocal

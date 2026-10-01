@@ -52,6 +52,7 @@ class Settings(BaseSettings):
         if env not in {"development", "production"}:
             # Fail closed on a typo; never echo the value.
             raise InsecureConfigError("APP_ENV must be 'development' or 'production'")
+        self.app_env = env  # store the normalised value so other code can compare it directly
         if env != "production":
             return self
         problems: list[str] = []

@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.agents.jobs import create_job, get_job_status, run_job
 from app.agents.market_data import fetch_quote_and_history
@@ -15,7 +16,7 @@ from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
-from app.schemas import RecommendationOut
+from app.schemas import RecommendationOut, Ticker
 from app.usage import check_monthly_usage
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,20 @@ router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(
 _track_background_task = make_task_tracker("analysis")
 
 
+# Each ticker in a run is its own graph run (a Claude web search plus an embedding call), yet a
+# run counts once against the monthly cap, so the number per run is bounded.
+MAX_RUN_TICKERS = 50
+QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
+
+
 class AnalysisRunIn(BaseModel):
-    tickers: list[str] | None = None
+    tickers: list[Ticker] | None = Field(default=None, max_length=MAX_RUN_TICKERS)
+
+    @field_validator("tickers")
+    @classmethod
+    def _drop_duplicates(cls, tickers: list[str] | None) -> list[str] | None:
+        # dict keys are unique and keep insertion order, so this removes repeats in order
+        return list(dict.fromkeys(tickers)) if tickers is not None else None
 
 
 @router.post(
@@ -42,12 +55,24 @@ async def run_analysis(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> dict[str, str]:
-    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user.id)}
-    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user.id)}
+    # The queries are synchronous, so they run in a worker thread to keep the event loop free.
+    ticker_infos = await run_in_threadpool(_build_ticker_infos, db, user.id, payload.tickers)
+    job_id = await create_job(user.id, ticker_infos)
+    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos))
+    _track_background_task(task)
+    return {"job_id": job_id}
 
-    if payload.tickers:
+
+def _build_ticker_infos(
+    db: Session, user_id: uuid.UUID, tickers: list[str] | None
+) -> list[dict[str, Any]]:
+    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
+    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
+
+    ticker_infos: list[dict[str, Any]]
+    if tickers:
         ticker_infos = []
-        for ticker in payload.tickers:
+        for ticker in tickers:
             if ticker in holdings:
                 ticker_infos.append(
                     {"ticker": ticker, "asset_type": holdings[ticker].asset_type, "is_held": True}
@@ -70,11 +95,8 @@ async def run_analysis(
             {"ticker": w.ticker, "asset_type": w.asset_type, "is_held": False}
             for w in watchlist.values()
         ]
-
-    job_id = await create_job(user.id, ticker_infos)
-    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos))
-    _track_background_task(task)
-    return {"job_id": job_id}
+        ticker_infos = ticker_infos[:MAX_RUN_TICKERS]  # holdings come first, then the watchlist
+    return ticker_infos
 
 
 @router.get("/run/{job_id}")
@@ -119,7 +141,11 @@ async def _attach_live_quotes(recs: list[RecommendationOut]) -> None:
             rec.current_price, rec.price_change_pct = quote
 
 
-@router.get("/recommendations", response_model=list[RecommendationOut])
+@router.get(
+    "/recommendations",
+    response_model=list[RecommendationOut],
+    dependencies=[Depends(rate_limiter("recommendations", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def list_recommendations(
     status: str | None = None,
     user: CurrentUser = Depends(get_current_user),
@@ -136,7 +162,11 @@ async def list_recommendations(
     return outs
 
 
-@router.get("/recommendations/{recommendation_id}", response_model=RecommendationOut)
+@router.get(
+    "/recommendations/{recommendation_id}",
+    response_model=RecommendationOut,
+    dependencies=[Depends(rate_limiter("recommendation", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def get_recommendation(
     recommendation_id: int,
     user: CurrentUser = Depends(get_current_user),

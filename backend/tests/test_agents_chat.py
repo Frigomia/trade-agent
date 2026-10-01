@@ -291,3 +291,19 @@ def test_run_chat_matches_the_web_heading_like_the_frontend(
     )
 
     assert ("You hold 10 shares." in reply) is keeps_lead
+
+
+def test_build_portfolio_context_queries_off_the_event_loop(db_session):
+    import threading
+
+    seen: list[int] = []
+    real = chat_module._portfolio_context_sync
+
+    def _spy(db, user_id):
+        seen.append(threading.get_ident())
+        return real(db, user_id)
+
+    with patch.object(chat_module, "_portfolio_context_sync", _spy):
+        asyncio.run(build_portfolio_context(db_session, USER_ID))
+
+    assert seen and seen[0] != threading.get_ident()

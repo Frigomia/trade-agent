@@ -259,3 +259,30 @@ def test_list_results_is_newest_first_capped_at_20_and_has_no_curve(client, db_s
     assert body[0]["ticker"] == "T21"  # same created_at inside one transaction: id breaks the tie
     assert body[-1]["ticker"] == "T02"
     assert "equity_curve" not in body[0]
+
+
+_BODY = {"ticker": "AAPL", "start_date": "2020-01-01", "end_date": "2024-01-01"}
+
+
+def test_run_backtest_is_rate_limited_after_5_calls_per_minute(client):
+    with (
+        patch("app.routers.backtest.create_job", AsyncMock(return_value="job-123")),
+        patch("app.routers.backtest.run_job", AsyncMock()),
+        patch("app.routers.backtest.asyncio.create_task", side_effect=_close_coro),
+    ):
+        for _ in range(5):
+            assert client.post("/backtest/run", json=_BODY).status_code == 202
+        assert client.post("/backtest/run", json=_BODY).status_code == 429
+
+
+def test_run_backtest_allows_only_one_running_job_per_user(client):
+    with (
+        patch("app.routers.backtest.run_job", AsyncMock()),
+        patch("app.routers.backtest.asyncio.create_task", side_effect=_close_coro),
+    ):
+        first = client.post("/backtest/run", json=_BODY)
+        second = client.post("/backtest/run", json=_BODY)
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]

@@ -53,6 +53,32 @@ either way, but a private repository means the encrypted file is not downloadabl
    for the owner role (`MIGRATION_DATABASE_URL`). UNVERIFIED: Supabase's session pooler
    connection string usually uses the username form `<role>.<project-ref>`; copy the string from
    the Supabase dashboard (Connect) rather than composing it.
+9. After every deploy that ships a migration, verify Supabase's public API roles have no access
+   to the app's tables. In the SQL editor this must return **zero rows**:
+
+   ```sql
+   SELECT grantee, privilege_type FROM information_schema.role_table_grants
+   WHERE table_schema = 'public' AND grantee IN ('anon','authenticated');
+   ```
+
+   Supabase serves public tables to `anon`/`authenticated` through PostgREST (`/rest/v1`) with
+   the public anon key, and `app_users` has no RLS, so any row here is a hole. Migrations run on
+   deploy through the Fly release command, so the revoke migration is applied automatically; this
+   query only confirms it. You can also turn the Supabase Data API off for the project (Project
+   Settings, Data API), because the app only uses the database directly and the Auth API
+   (UNVERIFIED: menu names, not checked here).
+10. After the same migration, confirm the runtime role can still call pgvector's functions (the
+    revoke also touches functions in `public`). This must return `true`:
+
+    ```sql
+    SELECT has_function_privilege('trading_agent_app', 'vector_in(cstring,oid,integer)', 'EXECUTE');
+    ```
+
+    Then ask a question in Chat or run an analysis, which exercises a memory/embedding query. If
+    the check returns `false` or those fail with "permission denied for function", run
+    `GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO trading_agent_app;` (UNVERIFIED that this
+    is ever needed: Supabase usually installs pgvector in the `extensions` schema, and `PUBLIC`
+    keeps execute on functions by default).
 
 ### Upstash
 

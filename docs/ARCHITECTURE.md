@@ -246,21 +246,21 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 |---|---|---|---|
 | GET | `/health` | — | Liveness check |
 | GET | `/portfolio/holdings` | — | List all holdings |
-| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker |
+| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker; at most 100 holdings per user (`409` beyond that) |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
-| POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker |
+| POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that) |
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
-| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable) |
+| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first) |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
 | POST | `/analysis/recommendations/{id}/reject` | — | |
-| POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run` |
+| POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run`. Rate limited: 5/min per user; one running backtest per user at a time (`409` while one is `RUNNING`) |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
 | GET | `/backtest/results/{id}` | — | A single result including `equity_curve`; 404 if missing or not the caller's |
@@ -602,9 +602,22 @@ and invited users; nobody can sign up on their own.
   forced, and can disable it). The `.env.example` default (the Docker superuser)
   and the `postgres` owner URL from Supabase's Connect dialog both bypass RLS
   silently. The app-level `user_id` filters stay on every query, but the
-  database-level guarantee only holds for `trading_agent_app`. A startup check
-  that refuses to boot on a bypassing role is planned for the deploy cycle
-  (roadmap step 5).
+  database-level guarantee only holds for `trading_agent_app`. With
+  `APP_ENV=production` the web process also checks this at startup
+  (`app/db.py::check_runtime_role`, called from the `main.py` lifespan) and refuses to boot
+  if the role is a superuser, has `BYPASSRLS`, or owns any table in schema `public`. The
+  release command and the one-off job do not go through that startup.
+- **Supabase's public API roles are closed.** Supabase exposes every `public` table through
+  PostgREST to `anon` and `authenticated` with the public anon key, and `app_users` and
+  `app_settings` have no RLS. Migration `a7c3e91d5b20` revokes all privileges on tables,
+  sequences and functions in `public` from both roles and revokes their default privileges, so
+  later tables are born closed (a no-op where the roles do not exist, such as local Docker). Its
+  downgrade deliberately re-grants nothing. The functions step does not remove `PUBLIC`'s
+  default `EXECUTE`, which is harmless while no `SECURITY DEFINER` function exists (add none
+  without revisiting this). The startup role check also counts ownership through role
+  membership and refuses a member of Supabase's `postgres` role. Deploy check: `SELECT grantee, privilege_type FROM
+  information_schema.role_table_grants WHERE table_schema = 'public' AND grantee IN ('anon',
+  'authenticated');` must return zero rows (see RUNBOOK).
 - **Migrating existing single-user data.** Before auth, every row carries
   `user_id = 00000000-0000-0000-0000-000000000001` (the removed
   `default_user_id`). Once you bootstrap the owner under their real Supabase uid,
@@ -621,8 +634,8 @@ and invited users; nobody can sign up on their own.
   up to the RLS migration (`dd035aae788b`); (4) run `python -m
   app.auth.bootstrap_admin <email> <supabase-uid>`. On the local Docker
   superuser the order does not matter.
-- Open question: FastAPI's `/docs`, `/redoc`, and `/openapi.json` are currently
-  unauthenticated. Decide before public hosting whether to disable or protect them.
+- FastAPI's `/docs`, `/redoc`, and `/openapi.json` are not served when
+  `APP_ENV=production` (they stay on in development).
 - **Invitations (admin API).** The admin invites by email through Supabase's invite API:
   the backend calls it with `SUPABASE_SECRET_KEY` and records an `invited` row in
   `app_users`; the invitee's emailed link signs them in at `INVITE_REDIRECT_URL`, they set a
@@ -803,8 +816,17 @@ just believed done.
       `dependencies=[Depends(rate_limiter(...))]`. `/analysis/run`: 5/min,
       `/chat`: 20/min; `/memory/embed`: 5/min, `/memory/evaluate-outcomes`: 6/min,
       `/memory/similar`: 30/min (the embedding calls cost money; evaluate-outcomes is fired
-      automatically when Track record opens). Monthly caps per user (default 100 analysis/500 chat) enforced
+      automatically when Track record opens). The routes that fan out to yfinance are limited
+      too: `/backtest/run` 5/min, `/portfolio/summary`, `/portfolio/snapshot`,
+      `/analysis/recommendations` and `/analysis/recommendations/{id}` 30/min each. The limiter
+      sets the counter and its TTL in one Redis MULTI/EXEC, so a crash cannot leave a key that
+      never expires. Monthly caps per user (default 100 analysis/500 chat) enforced
       in a route dependency (`check_monthly_usage`, run before the handler; sub-project 2c)
+- [x] Unbounded paid calls closed: at most 50 tickers per `/analysis/run` (deduplicated), 100
+      holdings and 100 watchlist items per user, one running backtest per user
+- [x] Supabase `anon`/`authenticated` roles revoked on `public` (migration `a7c3e91d5b20`)
+- [x] API docs and OpenAPI schema disabled in production
+- [x] Startup check that the runtime DB role cannot bypass RLS (production only)
 - [x] Exception text sanitized before it's persisted or returned — the
       original concern (`news_agent` interpolating raw `{exc}`) no longer
       applies; current code has no such interpolation anywhere in

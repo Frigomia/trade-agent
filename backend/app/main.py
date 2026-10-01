@@ -1,14 +1,36 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.admin.service import AdminError
 from app.config import settings
+from app.db import check_runtime_role, engine
 from app.routers import admin, analysis, backtest, chat, me, memory, portfolio, preferences
 from app.snapshots import PriceUnavailable
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
-app = FastAPI(title="Trading Agent API")
+
+def docs_kwargs(app_env: str) -> dict[str, Any]:
+    """In production the interactive docs and the OpenAPI schema are not served."""
+    if app_env == "production":
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {}
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    # Web process only: the release command and the one-off job never go through this startup.
+    if settings.app_env == "production":
+        with engine.connect() as conn:
+            check_runtime_role(conn)
+    yield
+
+
+app = FastAPI(title="Trading Agent API", lifespan=lifespan, **docs_kwargs(settings.app_env))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],

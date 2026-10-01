@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
-from app.backtest.jobs import create_job, get_job_status, run_job
+from app.backtest.jobs import BacktestAlreadyRunning, create_job, get_job_status, run_job
 from app.models import BacktestResult
+from app.rate_limit import rate_limiter
 from app.schemas import BacktestListItemOut, BacktestResultOut, Ticker
 
 router = APIRouter(prefix="/backtest", tags=["backtest"], dependencies=[Depends(get_current_user)])
@@ -18,6 +19,7 @@ _track_background_task = make_task_tracker("backtest")
 
 MAX_BACKTEST_RANGE = timedelta(days=365 * 30)
 RESULTS_LIMIT = 20
+RUN_LIMIT_PER_MINUTE = 5  # per user; each run downloads up to 30 years of prices
 
 
 class BacktestRunIn(BaseModel):
@@ -34,11 +36,21 @@ class BacktestRunIn(BaseModel):
         return self
 
 
-@router.post("/run", status_code=202)
+@router.post(
+    "/run",
+    status_code=202,
+    dependencies=[Depends(rate_limiter("backtest_run", limit=RUN_LIMIT_PER_MINUTE))],
+)
 async def run_backtest(
     payload: BacktestRunIn, user: CurrentUser = Depends(get_current_user)
 ) -> dict[str, str]:
-    job_id = await create_job(user.id, payload.ticker, payload.start_date, payload.end_date)
+    try:
+        job_id = await create_job(user.id, payload.ticker, payload.start_date, payload.end_date)
+    except BacktestAlreadyRunning:
+        raise HTTPException(
+            status_code=409,
+            detail="A backtest is already running. Wait for it to finish, then start another.",
+        ) from None
     task = asyncio.create_task(
         run_job(job_id, user.id, payload.ticker, payload.start_date, payload.end_date)
     )
