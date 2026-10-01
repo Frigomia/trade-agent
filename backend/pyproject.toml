@@ -10,10 +10,8 @@ dependencies = [
     "alembic",
     "pydantic",
     "pydantic-settings",
-    "python-dotenv",
     "langgraph",
     "anthropic",
-    "mcp",
     "yfinance",
     "redis",
     "psycopg[binary]",
@@ -49,5 +47,5 @@ strict = true
 files = ["app"]
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "mcp.*"]
+module = ["yfinance.*"]
 ignore_missing_imports = true
