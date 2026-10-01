@@ -56,6 +56,10 @@ function ChatScreen() {
   const chatUsage = usage?.chat_messages;
   const atLimit = limitHit || (chatUsage !== undefined && chatUsage.used >= chatUsage.limit);
   const resetDate = nextResetDate(new Date());
+  const limitNote =
+    chatUsage?.limit === 0
+      ? "Chat is turned off for your account. Ask the administrator if you need it."
+      : `You've used all ${chatUsage?.limit ?? ""} chat messages this month. They reset on ${resetDate}. Need more sooner? Ask the administrator to raise your limit.`;
 
   async function send(text: string) {
     const message = text.trim();
@@ -121,7 +125,7 @@ function ChatScreen() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
             <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
-              <Button key={starter} variant="outlined" size="small" disabled={atLimit} onClick={() => void send(starter)}>
+              <Button key={starter} variant="outlined" size="small" onClick={() => void send(starter)}>
                 {starter}
               </Button>
             ))}
@@ -143,14 +147,7 @@ function ChatScreen() {
         )}
         {atLimit && (
           <Alert severity="warning" sx={{ mb: 1 }}>
-            {chatUsage?.limit === 0 ? (
-              <>Chat is turned off for your account. Ask the administrator if you need it.</>
-            ) : (
-              <>
-                <b>You&apos;ve used all {chatUsage?.limit ?? ""} chat messages this month.</b> They reset on {resetDate}.
-                Need more sooner? Ask the administrator to raise your limit.
-              </>
-            )}
+            {limitNote}
           </Alert>
         )}
         <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>
