@@ -541,16 +541,10 @@ Windows Task Scheduler: action `uv`, arguments `run python -m app.scheduled dail
 start in the `backend` folder, trigger weekdays at 23:00 UTC converted to local
 time.
 
-Fly.io (§13), guidance for later since nothing is deployed yet: a scheduled
-machine on the same image.
-
-```bash
-fly machine run <image> --schedule daily "python -m app.scheduled daily"
-```
-
-Fly's built-in schedules are hourly, daily, weekly or monthly. The schedule is
-fuzzy (roughly daily) and starts when the machine is created. Because the job
-is idempotent, a daily run at whatever hour that turns out to be is fine.
+Fly.io (§13): the daily job is started by the GitHub Actions cron in
+`.github/workflows/scheduled-jobs.yml`, which runs it in a one-off Fly machine
+on the deployed image (with `APP_ENV=production` passed explicitly). See
+`docs/RUNBOOK.md`. Because the job is idempotent, a late or repeated run is fine.
 
 ---
 
@@ -559,11 +553,11 @@ is idempotent, a daily run at whatever hour that turns out to be is fine.
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | `backend/Dockerfile` and `backend/fly.toml` exist: one always-on machine (no auto-stop, 512 MB), `release_command = "alembic upgrade head"`, health check on `/health`; first deploy and day-to-day steps are in `docs/RUNBOOK.md`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint. `APP_ENV=production` is set in `fly.toml`. A GitHub Actions cron (`scheduled-jobs.yml`) runs `python -m app.scheduled daily` in a one-off Fly machine (see §12) |
+| Backend | Fly.io, `fra` region | `backend/Dockerfile` and `backend/fly.toml` exist: one always-on machine (no auto-stop, 512 MB), `release_command = "alembic upgrade head"`, health check on `/health`; first deploy and day-to-day steps are in `docs/RUNBOOK.md`. Fly secrets: `DATABASE_URL`, `MIGRATION_DATABASE_URL` (Alembic, the bootstrap command), `REDIS_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS` (full table in `docs/RUNBOOK.md` section 7). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint. `APP_ENV=production` is set in `fly.toml`. A GitHub Actions cron (`scheduled-jobs.yml`) runs `python -m app.scheduled daily` in a one-off Fly machine (see §12) |
 | Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
-| CI/CD | GitHub Actions | `deploy-backend.yml` (deploys to Fly after Backend CI passes on master), `scheduled-jobs.yml` (daily job) and `backup-db.yml` (daily encrypted `pg_dump`, kept 30 days); Vercel's own GitHub integration handles the frontend |
+| CI/CD | GitHub Actions | `deploy-backend.yml` (deploys to Fly after Backend CI passes on master), `scheduled-jobs.yml` (daily job) and `backup-db.yml` (daily encrypted `pg_dump --schema=public` made by a dedicated read-only role, kept 30 days; see the runbook). All three use the GitHub Environment `production` (master only, holds the secrets); Vercel's own GitHub integration handles the frontend |
 
 **Production TLS guard.** `APP_ENV=production` (default `development`) makes the backend, the
 Alembic release command and the scheduled job refuse to start unless `DATABASE_URL` and

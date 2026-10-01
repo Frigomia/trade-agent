@@ -18,10 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     # Scheduled runs are always master; a manual dispatch from another branch must not use the production token.
     if: github.ref == 'refs/heads/master'
+    # The Environment `production` must exist with "Deployment branches: master only", and the secrets
+    # (FLY_API_TOKEN, BACKUP_DATABASE_URL, BACKUP_PASSPHRASE) must be Environment secrets: GitHub then
+    # enforces the branch rule. The `if:` above is defence in depth. See docs/RUNBOOK.md.
+    environment: production
     steps:
       - uses: actions/checkout@v7
 
+      # The flyctl version is pinned and bumped by hand.
       - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
+        with:
+          version: "0.4.111"
 
       - name: Run the daily job in a one-off Fly machine
         env:
@@ -30,6 +37,8 @@ jobs:
         # unverified until the first manual run. Fallback if they prove wrong:
         #   flyctl ssh console --app "$APP" --command "python -m app.scheduled daily"
         # (flyctl maps a failing remote command to a non-zero exit).
+        # APP_ENV is passed explicitly because `machine run` does not apply fly.toml [env]; without
+        # it the production TLS guard would be off for this job.
         run: |
           set -euo pipefail
           APP=$(grep -m1 '^app = ' backend/fly.toml | cut -d'"' -f2)
@@ -42,4 +51,4 @@ jobs:
           fi
           # The machine gets the app's secrets and is removed when the command exits.
           flyctl machine run "$IMAGE" python -m app.scheduled daily \
-            --app "$APP" --region fra --rm --restart no --vm-memory 512
+            --app "$APP" --region fra --rm --restart no --vm-memory 512 --env APP_ENV=production

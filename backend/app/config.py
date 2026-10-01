@@ -6,6 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _STRICT_SSLMODES = {"require", "verify-ca", "verify-full"}
 
 
+def _use_psycopg(url: str | None) -> str | None:
+    for plain in ("postgresql://", "postgres://"):
+        if url and url.startswith(plain):
+            return "postgresql+psycopg://" + url[len(plain) :]
+    return url
+
+
 class InsecureConfigError(RuntimeError):
     """Production settings that would send data over an unencrypted connection. Deliberately not a
     ValueError: pydantic would wrap that in a ValidationError whose text echoes the input values,
@@ -39,6 +46,10 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_tls_in_production(self) -> "Settings":
+        # Supabase hands out postgresql:// (or postgres://); SQLAlchemy would pick psycopg2, which
+        # is not installed. Rewrite to the psycopg driver in every environment.
+        self.database_url = _use_psycopg(self.database_url) or ""
+        self.migration_database_url = _use_psycopg(self.migration_database_url)
         env = self.app_env.strip().lower()
         if env not in {"development", "production"}:
             # Fail closed on a typo; never echo the value.

@@ -131,6 +131,40 @@ def test_env_vars_drive_the_guard(monkeypatch):
     assert Settings(_env_file=None).app_env == "production"
 
 
+@pytest.mark.parametrize("scheme", ["postgresql", "postgres"])
+@pytest.mark.parametrize("env", ["development", "production"])
+def test_plain_postgres_schemes_are_rewritten_to_psycopg(scheme, env):
+    settings = _settings(
+        app_env=env,
+        database_url=f"{scheme}://u:p@h:5432/app?sslmode=require",
+        migration_database_url=f"{scheme}://o:p@h:5432/app?sslmode=require",
+        redis_url=SECURE_REDIS,
+    )
+    assert settings.database_url == "postgresql+psycopg://u:p@h:5432/app?sslmode=require"
+    assert settings.migration_database_url == "postgresql+psycopg://o:p@h:5432/app?sslmode=require"
+
+
+def test_an_already_correct_url_is_unchanged():
+    settings = _settings(app_env="production", database_url=SECURE_DB, redis_url=SECURE_REDIS)
+    assert settings.database_url == SECURE_DB
+    assert settings.migration_database_url is None
+
+
+def test_an_empty_migration_url_stays_empty():
+    settings = _settings(app_env="development", database_url=SECURE_DB, migration_database_url="")
+    assert settings.migration_database_url == ""
+
+
+def test_production_still_rejects_a_plain_url_without_sslmode_after_the_rewrite():
+    with pytest.raises(InsecureConfigError, match="DATABASE_URL") as caught:
+        _settings(
+            app_env="production",
+            database_url="postgresql://u:secretpw@h/app",
+            redis_url=SECURE_REDIS,
+        )
+    assert "secretpw" not in str(caught.value)
+
+
 def test_the_message_names_only_the_offending_setting():
     with pytest.raises(InsecureConfigError) as redis_bad:
         _settings(app_env="production", database_url=SECURE_DB, redis_url="redis://h:6379")

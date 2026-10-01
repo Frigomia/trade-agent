@@ -14,6 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     # Scheduled runs are always master; a manual dispatch from another branch must not use the production database.
     if: github.ref == 'refs/heads/master'
+    # The Environment `production` must exist with "Deployment branches: master only", and the secrets
+    # (FLY_API_TOKEN, BACKUP_DATABASE_URL, BACKUP_PASSPHRASE) must be Environment secrets: GitHub then
+    # enforces the branch rule. The `if:` above is defence in depth. See docs/RUNBOOK.md.
+    environment: production
     steps:
       - name: Install the PostgreSQL 17 client
         run: |
@@ -39,8 +43,10 @@ jobs:
           # pg_dump runs with row_security=off, so a role without BYPASSRLS makes it fail loudly
           # ("query would be affected by row-level security policy"). FORCE ROW LEVEL SECURITY applies
           # to the table owner too, so owning the tables is not enough: the backup role must have
-          # BYPASSRLS or be a superuser (Supabase's postgres role has BYPASSRLS).
-          pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
+          # BYPASSRLS or be a superuser. A dedicated read-only BYPASSRLS role is recommended (see
+          # docs/RUNBOOK.md). --schema=public keeps Supabase's auth.* (password hashes, sessions) and
+          # other Supabase-owned schemas out of the dump; they would also collide on restore.
+          pg_dump --format=custom --schema=public --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
             | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
                 --passphrase-file "$RUNNER_TEMP/passphrase" \
                 -o "$FILE"

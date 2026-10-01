@@ -15,9 +15,11 @@ commit them anywhere.
 | Cache and locks | Upstash Redis | TLS only (`rediss://`). |
 | Deploys, daily job, backups | GitHub Actions | `deploy-backend.yml`, `scheduled-jobs.yml`, `backup-db.yml`. |
 
-All three workflows run only from `master`. The deploy workflow needs a push run on this
-repository (it deploys the commit Backend CI just tested) or a manual dispatch from `master`;
-the scheduled-jobs and backup workflows refuse to run from any other branch. The repository must
+All three workflows are meant to run only from `master`. What enforces this is the GitHub
+Environment `production` (master only, holding the secrets; see section 2, GitHub). The `if:`
+lines in the workflows are defence in depth. The deploy workflow needs a push run on this
+repository (it deploys the commit Backend CI just tested) or a manual dispatch from `master`, and
+skips itself if a newer commit is already on master. The repository must
 be private: the backup is stored as a workflow artifact. The dump is encrypted with a passphrase
 either way, but a private repository means the encrypted file is not downloadable by strangers.
 
@@ -59,15 +61,17 @@ Create the Redis database with TLS on and copy the `rediss://` URL (this is `RED
 ### Fly
 
 1. `fly apps create <app-name>`.
-2. Put the same name in the first line of `backend/fly.toml` (`app = "<app-name>"`). The
-   workflows read the app name from that line.
-3. Set the nine secrets (see the table in section 7 for where each value comes from), from
-   `backend/`:
-   ```
-   fly secrets set DATABASE_URL='<...>' MIGRATION_DATABASE_URL='<...>' REDIS_URL='<...>' \
-     ANTHROPIC_API_KEY='<...>' VOYAGE_API_KEY='<...>' SUPABASE_URL='<...>' \
-     SUPABASE_SECRET_KEY='<...>' INVITE_REDIRECT_URL='<...>' CORS_ALLOWED_ORIGINS='<...>'
-   ```
+2. Put the same name in the `app = ` line near the top of `backend/fly.toml`
+   (`app = "<app-name>"`). The workflows read the app name from that line.
+3. Set the nine secrets (see the table in section 7 for where each value comes from). Avoid typing
+   values on the command line, where they land in shell history. Write them as `NAME=value` lines
+   in a file kept outside the repository (for example `secrets.env`), from `backend/` run
+   `fly secrets import < secrets.env` (UNVERIFIED: check `fly secrets import --help`), then delete
+   the file. If you typed any secret inline, clear your shell history. The nine names are
+   `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`,
+   `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL` and `CORS_ALLOWED_ORIGINS`.
+   The app accepts Supabase's `postgresql://` string for `DATABASE_URL` and
+   `MIGRATION_DATABASE_URL` (it rewrites it to `postgresql+psycopg://`); add `?sslmode=require`.
    `INVITE_REDIRECT_URL` and `CORS_ALLOWED_ORIGINS` are not known yet; put a temporary value now
    and correct them in the Vercel step.
 4. **Production TLS guard.** `fly.toml` sets `APP_ENV=production`. In that mode the app, the
@@ -98,26 +102,51 @@ Create the Redis database with TLS on and copy the `rediss://` URL (this is `RED
 
 ### GitHub
 
-Repository settings, Secrets and variables, Actions: add `FLY_API_TOKEN` (the deploy token),
-`BACKUP_DATABASE_URL` and `BACKUP_PASSPHRASE`.
+1. Repository Settings, Environments: create an Environment named `production`. Set
+   "Deployment branches and tags" to "Selected branches and tags" and allow `master` only.
+   Optionally add a required reviewer, which suits the backup and scheduled workflows.
+2. In that Environment, add `FLY_API_TOKEN` (the deploy token), `BACKUP_DATABASE_URL` and
+   `BACKUP_PASSPHRASE` as **Environment secrets**, not repository secrets. All three workflows
+   declare `environment: production`, so GitHub enforces the branch rule and releases the secrets
+   only to runs on `master`. The `if:` lines in the workflows are defence in depth.
 
-`BACKUP_DATABASE_URL` is a connection string to the Supabase database for a role that has
-`BYPASSRLS` or is a superuser. `pg_dump` runs with row security off, so a role without
-`BYPASSRLS` makes it fail loudly ("query would be affected by row-level security policy").
-Owning the tables is not enough, because `FORCE ROW LEVEL SECURITY` applies to the table owner
-too. Supabase's `postgres` role has `BYPASSRLS`. Add `?sslmode=require` to the URL. Choose a long
-random `BACKUP_PASSPHRASE` and store it somewhere safe outside GitHub as well: without it the
-backups cannot be opened.
+`BACKUP_DATABASE_URL` must stay a plain `postgresql://` URL (for `pg_dump`/libpq), never
+`postgresql+psycopg://`. Add `?sslmode=require`. `pg_dump` runs with row security off, so the role
+must have `BYPASSRLS` (or be a superuser), because `FORCE ROW LEVEL SECURITY` applies to the table
+owner too. Instead of the powerful `postgres` role, create a dedicated read-only role once, as
+`postgres` in the Supabase SQL editor:
+
+```sql
+CREATE ROLE backup_reader LOGIN BYPASSRLS PASSWORD '<generate-a-long-password>';
+ALTER ROLE backup_reader SET default_transaction_read_only = on;
+GRANT USAGE ON SCHEMA public TO backup_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup_reader;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO backup_reader;
+```
+
+UNVERIFIED: whether Supabase lets `postgres` grant `BYPASSRLS` to a new role. If not, fall back to
+the `postgres` role in `BACKUP_DATABASE_URL`; the secret is then very powerful, so protect it
+accordingly. UNVERIFIED: if the dump fails with "permission denied for schema extensions"
+(pgvector's type lives there), run `GRANT USAGE ON SCHEMA extensions TO backup_reader;`. A future
+table without a grant makes the backup fail loudly, which is what you want. Also turn on
+Supabase's "Enforce SSL on incoming connections".
+
+Choose a long random `BACKUP_PASSPHRASE` and store it somewhere safe outside GitHub as well:
+without it the backups cannot be opened.
 
 ## 3. Manual checks to do once
 
 Do these after the first deploy. Items marked (required) cover behavior that could not be
 verified without a real Fly app.
 
-- [ ] (required) In the Actions tab, run "Scheduled jobs" by hand. Then open the one-off
+- [ ] (required) In the Actions tab, run "Scheduled jobs" by hand (the workflow passes
+      `APP_ENV=production` to the one-off machine with `--env`, because `machine run` does not apply
+      `fly.toml`). Then open the one-off
       machine's logs in the Fly dashboard (or `fly logs -a <app-name>`) and confirm the summary
       line `users=... failures=0`. The `flyctl machine run` flags in the workflow are unverified
-      until this run. If the GitHub run is green while the job itself failed, the workflow does
+      until this run. A failed job may still not turn the GitHub run red (UNVERIFIED), so keep
+      checking the logs. If the GitHub run is green while the job itself failed, the workflow does
       not surface job failures: switch to the `flyctl ssh console` fallback written in the
       comments of `scheduled-jobs.yml`.
 - [ ] (required) Confirm the deploy token is allowed to create the one-off machine. If the
@@ -128,7 +157,10 @@ verified without a real Fly app.
       into a scratch database and check that a user table has rows (for example
       `SELECT count(*) FROM holdings;` after you have added data). This proves the backup role
       bypasses RLS: if it did not, the backup would have failed or the tables would be empty.
-      See section 6 for the commands.
+      Then connect to the restored database as `trading_agent_app` and read a row: run
+      `SELECT set_config('app.current_user_id', '<an existing user uuid>', false);` and select from
+      a user table, or read `app_users`. A missing grant shows up here. See section 6 for the
+      commands.
 - [ ] In the Actions tab, confirm the scheduled workflows are enabled (GitHub disables them after
       60 days of inactivity only in public repositories; a private repository should not be
       affected, but double-check this GitHub behaviour).
@@ -148,8 +180,11 @@ verified without a real Fly app.
    (`fly releases -a <app-name> --image` shows image references; UNVERIFIED: the `--image` flag
    on `fly releases`, check `fly releases --help`).
 2. Redeploy it: `fly deploy -a <app-name> --image <previous-image> --ha=false`. This also runs the
-   release command (`alembic upgrade head`), which is harmless when the database is already
-   migrated.
+   release command (`alembic upgrade head`). If the bad release included a migration, the OLD
+   image's Alembic does not know the newer revision and the release fails ("Can't locate
+   revision"). Such a rollback must instead update the machine image directly:
+   `fly machine update <machine-id> --image <previous-image> -a <app-name>` (UNVERIFIED: check
+   `fly machine update --help`), or restore from backup (section 6) and roll forward.
 3. A migration is **not** rolled back automatically. The release command runs
    `alembic upgrade head` before a new version starts, and a failed migration fails the release
    so the old version keeps serving. But a migration that succeeded stays applied even if you
@@ -163,21 +198,32 @@ verified without a real Fly app.
 The backup workflow writes `trade-agent-<yyyymmdd>.dump.gpg` as an artifact named `db-backup`,
 kept for 30 days.
 
+The dump contains the `public` schema only (`--schema=public`), made with `--no-owner
+--no-privileges`. It includes the tables, data, `ENABLE`/`FORCE ROW LEVEL SECURITY`, the policies and
+the `alembic_version` row at head. It has no roles and no GRANTs.
+
 1. Download the artifact from the workflow run (Actions tab) and unzip it.
 2. Decrypt: `gpg --output backup.dump --decrypt trade-agent-<yyyymmdd>.dump.gpg` (enter the
    `BACKUP_PASSPHRASE` when asked).
-3. Create an empty target database, then restore:
-   `pg_restore --no-owner --no-privileges -d '<new-database-url>' backup.dump`.
-4. The dump is made with `--no-owner --no-privileges`, so ownership and grants are not in it. On
-   a fresh database or Supabase project you must recreate the roles and the RLS grants before the
-   app can use it: run the migrations as in ARCHITECTURE section 13 and `backend/app/rls.py` (the
-   role, grants and policies setup), then set the runtime role's password again.
-5. Point `DATABASE_URL` (and `MIGRATION_DATABASE_URL`) at the new database with
-   `fly secrets set`, keeping `?sslmode=require`.
-6. The `pg_dump` client in the workflow is PostgreSQL 17, which works against Supabase servers of
+3. Create the target: an empty database or a new Supabase project. Connect as its owner and run
+   `CREATE EXTENSION IF NOT EXISTS vector;`.
+4. Restore: `pg_restore --no-owner -d '<target-url>' backup.dump`. Do **not** re-run the Alembic
+   migrations or the RLS policy SQL afterwards: the schema, policies and the `alembic_version`
+   row are already restored, so they would fail or do nothing.
+5. Create the runtime role and its grants (the dump has none). From `backend/`, this prints the
+   SQL from `app/rls.py` without the policies:
+   ```
+   uv run python -c "from app import rls; print(rls.create_role_sql()); print(rls.grant_schema_sql() + ';'); [print(s + ';') for t in rls.RUNTIME_TABLES for s in rls.grant_table_sql(t)]"
+   ```
+   Run that output against the target as the owner. Then set the login:
+   `ALTER ROLE trading_agent_app WITH LOGIN PASSWORD '<password>';`.
+6. Point `DATABASE_URL` (the `trading_agent_app` role) and `MIGRATION_DATABASE_URL` (the owner) at
+   the new database with `fly secrets set`, keeping `?sslmode=require`.
+7. The `pg_dump` client in the workflow is PostgreSQL 17, which works against Supabase servers of
    version 17 or older. If Supabase moves beyond 17 the backup fails loudly, and the client
    version in `backup-db.yml` must be raised. Use a matching `pg_restore` locally.
-7. The workflow also fails if the encrypted file is under 1 KB, to catch an empty dump.
+8. The workflow fails if the encrypted file is under 1 KB. That only catches a truly empty or
+   broken file; a real backup is much larger. The restore drill in section 3 is the real check.
 
 ## 7. Where each secret lives
 
@@ -185,7 +231,7 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 
 | Secret | Set in | Where the value comes from | Readable by |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | Fly secrets | Supabase session-pooler URL, `trading_agent_app` role, plus `?sslmode=require` | Fly app, owner |
+| `DATABASE_URL` | Fly secrets | Supabase session-pooler URL (`postgresql://` is fine, the app rewrites it), `trading_agent_app` role, plus `?sslmode=require` | Fly app, owner |
 | `MIGRATION_DATABASE_URL` | Fly secrets | Supabase owner-role URL, plus `?sslmode=require` | Fly app (release command, job), owner |
 | `REDIS_URL` | Fly secrets | Upstash `rediss://` URL | Fly app, owner |
 | `ANTHROPIC_API_KEY` | Fly secrets | Anthropic console | Fly app, owner |
@@ -196,9 +242,9 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 | `CORS_ALLOWED_ORIGINS` | Fly secrets | The Vercel origin only | Fly app, owner |
 | `APP_ENV` | `backend/fly.toml` (`production`, not secret) | Committed config | Anyone with repo access |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel env vars | Fly URL, Supabase project settings (public by design) | Vercel project members, and browsers |
-| `FLY_API_TOKEN` | GitHub Actions secret | `fly tokens create deploy -a <app-name>` | Workflows on `master`, repository admins |
-| `BACKUP_DATABASE_URL` | GitHub Actions secret | Supabase URL for a `BYPASSRLS` role (see section 2) | Workflows on `master`, repository admins |
-| `BACKUP_PASSPHRASE` | GitHub Actions secret, plus your own safe copy | You choose it | Workflows on `master`, repository admins, you |
+| `FLY_API_TOKEN` | GitHub Environment secret (`production`) | `fly tokens create deploy -a <app-name>` | Workflows running on `master` (Environment rule), repository admins |
+| `BACKUP_DATABASE_URL` | GitHub Environment secret (`production`) | Plain `postgresql://` URL for the `backup_reader` role (see section 2) | Workflows running on `master` (Environment rule), repository admins |
+| `BACKUP_PASSPHRASE` | GitHub Environment secret (`production`), plus your own safe copy | You choose it | Workflows running on `master` (Environment rule), repository admins, you |
 
 ## 8. Known limits
 
@@ -218,3 +264,9 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
   tab now and then to confirm the daily jobs and backups are still running.
 - Single machine: a deploy or a crash means a short outage, and a background analysis running at
   that moment is lost.
+- `sslmode=require` and `rediss://` encrypt the connection but do not verify the server
+  certificate. `sslmode=verify-full` with the provider's CA certificate would also check it
+  (optional hardening).
+- GnuPG versions differ. Decrypt the first backup with the same `gpg` you would use in an
+  emergency. If an older `gpg` cannot decrypt it, add `--rfc4880` to the `gpg` command in
+  `backup-db.yml` (UNVERIFIED).
