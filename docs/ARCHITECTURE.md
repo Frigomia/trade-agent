@@ -750,7 +750,8 @@ just believed done.
 - [x] Invitation flow, admin user management, and narrowed `app_users` grants (sub-project 2b)
 - [x] Backup plan — Supabase's free tier has no point-in-time recovery; a daily
       encrypted `pg_dump` (`backup-db.yml`, kept 30 days) is the recovery path, up to
-      24 hours of data can be lost; restore steps in `docs/RUNBOOK.md`
+      24 hours of data can be lost; restore steps in `docs/RUNBOOK.md` (first restore
+      check still to be done by hand, see RUNBOOK section 3)
 
 **Operational**
 - [x] Snapshots and outcomes run as a scheduled one-shot command
@@ -843,8 +844,8 @@ just believed done.
       `market_data.py`: `QUOTE_CACHE_TTL=300`, `FUNDAMENTALS_CACHE_TTL=900`,
       `HISTORY_CACHE_TTL=86400`, all read/write through `redis_client.py`
 - [x] Postgres connections go through Supabase's pooler endpoint rather
-      than SQLAlchemy defaults — the runbook has `DATABASE_URL` use the
-      session-pooler URL
+      than SQLAlchemy defaults — specified in the runbook (session-pooler URL),
+      not yet verified against a live project
 - [x] Frontend refresh strategy for jobs — Today and Backtests poll
       `GET /analysis/run/{job_id}` and `GET /backtest/run/{job_id}` every 2 s
       while the status is `RUNNING` (SWR `refreshInterval`)

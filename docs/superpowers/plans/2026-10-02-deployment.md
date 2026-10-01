@@ -17,7 +17,7 @@
 - Production secrets set on Fly: `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS`. `APP_ENV=production` is a non-secret `[env]` value in `fly.toml`.
 - One production environment on default hostnames; no staging, no custom domain, no Sentry.
 - The Fly machine is always on (`min_machines_running = 1`, no auto-stop) with 512 MB, region `fra`, because analysis and backtest runs are background tasks inside the API process.
-- The backup connection must be a role that bypasses row-level security (the table owner or `postgres`), never the `trading_agent_app` role: RLS is forced on the user tables, so a non-bypassing role would dump empty tables without any error.
+- The backup connection must be a role that bypasses row-level security (`BYPASSRLS` or a superuser; Supabase's `postgres` role has `BYPASSRLS`; owning the tables is not enough because FORCE RLS applies to the owner too), never the `trading_agent_app` role: RLS is forced on the user tables, so a non-bypassing role makes `pg_dump` (which runs with row_security=off) fail loudly.
 - Backend: `cd backend && uv run ruff check . && uv run ruff format . && uv run mypy app && uv run python -m pytest tests -q` must pass. Never edit existing files in `backend/migrations/versions/`.
 - Workflow files must parse as YAML (`python -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" FILE`) and use `actions/checkout@v7`, matching the existing workflows.
 - Commit trailer on every commit: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Never skip hooks or signing.
@@ -523,8 +523,9 @@ jobs:
           set -euo pipefail
           umask 077
           printf '%s' "$BACKUP_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
-          # The connection must be a role that bypasses row-level security (the table owner or
-          # postgres); a role that does not would dump empty tables without any error.
+          # The connection must be a role that bypasses row-level security
+          # (BYPASSRLS or superuser; Supabase's postgres has BYPASSRLS); pg_dump runs with
+          # row_security=off and fails loudly on a role that does not.
           pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
             | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
                 --passphrase-file "$RUNNER_TEMP/passphrase" \
@@ -605,6 +606,6 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 ## Self-review
 
 - **Spec coverage:** container and Fly app, always-on machine, release command, health check (Task 2); secrets list (Global Constraints, Task 5); TLS guard (Task 1); deploy on merge after CI (Task 3); Docker build and health smoke test (Task 2); actionlint (Task 3); scheduled job (Task 4); backup, encryption, 30-day artifact (Task 4); runbook with first-deploy order, rollback, restore, budget alert, manual checks (Task 5); ARCHITECTURE and README updates (Task 5). Frontend deploy is Vercel's integration (documented in Task 5).
-- **Spec correction recorded:** the spec said a "read-only" backup connection; because RLS is forced on the user tables, the plan requires a role that bypasses RLS and makes the restore check part of the runbook.
+- **Spec correction recorded:** the spec said a "read-only" backup connection; because RLS is forced on the user tables, the plan requires a role with BYPASSRLS (or a superuser; the table owner alone is not enough because FORCE RLS applies to it too; without it pg_dump fails loudly) and makes the restore check part of the runbook.
 - **Placeholders:** none in code steps; the Fly app name `trade-agent-api` is a deliberate placeholder the owner replaces.
 - **Type consistency:** `InsecureConfigError`, `app_env`, the secret names, the app-name source (`backend/fly.toml` first `app = ` line) are used identically across tasks.

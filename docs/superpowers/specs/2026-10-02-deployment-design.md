@@ -81,8 +81,10 @@ Out of scope: Sentry or other error reporting, a staging environment, a custom d
 ## Database backup
 
 - `.github/workflows/backup-db.yml`: a daily cron plus manual run. It runs `pg_dump` (custom format,
-  a client version matching the Supabase server) against a read-only connection string in the
-  secret `BACKUP_DATABASE_URL`, encrypts the file with a symmetric passphrase from the secret
+  a client version matching the Supabase server) against a connection string in the
+  secret `BACKUP_DATABASE_URL` for a role with `BYPASSRLS` or a superuser (Supabase's `postgres`
+  has `BYPASSRLS`; `pg_dump` runs with row_security=off and fails loudly otherwise, and FORCE RLS
+  applies to the table owner too), encrypts the file with a symmetric passphrase from the secret
   `BACKUP_PASSPHRASE` (for example `gpg --symmetric --cipher-algo AES256`), and uploads it as a
   private workflow artifact kept 30 days. The dump is never written to the log.
 - Restore steps (decrypt, `pg_restore` into a new database, point the app at it) are in the runbook,

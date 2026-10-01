@@ -28,10 +28,14 @@ either way, but a private repository means the encrypted file is not downloadabl
 1. Create the project.
 2. Authentication, Sign In / Providers: disable public email sign-ups.
 3. Authentication, URL Configuration: add the Vercel origin's `<origin>/auth/confirm` and
-   `<origin>/reset-password` to Redirect URLs, and set the Invite email template as described in
-   ARCHITECTURE section 13 ("Owner setup: invite email template and redirect allow-list"). You
-   may need to come back to this step once you know the Vercel URL. Also configure custom SMTP
-   (Authentication, Emails, SMTP Settings); the built-in mailer allows 2 emails per hour.
+   `<origin>/reset-password` to Redirect URLs, set the Site URL to the Vercel origin (the invite
+   template builds its link from `{{ .SiteURL }}`; with the default Site URL, invitation emails
+   point to the wrong host), and set the Invite email template as described in
+   ARCHITECTURE section 13 ("Owner setup: invite email template and redirect allow-list"). The
+   Vercel URL does not exist yet on a first deploy: after the Vercel deploy, come back and set
+   the Site URL and the Redirect URLs. Also configure custom SMTP
+   (Authentication, Emails, SMTP Settings); the built-in mailer allows 2 emails per hour
+   (UNVERIFIED: from Supabase's docs, not checked here).
 4. Run the migrations once from your machine, with `MIGRATION_DATABASE_URL` (the owner role) in
    your environment, from `backend/`: `alembic upgrade head`.
 5. In the SQL editor, give the runtime role a password (the migration creates it with no login):
@@ -44,7 +48,9 @@ either way, but a private repository means the encrypted file is not downloadabl
    the first admin from `backend/`:
    `python -m app.auth.bootstrap_admin <email> <supabase-uid>`.
 8. Note the connection strings: the session-pooler URL for the runtime role (`DATABASE_URL`) and
-   for the owner role (`MIGRATION_DATABASE_URL`).
+   for the owner role (`MIGRATION_DATABASE_URL`). UNVERIFIED: Supabase's session pooler
+   connection string usually uses the username form `<role>.<project-ref>`; copy the string from
+   the Supabase dashboard (Connect) rather than composing it.
 
 ### Upstash
 
@@ -86,7 +92,8 @@ Create the Redis database with TLS on and copy the `rediss://` URL (this is `RED
 3. On Fly, set `CORS_ALLOWED_ORIGINS` to the Vercel origin only and `INVITE_REDIRECT_URL` to the
    frontend's accept-invitation page on that origin:
    `fly secrets set CORS_ALLOWED_ORIGINS='<vercel-origin>' INVITE_REDIRECT_URL='<vercel-origin>/accept-invitation' -a <app-name>`.
-   Setting secrets redeploys the machine.
+   Setting secrets redeploys the machine (UNVERIFIED: flyctl behaviour; confirm with
+   `fly status -a <app-name>`).
 4. Go back to Supabase URL Configuration and make sure the Vercel origin is allow-listed.
 
 ### GitHub
@@ -122,6 +129,9 @@ verified without a real Fly app.
       `SELECT count(*) FROM holdings;` after you have added data). This proves the backup role
       bypasses RLS: if it did not, the backup would have failed or the tables would be empty.
       See section 6 for the commands.
+- [ ] In the Actions tab, confirm the scheduled workflows are enabled (GitHub disables them after
+      60 days of inactivity only in public repositories; a private repository should not be
+      affected, but double-check this GitHub behaviour).
 - [ ] Push a trivial change to `backend/` on `master` and confirm "Deploy backend" runs after
       Backend CI and that `fly status -a <app-name>` still shows one machine.
 - [ ] In the app, send a chat message and run one analysis in production.
@@ -135,8 +145,11 @@ verified without a real Fly app.
 ## 5. Rolling back a bad deploy
 
 1. List releases: `fly releases -a <app-name>`. Find the previous good one and its image
-   (`fly releases -a <app-name> --image` shows image references).
-2. Redeploy it: `fly deploy -a <app-name> --image <previous-image> --ha=false`.
+   (`fly releases -a <app-name> --image` shows image references; UNVERIFIED: the `--image` flag
+   on `fly releases`, check `fly releases --help`).
+2. Redeploy it: `fly deploy -a <app-name> --image <previous-image> --ha=false`. This also runs the
+   release command (`alembic upgrade head`), which is harmless when the database is already
+   migrated.
 3. A migration is **not** rolled back automatically. The release command runs
    `alembic upgrade head` before a new version starts, and a failed migration fails the release
    so the old version keeps serving. But a migration that succeeded stays applied even if you
@@ -189,7 +202,8 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 
 ## 8. Known limits
 
-- No point-in-time recovery on Supabase's free tier. The daily backup is the only recovery path,
+- No point-in-time recovery on Supabase's free tier (UNVERIFIED: check your plan in the Supabase
+  dashboard). The daily backup is the only recovery path,
   so up to 24 hours of data can be lost.
 - CORS allows all methods and headers for the one configured origin. With a single trusted origin
   this does not widen access.
@@ -198,8 +212,9 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 - 512 MB may be tight. Watch for out-of-memory restarts in `fly logs -a <app-name>` and raise
   `memory` in `backend/fly.toml` if they appear.
 - A deploy token can deploy, but whether it can create one-off machines is unverified (section 3).
-- GitHub Actions scheduled workflows can run late, and GitHub disables them after 60 days of
-  repository inactivity (it does this for public repositories). Check the Actions tab now and
-  then to confirm the daily jobs and backups are still running.
+- GitHub Actions scheduled workflows can run late. GitHub disables them after 60 days of
+  repository inactivity only in public repositories; this repository must be private, so it
+  should not be affected (GitHub behaviour: double-check in the Actions tab). Check the Actions
+  tab now and then to confirm the daily jobs and backups are still running.
 - Single machine: a deploy or a crash means a short outage, and a background analysis running at
   that moment is lost.
