@@ -62,3 +62,35 @@ def test_rate_limiter_gives_each_user_their_own_budget():
             _make_fake_user_factory()
         )  # a second, distinct user
         assert probe_client.get("/probe").status_code == 200  # fresh budget
+
+
+def test_rate_limit_key_always_gets_a_ttl_even_if_expire_never_runs():
+    # Regression test: incr and expire used to be two separate calls, so a crash between them left
+    # a key with no TTL and the user was 429'd forever. Making expire unavailable simulates it.
+    import redis as sync_redis
+
+    from app.config import settings
+    from app.redis_client import get_redis
+
+    user_id = uuid.uuid4()
+    probe_app = FastAPI()
+
+    @probe_app.get("/probe", dependencies=[Depends(rate_limiter("ttl_probe", limit=3))])
+    def probe() -> dict[str, bool]:
+        return {"ok": True}
+
+    probe_app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+        id=user_id, email="probe@example.com", role="user"
+    )
+
+    async def _no_expire(*args, **kwargs):
+        raise RuntimeError("process died before expire")
+
+    with TestClient(probe_app) as probe_client:
+        get_redis().expire = _no_expire  # type: ignore[method-assign]
+        assert probe_client.get("/probe").status_code == 200
+
+    checker = sync_redis.Redis.from_url(settings.redis_url)
+    ttl = checker.ttl(f"ratelimit:ttl_probe:{user_id}")
+    checker.delete(f"ratelimit:ttl_probe:{user_id}")
+    assert 0 < ttl <= 60
