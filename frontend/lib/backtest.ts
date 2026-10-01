@@ -89,7 +89,8 @@ export function signalRows(stats: Record<string, SignalStats>): SignalRow[] {
       const count = Math.round(s.count);
       return {
         key,
-        label: SIGNAL_LABELS[key] ?? key,
+        // A signal with no label yet reads as "Weak uptrend" rather than WEAK_UPTREND.
+        label: SIGNAL_LABELS[key] ?? key.charAt(0) + key.slice(1).toLowerCase().replace(/_/g, " "),
         count,
         avgMovePct: s.avg_forward_return_pct * 100,
         risePct: s.hit_rate * 100,
