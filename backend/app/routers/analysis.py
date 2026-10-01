@@ -28,6 +28,7 @@ _track_background_task = make_task_tracker("analysis")
 # Each ticker in a run is its own graph run (a Claude web search plus an embedding call), yet a
 # run counts once against the monthly cap, so the number per run is bounded.
 MAX_RUN_TICKERS = 50
+QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
 
 
 class AnalysisRunIn(BaseModel):
@@ -131,7 +132,11 @@ async def _attach_live_quotes(recs: list[RecommendationOut]) -> None:
             rec.current_price, rec.price_change_pct = quote
 
 
-@router.get("/recommendations", response_model=list[RecommendationOut])
+@router.get(
+    "/recommendations",
+    response_model=list[RecommendationOut],
+    dependencies=[Depends(rate_limiter("recommendations", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def list_recommendations(
     status: str | None = None,
     user: CurrentUser = Depends(get_current_user),
@@ -148,7 +153,11 @@ async def list_recommendations(
     return outs
 
 
-@router.get("/recommendations/{recommendation_id}", response_model=RecommendationOut)
+@router.get(
+    "/recommendations/{recommendation_id}",
+    response_model=RecommendationOut,
+    dependencies=[Depends(rate_limiter("recommendation", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def get_recommendation(
     recommendation_id: int,
     user: CurrentUser = Depends(get_current_user),

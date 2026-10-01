@@ -537,3 +537,9 @@ def test_run_analysis_without_body_tickers_is_bounded(client, db_session):
 
     assert response.status_code == 202
     assert len(create_job.await_args.args[1]) == 50
+
+
+def test_list_recommendations_is_rate_limited(client):
+    for _ in range(30):
+        assert client.get("/analysis/recommendations").status_code == 200
+    assert client.get("/analysis/recommendations").status_code == 429

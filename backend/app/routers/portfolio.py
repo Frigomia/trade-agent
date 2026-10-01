@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
+from app.rate_limit import rate_limiter
 from app.schemas import (
     HoldingIn,
     HoldingOut,
@@ -33,6 +34,7 @@ router = APIRouter(
 # Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
 MAX_HOLDINGS = 100
 MAX_WATCHLIST = 100
+QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
 
 
 def _cap_message(what: str, cap: int) -> str:
@@ -142,7 +144,11 @@ def log_trade(
     return trade
 
 
-@router.post("/snapshot", response_model=PortfolioSnapshotOut)
+@router.post(
+    "/snapshot",
+    response_model=PortfolioSnapshotOut,
+    dependencies=[Depends(rate_limiter("portfolio_snapshot", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def create_snapshot(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> PortfolioSnapshot:
@@ -182,7 +188,11 @@ async def _prices_for(tickers: set[str]) -> dict[str, float | None]:
     return dict(zip(ordered, results, strict=True))
 
 
-@router.get("/summary", response_model=PortfolioSummaryOut)
+@router.get(
+    "/summary",
+    response_model=PortfolioSummaryOut,
+    dependencies=[Depends(rate_limiter("portfolio_summary", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
 async def get_summary(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> PortfolioSummaryOut:

@@ -643,3 +643,15 @@ def test_watchlist_is_capped_at_100_per_user(client, db_session):
 
     existing = client.post("/portfolio/watchlist", json={"ticker": "W0", "asset_type": "STOCK"})
     assert existing.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("get", "/portfolio/summary"), ("post", "/portfolio/snapshot")],
+)
+def test_expensive_portfolio_routes_are_rate_limited(client, method, path):
+    send = getattr(client, method)
+    with patch("app.routers.portfolio.fetch_quote_and_history", AsyncMock(return_value={})):
+        for _ in range(30):
+            assert send(path).status_code != 429
+        assert send(path).status_code == 429

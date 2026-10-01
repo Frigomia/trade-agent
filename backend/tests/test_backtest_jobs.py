@@ -2,8 +2,10 @@ import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.backtest.engine import BacktestMetrics
-from app.backtest.jobs import create_job, get_job_status, run_job
+from app.backtest.jobs import BacktestAlreadyRunning, create_job, get_job_status, run_job
 from app.models import BacktestResult
 from tests.auth_support import OTHER_USER_ID, USER_ID
 
@@ -79,5 +81,20 @@ def test_backtest_job_status_hides_other_users_jobs():
         job_id = await create_job(USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
         assert await get_job_status(job_id, USER_ID) is not None
         assert await get_job_status(job_id, OTHER_USER_ID) is None
+
+    asyncio.run(_run())
+
+
+def test_a_finished_job_frees_the_users_running_slot(app_session_local):
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+        with pytest.raises(BacktestAlreadyRunning):
+            await create_job(OTHER_USER_ID, "MSFT", date(2020, 1, 1), date(2024, 1, 1))
+
+        with patch("app.backtest.jobs.fetch_price_history", AsyncMock(side_effect=RuntimeError)):
+            await run_job(job_id, OTHER_USER_ID, "AAPL", date(2020, 1, 1), date(2024, 1, 1))
+
+        # FAILED jobs release the slot too
+        await create_job(OTHER_USER_ID, "MSFT", date(2020, 1, 1), date(2024, 1, 1))
 
     asyncio.run(_run())
