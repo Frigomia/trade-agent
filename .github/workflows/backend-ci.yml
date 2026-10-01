@@ -78,7 +78,7 @@ jobs:
       - name: Start it and check /health
         run: |
           docker run -d --name api -p 8080:8080 trade-agent-api
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://localhost:8080/health; then exit 0; fi
             sleep 2
           done
