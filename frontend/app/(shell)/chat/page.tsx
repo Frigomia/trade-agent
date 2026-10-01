@@ -1,8 +1,166 @@
+"use client";
+
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import useSWR from "swr";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, Typography } from "@mui/material";
+import { Trash2 } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/api/client";
+import { CHAT_SESSION, STARTERS, type ChatMessage } from "@/lib/chat";
+import { nextResetDate, type Usage } from "@/lib/usage";
+import { PageHeader } from "@/components/shell/PageHeader";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { UsageMeter } from "@/components/chat/UsageMeter";
+import { Composer } from "@/components/chat/Composer";
+
+const HISTORY_PATH = `/chat/messages?session_id=${CHAT_SESSION}`;
+
 export default function ChatPage() {
+  // useSearchParams needs a Suspense boundary for the static build.
   return (
-    <div>
-      <h1>Chat</h1>
-      <p style={{ color: "var(--text2)" }}>Coming in sub-project 7.</p>
-    </div>
+    <Suspense>
+      <ChatScreen />
+    </Suspense>
+  );
+}
+
+function ChatScreen() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const { data: messages, mutate: mutateMessages } = useSWR<ChatMessage[]>(HISTORY_PATH, apiFetch);
+  const { data: usage, mutate: mutateUsage } = useSWR<Usage>("/me/usage", apiFetch);
+  // "Ask about this" links here with the question already typed: it is only ever put in the box.
+  const [draft, setDraft] = useState(() => params.get("ask") ?? "");
+  const [pending, setPending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [limitHit, setLimitHit] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (params.get("ask") !== null) router.replace("/chat");
+  }, [params, router]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView?.({ block: "end" });
+  }, [messages, pending]);
+
+  const chatUsage = usage?.chat_messages;
+  const atLimit = limitHit || (chatUsage !== undefined && chatUsage.used >= chatUsage.limit);
+  const resetDate = nextResetDate(new Date());
+
+  async function send(text: string) {
+    const message = text.trim();
+    if (!message || pending !== null || atLimit) return;
+    setError(null);
+    setPending(message);
+    setDraft("");
+    try {
+      await apiFetch("/chat", {
+        method: "POST",
+        body: JSON.stringify({ session_id: CHAT_SESSION, message }),
+      });
+    } catch (err) {
+      setDraft(message);
+      if (err instanceof ApiError && err.status === 429 && /monthly/i.test(err.detail)) {
+        setLimitHit(true);
+      } else {
+        setError("Could not get a reply. Try again.");
+      }
+    }
+    // The user's message may already be stored even when the reply failed, so always refetch.
+    await Promise.all([mutateMessages(), mutateUsage()]);
+    setPending(null);
+  }
+
+  async function clear() {
+    setConfirmClear(false);
+    try {
+      await apiFetch(HISTORY_PATH, { method: "DELETE" });
+      await mutateMessages();
+    } catch {
+      setError("Could not clear the conversation.");
+    }
+  }
+
+  const empty = messages !== undefined && messages.length === 0 && pending === null;
+
+  return (
+    <Box sx={{ maxWidth: 760, mx: "auto", display: "flex", flexDirection: "column", minHeight: { xs: "calc(100dvh - 150px)", md: "calc(100dvh - 60px)" } }}>
+      <PageHeader
+        title="Chat"
+        actions={
+          <>
+            {chatUsage && <UsageMeter usage={chatUsage} />}
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<Trash2 size={15} />}
+              disabled={!messages?.length}
+              onClick={() => setConfirmClear(true)}
+            >
+              Clear chat
+            </Button>
+          </>
+        }
+      />
+
+      <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, justifyContent: "flex-end", pb: 1.5 }}>
+        {empty && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
+            <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
+            {STARTERS.map((starter) => (
+              <Button key={starter} variant="outlined" size="small" disabled={atLimit} onClick={() => void send(starter)}>
+                {starter}
+              </Button>
+            ))}
+          </Box>
+        )}
+        {messages?.map((message) => <MessageBubble key={message.id} message={message} />)}
+        {pending !== null && <MessageBubble message={{ role: "user", content: pending }} />}
+        {pending !== null && (
+          <Typography sx={{ color: "var(--muted)", fontSize: 13 }} role="status">
+            Thinking…
+          </Typography>
+        )}
+        <div ref={endRef} />
+      </Box>
+
+      <Box sx={{ position: "sticky", bottom: { xs: 76, md: 16 }, pt: 1, pb: 0.5, bgcolor: "var(--bg)", zIndex: 1 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 1 }}>
+            {error}
+          </Alert>
+        )}
+        {atLimit && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            <b>You&apos;ve used all {chatUsage?.limit ?? ""} chat messages this month.</b> They reset on {resetDate}. Need
+            more sooner? Ask the administrator to raise your limit.
+          </Alert>
+        )}
+        <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>
+          Advisory only, not investment advice.
+        </Typography>
+        <Composer
+          value={draft}
+          onChange={setDraft}
+          onSend={() => void send(draft)}
+          disabled={atLimit || pending !== null}
+          placeholder={atLimit ? `Chat is paused until ${resetDate}` : "Ask about your portfolio"}
+        />
+      </Box>
+
+      <Dialog open={confirmClear} onClose={() => setConfirmClear(false)}>
+        <DialogContent>
+          <DialogContentText>Delete this conversation? This cannot be undone.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmClear(false)}>Cancel</Button>
+          <Button color="error" onClick={() => void clear()}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }
