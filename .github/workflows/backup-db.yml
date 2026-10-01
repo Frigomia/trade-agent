@@ -1,0 +1,50 @@
+name: Backup database
+
+on:
+  schedule:
+    - cron: "15 4 * * *" # daily, UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    name: pg_dump, encrypt, keep 30 days
+    runs-on: ubuntu-latest
+    # Scheduled runs are always master; a manual dispatch from another branch must not use the production database.
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Install the PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -sSfL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump and encrypt
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f "$RUNNER_TEMP/passphrase"' EXIT
+          printf '%s' "$BACKUP_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
+          # The connection must be a role that bypasses row-level security (the table owner or
+          # postgres); a role that does not would dump empty tables without any error.
+          pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
+            | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+                --passphrase-file "$RUNNER_TEMP/passphrase" \
+                -o "trade-agent-$(date -u +%Y%m%d).dump.gpg"
+          ls -l trade-agent-*.dump.gpg
+
+      - name: Keep the encrypted file for 30 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup
+          path: trade-agent-*.dump.gpg
+          retention-days: 30
+          if-no-files-found: error
