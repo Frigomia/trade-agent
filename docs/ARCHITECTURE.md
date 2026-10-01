@@ -583,7 +583,7 @@ and invited users; nobody can sign up on their own.
 - **First admin**: create your user in the Supabase dashboard, then run
   `python -m app.auth.bootstrap_admin <email> <supabase-uid>` (it refuses to run
   if an admin already exists).
-- **Frontend** (not built yet): `@supabase/ssr` in Next.js: login page,
+- **Frontend** (built): `@supabase/ssr` in Next.js: login page,
   middleware that redirects unauthenticated requests, session token attached to
   every backend request.
 - New env vars: `SUPABASE_URL` (backend), `SUPABASE_SECRET_KEY` (backend, secret),
@@ -694,7 +694,7 @@ and invited users; nobody can sign up on their own.
    Compose).
 2. Wire the LangGraph analysis graph + `/analysis/run`, verify against a
    couple of real tickers with a real `ANTHROPIC_API_KEY`.
-3. `frontend/`: dashboard reading from a local backend.
+3. ✓ `frontend/`: dashboard reading from a local backend (all screens built, including Chat).
 4. ✓ Supabase Auth (§13): JWKS verification, `app_users`, per-user RLS (auth core). Login page and middleware arrive with the frontend.
 5. Deploy: Supabase (DB + Auth) → Fly.io backend → Vercel frontend, wired
    together.
@@ -767,7 +767,7 @@ just believed done.
 - [x] Portfolio value history — `PortfolioSnapshot` table captures portfolio
       totals (market value, cost basis) at point in time; snapshots persisted
       via `POST /portfolio/snapshot`, listed via `GET /portfolio/snapshots`.
-      Capture-only for now; no chart/UI rendering yet
+      The Today screen charts them (value over time)
 - [ ] Trade history view in the UI (the `Trade` table exists; nothing
       lists it)
 - [x] Decide: does "Approve" on a recommendation capture actual execution
@@ -775,8 +775,8 @@ just believed done.
       `POST /portfolio/trades`? Decided: stays separate (see §7). The
       "conflated" premise was stale — the code and §7 already kept them
       apart
-- [ ] Deliberate responsive/mobile pass — likely to be checked from a
-      phone, same as Trade Republic itself
+- [x] Deliberate responsive/mobile pass — every screen has a phone layout and the
+      main ones a desktop layout, checked against `docs/design/mockups/`
 
 **Testing**
 - [x] Unit tests for the deterministic logic — `fundamental.py` (3 tests),
@@ -810,11 +810,12 @@ just believed done.
       applies; current code has no such interpolation anywhere in
       `agents/`, and every catch site uses `logger.exception` (traceback
       to logs only, never returned to the caller)
-- [ ] CORS configured for actual methods/origins once a frontend exists on
-      a different origin — currently no `CORSMiddleware` at all (not
-      loose, just absent — fine for a backend with no frontend yet)
-- [ ] Frontend session token stays in httpOnly cookies via Supabase's SSR
-      helpers — not applicable yet, no frontend exists
+- [ ] CORS configured for the deployed origin — `CORSMiddleware` exists with the
+      origins from `CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) but
+      allows all methods and headers; set the production origin and consider
+      narrowing both when deploying
+- [ ] Frontend session token handling reviewed for production — the frontend now
+      exists and uses `@supabase/ssr`; confirm the cookie flags before deploying
 - [ ] TLS enforced to Postgres (`sslmode=require`) and Redis, not just
       browser-to-frontend — confirmed absent; local dev uses plain Docker
       Postgres with no TLS enforcement in `db.py`'s engine config
@@ -839,8 +840,9 @@ just believed done.
 - [ ] Postgres connections go through Supabase's pooler endpoint rather
       than SQLAlchemy defaults — deployment-time concern, not applicable
       to local Docker Postgres
-- [ ] Frontend refresh strategy decided once `/analysis/run` is a job —
-      not applicable yet, no frontend exists
+- [x] Frontend refresh strategy for jobs — Today and Backtests poll
+      `GET /analysis/run/{job_id}` and `GET /backtest/run/{job_id}` every 2 s
+      while the status is `RUNNING` (SWR `refreshInterval`)
 
 **Legal/compliance**
 - [x] Self-service data export and deletion in place (sub-project 2c): `GET /me/export` and `DELETE /me/data` endpoints; privacy notice and household-exemption statement still needed before inviting other users

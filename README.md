@@ -10,22 +10,26 @@ the trade yourself in your broker's app.
 
 ## Status
 
-Everything below is built and merged. The one screen still to come is **Chat**.
+Every screen is built and merged. What remains is deployment: hosting, a trigger for the scheduled
+jobs, and the production checklist in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - **Backend:** multi-user, invitation-only. Supabase Auth + JWT verification, Row Level Security,
   an admin API for inviting/managing users, per-user monthly usage limits, and self-service data
   export/deletion (PRs [#21](../../pull/21), [#22](../../pull/22), [#23](../../pull/23)). The
   analysis agents, portfolio, watchlist, trade log and snapshots, recommendations with 20-day
   outcomes, backtests with a stored equity curve ([#33](../../pull/33)), long-term memory,
-  per-user rate limits and bounded preferences ([#34](../../pull/34)), and scheduled daily
-  snapshot and outcome jobs ([#35](../../pull/35)). The chat endpoint exists; its screen does not.
+  per-user rate limits and bounded preferences ([#34](../../pull/34)), scheduled daily
+  snapshot and outcome jobs ([#35](../../pull/35)), admin-editable default usage limits
+  ([#48](../../pull/48)), and chat history and clear endpoints ([#50](../../pull/50)).
 - **Frontend:** foundation ([#24](../../pull/24)), login and admin ([#27](../../pull/27)), the
   recommendation review loop ([#29](../../pull/29)), Portfolio ([#31](../../pull/31)), and the
-  secondary screens ([#32](../../pull/32)) and Backtests ([#33](../../pull/33)). That is Today,
-  recommendation detail and approve/dismiss, Portfolio (holdings, watchlist, "log a trade",
-  value-over-time chart), Track record, Backtests, Preferences, Account (usage, export, delete my
-  data), and the admin users/usage screens, with light and dark themes, a phone-first shell, and
-  session-backed route protection.
+  secondary screens ([#32](../../pull/32)), Backtests ([#33](../../pull/33)) and Chat
+  ([#50](../../pull/50)). That is Today, recommendation detail and approve/dismiss (with the web
+  opinion rendered from markdown), Portfolio (holdings, watchlist, "log a trade"), Track record,
+  Backtests, Chat (one ongoing conversation with a usage meter), Preferences, Account (usage,
+  export, delete my data), and the admin users and usage-and-limits screens, with light and dark
+  themes, a phone-first shell with desktop layouts, and session-backed route protection. The
+  visual design follows the mockups in `docs/design/mockups/` (see [DESIGN.md](DESIGN.md)).
 
 ## Layout
 
