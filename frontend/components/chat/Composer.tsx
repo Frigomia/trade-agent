@@ -9,7 +9,9 @@ export function Composer({
   onSend,
   disabled,
   placeholder,
+  inputRef,
 }: {
+  inputRef?: React.Ref<HTMLTextAreaElement>;
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
@@ -40,6 +42,7 @@ export function Composer({
           }
         }}
         slotProps={{ htmlInput: { "aria-label": "Message" } }}
+        inputRef={inputRef}
       />
       <IconButton
         type="submit"

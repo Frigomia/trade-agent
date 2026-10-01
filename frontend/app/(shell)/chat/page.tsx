@@ -3,10 +3,10 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton, Typography } from "@mui/material";
 import { Trash2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
-import { CHAT_SESSION, STARTERS, type ChatMessage } from "@/lib/chat";
+import { CHAT_SESSION, MAX_MESSAGE, STARTERS, type ChatMessage } from "@/lib/chat";
 import { nextResetDate, type Usage } from "@/lib/usage";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -30,12 +30,20 @@ function ChatScreen() {
   const { data: messages, mutate: mutateMessages } = useSWR<ChatMessage[]>(HISTORY_PATH, apiFetch);
   const { data: usage, mutate: mutateUsage } = useSWR<Usage>("/me/usage", apiFetch);
   // "Ask about this" links here with the question already typed: it is only ever put in the box.
-  const [draft, setDraft] = useState(() => params.get("ask") ?? "");
+  const [draft, setDraft] = useState(() => (params.get("ask") ?? "").slice(0, MAX_MESSAGE));
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wasPending = useRef(false);
+
+  // Hand the keyboard back once a reply finishes.
+  useEffect(() => {
+    if (wasPending.current && pending === null) inputRef.current?.focus();
+    wasPending.current = pending !== null;
+  }, [pending]);
 
   useEffect(() => {
     if (params.get("ask") !== null) router.replace("/chat");
@@ -69,8 +77,11 @@ function ChatScreen() {
       }
     }
     // The user's message may already be stored even when the reply failed, so always refetch.
-    await Promise.all([mutateMessages(), mutateUsage()]);
-    setPending(null);
+    try {
+      await Promise.all([mutateMessages(), mutateUsage()]);
+    } finally {
+      setPending(null);
+    }
   }
 
   async function clear() {
@@ -92,15 +103,15 @@ function ChatScreen() {
         actions={
           <>
             {chatUsage && <UsageMeter usage={chatUsage} />}
-            <Button
+            <IconButton
               size="small"
-              variant="text"
-              startIcon={<Trash2 size={15} />}
-              disabled={!messages?.length}
+              aria-label="Clear chat"
+              title="Clear chat"
+              disabled={!messages?.length || pending !== null}
               onClick={() => setConfirmClear(true)}
             >
-              Clear chat
-            </Button>
+              <Trash2 size={17} />
+            </IconButton>
           </>
         }
       />
@@ -118,11 +129,9 @@ function ChatScreen() {
         )}
         {messages?.map((message) => <MessageBubble key={message.id} message={message} />)}
         {pending !== null && <MessageBubble message={{ role: "user", content: pending }} />}
-        {pending !== null && (
-          <Typography sx={{ color: "var(--muted)", fontSize: 13 }} role="status">
-            Thinking…
-          </Typography>
-        )}
+        <Typography sx={{ color: "var(--muted)", fontSize: 13, minHeight: pending !== null ? undefined : 0 }} role="status">
+          {pending !== null ? "Thinking…" : ""}
+        </Typography>
         <div ref={endRef} />
       </Box>
 
@@ -144,6 +153,7 @@ function ChatScreen() {
         <Composer
           value={draft}
           onChange={setDraft}
+          inputRef={inputRef}
           onSend={() => void send(draft)}
           disabled={atLimit || pending !== null}
           placeholder={atLimit ? `Chat is paused until ${resetDate}` : "Ask about your portfolio"}

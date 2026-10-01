@@ -103,6 +103,32 @@ describe("ChatPage", () => {
     release(null);
     expect(await screen.findByText("Hi there.")).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveFocus());
+  });
+
+  it("disables the clear icon while a send is in flight", async () => {
+    history = [msg(1, "user", "hello"), msg(2, "assistant", "Hi.")];
+    let release: (value: unknown) => void = () => {};
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === HISTORY_PATH) return history;
+      if (path === "/me/usage") return usage;
+      if (path === "/chat" && init?.method === "POST") {
+        await new Promise((resolve) => (release = resolve));
+        return { session_id: "main", message: "ok" };
+      }
+      throw new Error(`unexpected ${path}`);
+    });
+    renderFresh();
+
+    await screen.findByText("Hi.");
+    expect(screen.getByRole("button", { name: /clear chat/i })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "more" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await screen.findByText(/thinking/i);
+    expect(screen.getByRole("button", { name: /clear chat/i })).toBeDisabled();
+    release(null);
+    await waitFor(() => expect(screen.getByRole("button", { name: /clear chat/i })).toBeEnabled());
   });
 
   it("sends a starter when tapped", async () => {
@@ -194,6 +220,13 @@ describe("ChatPage", () => {
       expect(apiFetch).toHaveBeenCalledWith(HISTORY_PATH, { method: "DELETE" }),
     );
     expect(await screen.findByText("How is my portfolio doing?")).toBeInTheDocument();
+  });
+
+  it("caps a very long ?ask= at 4000 characters", async () => {
+    search = `ask=${"a".repeat(5000)}`;
+    renderFresh();
+
+    expect(((await screen.findByLabelText("Message")) as HTMLTextAreaElement).value).toHaveLength(4000);
   });
 
   it("prefills the box from ?ask= without sending, and tidies the URL", async () => {
