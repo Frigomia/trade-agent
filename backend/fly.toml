@@ -1,5 +1,5 @@
-# The app name is a placeholder: use the name you pass to `fly apps create` (see docs/RUNBOOK.md).
-app = "trade-agent-api"
+# The Fly app name (created with `fly apps create`; see docs/RUNBOOK.md).
+app = "bro-trade-agent-api"
 primary_region = "fra"
 
 [build]
