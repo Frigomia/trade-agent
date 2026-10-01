@@ -559,11 +559,16 @@ is idempotent, a daily run at whatever hour that turns out to be is fine.
 | Component | Target | Notes |
 |---|---|---|
 | Frontend | Vercel | Git-push deploy, set `NEXT_PUBLIC_API_URL` to the backend's Fly.io URL |
-| Backend | Fly.io, `fra` region | Add a `Dockerfile` + `fly.toml` (see §2 for what the backend needs to run); `fly deploy`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint. A scheduled machine (or any cron) runs `python -m app.scheduled daily` (see §12) |
+| Backend | Fly.io, `fra` region | `backend/Dockerfile` and `backend/fly.toml` exist: one always-on machine (no auto-stop, 512 MB), `release_command = "alembic upgrade head"`, health check on `/health`; first deploy and day-to-day steps are in `docs/RUNBOOK.md`. Fly secrets: `DATABASE_URL`, `REDIS_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `MIGRATION_DATABASE_URL` (the last only for running Alembic and the bootstrap command). Without `SUPABASE_SECRET_KEY` every `/admin/*` route returns `503`; `INVITE_LINK_HOURS` (default 24) is an optional display hint. `APP_ENV=production` is set in `fly.toml`. A GitHub Actions cron (`scheduled-jobs.yml`) runs `python -m app.scheduled daily` in a one-off Fly machine (see §12) |
 | Database | Supabase (Postgres + Auth) | Set `DATABASE_URL` (session-pooler URL, `trading_agent_app` role) as a Fly secret: `fly secrets set DATABASE_URL=...`. `MIGRATION_DATABASE_URL` (owner role) is only for running Alembic and the bootstrap command, not for the running app |
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
-| CI/CD | GitHub Actions | Suggested: on push to `main`, run backend tests → `fly deploy`; separately, Vercel's own GitHub integration handles the frontend automatically |
+| CI/CD | GitHub Actions | `deploy-backend.yml` (deploys to Fly after Backend CI passes on master), `scheduled-jobs.yml` (daily job) and `backup-db.yml` (daily encrypted `pg_dump`, kept 30 days); Vercel's own GitHub integration handles the frontend |
+
+**Production TLS guard.** `APP_ENV=production` (default `development`) makes the backend, the
+Alembic release command and the scheduled job refuse to start unless `DATABASE_URL` and
+`MIGRATION_DATABASE_URL` carry `sslmode=require` (or `verify-ca` / `verify-full`) and `REDIS_URL`
+uses `rediss://`. An unknown `APP_ENV` value is rejected too. See `docs/RUNBOOK.md`.
 
 **Authentication: Supabase Auth, invitation-only.** The service has one admin
 and invited users; nobody can sign up on their own.
@@ -588,7 +593,7 @@ and invited users; nobody can sign up on their own.
   every backend request.
 - New env vars: `SUPABASE_URL` (backend), `SUPABASE_SECRET_KEY` (backend, secret),
   `INVITE_REDIRECT_URL` (backend), `INVITE_LINK_HOURS` (backend, optional, default 24),
-  `MIGRATION_DATABASE_URL` (backend),
+  `MIGRATION_DATABASE_URL` (backend), `APP_ENV` (backend, `production` turns on the TLS guard),
   `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend).
 - One-time Supabase setup: `ALTER ROLE trading_agent_app WITH LOGIN PASSWORD
   '...'` in the SQL editor after the RLS migration has run (the migration creates
@@ -743,9 +748,9 @@ just believed done.
 - [x] Migrations tooling — Alembic, set up per §4
 - [x] RLS policies written and applied to all eight user-data tables in one migration; enforced for the `trading_agent_app` role
 - [x] Invitation flow, admin user management, and narrowed `app_users` grants (sub-project 2b)
-- [ ] Backup plan — Supabase's free tier has limited/no point-in-time
-      recovery; decide if that's acceptable or if you need your own
-      periodic export
+- [x] Backup plan — Supabase's free tier has no point-in-time recovery; a daily
+      encrypted `pg_dump` (`backup-db.yml`, kept 30 days) is the recovery path, up to
+      24 hours of data can be lost; restore steps in `docs/RUNBOOK.md`
 
 **Operational**
 - [x] Snapshots and outcomes run as a scheduled one-shot command
@@ -810,15 +815,15 @@ just believed done.
       applies; current code has no such interpolation anywhere in
       `agents/`, and every catch site uses `logger.exception` (traceback
       to logs only, never returned to the caller)
-- [ ] CORS configured for the deployed origin — `CORSMiddleware` exists with the
-      origins from `CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) but
-      allows all methods and headers; set the production origin and consider
-      narrowing both when deploying
+- [ ] CORS configured for the deployed origin — `CORSMiddleware` takes its
+      origins from `CORS_ALLOWED_ORIGINS` (default `http://localhost:3000`) and
+      allows all methods and headers; the deployed origin is set through that
+      variable (see `docs/RUNBOOK.md`); open until the first deploy sets it
 - [ ] Frontend session token handling reviewed for production — the frontend now
       exists and uses `@supabase/ssr`; confirm the cookie flags before deploying
-- [ ] TLS enforced to Postgres (`sslmode=require`) and Redis, not just
-      browser-to-frontend — confirmed absent; local dev uses plain Docker
-      Postgres with no TLS enforcement in `db.py`'s engine config
+- [x] TLS enforced to Postgres (`sslmode=require`) and Redis, not just
+      browser-to-frontend — with `APP_ENV=production` the app refuses to start
+      without it (`config.py`); local dev stays plain Docker Postgres
 - [x] Dependency vulnerability scanning in CI — `dependabot.yml` (uv +
       github-actions ecosystems) and `backend-ci.yml`'s `pip-audit` step
       both present
@@ -837,9 +842,9 @@ just believed done.
 - [x] Redis quote/fundamentals caching actually implemented —
       `market_data.py`: `QUOTE_CACHE_TTL=300`, `FUNDAMENTALS_CACHE_TTL=900`,
       `HISTORY_CACHE_TTL=86400`, all read/write through `redis_client.py`
-- [ ] Postgres connections go through Supabase's pooler endpoint rather
-      than SQLAlchemy defaults — deployment-time concern, not applicable
-      to local Docker Postgres
+- [x] Postgres connections go through Supabase's pooler endpoint rather
+      than SQLAlchemy defaults — the runbook has `DATABASE_URL` use the
+      session-pooler URL
 - [x] Frontend refresh strategy for jobs — Today and Backtests poll
       `GET /analysis/run/{job_id}` and `GET /backtest/run/{job_id}` every 2 s
       while the status is `RUNNING` (SWR `refreshInterval`)
