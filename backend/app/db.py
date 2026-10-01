@@ -55,6 +55,36 @@ def scoped_session(user_id: uuid.UUID) -> Generator[Session, None, None]:
         session.close()
 
 
+class UnsafeRuntimeRoleError(RuntimeError):
+    """The runtime database role could bypass RLS. Like InsecureConfigError this is not a
+    ValueError, and its message never carries a URL or password."""
+
+
+def check_runtime_role(conn: Connection) -> None:
+    """Refuse a role that would silently skip row-level security: a superuser, a BYPASSRLS role,
+    or the owner of the tables (owners bypass RLS unless it is forced)."""
+    rolsuper, rolbypassrls = conn.execute(
+        text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+    ).one()
+    owned: int = conn.execute(
+        text(
+            "SELECT count(*) FROM pg_tables "
+            "WHERE schemaname = 'public' AND tableowner = current_user"
+        )
+    ).scalar_one()
+    problems: list[str] = []
+    if rolsuper:
+        problems.append("is a superuser")
+    if rolbypassrls:
+        problems.append("has BYPASSRLS")
+    if owned:
+        problems.append("owns tables in schema public")
+    if problems:
+        raise UnsafeRuntimeRoleError(
+            "DATABASE_URL role must not bypass row-level security, but it " + ", ".join(problems)
+        )
+
+
 def get_session_factory() -> sessionmaker[Session]:
     """FastAPI dependency so tests can swap in a factory bound to the restricted test role."""
     return SessionLocal
