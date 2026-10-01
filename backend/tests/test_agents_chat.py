@@ -246,3 +246,48 @@ def test_run_chat_leaves_a_closing_answer_without_the_web_heading_unchanged(
     )
 
     assert result == "Final answer."
+
+
+def _reply_for(db_session, blocks):
+    fake_response = MagicMock()
+    fake_response.content = blocks
+    with patch("app.agents.chat.Anthropic") as mock_anthropic_cls:
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = fake_response
+        mock_anthropic_cls.return_value = mock_client
+        return asyncio.run(run_chat(db_session, USER_ID, "main", "news?", history=[]))
+
+
+def _block(kind, text=None):
+    b = MagicMock()
+    b.type = kind
+    if text is not None:
+        b.text = text
+    return b
+
+
+@pytest.mark.parametrize(
+    ("heading", "keeps_lead"),
+    [
+        ("## From the Web\n\nNews.", True),
+        ("## From the web:\n\nNews.", True),
+        ("## From the web page\n\nNews.", False),
+    ],
+)
+def test_run_chat_matches_the_web_heading_like_the_frontend(
+    monkeypatch, db_session, heading, keeps_lead
+):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    chat_module._client = None
+
+    reply = _reply_for(
+        db_session,
+        [
+            _block("text", "You hold 10 shares."),
+            _block("server_tool_use"),
+            _block("web_search_tool_result"),
+            _block("text", heading),
+        ],
+    )
+
+    assert ("You hold 10 shares." in reply) is keeps_lead

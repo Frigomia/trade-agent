@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from typing import cast
 
@@ -11,7 +12,9 @@ from app.config import settings
 from app.models import ChatMessage, Holding, Recommendation, WatchlistItem
 
 RECENT_RECOMMENDATIONS_LIMIT = 10
-WEB_HEADING = "## From the web"
+# The same heading the frontend splits on (frontend/lib/chat.ts): case-insensitive, optional colon,
+# and nothing else on the line.
+WEB_HEADING = re.compile(r"## From the web:?[ \t]*(\n|$)", re.IGNORECASE)
 
 
 async def build_portfolio_context(db: Session, user_id: uuid.UUID) -> str:
@@ -119,7 +122,7 @@ async def run_chat(
         raise RuntimeError(
             f"Claude response contained no closing text (stop_reason={response.stop_reason!r})"
         )
-    if reply.startswith(WEB_HEADING):
+    if WEB_HEADING.match(reply):
         lead = leading_text(response.content)
         if lead:
             reply = f"{lead}\n\n{reply}"
