@@ -77,11 +77,17 @@ def test_revoke_removes_public_api_access_to_app_tables(engine, api_roles):
 
 
 def test_revoke_closes_tables_created_later(engine, api_roles):
+    # born_later is not a model table, so the engine fixture's drop_all would leave it behind.
     with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS public.born_later"))
         conn.execute(text(_migration().REVOKE_SQL))
         conn.execute(text("CREATE TABLE public.born_later (id integer)"))
-    assert _can(engine, "anon", "public.born_later", "SELECT") is False
-    assert _can(engine, "authenticated", "public.born_later", "SELECT") is False
+    try:
+        assert _can(engine, "anon", "public.born_later", "SELECT") is False
+        assert _can(engine, "authenticated", "public.born_later", "SELECT") is False
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS public.born_later"))
 
 
 def test_revoke_leaves_the_runtime_role_alone(engine, api_roles):
