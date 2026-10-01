@@ -1,8 +1,9 @@
 import asyncio
 
 from anthropic import Anthropic
-from anthropic.types import ContentBlock, Message
+from anthropic.types import Message
 
+from app.agents.text import final_text
 from app.config import settings
 
 NEWS_AGENT_SYSTEM_PROMPT = """You are assisting a personal, advisory-only trading agent. \
@@ -72,20 +73,4 @@ async def run_news_agent(
 
     response = await asyncio.to_thread(_create)
 
-    return _final_text(response.content)
-
-
-def _final_text(content: list[ContentBlock]) -> str | None:
-    """The model's closing answer only.
-
-    With web search the reply interleaves narration ("Let me retry that query...") with tool
-    calls and results. Only the run of text blocks after the last non-text block is the answer;
-    one answer can be split across several text blocks (citations), so they are joined as-is.
-    """
-    answer: list[str] = []
-    for block in reversed(content):
-        if block.type != "text":
-            break
-        answer.append(block.text)
-    text = "".join(reversed(answer)).strip()
-    return text or None
+    return final_text(response.content)

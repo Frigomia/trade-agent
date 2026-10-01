@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
@@ -111,3 +112,102 @@ def test_chat_persists_rows_for_the_token_user_not_a_default(client, db_session,
     rows = db_session.query(ChatMessage).all()
     assert [row.user_id for row in rows] == [OTHER_USER_ID, OTHER_USER_ID]
     assert mock_run.call_args.args[1] == OTHER_USER_ID
+
+
+def _add_messages(db_session, user_id, session_id, count, start=0):
+    base = datetime(2026, 1, 1)
+    for i in range(start, start + count):
+        db_session.add(
+            ChatMessage(
+                user_id=user_id,
+                session_id=session_id,
+                role="user" if i % 2 == 0 else "assistant",
+                content=f"m{i}",
+                created_at=base + timedelta(minutes=i),
+            )
+        )
+    db_session.commit()
+
+
+def test_history_is_empty_for_a_new_user(client):
+    response = client.get("/chat/messages")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_history_returns_the_caller_session_oldest_first(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    _add_messages(db_session, USER_ID, "main", 3)
+    _add_messages(db_session, USER_ID, "elsewhere", 2, start=10)
+    _add_messages(db_session, OTHER_USER_ID, "main", 2, start=20)
+
+    body = client.get("/chat/messages").json()
+
+    assert [m["content"] for m in body] == ["m0", "m1", "m2"]
+    assert body[0]["role"] == "user" and body[1]["role"] == "assistant"
+    assert set(body[0]) == {"id", "session_id", "role", "content", "created_at"}
+
+
+def test_history_is_capped_at_the_last_50(client, db_session):
+    _add_messages(db_session, USER_ID, "main", 55)
+
+    body = client.get("/chat/messages").json()
+
+    assert len(body) == 50
+    assert body[0]["content"] == "m5"
+    assert body[-1]["content"] == "m54"
+
+
+def test_history_requires_authentication(anon_client):
+    assert anon_client.get("/chat/messages").status_code == 401
+    assert anon_client.delete("/chat/messages").status_code == 401
+
+
+def test_clearing_deletes_only_the_callers_rows_of_that_session(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    _add_messages(db_session, USER_ID, "main", 3)
+    _add_messages(db_session, USER_ID, "elsewhere", 2, start=10)
+    _add_messages(db_session, OTHER_USER_ID, "main", 2, start=20)
+
+    response = client.delete("/chat/messages")
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    remaining = {(m.user_id, m.session_id) for m in db_session.query(ChatMessage).all()}
+    assert remaining == {(USER_ID, "elsewhere"), (OTHER_USER_ID, "main")}
+
+
+def test_chat_sends_only_the_last_20_messages_to_claude(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _add_messages(db_session, USER_ID, "main", 26)
+
+    seen = _history_seen_by_claude(client)
+
+    assert [role for role, _ in seen][0] == "user"
+    assert len(seen) == 20
+    assert seen[0][1] == "m6"
+    assert seen[-1][1] == "m25"
+
+
+def test_chat_history_never_starts_with_an_assistant_row(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _add_messages(db_session, USER_ID, "main", 21)  # newest 20 start with assistant m1
+
+    seen = _history_seen_by_claude(client)
+
+    assert seen[0] == ("user", "m2")
+    assert len(seen) == 19
+
+
+def _history_seen_by_claude(client) -> list[tuple[str, str]]:
+    seen: list[tuple[str, str]] = []
+
+    async def fake_run_chat(*args, history, **kwargs):
+        # read while the request session is still open (the rows detach afterwards)
+        seen.extend((m.role, m.content) for m in history)
+        return "ok"
+
+    with patch("app.routers.chat.run_chat", fake_run_chat):
+        client.post("/chat", json={"session_id": "main", "message": "hello"})
+    return seen

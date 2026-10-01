@@ -10,6 +10,7 @@ import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
 import { Amount } from "@/components/portfolio/Amount";
 import { Pill } from "@/components/ui/Pill";
+import { AskAboutThis } from "@/components/recommendations/AskAboutThis";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
 import { EvidenceDetail } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
@@ -115,6 +116,7 @@ function RecommendationDetail() {
         </Box>
       )}
       <EvidenceDetail recommendation={recommendation} />
+      <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
       <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
