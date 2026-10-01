@@ -1,0 +1,33 @@
+# The app name is a placeholder: use the name you pass to `fly apps create` (see docs/RUNBOOK.md).
+app = "trade-agent-api"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+
+[deploy]
+  # Runs on a temporary machine before the new version starts; a failed migration fails the
+  # release and the old version keeps serving. Uses MIGRATION_DATABASE_URL (the table owner).
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Always on: analysis and backtest runs are background tasks inside this process.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
