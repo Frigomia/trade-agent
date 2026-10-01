@@ -9,7 +9,8 @@ export function UsageMeter({ usage }: { usage: UsageDetail }) {
       <Typography sx={{ fontSize: 12.5, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
         {usage.used} / {usage.limit}
       </Typography>
-      <Box sx={{ width: 56, height: 5, borderRadius: 99, bgcolor: "var(--track)", overflow: "hidden" }}>
+      {/* The bar is dropped on phones so the header fits on one row. */}
+      <Box sx={{ display: { xs: "none", sm: "block" }, width: 56, height: 5, borderRadius: 99, bgcolor: "var(--track)", overflow: "hidden" }}>
         <Box sx={{ width: `${usageFraction(usage) * 100}%`, height: "100%", bgcolor: color }} />
       </Box>
     </Box>
