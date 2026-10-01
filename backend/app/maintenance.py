@@ -1,7 +1,7 @@
-"""One-off maintenance commands, run by hand: ``python -m app.maintenance <command>``.
+"""One-off cleanup, run by hand: ``python -m app.maintenance [--apply]``.
 
-clean-analyses: strips the model's working notes from web second opinions stored before
-``news._final_text`` kept only the closing answer. A dry run by default; ``--apply`` writes.
+Strips the model's working notes from web second opinions stored before ``news._final_text``
+kept only the closing answer. A dry run unless ``--apply`` is given.
 """
 
 import argparse
@@ -31,7 +31,8 @@ _SOURCING_NOTE = re.compile(r"\n+\*?\s*note on sourcing:[^\n]*\*?\s*$", re.IGNOR
 def strip_narration(text: str) -> str:
     """The stored analysis without its leading working notes and trailing sourcing remark."""
     heading = _HEADING.search(text)
-    if heading and heading.start() > 0 and _WORKING_NOTES.search(text[: heading.start()]):
+    # An empty prefix (a heading at the very start) never matches, so nothing is cut.
+    if heading and _WORKING_NOTES.search(text[: heading.start()]):
         text = text[heading.start() :]
     return _SOURCING_NOTE.sub("", text).strip()
 
@@ -46,12 +47,12 @@ def clean_analyses(apply: bool) -> tuple[int, int]:
             rows = db.query(Recommendation).filter(Recommendation.ai_analysis.isnot(None)).all()
             for row in rows:
                 seen += 1
-                assert row.ai_analysis is not None  # filtered above; narrows the type for mypy
-                cleaned = strip_narration(row.ai_analysis)
-                if cleaned == row.ai_analysis:
+                original = row.ai_analysis or ""
+                cleaned = strip_narration(original)
+                if cleaned == original:
                     continue
                 changed += 1
-                preview = row.ai_analysis[:70].replace("\n", " ")
+                preview = original[:70].replace("\n", " ")
                 logger.info("%s #%s: %r -> %r", row.ticker, row.id, preview, cleaned[:70])
                 if apply:
                     row.ai_analysis = cleaned
@@ -61,10 +62,8 @@ def clean_analyses(apply: bool) -> tuple[int, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m app.maintenance")
-    sub = parser.add_subparsers(dest="command", required=True)
-    clean = sub.add_parser("clean-analyses", help="strip working notes from stored analyses")
-    clean.add_argument("--apply", action="store_true", help="write the changes (default: dry run)")
+    parser = argparse.ArgumentParser(prog="python -m app.maintenance", description=__doc__)
+    parser.add_argument("--apply", action="store_true", help="write the changes (default: dry run)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")

@@ -20,8 +20,7 @@ export function todayIso(): string {
 }
 
 export function formatSigned(value: number): string {
-  const rounded = round(value, 2);
-  return `${rounded >= 0 ? "+" : ""}${formatAmount(rounded)}`;
+  return `${round(value, 2) >= 0 ? "+" : ""}${formatAmount(value)}`;
 }
 
 export function formatPct(value: number): string {

@@ -46,7 +46,7 @@ Existing single-user data (all rows on the old default `user_id`) must be reassi
 | Type check     | `uv run mypy app`                                                              |
 | New migration  | `uv run alembic revision --autogenerate -m "..."` after any `models.py` change |
 | Scheduled jobs | `uv run python -m app.scheduled daily` (or `snapshots` / `outcomes`); see `docs/ARCHITECTURE.md` §12 |
-| One-off cleanup  | `uv run python -m app.maintenance clean-analyses` (dry run; add `--apply` to write): strips model working notes from stored web opinions |
+| One-off cleanup  | `uv run python -m app.maintenance` (dry run; add `--apply` to write): strips model working notes from stored web opinions |
 
 Prefix everything with `uv run` — never activate the venv manually.
 Never hand-edit an existing file in `migrations/versions/`: generate it with
