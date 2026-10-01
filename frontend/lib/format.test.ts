@@ -12,6 +12,7 @@ describe("format", () => {
     expect(formatSigned(551.7)).toBe("+551.70");
     expect(formatSigned(-103.2)).toBe("-103.20");
     expect(formatSigned(0)).toBe("+0.00");
+    expect(formatSigned(-0.001)).toBe("+0.00");
   });
 
   it("gives today's UTC date as YYYY-MM-DD", () => {
@@ -25,5 +26,6 @@ describe("format", () => {
     expect(formatPct(5.72)).toBe("+5.7%");
     expect(formatPct(-9.6)).toBe("-9.6%");
     expect(formatPct(0)).toBe("+0.0%");
+    expect(formatPct(-0.04)).toBe("+0.0%");
   });
 });

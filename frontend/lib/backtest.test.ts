@@ -52,11 +52,16 @@ describe("signalRows", () => {
       OVERSOLD: { count: 3, avg_forward_return_pct: -0.01, hit_rate: 0.3333 },
       MYSTERY: { count: 30, avg_forward_return_pct: 0, hit_rate: 0.5 },
     });
-    expect(rows.map((r) => r.label)).toEqual(["MYSTERY", "Strong uptrend", "Oversold"]);
+    expect(rows.map((r) => r.label)).toEqual(["Mystery", "Strong uptrend", "Oversold"]);
     expect(rows[1]).toMatchObject({ key: "STRONG_UPTREND", count: 12, small: false });
     expect(rows[1].avgMovePct).toBeCloseTo(2.38);
     expect(rows[1].risePct).toBeCloseTo(65);
     expect(rows[2].small).toBe(true);
+  });
+
+  it("turns an unknown signal key into a readable label", () => {
+    const [row] = signalRows({ WEAK_UPTREND: { count: 7, avg_forward_return_pct: 0.01, hit_rate: 0.6 } });
+    expect(row.label).toBe("Weak uptrend");
   });
 
   it("returns an empty list for no signals", () => {

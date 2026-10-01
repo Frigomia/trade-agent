@@ -83,13 +83,19 @@ const SIGNAL_LABELS: Record<string, string> = {
   NEUTRAL: "Neutral",
 };
 
+// A signal the UI has no label for yet: OVERBOUGHT -> "Overbought", WEAK_UPTREND -> "Weak uptrend".
+function humanize(key: string): string {
+  const words = key.toLowerCase().replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function signalRows(stats: Record<string, SignalStats>): SignalRow[] {
   return Object.entries(stats)
     .map(([key, s]) => {
       const count = Math.round(s.count);
       return {
         key,
-        label: SIGNAL_LABELS[key] ?? key,
+        label: SIGNAL_LABELS[key] ?? humanize(key),
         count,
         avgMovePct: s.avg_forward_return_pct * 100,
         risePct: s.hit_rate * 100,
