@@ -6,13 +6,17 @@ back to a system default in Settings) instead of a fixed number.
 """
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
 from fastapi import Depends
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.deps import CurrentUser, get_current_user
 from app.config import Settings, settings
+from app.db import get_session_factory
+from app.models import AppSettings
 from app.redis_client import get_redis
 
 # Outlives any calendar month (max 31 days) with slack, so a stale key always expires on its
@@ -46,16 +50,44 @@ class _HasLimits(Protocol):
     def monthly_chat_limit(self) -> int | None: ...
 
 
-def effective_limit(user: _HasLimits, kind: str, settings: Settings) -> int:
+@dataclass(frozen=True)
+class LimitDefaults:
+    """The monthly limits a user without a personal override gets."""
+
+    analysis_runs: int
+    chat_messages: int
+
+
+def load_limit_defaults(db: Session, settings: Settings) -> LimitDefaults:
+    """The admin-set defaults from app_settings, each falling back to the environment value when
+    the row (or that column) is empty."""
+    row = db.get(AppSettings, 1)
+    analysis = row.default_monthly_analysis_limit if row else None
+    chat = row.default_monthly_chat_limit if row else None
+    return LimitDefaults(
+        analysis_runs=analysis if analysis is not None else settings.default_monthly_analysis_limit,
+        chat_messages=chat if chat is not None else settings.default_monthly_chat_limit,
+    )
+
+
+def get_limit_defaults(
+    factory: sessionmaker[Session] = Depends(get_session_factory),
+) -> LimitDefaults:
+    """Route dependency. A plain session is enough: app_settings has no per-user scoping."""
+    with factory() as db:
+        return load_limit_defaults(db, settings)
+
+
+def effective_limit(user: _HasLimits, kind: str, defaults: LimitDefaults) -> int:
     """The user's override if one is set, else the matching system default."""
     if kind == "analysis_run":
         if user.monthly_analysis_limit is not None:
             return user.monthly_analysis_limit
-        return settings.default_monthly_analysis_limit
+        return defaults.analysis_runs
     if kind == "chat":
         if user.monthly_chat_limit is not None:
             return user.monthly_chat_limit
-        return settings.default_monthly_chat_limit
+        return defaults.chat_messages
     raise ValueError(f"Unknown usage kind: {kind!r}")
 
 
@@ -89,8 +121,11 @@ async def get_usage(kind: str, user_id: str) -> int:
 def check_monthly_usage(kind: str) -> Callable[..., Awaitable[None]]:
     """FastAPI dependency factory: add as a route dependency to enforce kind's monthly cap."""
 
-    async def _check(user: CurrentUser = Depends(get_current_user)) -> None:
-        limit = effective_limit(user, kind, settings)
+    async def _check(
+        user: CurrentUser = Depends(get_current_user),
+        defaults: LimitDefaults = Depends(get_limit_defaults),
+    ) -> None:
+        limit = effective_limit(user, kind, defaults)
         await check_and_increment_usage(kind, str(user.id), limit)
 
     return _check

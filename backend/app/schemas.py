@@ -307,6 +307,21 @@ class LimitsIn(BaseModel):
     chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
 
 
+class LimitDefaultsIn(BaseModel):
+    """Both defaults are always sent together: the admin form edits them as a pair. The upper
+    bound matches Postgres's Integer column so an oversized value 422s instead of 500ing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_limit: Annotated[int, Field(ge=0, le=2_147_483_647)]
+    chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)]
+
+
+class LimitDefaultsOut(BaseModel):
+    analysis_limit: int
+    chat_limit: int
+
+
 class AdminUserOut(BaseModel):
     """Access-management data only: never anything from the user's portfolio or chats. The four
     monthly_* fields are effective limits and this month's counts (never the raw nullable

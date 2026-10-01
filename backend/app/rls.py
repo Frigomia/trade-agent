@@ -18,8 +18,8 @@ USER_TABLES: tuple[str, ...] = (
     "portfolio_snapshots",
 )
 
-# Every table the runtime role may touch: the user tables plus the auth table.
-RUNTIME_TABLES: tuple[str, ...] = (*USER_TABLES, "app_users")
+# Every table the runtime role may touch: the user tables, the auth table and the settings row.
+RUNTIME_TABLES: tuple[str, ...] = (*USER_TABLES, "app_users", "app_settings")
 
 # The auth table is deliberately not writable wholesale: the runtime role cannot UPDATE id,
 # email, or role, so no application bug can change an existing user's role (for example promote
@@ -66,6 +66,9 @@ def grant_table_sql(table: str) -> list[str]:
             f"GRANT SELECT, INSERT, DELETE ON app_users TO {RUNTIME_ROLE}",
             f"GRANT UPDATE ({columns}) ON app_users TO {RUNTIME_ROLE}",
         ]
+    if table == "app_settings":
+        # One admin-edited row: created and updated, never deleted.
+        return [f"GRANT SELECT, INSERT, UPDATE ON app_settings TO {RUNTIME_ROLE}"]
     statements = [f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {RUNTIME_ROLE}"]
     if table in USER_TABLES:
         # Every user table has an integer id backed by a serial sequence named <table>_id_seq.
