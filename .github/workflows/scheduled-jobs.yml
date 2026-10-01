@@ -1,0 +1,52 @@
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, then outcome evaluation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    name: python -m app.scheduled daily
+    runs-on: ubuntu-latest
+    # Scheduled runs are always master; a manual dispatch from another branch must not use the production token.
+    if: github.ref == 'refs/heads/master'
+    # Needs the GitHub Environment `production` (master only, holds the secrets): see docs/RUNBOOK.md.
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+
+      # The flyctl version is pinned and bumped by hand.
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
+        with:
+          version: "0.4.111"
+
+      - name: Run the daily job in a one-off Fly machine
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        # The flyctl flags below and whether this step fails when the job exits non-zero are
+        # unverified until the first manual run. Fallback if they prove wrong:
+        #   flyctl ssh console --app "$APP" --command "python -m app.scheduled daily"
+        # (flyctl maps a failing remote command to a non-zero exit).
+        # APP_ENV is passed explicitly because `machine run` does not apply fly.toml [env]; without
+        # it the production TLS guard would be off for this job.
+        run: |
+          set -euo pipefail
+          APP=$(grep -m1 '^app = ' backend/fly.toml | cut -d'"' -f2)
+          # The image the running machine uses, so the job always runs the deployed code.
+          IMAGE=$(flyctl machine list --app "$APP" --json \
+            | jq -r '[.[] | select(.state == "started")][0].config.image')
+          if [ -z "$IMAGE" ] || [ "$IMAGE" = "null" ]; then
+            echo "no started machine found for app $APP; is the backend deployed?" >&2
+            exit 1
+          fi
+          # The machine gets the app's secrets and is removed when the command exits.
+          flyctl machine run "$IMAGE" python -m app.scheduled daily \
+            --app "$APP" --region fra --rm --restart no --vm-memory 512 --env APP_ENV=production

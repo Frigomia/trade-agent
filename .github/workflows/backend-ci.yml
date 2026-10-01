@@ -66,6 +66,25 @@ jobs:
       - name: Test (pytest)
         run: uv run python -m pytest tests/ -v
 
+  docker:
+    name: Docker build and health check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build image
+        run: docker build -t trade-agent-api .
+
+      - name: Start it and check /health
+        run: |
+          docker run -d --name api -p 8080:8080 trade-agent-api
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/health; then exit 0; fi
+            sleep 2
+          done
+          docker logs api
+          exit 1
+
   security:
     name: Dependency + code security scan
     runs-on: ubuntu-latest

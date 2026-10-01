@@ -1,0 +1,65 @@
+name: Deploy backend
+
+# Runs after Backend CI succeeds on a push to master (that workflow is path-filtered to backend/**,
+# so frontend-only changes do not redeploy the backend). It can also be run by hand.
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    branches: [master]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    # workflow_run.branches matches only the head branch name, so PR runs (even from a branch named
+    # master) and other branches must never deploy: require a push run from this repo, or a master dispatch.
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_repository.full_name == github.repository)
+    # The Environment `production` must exist with "Deployment branches: master only", and the secrets
+    # (FLY_API_TOKEN, BACKUP_DATABASE_URL, BACKUP_PASSPHRASE) must be Environment secrets: GitHub then
+    # enforces the branch rule. The `if:` above is defence in depth. See docs/RUNBOOK.md.
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The commit Backend CI actually tested, not whatever master is by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      # An older commit must not overtake a newer one (runs are queued, not cancelled).
+      - name: Skip if a newer commit is on master
+        id: freshness
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          TIP=$(git ls-remote origin refs/heads/master | cut -f1)
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ "$TIP" = "$(git rev-parse HEAD)" ]; then
+            echo "fresh=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "superseded by a newer commit; skipping"
+            echo "fresh=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The flyctl version is pinned and bumped by hand.
+      - if: steps.freshness.outputs.fresh == 'true'
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1.6
+        with:
+          version: "0.4.111"
+
+      - name: Deploy (migrations run as the release command)
+        if: steps.freshness.outputs.fresh == 'true'
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

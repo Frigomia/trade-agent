@@ -10,8 +10,10 @@ the trade yourself in your broker's app.
 
 ## Status
 
-Every screen is built and merged. What remains is deployment: hosting, a trigger for the scheduled
-jobs, and the production checklist in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Every screen is built and merged. The deployment files exist (Dockerfile, Fly config, deploy,
+scheduled-job and backup workflows); the first deploy is still to be done by following
+[docs/RUNBOOK.md](docs/RUNBOOK.md). The production checklist is in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - **Backend:** multi-user, invitation-only. Supabase Auth + JWT verification, Row Level Security,
   an admin API for inviting/managing users, per-user monthly usage limits, and self-service data
@@ -89,6 +91,8 @@ What it does, its exit codes, and copy-paste triggers are in
 - [DESIGN.md](DESIGN.md) — the visual design system as built: colours, type, layout, components.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the technical design: data model, API contract,
   agent design, deployment.
+- [docs/RUNBOOK.md](docs/RUNBOOK.md) — first deploy, manual checks, rollback, backup restore and
+  where each secret lives.
 - [docs/superpowers/specs/](docs/superpowers/specs/) and
   [docs/superpowers/plans/](docs/superpowers/plans/) — the design spec and implementation plan
   for every build cycle, in order.
