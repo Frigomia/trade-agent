@@ -36,7 +36,10 @@ jobs:
           # The image the running machine uses, so the job always runs the deployed code.
           IMAGE=$(flyctl machine list --app "$APP" --json \
             | jq -r '[.[] | select(.state == "started")][0].config.image')
-          test -n "$IMAGE" && test "$IMAGE" != "null"
+          if [ -z "$IMAGE" ] || [ "$IMAGE" = "null" ]; then
+            echo "no started machine found for app $APP; is the backend deployed?" >&2
+            exit 1
+          fi
           # The machine gets the app's secrets and is removed when the command exits.
           flyctl machine run "$IMAGE" python -m app.scheduled daily \
             --app "$APP" --region fra --rm --restart no --vm-memory 512

@@ -31,15 +31,21 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          trap 'rm -f "$RUNNER_TEMP/passphrase"' EXIT
+          FILE="trade-agent-$(date -u +%Y%m%d).dump.gpg"
+          trap 'rc=$?; rm -f "$RUNNER_TEMP/passphrase"; if [ "$rc" -ne 0 ]; then rm -f "$FILE"; fi' EXIT
           printf '%s' "$BACKUP_PASSPHRASE" > "$RUNNER_TEMP/passphrase"
-          # The connection must be a role that bypasses row-level security (the table owner or
-          # postgres); a role that does not would dump empty tables without any error.
+          # The artifact is only as private as the repository: the repository must be private, and
+          # the encryption passphrase is what protects the dump.
+          # pg_dump runs with row_security=off, so a role without BYPASSRLS makes it fail loudly
+          # ("query would be affected by row-level security policy"). FORCE ROW LEVEL SECURITY applies
+          # to the table owner too, so owning the tables is not enough: the backup role must have
+          # BYPASSRLS or be a superuser (Supabase's postgres role has BYPASSRLS).
           pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
             | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
                 --passphrase-file "$RUNNER_TEMP/passphrase" \
-                -o "trade-agent-$(date -u +%Y%m%d).dump.gpg"
-          ls -l trade-agent-*.dump.gpg
+                -o "$FILE"
+          test "$(stat -c%s "$FILE")" -ge 1024 || { echo "backup is suspiciously small" >&2; exit 1; }
+          ls -l "$FILE"
 
       - name: Keep the encrypted file for 30 days
         uses: actions/upload-artifact@v4
