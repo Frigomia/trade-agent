@@ -30,6 +30,14 @@ router = APIRouter(
     prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(get_current_user)]
 )
 
+# Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
+MAX_HOLDINGS = 100
+MAX_WATCHLIST = 100
+
+
+def _cap_message(what: str, cap: int) -> str:
+    return f"You can keep up to {cap} {what}. Remove one before adding another."
+
 
 @router.get("/holdings", response_model=list[HoldingOut])
 def list_holdings(
@@ -46,6 +54,8 @@ def upsert_holding(
 ) -> Holding:
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
+        if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
+            raise HTTPException(status_code=409, detail=_cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
         db.add(holding)
     else:
@@ -82,6 +92,10 @@ def upsert_watchlist_item(
 ) -> WatchlistItem:
     item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if item is None:
+        if db.query(WatchlistItem).filter_by(user_id=user.id).count() >= MAX_WATCHLIST:
+            raise HTTPException(
+                status_code=409, detail=_cap_message("watchlist items", MAX_WATCHLIST)
+            )
         item = WatchlistItem(user_id=user.id, **payload.model_dump())
         db.add(item)
     else:

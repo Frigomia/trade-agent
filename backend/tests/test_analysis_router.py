@@ -479,3 +479,61 @@ def test_recommendation_exposes_outcome_fields(client, db_session):
     assert by_ticker["AAPL"]["outcome_evaluated_at"] is not None
     assert by_ticker["MSFT"]["outcome_forward_return_pct"] is None
     assert by_ticker["MSFT"]["outcome_evaluated_at"] is None
+
+
+def _add_holdings(db_session, tickers):
+    for ticker in tickers:
+        db_session.add(
+            Holding(
+                user_id=USER_ID,
+                ticker=ticker,
+                name=ticker,
+                asset_type="STOCK",
+                shares=1,
+                cost_basis=1.0,
+                first_purchase_date=date(2024, 1, 1),
+            )
+        )
+    db_session.commit()
+
+
+def _run_with_mocked_jobs(client, body):
+    def _close_coro(coro):
+        coro.close()
+        return MagicMock()
+
+    create_job = AsyncMock(return_value="job-123")
+    with (
+        patch("app.routers.analysis.create_job", create_job),
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
+    ):
+        response = client.post("/analysis/run", json=body)
+    return response, create_job
+
+
+def test_run_analysis_rejects_more_than_50_tickers(client):
+    tickers = [f"T{i}" for i in range(51)]
+    response = client.post("/analysis/run", json={"tickers": tickers})
+    assert response.status_code == 422
+
+
+def test_run_analysis_collapses_duplicate_tickers_to_one_graph_run(client, db_session):
+    _add_holdings(db_session, ["AAPL", "MSFT"])
+
+    response, create_job = _run_with_mocked_jobs(
+        client, {"tickers": ["AAPL", "aapl", "MSFT", "AAPL"]}
+    )
+
+    assert response.status_code == 202
+    infos = create_job.await_args.args[1]
+    assert [i["ticker"] for i in infos] == ["AAPL", "MSFT"]
+
+
+def test_run_analysis_without_body_tickers_is_bounded(client, db_session):
+    _add_holdings(db_session, [f"H{i}" for i in range(60)])
+
+    response, create_job = _run_with_mocked_jobs(client, {})
+
+    assert response.status_code == 202
+    assert len(create_job.await_args.args[1]) == 50

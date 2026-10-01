@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import Holding, PortfolioSnapshot
+from app.models import Holding, PortfolioSnapshot, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
@@ -596,3 +596,50 @@ def test_summary_excludes_other_users_holdings(client, db_session):
 
 def test_summary_requires_authentication(anon_client):
     assert anon_client.get("/portfolio/summary").status_code == 401
+
+
+def _holding_payload(ticker):
+    return {
+        "ticker": ticker,
+        "name": ticker,
+        "asset_type": "STOCK",
+        "shares": 1,
+        "cost_basis": 1,
+        "first_purchase_date": "2024-01-15",
+    }
+
+
+def test_holdings_are_capped_at_100_per_user(client, db_session):
+    for i in range(100):
+        db_session.add(
+            Holding(
+                user_id=USER_ID,
+                ticker=f"H{i}",
+                name="x",
+                asset_type="STOCK",
+                shares=1,
+                cost_basis=1,
+                first_purchase_date=date(2024, 1, 1),
+            )
+        )
+    db_session.commit()
+
+    response = client.post("/portfolio/holdings", json=_holding_payload("NEWONE"))
+    assert response.status_code == 409
+    assert "100" in response.json()["detail"]
+
+    # Updating a holding that already exists is still allowed at the cap.
+    assert client.post("/portfolio/holdings", json=_holding_payload("H0")).status_code == 200
+
+
+def test_watchlist_is_capped_at_100_per_user(client, db_session):
+    for i in range(100):
+        db_session.add(WatchlistItem(user_id=USER_ID, ticker=f"W{i}", asset_type="STOCK"))
+    db_session.commit()
+
+    response = client.post("/portfolio/watchlist", json={"ticker": "NEWONE", "asset_type": "ETF"})
+    assert response.status_code == 409
+    assert "100" in response.json()["detail"]
+
+    existing = client.post("/portfolio/watchlist", json={"ticker": "W0", "asset_type": "STOCK"})
+    assert existing.status_code == 200
