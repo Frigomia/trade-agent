@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
-from app.config import settings
 from app.db import get_session_factory
 from app.models import (
     AppUser,
@@ -64,15 +63,18 @@ def accept(
 
 
 @active_router.get("/usage", response_model=UsageOut)
-async def get_usage_summary(user: CurrentUser = Depends(get_current_user)) -> UsageOut:
+async def get_usage_summary(
+    user: CurrentUser = Depends(get_current_user),
+    defaults: usage.LimitDefaults = Depends(usage.get_limit_defaults),
+) -> UsageOut:
     analysis_used = await usage.get_usage("analysis_run", str(user.id))
     chat_used = await usage.get_usage("chat", str(user.id))
     return UsageOut(
         analysis_runs=UsageDetail(
-            used=analysis_used, limit=usage.effective_limit(user, "analysis_run", settings)
+            used=analysis_used, limit=usage.effective_limit(user, "analysis_run", defaults)
         ),
         chat_messages=UsageDetail(
-            used=chat_used, limit=usage.effective_limit(user, "chat", settings)
+            used=chat_used, limit=usage.effective_limit(user, "chat", defaults)
         ),
     )
 

@@ -5,12 +5,15 @@ import pytest
 
 from app.auth.deps import CurrentUser
 from app.config import Settings
+from app.models import AppSettings
 from app.usage import (
+    LimitDefaults,
     UsageLimitExceeded,
     _usage_key,
     check_and_increment_usage,
     effective_limit,
     get_usage,
+    load_limit_defaults,
 )
 
 
@@ -97,19 +100,35 @@ def _current_user(*, monthly_analysis_limit=None, monthly_chat_limit=None) -> Cu
     )
 
 
+DEFAULTS = LimitDefaults(analysis_runs=100, chat_messages=500)
+
+
 def test_effective_limit_uses_the_override_when_set():
     user = _current_user(monthly_analysis_limit=7)
-    test_settings = Settings(default_monthly_analysis_limit=100, default_monthly_chat_limit=500)
-    assert effective_limit(user, "analysis_run", test_settings) == 7
+    assert effective_limit(user, "analysis_run", DEFAULTS) == 7
 
 
 def test_effective_limit_falls_back_to_the_default_when_not_set():
     user = _current_user()
-    test_settings = Settings(default_monthly_analysis_limit=100, default_monthly_chat_limit=500)
-    assert effective_limit(user, "chat", test_settings) == 500
+    assert effective_limit(user, "chat", DEFAULTS) == 500
 
 
 def test_effective_limit_rejects_an_unknown_kind():
     user = _current_user()
     with pytest.raises(ValueError, match="Unknown usage kind"):
-        effective_limit(user, "not_a_kind", Settings())
+        effective_limit(user, "not_a_kind", DEFAULTS)
+
+
+def test_load_limit_defaults_uses_the_environment_when_there_is_no_row(db_session):
+    env = Settings(default_monthly_analysis_limit=100, default_monthly_chat_limit=500)
+    assert load_limit_defaults(db_session, env) == LimitDefaults(100, 500)
+
+
+def test_load_limit_defaults_prefers_the_stored_values_per_column(db_session):
+    env = Settings(default_monthly_analysis_limit=100, default_monthly_chat_limit=500)
+    db_session.add(
+        AppSettings(id=1, default_monthly_analysis_limit=3, default_monthly_chat_limit=None)
+    )
+    db_session.commit()
+
+    assert load_limit_defaults(db_session, env) == LimitDefaults(3, 500)

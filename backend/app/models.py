@@ -2,7 +2,18 @@ import uuid
 from datetime import date, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Date, DateTime, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -144,3 +155,19 @@ class AppUser(Base):
     # NULL means "use Settings.default_monthly_*_limit". Set only by the admin API.
     monthly_analysis_limit: Mapped[int | None] = mapped_column(nullable=True)
     monthly_chat_limit: Mapped[int | None] = mapped_column(nullable=True)
+
+
+class AppSettings(Base):
+    """System-wide settings an admin can change, kept as exactly one row (id = 1).
+
+    A NULL default means "use the matching Settings.default_monthly_*_limit from the environment".
+    Like app_users it has no user_id and no RLS policy: only the admin API writes it, and the
+    limit checks read it.
+    """
+
+    __tablename__ = "app_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="app_settings_single_row"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False, default=1)
+    default_monthly_analysis_limit: Mapped[int | None] = mapped_column(nullable=True)
+    default_monthly_chat_limit: Mapped[int | None] = mapped_column(nullable=True)

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth.supabase_admin import get_supabase_admin
 from app.config import settings
 from app.main import app
-from app.models import AppUser
+from app.models import AppSettings, AppUser
 from tests.auth_support import ADMIN_ID, OTHER_USER_ID, USER_ID, add_app_user
 
 OLD = datetime(2020, 1, 1)
@@ -352,3 +352,71 @@ def test_set_limits_rejects_an_unknown_field(admin_client, db_session):
 def test_set_limits_unknown_user_is_404(admin_client):
     response = admin_client.patch(f"/admin/users/{uuid.uuid4()}/limits", json={"analysis_limit": 1})
     assert response.status_code == 404
+
+
+# ---- default limits --------------------------------------------------------------------------
+def test_limit_defaults_start_at_the_environment_values(admin_client):
+    response = admin_client.get("/admin/limit-defaults")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "analysis_limit": settings.default_monthly_analysis_limit,
+        "chat_limit": settings.default_monthly_chat_limit,
+    }
+
+
+def test_setting_defaults_changes_everyone_without_an_override(admin_client, db_session):
+    add_app_user(db_session, USER_ID)
+    add_app_user(db_session, OTHER_USER_ID)
+    admin_client.patch(f"/admin/users/{OTHER_USER_ID}/limits", json={"analysis_limit": 4})
+
+    response = admin_client.put(
+        "/admin/limit-defaults", json={"analysis_limit": 20, "chat_limit": 60}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"analysis_limit": 20, "chat_limit": 60}
+    assert admin_client.get("/admin/limit-defaults").json() == {
+        "analysis_limit": 20,
+        "chat_limit": 60,
+    }
+    rows = {u["id"]: u for u in admin_client.get("/admin/users").json()}
+    assert rows[str(USER_ID)]["monthly_analysis_limit"] == 20
+    assert rows[str(USER_ID)]["monthly_chat_limit"] == 60
+    # A personal override survives a change of the default.
+    assert rows[str(OTHER_USER_ID)]["monthly_analysis_limit"] == 4
+    assert rows[str(OTHER_USER_ID)]["monthly_chat_limit"] == 60
+
+
+def test_setting_defaults_twice_keeps_a_single_row(admin_client, db_session):
+    admin_client.put("/admin/limit-defaults", json={"analysis_limit": 1, "chat_limit": 2})
+    admin_client.put("/admin/limit-defaults", json={"analysis_limit": 3, "chat_limit": 4})
+
+    db_session.expire_all()
+    rows = db_session.query(AppSettings).all()
+    assert [
+        (r.id, r.default_monthly_analysis_limit, r.default_monthly_chat_limit) for r in rows
+    ] == [(1, 3, 4)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"analysis_limit": -1, "chat_limit": 5},
+        {"analysis_limit": 5},
+        {"analysis_limit": 5, "chat_limit": None},
+        {"analysis_limit": 5, "chat_limit": 2_147_483_648},
+        {"analysis_limit": 5, "chat_limit": 5, "extra": 1},
+    ],
+)
+def test_setting_defaults_rejects_bad_bodies(admin_client, body):
+    assert admin_client.put("/admin/limit-defaults", json=body).status_code == 422
+
+
+def test_an_admin_set_default_applies_to_a_users_own_usage_view(admin_client, client):
+    admin_client.put("/admin/limit-defaults", json={"analysis_limit": 9, "chat_limit": 11})
+
+    body = client.get("/me/usage").json()
+
+    assert body["analysis_runs"]["limit"] == 9
+    assert body["chat_messages"]["limit"] == 11

@@ -185,8 +185,16 @@ AppUser
   -- no user_id, no RLS; read on every request by the auth path. The runtime role may
   -- INSERT/DELETE rows and UPDATE only status, accepted_terms_at, last_seen_at, invited_at,
   -- monthly_analysis_limit, monthly_chat_limit: it cannot change id, email, or role.
-  -- NULL on a limit column means "use the system default" (Settings.default_monthly_analysis_limit /
-  -- default_monthly_chat_limit). Set only by the admin API (PATCH /admin/users/{id}/limits).
+  -- NULL on a limit column means "use the system default" (the app_settings value below, else
+  -- Settings.default_monthly_analysis_limit / default_monthly_chat_limit). Set only by the admin API
+  -- (PATCH /admin/users/{id}/limits).
+
+AppSettings
+  id (always 1; a CHECK constraint keeps it a single row),
+  default_monthly_analysis_limit (nullable integer), default_monthly_chat_limit (nullable integer)
+  -- System-wide defaults an admin edits (PUT /admin/limit-defaults). NULL, or no row at all, falls back
+  -- to the Settings value from the environment. No user_id, no RLS (like app_users); the runtime role
+  -- may SELECT, INSERT and UPDATE it, never DELETE.
 ```
 
 ### Migrations — Alembic
@@ -267,6 +275,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
 | GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
+| GET | `/admin/limit-defaults` | — | **Admin only.** The monthly limits users without a personal override get: `{analysis_limit, chat_limit}` (the stored defaults, else the environment values) |
+| PUT | `/admin/limit-defaults` | `{analysis_limit, chat_limit}` | **Admin only.** Sets both defaults (non-negative integers, both required). Everyone without a personal override follows them immediately; personal overrides are untouched |
 | PATCH | `/admin/users/{id}/limits` | `{analysis_limit?, chat_limit?}` | **Admin only.** Sets or clears (via explicit `null`) a per-user monthly override; an omitted field is left unchanged |
 | GET | `/admin/users?status=` | — | **Admin only.** List users (access data only: never portfolios, recommendations, or chats); `invite_expires_at` is a display hint; also returns each user's effective monthly limits and this month's usage counts |
 | POST | `/admin/users/invite` | `{email}` | **Admin only.** Supabase invite (24 h link) and an `app_users` row with status `invited`; an already-invited address is re-sent. `201` |

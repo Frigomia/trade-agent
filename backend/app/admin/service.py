@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.supabase_admin import SupabaseAdmin, SupabaseAdminError, SupabaseUserExists
-from app.models import AppUser
+from app.models import AppSettings, AppUser
 from app.user_data import delete_user_data
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,18 @@ def set_limits(db: Session, user_id: uuid.UUID, fields: dict[str, int | None]) -
     db.commit()
     db.refresh(user)
     return user
+
+
+def set_limit_defaults(db: Session, analysis_limit: int, chat_limit: int) -> None:
+    """Stores the system-wide defaults in the single app_settings row, creating it on first use.
+    Users with a personal override keep it; everyone else follows the new values."""
+    row = db.get(AppSettings, 1)
+    if row is None:
+        row = AppSettings(id=1)
+        db.add(row)
+    row.default_monthly_analysis_limit = analysis_limit
+    row.default_monthly_chat_limit = chat_limit
+    db.commit()
 
 
 def _upstream[T](action: str, call: Callable[[], T]) -> T:
