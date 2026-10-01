@@ -1,0 +1,36 @@
+name: Deploy backend
+
+# Runs after Backend CI succeeds on a push to master (that workflow is path-filtered to backend/**,
+# so frontend-only changes do not redeploy the backend). It can also be run by hand.
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    branches: [master]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  deploy:
+    name: fly deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The commit Backend CI actually tested, not whatever master is by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy (migrations run as the release command)
+        run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
