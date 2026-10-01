@@ -5,6 +5,7 @@ import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { Amount } from "@/components/portfolio/Amount";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
+import { AskAboutThis } from "./AskAboutThis";
 import { DecisionActions } from "./DecisionActions";
 import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
 import { ActionChip, ChangePill } from "./RecommendationCard";
@@ -87,6 +88,8 @@ export function RecommendationDetailDesktop({
           </Box>
         </Box>
       </Panel>
+
+      <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
 
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} article />}
 
