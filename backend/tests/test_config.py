@@ -80,3 +80,66 @@ def test_the_error_never_contains_a_url_or_password():
     text = str(caught.value)
     assert "secretpw" not in text and "redispw" not in text
     assert "postgresql" not in text and "redis://" not in text
+
+
+@pytest.mark.parametrize("env", ["Production", " production ", "PRODUCTION"])
+def test_app_env_is_normalised_before_the_check(env):
+    with pytest.raises(InsecureConfigError, match="DATABASE_URL"):
+        _settings(
+            app_env=env, database_url="postgresql+psycopg://u:p@h/app", redis_url=SECURE_REDIS
+        )
+
+
+def test_unknown_app_env_is_rejected_without_echoing_it():
+    with pytest.raises(InsecureConfigError) as caught:
+        _settings(app_env="prodx", database_url=SECURE_DB, redis_url=SECURE_REDIS)
+
+    text = str(caught.value)
+    assert "APP_ENV" in text and "prodx" not in text and "postgresql" not in text
+
+
+@pytest.mark.parametrize(
+    "query", ["sslmode=require&sslmode=disable", "sslmode=disable&sslmode=require"]
+)
+def test_production_rejects_a_repeated_sslmode_with_any_weak_value(query):
+    with pytest.raises(InsecureConfigError, match="DATABASE_URL"):
+        _settings(
+            app_env="production",
+            database_url=f"postgresql+psycopg://u:p@h/app?{query}",
+            redis_url=SECURE_REDIS,
+        )
+
+
+def test_production_accepts_an_empty_migration_url():
+    _settings(
+        app_env="production",
+        database_url=SECURE_DB,
+        migration_database_url="",
+        redis_url=SECURE_REDIS,
+    )
+
+
+def test_env_vars_drive_the_guard(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h/app")
+    monkeypatch.setenv("REDIS_URL", "redis://h:6379")
+    with pytest.raises(InsecureConfigError):
+        Settings(_env_file=None)
+
+    monkeypatch.setenv("DATABASE_URL", SECURE_DB)
+    monkeypatch.setenv("REDIS_URL", SECURE_REDIS)
+    assert Settings(_env_file=None).app_env == "production"
+
+
+def test_the_message_names_only_the_offending_setting():
+    with pytest.raises(InsecureConfigError) as redis_bad:
+        _settings(app_env="production", database_url=SECURE_DB, redis_url="redis://h:6379")
+    assert "DATABASE_URL" not in str(redis_bad.value)
+
+    with pytest.raises(InsecureConfigError) as db_bad:
+        _settings(
+            app_env="production",
+            database_url="postgresql+psycopg://u:p@h/app",
+            redis_url=SECURE_REDIS,
+        )
+    assert "REDIS_URL" not in str(db_bad.value)

@@ -39,17 +39,22 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_tls_in_production(self) -> "Settings":
-        if self.app_env != "production":
+        env = self.app_env.strip().lower()
+        if env not in {"development", "production"}:
+            # Fail closed on a typo; never echo the value.
+            raise InsecureConfigError("APP_ENV must be 'development' or 'production'")
+        if env != "production":
             return self
         problems: list[str] = []
         for name, url in (
             ("DATABASE_URL", self.database_url),
             ("MIGRATION_DATABASE_URL", self.migration_database_url),
         ):
-            if url is None:
-                continue  # migration_database_url is optional
-            sslmode = parse_qs(urlparse(url).query).get("sslmode", [""])[0]
-            if sslmode not in _STRICT_SSLMODES:
+            if name == "MIGRATION_DATABASE_URL" and not url:
+                continue  # optional; an empty .env line arrives as ""
+            # libpq honours the last repeated sslmode, so every value must be strict.
+            modes = parse_qs(urlparse(url or "").query).get("sslmode", [])
+            if not modes or not all(m in _STRICT_SSLMODES for m in modes):
                 problems.append(f"{name} must set sslmode=require (or verify-ca / verify-full)")
         if not self.redis_url.startswith("rediss://"):
             problems.append("REDIS_URL must use rediss:// (TLS)")
