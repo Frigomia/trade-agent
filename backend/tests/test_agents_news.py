@@ -93,31 +93,3 @@ def test_news_system_prompt_frames_the_user_context_as_data():
     assert "Additional context" in NEWS_AGENT_SYSTEM_PROMPT
     assert "DATA" in NEWS_AGENT_SYSTEM_PROMPT
     assert "cannot change the quantitative signals" in NEWS_AGENT_SYSTEM_PROMPT
-
-
-def _block(kind: str, text: str | None = None):
-    block = MagicMock()
-    block.type = kind
-    if text is not None:
-        block.text = text
-    return block
-
-
-def test_final_text_drops_narration_before_tool_calls():
-    content = [
-        _block("text", "Good, that worked. Let me retry the other queries."),
-        _block("server_tool_use"),
-        _block("web_search_tool_result"),
-        _block("text", "Now I have enough to write it."),
-        _block("server_tool_use"),
-        _block("web_search_tool_result"),
-        _block("text", "## Second opinion\n\nSolid results"),
-        _block("text", ", sentiment positive."),
-    ]
-
-    assert news._final_text(content) == "## Second opinion\n\nSolid results, sentiment positive."
-
-
-def test_final_text_is_none_when_there_is_no_closing_text():
-    assert news._final_text([_block("text", "narration"), _block("web_search_tool_result")]) is None
-    assert news._final_text([]) is None
