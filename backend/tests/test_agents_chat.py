@@ -192,3 +192,57 @@ def test_run_chat_returns_only_the_closing_answer(monkeypatch, db_session):
 
 def test_chat_system_prompt_asks_for_a_from_the_web_section():
     assert "## From the web" in chat_module.CHAT_AGENT_SYSTEM_PROMPT
+
+
+def _run_with_blocks(monkeypatch, db_session, blocks):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    chat_module._client = None
+
+    def block(kind, text=None):
+        b = MagicMock()
+        b.type = kind
+        if text is not None:
+            b.text = text
+        return b
+
+    fake_response = MagicMock()
+    fake_response.content = [block(*b) for b in blocks]
+
+    with patch("app.agents.chat.Anthropic") as mock_anthropic_cls:
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = fake_response
+        mock_anthropic_cls.return_value = mock_client
+
+        return asyncio.run(run_chat(db_session, USER_ID, "main", "q", history=[]))
+
+
+def test_run_chat_keeps_the_answer_written_before_the_web_search(monkeypatch, db_session):
+    result = _run_with_blocks(
+        monkeypatch,
+        db_session,
+        [
+            ("text", "You hold 10 shares."),
+            ("server_tool_use",),
+            ("web_search_tool_result",),
+            ("text", "## From the web\n\nNews."),
+        ],
+    )
+
+    assert result == "You hold 10 shares.\n\n## From the web\n\nNews."
+
+
+def test_run_chat_leaves_a_closing_answer_without_the_web_heading_unchanged(
+    monkeypatch, db_session
+):
+    result = _run_with_blocks(
+        monkeypatch,
+        db_session,
+        [
+            ("text", "Let me search."),
+            ("server_tool_use",),
+            ("web_search_tool_result",),
+            ("text", "Final answer."),
+        ],
+    )
+
+    assert result == "Final answer."

@@ -269,7 +269,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
-| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude |
+| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
 | DELETE | `/chat/messages?session_id=main` | — | Deletes the caller's messages of that session. `204` |
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
@@ -378,7 +378,8 @@ approved-but-never-executed is a meaningful state. A UI can still prompt
 conversation (session id `main`), loads the last 50 messages with
 `GET /chat/messages`, can clear it with `DELETE /chat/messages`, and
 `POST /chat` sends only the last 20 messages to Claude. The prompt asks for
-markdown with web findings under a final `## From the web` heading. It is a
+markdown with web findings under a final `## From the web` heading; if the reply was
+written as answer, search, `## From the web`, the answer written before the search is kept. It is a
 direct Claude API call with the `web_search_20260209` tool, seeded with a
 portfolio-context string. Implementation: `backend/app/agents/chat.py`
 (context builder + prompt) and `backend/app/routers/chat.py`. No

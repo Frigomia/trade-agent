@@ -180,18 +180,34 @@ def test_clearing_deletes_only_the_callers_rows_of_that_session(client, db_sessi
 
 def test_chat_sends_only_the_last_20_messages_to_claude(client, db_session, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
-    _add_messages(db_session, USER_ID, "main", 25)
+    _add_messages(db_session, USER_ID, "main", 26)
 
-    seen: list[str] = []
+    seen = _history_seen_by_claude(client)
+
+    assert [role for role, _ in seen][0] == "user"
+    assert len(seen) == 20
+    assert seen[0][1] == "m6"
+    assert seen[-1][1] == "m25"
+
+
+def test_chat_history_never_starts_with_an_assistant_row(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+    _add_messages(db_session, USER_ID, "main", 21)  # newest 20 start with assistant m1
+
+    seen = _history_seen_by_claude(client)
+
+    assert seen[0] == ("user", "m2")
+    assert len(seen) == 19
+
+
+def _history_seen_by_claude(client) -> list[tuple[str, str]]:
+    seen: list[tuple[str, str]] = []
 
     async def fake_run_chat(*args, history, **kwargs):
         # read while the request session is still open (the rows detach afterwards)
-        seen.extend(m.content for m in history)
+        seen.extend((m.role, m.content) for m in history)
         return "ok"
 
     with patch("app.routers.chat.run_chat", fake_run_chat):
         client.post("/chat", json={"session_id": "main", "message": "hello"})
-
-    assert len(seen) == 20
-    assert seen[0] == "m5"
-    assert seen[-1] == "m24"
+    return seen

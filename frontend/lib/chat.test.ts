@@ -19,6 +19,17 @@ describe("splitWebSection", () => {
     expect(splitWebSection("## From the web\n\nNews.")).toEqual({ body: "", web: "News." });
   });
 
+  it("tolerates a different case and a trailing colon in the heading", () => {
+    expect(splitWebSection("Answer.\n\n## From the Web\n\nNews.")).toEqual({
+      body: "Answer.",
+      web: "News.",
+    });
+    expect(splitWebSection("Answer.\n\n## From the web:\n\nNews.")).toEqual({
+      body: "Answer.",
+      web: "News.",
+    });
+  });
+
   it("ignores a similar heading that is not exactly the web heading", () => {
     const reply = "## From the web page\n\ntext";
     expect(splitWebSection(reply)).toEqual({ body: reply, web: null });

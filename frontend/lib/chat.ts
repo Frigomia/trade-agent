@@ -16,7 +16,7 @@ export interface ChatMessage {
 }
 
 // The chat prompt asks the model to put what it learned from web search under this heading.
-const WEB_HEADING = /^## From the web[ \t]*$/m;
+const WEB_HEADING = /^## From the web:?[ \t\r]*$/im;
 
 /** Splits a reply into the part from our own data and the web-derived section, if there is one. */
 export function splitWebSection(content: string): { body: string; web: string | null } {

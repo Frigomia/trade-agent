@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from app.agents.text import final_text
+from app.agents.text import final_text, leading_text
 
 
 def _block(kind: str, text: str | None = None):
@@ -29,3 +29,19 @@ def test_final_text_drops_narration_before_tool_calls():
 def test_final_text_is_none_when_there_is_no_closing_text():
     assert final_text([_block("text", "narration"), _block("web_search_tool_result")]) is None
     assert final_text([]) is None
+
+
+def test_leading_text_is_the_text_before_the_first_tool_block():
+    content = [
+        _block("text", "You hold "),
+        _block("text", "10 shares. "),
+        _block("server_tool_use"),
+        _block("text", "## From the web"),
+    ]
+
+    assert leading_text(content) == "You hold 10 shares."
+
+
+def test_leading_text_is_empty_when_content_starts_with_a_tool_block():
+    assert leading_text([_block("server_tool_use"), _block("text", "x")]) == ""
+    assert leading_text([]) == ""

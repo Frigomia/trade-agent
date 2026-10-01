@@ -63,6 +63,9 @@ async def chat(
         raise HTTPException(status_code=503, detail="Chat not configured")
 
     history = _recent_messages(db, user.id, payload.session_id, HISTORY_SENT_TO_CLAUDE)
+    # a failed reply leaves an odd number of rows, so the window can start with an assistant row
+    while history and history[0].role == "assistant":
+        history.pop(0)
 
     user_row = ChatMessage(
         user_id=user.id,

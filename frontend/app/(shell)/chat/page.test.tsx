@@ -177,6 +177,16 @@ describe("ChatPage", () => {
     expect(screen.getByText("An earlier answer.")).toBeInTheDocument();
   });
 
+  it("says chat is turned off when the monthly limit is 0", async () => {
+    usage = { analysis_runs: { used: 0, limit: 100 }, chat_messages: { used: 0, limit: 0 } };
+    renderFresh();
+
+    expect(await screen.findByText(/chat is turned off for your account/i)).toBeInTheDocument();
+    expect(screen.queryByText(/used all/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Message")).toBeDisabled();
+    expect(screen.getByPlaceholderText(/chat is paused until/i)).toBeInTheDocument();
+  });
+
   it("switches to the limit state when the server answers with the monthly 429", async () => {
     apiFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
       if (path === HISTORY_PATH) return history;

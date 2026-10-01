@@ -143,8 +143,14 @@ function ChatScreen() {
         )}
         {atLimit && (
           <Alert severity="warning" sx={{ mb: 1 }}>
-            <b>You&apos;ve used all {chatUsage?.limit ?? ""} chat messages this month.</b> They reset on {resetDate}. Need
-            more sooner? Ask the administrator to raise your limit.
+            {chatUsage?.limit === 0 ? (
+              <>Chat is turned off for your account. Ask the administrator if you need it.</>
+            ) : (
+              <>
+                <b>You&apos;ve used all {chatUsage?.limit ?? ""} chat messages this month.</b> They reset on {resetDate}.
+                Need more sooner? Ask the administrator to raise your limit.
+              </>
+            )}
           </Alert>
         )}
         <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>

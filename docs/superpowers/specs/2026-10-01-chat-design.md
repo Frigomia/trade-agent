@@ -71,7 +71,8 @@ section when no web search was used. The existing injection-resistance wording s
 ### Page (`/chat`)
 
 - Header: title "Chat", the usage meter (`used / limit` with a thin bar from `GET /me/usage`),
-  a "Clear chat" action, the theme toggle (via `PageHeader`).
+  a "Clear chat" icon button, the theme toggle (via `PageHeader`). The usage bar is hidden on
+  phones (the `used / limit` number stays) so the header fits one row.
 - Messages (`SWR /chat/messages?session_id=main`): the user's messages as accent-tinted bubbles on
   the right; replies as panels on the left rendered with the shared `Markdown` component.
   A reply is split at a line `## From the web`; the part after it is shown in the dashed web box

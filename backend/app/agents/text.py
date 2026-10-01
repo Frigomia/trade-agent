@@ -15,3 +15,13 @@ def final_text(content: list[ContentBlock]) -> str | None:
         answer.append(block.text)
     text = "".join(reversed(answer)).strip()
     return text or None
+
+
+def leading_text(content: list[ContentBlock]) -> str:
+    """The text blocks before the first non-text block, joined as-is and stripped."""
+    lead: list[str] = []
+    for block in content:
+        if block.type != "text":
+            break
+        lead.append(block.text)
+    return "".join(lead).strip()
