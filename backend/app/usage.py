@@ -61,9 +61,10 @@ class LimitDefaults:
 def load_limit_defaults(db: Session, settings: Settings) -> LimitDefaults:
     """The admin-set defaults from app_settings, each falling back to the environment value when
     the row (or that column) is empty."""
-    row = db.get(AppSettings, 1)
-    analysis = row.default_monthly_analysis_limit if row else None
-    chat = row.default_monthly_chat_limit if row else None
+    # A missing row behaves like a row of NULLs; the transient object is never added to the session.
+    row = db.get(AppSettings, 1) or AppSettings()
+    analysis = row.default_monthly_analysis_limit
+    chat = row.default_monthly_chat_limit
     return LimitDefaults(
         analysis_runs=analysis if analysis is not None else settings.default_monthly_analysis_limit,
         chat_messages=chat if chat is not None else settings.default_monthly_chat_limit,

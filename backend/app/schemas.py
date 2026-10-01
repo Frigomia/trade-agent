@@ -307,19 +307,15 @@ class LimitsIn(BaseModel):
     chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)] | None = None
 
 
-class LimitDefaultsIn(BaseModel):
-    """Both defaults are always sent together: the admin form edits them as a pair. The upper
-    bound matches Postgres's Integer column so an oversized value 422s instead of 500ing."""
+class LimitDefaults(BaseModel):
+    """The system-wide monthly defaults, sent and returned as a pair (the admin form edits them
+    together). The upper bound matches Postgres's Integer column so an oversized value 422s
+    instead of 500ing."""
 
     model_config = ConfigDict(extra="forbid")
 
     analysis_limit: Annotated[int, Field(ge=0, le=2_147_483_647)]
     chat_limit: Annotated[int, Field(ge=0, le=2_147_483_647)]
-
-
-class LimitDefaultsOut(BaseModel):
-    analysis_limit: int
-    chat_limit: int
 
 
 class AdminUserOut(BaseModel):

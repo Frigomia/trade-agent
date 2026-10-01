@@ -66,20 +66,21 @@ function DefaultLimitsForm({ initial, onSaved }: { initial: LimitDefaults; onSav
   return (
     <Box component="form" noValidate onSubmit={handleSubmit} sx={{ display: "grid", gap: 1.5 }}>
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-        <TextField
-          label="Analysis runs"
-          type="number"
-          value={analysis}
-          onChange={(e) => setAnalysis(e.target.value)}
-          slotProps={{ htmlInput: { min: 0 } }}
-        />
-        <TextField
-          label="Chat messages"
-          type="number"
-          value={chat}
-          onChange={(e) => setChat(e.target.value)}
-          slotProps={{ htmlInput: { min: 0 } }}
-        />
+        {(
+          [
+            ["Analysis runs", analysis, setAnalysis],
+            ["Chat messages", chat, setChat],
+          ] as const
+        ).map(([label, value, set]) => (
+          <TextField
+            key={label}
+            label={label}
+            type="number"
+            value={value}
+            onChange={(e) => set(e.target.value)}
+            slotProps={{ htmlInput: { min: 0 } }}
+          />
+        ))}
       </Box>
       {error && <Alert severity="error">{error}</Alert>}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>

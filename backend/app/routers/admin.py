@@ -16,8 +16,7 @@ from app.models import AppUser
 from app.schemas import (
     AdminUserOut,
     InviteIn,
-    LimitDefaultsIn,
-    LimitDefaultsOut,
+    LimitDefaults,
     LimitsIn,
     RemoveIn,
 )
@@ -119,22 +118,20 @@ async def set_limits(
     return await _to_out(user, defaults)
 
 
-@router.get("/limit-defaults", response_model=LimitDefaultsOut)
-def get_limit_defaults(
+@router.get("/limit-defaults", response_model=LimitDefaults)
+def read_limit_defaults(
     defaults: usage.LimitDefaults = Depends(usage.get_limit_defaults),
-) -> LimitDefaultsOut:
-    return LimitDefaultsOut(
-        analysis_limit=defaults.analysis_runs, chat_limit=defaults.chat_messages
-    )
+) -> LimitDefaults:
+    return LimitDefaults(analysis_limit=defaults.analysis_runs, chat_limit=defaults.chat_messages)
 
 
-@router.put("/limit-defaults", response_model=LimitDefaultsOut)
-def set_limit_defaults(
-    payload: LimitDefaultsIn, db: Session = Depends(get_user_db)
-) -> LimitDefaultsOut:
+@router.put("/limit-defaults", response_model=LimitDefaults)
+def write_limit_defaults(
+    payload: LimitDefaults, db: Session = Depends(get_user_db)
+) -> LimitDefaults:
     """The limits for everyone without a personal override (see LimitsIn for those)."""
     service.set_limit_defaults(db, payload.analysis_limit, payload.chat_limit)
-    return LimitDefaultsOut(analysis_limit=payload.analysis_limit, chat_limit=payload.chat_limit)
+    return payload
 
 
 @router.delete("/users/{user_id}", status_code=204)
