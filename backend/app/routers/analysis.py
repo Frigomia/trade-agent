@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.agents.jobs import create_job, get_job_status, run_job
 from app.agents.market_data import fetch_quote_and_history
@@ -54,12 +55,24 @@ async def run_analysis(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> dict[str, str]:
-    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user.id)}
-    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user.id)}
+    # The queries are synchronous, so they run in a worker thread to keep the event loop free.
+    ticker_infos = await run_in_threadpool(_build_ticker_infos, db, user.id, payload.tickers)
+    job_id = await create_job(user.id, ticker_infos)
+    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos))
+    _track_background_task(task)
+    return {"job_id": job_id}
 
-    if payload.tickers:
+
+def _build_ticker_infos(
+    db: Session, user_id: uuid.UUID, tickers: list[str] | None
+) -> list[dict[str, Any]]:
+    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
+    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
+
+    ticker_infos: list[dict[str, Any]]
+    if tickers:
         ticker_infos = []
-        for ticker in payload.tickers:
+        for ticker in tickers:
             if ticker in holdings:
                 ticker_infos.append(
                     {"ticker": ticker, "asset_type": holdings[ticker].asset_type, "is_held": True}
@@ -83,11 +96,7 @@ async def run_analysis(
             for w in watchlist.values()
         ]
         ticker_infos = ticker_infos[:MAX_RUN_TICKERS]  # holdings come first, then the watchlist
-
-    job_id = await create_job(user.id, ticker_infos)
-    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos))
-    _track_background_task(task)
-    return {"job_id": job_id}
+    return ticker_infos
 
 
 @router.get("/run/{job_id}")

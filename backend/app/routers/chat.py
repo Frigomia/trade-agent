@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.agents.chat import run_chat
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
@@ -62,32 +63,35 @@ async def chat(
     if not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="Chat not configured")
 
-    history = _recent_messages(db, user.id, payload.session_id, HISTORY_SENT_TO_CLAUDE)
+    # The database work is synchronous, so each step runs in a worker thread to keep the event
+    # loop free. The same session is used one step at a time, never concurrently.
+    history = await run_in_threadpool(_prepare_chat, db, user.id, payload)
+    reply = await run_chat(db, user.id, payload.session_id, payload.message, history=history)
+    await run_in_threadpool(_save_reply, db, user.id, payload.session_id, reply)
+    return ChatOut(session_id=payload.session_id, message=reply)
+
+
+def _prepare_chat(db: Session, user_id: uuid.UUID, payload: ChatIn) -> list[ChatMessage]:
+    """Load the history to send, then store the user's message. Returns the history."""
+    history = _recent_messages(db, user_id, payload.session_id, HISTORY_SENT_TO_CLAUDE)
     # a failed reply leaves an odd number of rows, so the window can start with an assistant row
     while history and history[0].role == "assistant":
         history.pop(0)
 
     user_row = ChatMessage(
-        user_id=user.id,
+        user_id=user_id,
         session_id=payload.session_id,
         role="user",
         content=payload.message,
     )
     db.add(user_row)
     _commit_or_raise(db, "Failed to persist user chat message")
+    return history
 
-    reply = await run_chat(db, user.id, payload.session_id, payload.message, history=history)
 
-    assistant_row = ChatMessage(
-        user_id=user.id,
-        session_id=payload.session_id,
-        role="assistant",
-        content=reply,
-    )
-    db.add(assistant_row)
+def _save_reply(db: Session, user_id: uuid.UUID, session_id: str, reply: str) -> None:
+    db.add(ChatMessage(user_id=user_id, session_id=session_id, role="assistant", content=reply))
     _commit_or_raise(db, "Failed to persist assistant chat message")
-
-    return ChatOut(session_id=payload.session_id, message=reply)
 
 
 @router.get("/chat/messages", response_model=list[ChatMessageOut])
