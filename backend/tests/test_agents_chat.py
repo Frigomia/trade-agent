@@ -188,3 +188,7 @@ def test_run_chat_returns_only_the_closing_answer(monkeypatch, db_session):
         result = asyncio.run(run_chat(db_session, USER_ID, "main", "what do I hold?", history=[]))
 
     assert result == "You hold 10 shares."
+
+
+def test_chat_system_prompt_asks_for_a_from_the_web_section():
+    assert "## From the web" in chat_module.CHAT_AGENT_SYSTEM_PROMPT
