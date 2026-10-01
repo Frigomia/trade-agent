@@ -116,7 +116,8 @@ function RecommendationDetail() {
       )}
       <EvidenceDetail recommendation={recommendation} />
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
-      <Box sx={{ mt: "auto", pt: 2 }}>
+      {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
+      <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
         <DecisionActions id={recommendation.id} onDecided={setDecided} />
       </Box>
     </Box>

@@ -121,13 +121,12 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
 
         <Section title="Notes">
           <TextField
-            label="Notes"
             multiline
             minRows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value.slice(0, NOTES_MAX))}
             helperText={`${notes.length} / ${NOTES_MAX}`}
-            slotProps={{ htmlInput: { maxLength: NOTES_MAX } }}
+            slotProps={{ htmlInput: { maxLength: NOTES_MAX, "aria-label": "Notes" } }}
           />
         </Section>
 

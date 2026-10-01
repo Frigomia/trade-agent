@@ -13,3 +13,8 @@ export interface AdminUserOut {
   monthly_chat_limit: number | null;
   monthly_chat_used: number | null;
 }
+
+export interface LimitDefaults {
+  analysis_limit: number;
+  chat_limit: number;
+}

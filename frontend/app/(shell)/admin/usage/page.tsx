@@ -4,6 +4,7 @@ import useSWR from "swr";
 import { Box, LinearProgress, Table, TableHead, TableBody, TableRow, TableCell, Typography, Alert } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
+import { DefaultLimitsPanel } from "@/components/admin/DefaultLimitsPanel";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Panel } from "@/components/ui/Panel";
@@ -33,7 +34,7 @@ function UsageCell({ usage }: { usage: UsageDetail }) {
 }
 
 export default function AdminUsagePage() {
-  const { data: users, error: loadError } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
+  const { data: users, error: loadError, mutate } = useSWR<AdminUserOut[]>("/admin/users", apiFetch);
   const rows = (users ?? []).map((user) => {
     const analysis = { used: user.monthly_analysis_used ?? 0, limit: user.monthly_analysis_limit ?? 0 };
     const chat = { used: user.monthly_chat_used ?? 0, limit: user.monthly_chat_limit ?? 0 };
@@ -41,6 +42,8 @@ export default function AdminUsagePage() {
     const level = levels.includes("limit") ? "limit" : levels.includes("warn") ? "warn" : "ok";
     return { ...user, analysis, chat, level } as const;
   });
+  const totalAnalysis = rows.reduce((sum, row) => sum + row.analysis.used, 0);
+  const totalChat = rows.reduce((sum, row) => sum + row.chat.used, 0);
 
   return (
     <Box>
@@ -54,6 +57,10 @@ export default function AdminUsagePage() {
         You manage access, not data. Usage shows how much each person used the service, never what
         they asked or received.
       </Alert>
+      <Box
+        sx={{ display: "grid", gap: 2, alignItems: "start", gridTemplateColumns: { md: "320px minmax(0, 1fr)" }, maxWidth: 1180 }}
+      >
+      <DefaultLimitsPanel onSaved={() => void mutate()} />
       <Panel sx={{ p: "4px 18px" }}>
         <Table>
           <TableHead>
@@ -84,9 +91,16 @@ export default function AdminUsagePage() {
                 </TableCell>
               </TableRow>
             ))}
+            <TableRow>
+              <TableCell sx={{ fontWeight: 650 }}>Total</TableCell>
+              <TableCell sx={{ fontWeight: 650 }}>{totalAnalysis} runs</TableCell>
+              <TableCell sx={{ fontWeight: 650 }}>{totalChat} messages</TableCell>
+              <TableCell />
+            </TableRow>
           </TableBody>
         </Table>
       </Panel>
+      </Box>
     </Box>
   );
 }
