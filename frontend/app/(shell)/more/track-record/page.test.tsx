@@ -56,6 +56,20 @@ describe("TrackRecordPage", () => {
     expect(screen.queryByText(/0 of 0/)).not.toBeInTheDocument();
   });
 
+  it("explains the 20-day rule and points to today's recommendations when nothing is scored", async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path === "/analysis/recommendations" ? [] : { evaluated: 0, remaining: 0 },
+    );
+    renderFresh();
+
+    expect(await screen.findByText(/no scored calls yet/i)).toBeInTheDocument();
+    expect(screen.getByText("20")).toBeInTheDocument();
+    expect(screen.getByText("trading days")).toBeInTheDocument();
+    expect(screen.getByText(/20 trading days after it is made/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /see today.s recommendations/i })).toHaveAttribute("href", "/today");
+    expect(screen.getByText(/hold and watch aren.t scored/i)).toBeInTheDocument();
+  });
+
   it("asks the backend to evaluate due outcomes once, and refetches after", async () => {
     apiFetch.mockImplementation(async (path: string) =>
       path === "/analysis/recommendations" ? [] : { evaluated: 2, remaining: 0 },

@@ -6,6 +6,8 @@ import { Box, Typography, Alert, Button, useMediaQuery, useTheme } from "@mui/ma
 import { Play } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
+import type { PortfolioSummary } from "@/lib/api/portfolio-types";
+import { TodayEmpty } from "@/components/recommendations/TodayEmpty";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { toTime } from "@/components/portfolio/PortfolioChart";
 import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
@@ -49,6 +51,8 @@ export default function TodayPage() {
     error: loadError,
     mutate,
   } = useSWR<RecommendationOut[]>("/analysis/recommendations?status=PENDING", apiFetch);
+  // Same key as PortfolioTile, so SWR shares one request.
+  const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const [jobId, setJobId] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -81,6 +85,17 @@ export default function TodayPage() {
 
   const pending = recommendations ?? [];
   const lastRun = lastAnalysis(recommendations);
+
+  // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
+  // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
+  // if it fails to load the all-clear is the safe, truthful default.
+  let emptyKind: "first-run" | "all-clear" | null = null;
+  if (summary) {
+    const hasPortfolio = summary.holdings.some((h) => h.shares > 0) || summary.watchlist.length > 0;
+    emptyKind = hasPortfolio ? "all-clear" : "first-run";
+  } else if (summaryError) {
+    emptyKind = "all-clear";
+  }
 
   return (
     <Box>
@@ -132,10 +147,8 @@ export default function TodayPage() {
           {job.results.length - failedCount} analyzed, {failedCount} failed.
         </Alert>
       )}
-      {recommendations?.length === 0 && (
-        <Typography sx={{ color: "var(--muted)", textAlign: "center", py: 6 }}>
-          No recommendations right now.
-        </Typography>
+      {recommendations?.length === 0 && emptyKind !== null && (
+        <TodayEmpty firstRun={emptyKind === "first-run"} running={running} onRun={runAnalysis} />
       )}
       {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
       {!isDesktop && recommendations?.map((recommendation) => (

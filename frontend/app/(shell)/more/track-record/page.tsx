@@ -10,6 +10,7 @@ import { buildTrackRecord, type Verdict } from "@/lib/trackRecord";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionChip } from "@/components/recommendations/RecommendationCard";
 import { Panel } from "@/components/ui/Panel";
+import { TrackRecordEmpty } from "@/components/recommendations/TrackRecordEmpty";
 
 const VERDICT_WORD: Record<Verdict, string> = {
   matched: "Matched",
@@ -45,11 +46,7 @@ export default function TrackRecordPage() {
 
       {error && <Alert severity="error">Could not load your track record.</Alert>}
 
-      {summary && summary.scored === 0 && (
-        <Typography sx={{ color: "var(--text2)" }}>
-          No scored calls yet. A call is scored 20 days after it is made.
-        </Typography>
-      )}
+      {summary && summary.scored === 0 && <TrackRecordEmpty />}
 
       {summary && summary.scored > 0 && (
         <Panel sx={{ p: "18px 20px", mb: 1.75 }}>
