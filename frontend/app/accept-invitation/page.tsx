@@ -56,7 +56,6 @@ export default function AcceptInvitationPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!canSubmit) return;
     setError(null);
     setSubmitting(true);
     const supabase = createClient();
