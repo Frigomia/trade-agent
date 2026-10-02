@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -15,23 +15,49 @@ import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
 
+const MIN_PASSWORD_LENGTH = 8;
+
 export default function AcceptInvitationPage() {
   const router = useRouter();
   const { session, checkingSession } = useClientSession();
-  const email = session?.user.email ?? null;
+  // The invited account as the backend sees it. `undefined` while loading; `null` when there is
+  // no session or the account is not an invited one. A browser that still holds another session
+  // (the admin's, say) must never get this form: it would change that person's password.
+  const [fetchedEmail, setFetchedEmail] = useState<string | null | undefined>(undefined);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    apiFetch<{ email: string; status: string }>("/me")
+      .then((me) => {
+        if (!cancelled) setFetchedEmail(me.status === "invited" ? me.email : null);
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedEmail(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+  const invitedEmail = checkingSession ? undefined : session ? fetchedEmail : null;
+
+  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const passwordsDiffer = confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit =
+    password.length >= MIN_PASSWORD_LENGTH &&
+    password === confirmPassword &&
+    acceptedTerms &&
+    !submitting;
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!canSubmit) return;
     setError(null);
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
-      return;
-    }
     setSubmitting(true);
     const supabase = createClient();
     const { error: updateError } = await supabase.auth.updateUser({ password });
@@ -52,11 +78,11 @@ export default function AcceptInvitationPage() {
     }
   }
 
-  if (checkingSession) {
+  if (invitedEmail === undefined) {
     return null;
   }
 
-  if (!email) {
+  if (!invitedEmail) {
     return (
       <AuthShell>
         <Alert severity="warning">
@@ -76,7 +102,7 @@ export default function AcceptInvitationPage() {
         />
         <TextField
           label="Email"
-          value={email}
+          value={invitedEmail}
           fullWidth
           margin="normal"
           disabled
@@ -91,6 +117,10 @@ export default function AcceptInvitationPage() {
           margin="normal"
           required
           autoComplete="new-password"
+          error={passwordTooShort}
+          helperText={
+            passwordTooShort ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : undefined
+          }
         />
         <TextField
           label="Confirm password"
@@ -101,6 +131,8 @@ export default function AcceptInvitationPage() {
           margin="normal"
           required
           autoComplete="new-password"
+          error={passwordsDiffer}
+          helperText={passwordsDiffer ? "Passwords don't match." : undefined}
         />
         <FormControlLabel
           sx={{ alignItems: "flex-start", mt: 1.5, mx: 0, "& .MuiFormControlLabel-label": { fontSize: 12.5, color: "var(--text2)", lineHeight: 1.45, pt: 0.5 } }}
@@ -123,7 +155,7 @@ export default function AcceptInvitationPage() {
           variant="contained"
           fullWidth
           sx={{ mt: 2.25 }}
-          disabled={!acceptedTerms || submitting}
+          disabled={!canSubmit}
         >
           Create account
         </Button>
