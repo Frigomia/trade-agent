@@ -53,6 +53,18 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
   };
 }
 
+const EMPTY_SUMMARY = { holdings: [], watchlist: [] };
+const SUMMARY_WITH_HOLDING = { holdings: [{ ticker: "AAPL", shares: 2 }], watchlist: [] };
+
+function mockApi({ recs = [], summary }: { recs?: RecommendationOut[]; summary: unknown }) {
+  apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.startsWith("/analysis/recommendations")) return Promise.resolve(recs);
+    if (path === "/portfolio/summary") return Promise.resolve(summary);
+    if (path === "/analysis/run" && init?.method === "POST") return Promise.resolve({ job_id: "job-1" });
+    return Promise.reject(new Error("unexpected " + path));
+  });
+}
+
 describe("TodayPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,17 +80,68 @@ describe("TodayPage", () => {
   });
 
   it("shows the portfolio tile", async () => {
-    apiFetch.mockResolvedValue([]);
+    mockApi({ summary: SUMMARY_WITH_HOLDING });
     renderFresh(<TodayPage />);
 
     await waitFor(() => expect(screen.getByText("portfolio-tile")).toBeInTheDocument());
   });
 
-  it("shows a calm empty state with no pending recommendations", async () => {
-    apiFetch.mockResolvedValue([]);
-    renderFresh(<TodayPage />);
+  describe("empty states", () => {
+    it("walks a new user through the first steps when there is no portfolio yet", async () => {
+      mockApi({ summary: EMPTY_SUMMARY });
+      renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+      expect(await screen.findByText(/get your first recommendation/i)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /open portfolio/i })).toHaveAttribute("href", "/portfolio");
+      expect(screen.getByText(/nothing is bought or sold/i)).toBeInTheDocument();
+      expect(screen.queryByText(/nothing to decide right now/i)).not.toBeInTheDocument();
+    });
+
+    it("runs the analysis from the second step", async () => {
+      mockApi({ summary: EMPTY_SUMMARY });
+      renderFresh(<TodayPage />);
+
+      await screen.findByText(/get your first recommendation/i);
+      fireEvent.click(screen.getByRole("button", { name: /run an analysis now/i }));
+
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.objectContaining({ method: "POST" })));
+    });
+
+    it("shows the calm all-clear when there is a portfolio but nothing pending", async () => {
+      mockApi({ summary: SUMMARY_WITH_HOLDING });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByText(/nothing to decide right now/i)).toBeInTheDocument();
+      expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
+    });
+
+    it("counts a watchlist alone as a portfolio", async () => {
+      mockApi({ summary: { ...EMPTY_SUMMARY, watchlist: [{ ticker: "AAPL" }] } });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByText(/nothing to decide right now/i)).toBeInTheDocument();
+      expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
+    });
+
+    it("shows neither state while the portfolio is still loading", async () => {
+      apiFetch.mockImplementation((path: string) =>
+        path.startsWith("/analysis/recommendations") ? Promise.resolve([]) : new Promise(() => {}),
+      );
+      renderFresh(<TodayPage />);
+
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/summary"));
+      expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/nothing to decide right now/i)).not.toBeInTheDocument();
+    });
+
+    it("shows no empty state when recommendations are waiting", async () => {
+      mockApi({ recs: [rec()], summary: SUMMARY_WITH_HOLDING });
+      renderFresh(<TodayPage />);
+
+      await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+      expect(screen.queryByText(/nothing to decide right now/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
+    });
   });
 
   it("shows an inline error when the list fails to load", async () => {
@@ -105,7 +168,7 @@ describe("TodayPage", () => {
     await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
   });
 
@@ -129,7 +192,7 @@ describe("TodayPage", () => {
     });
     renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.objectContaining({ method: "POST" })));
 
@@ -154,7 +217,7 @@ describe("TodayPage", () => {
     });
     renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2000);
@@ -174,7 +237,7 @@ describe("TodayPage", () => {
     });
     renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
 
     await waitFor(() => expect(screen.getByText(/monthly limit reached/i)).toBeInTheDocument());
@@ -193,7 +256,7 @@ describe("TodayPage", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const { unmount } = renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/no recommendations right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.anything()));
 
