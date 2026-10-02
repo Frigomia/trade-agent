@@ -124,6 +124,28 @@ def test_server_errors_raise_without_leaking_the_response(call):
     assert "a@example.com" not in str(excinfo.value)
 
 
+def test_the_error_names_the_status_and_the_error_code_only():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            429, json={"error_code": "over_email_send_rate_limit", "msg": "a@example.com"}
+        )
+
+    with pytest.raises(SupabaseAdminError) as excinfo:
+        _client(handler).invite("a@example.com", None)
+
+    assert str(excinfo.value) == "HTTP 429 over_email_send_rate_limit"
+
+
+def test_an_odd_error_code_is_not_echoed():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error_code": "a@example.com sb_secret_xyz"})
+
+    with pytest.raises(SupabaseAdminError) as excinfo:
+        _client(handler).invite("a@example.com", None)
+
+    assert str(excinfo.value) == "HTTP 400"
+
+
 def test_network_failure_raises_supabase_admin_error():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("boom with secret host")

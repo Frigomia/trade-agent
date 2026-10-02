@@ -9,6 +9,7 @@ failure becomes one SupabaseAdminError that carries no response text or exceptio
 can echo keys, hosts, and email addresses.
 """
 
+import re
 import uuid
 from typing import Any
 
@@ -21,6 +22,7 @@ REQUEST_TIMEOUT_SECONDS = 10.0
 # Supabase takes Go duration units (hours at most); 876000h is 100 years, i.e. permanent.
 BAN_FOREVER = "876000h"
 UNBAN = "none"
+_SLUG = re.compile(r"[a-z0-9_]{1,60}")
 
 
 class SupabaseAdminError(Exception):
@@ -44,7 +46,11 @@ def _error_code(response: httpx.Response) -> str | None:
 
 def _raise_for_status(response: httpx.Response) -> None:
     if not response.is_success:
-        raise SupabaseAdminError(f"HTTP {response.status_code}")
+        code = _error_code(response)
+        # Only a short slug such as "over_email_send_rate_limit" is kept; anything else could echo
+        # an address or a key.
+        reason = f" {code}" if code and _SLUG.fullmatch(code) else ""
+        raise SupabaseAdminError(f"HTTP {response.status_code}{reason}")
 
 
 class SupabaseAdmin:
