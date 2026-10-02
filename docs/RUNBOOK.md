@@ -80,6 +80,29 @@ either way, but a private repository means the encrypted file is not downloadabl
     is ever needed: Supabase usually installs pgvector in the `extensions` schema, and `PUBLIC`
     keeps execute on functions by default).
 
+### Email (Resend) and the invite templates
+
+Supabase's built-in mailer is limited to about 2 emails per hour, so invitations need custom SMTP
+(Authentication, Emails, SMTP Settings). Invitation emails land in spam unless the sender is
+authenticated, so:
+
+1. In Resend, add your own domain (Domains) and create the DNS records it shows at your registrar
+   (SPF and DKIM). Wait until the domain shows as verified. Do not send from a `@gmail.com`
+   address: it fails DMARC alignment and goes to spam.
+2. Add a DMARC record at the registrar, for example a TXT record on `_dmarc.<your-domain>` with
+   `v=DMARC1; p=none; rua=mailto:<your-address>`. Move to `p=quarantine` once reports look clean.
+3. In Supabase SMTP Settings use a from address on that domain (for example
+   `invites@<your-domain>`), sender name `trade-agent`, host `smtp.resend.com`, username `resend`,
+   and a Resend API key as the password (UNVERIFIED: check Resend's SMTP page for the current host,
+   port and username).
+4. Paste the HTML in [email-templates/invite.html](email-templates/invite.html) into
+   Authentication, Emails, Templates, Invite user, with the subject "You're invited to
+   trade-agent". Paste [email-templates/reset-password.html](email-templates/reset-password.html)
+   into Reset password with the subject "Reset your trade-agent password". Both build their link
+   from `{{ .SiteURL }}`, so the Site URL must be the Vercel origin (see Supabase step 3).
+5. Send a test invitation to the address shown on mail-tester.com and fix what it flags. Open the
+   test invite in Gmail and check "Show original": SPF, DKIM and DMARC should all say PASS.
+
 ### Upstash
 
 Create the Redis database with TLS on and copy the `rediss://` URL (this is `REDIS_URL`).
