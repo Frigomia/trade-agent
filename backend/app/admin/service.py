@@ -95,11 +95,13 @@ def set_limit_defaults(db: Session, analysis_limit: int, chat_limit: int) -> Non
 
 
 def _upstream[T](action: str, call: Callable[[], T]) -> T:
-    """Runs a Supabase call; any failure becomes a generic 502. Only the class is logged."""
+    """Runs a Supabase call; any failure becomes a generic 502.
+
+    Only the class and its short reason (status, error code) are logged."""
     try:
         return call()
     except SupabaseAdminError as exc:
-        logger.error("Supabase %s failed: %s", action, type(exc).__name__)
+        logger.error("Supabase %s failed: %s", action, repr(exc))
         raise UpstreamError(UPSTREAM_DETAIL) from None
 
 
@@ -124,7 +126,7 @@ def invite_user(
     except SupabaseUserExists:
         raise Conflict("That address is already registered") from None
     except SupabaseAdminError as exc:
-        logger.error("Supabase invite failed: %s", type(exc).__name__)
+        logger.error("Supabase invite failed: %s", repr(exc))
         raise UpstreamError(UPSTREAM_DETAIL) from None
 
     user = AppUser(id=supabase_id, email=email, role="user", status="invited", invited_at=_utcnow())
@@ -144,7 +146,7 @@ def invite_user(
         try:
             supabase.delete(supabase_id)
         except SupabaseAdminError as exc:
-            logger.error("Compensating Supabase delete failed: %s", type(exc).__name__)
+            logger.error("Compensating Supabase delete failed: %s", repr(exc))
         raise
     db.refresh(user)
     return user
@@ -162,7 +164,7 @@ def resend_invite(
         # Confirmed in Supabase but terms not yet accepted, so app_users still says "invited".
         raise Conflict("That address has already accepted the invitation") from None
     except SupabaseAdminError as exc:
-        logger.error("Supabase invite failed: %s", type(exc).__name__)
+        logger.error("Supabase invite failed: %s", repr(exc))
         raise UpstreamError(UPSTREAM_DETAIL) from None
     if supabase_id != user.id:
         # The Supabase user was deleted out-of-band, so Supabase created a NEW one (and emailed
@@ -170,7 +172,7 @@ def resend_invite(
         try:
             supabase.delete(supabase_id)
         except SupabaseAdminError as exc:
-            logger.error("Compensating Supabase delete failed: %s", type(exc).__name__)
+            logger.error("Compensating Supabase delete failed: %s", repr(exc))
         raise Conflict("This invitation is out of date; revoke it and invite the address again")
     user.invited_at = _utcnow()
     db.commit()
