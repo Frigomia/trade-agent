@@ -1,0 +1,66 @@
+<!--
+  Supabase "Invite user" email. Paste into Authentication, Emails, Templates, Invite user.
+  Subject: You're invited to trade-agent
+  Variables are Supabase's ({{ .SiteURL }}, {{ .TokenHash }}); the link goes through the frontend's
+  /auth/confirm route (see docs/ARCHITECTURE.md section 13). Inline styles and tables on purpose:
+  mail clients ignore most modern CSS.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>You're invited to trade-agent</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#060d0c;">
+    <!-- Preview text shown next to the subject in the inbox -->
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#060d0c;">
+      Set a password to start using trade-agent. The link expires in 24 hours.
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#060d0c;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
+            <tr>
+              <td style="padding:0 4px 20px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:18px;font-weight:700;color:#e7f3ef;">
+                <span style="color:#34e7a9;">&#9632;</span>&nbsp; trade-agent
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color:#f2f8f5;border-radius:16px;padding:40px 36px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0b1f19;">
+                <h1 style="margin:0 0 12px 0;font-size:26px;line-height:1.25;font-weight:700;color:#0b1f19;">You're invited</h1>
+                <p style="margin:0 0 28px 0;font-size:16px;line-height:1.55;color:#29473c;">
+                  The administrator invited you to trade-agent. Set a password to create your account and get started.
+                </p>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 28px 0;">
+                  <tr>
+                    <td align="center" bgcolor="#34e7a9" style="border-radius:10px;">
+                      <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation"
+                         style="display:inline-block;padding:14px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;color:#032116;text-decoration:none;border-radius:10px;">
+                        Set your password
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 6px 0;font-size:14px;line-height:1.5;color:#52695f;">
+                  This link expires in 24 hours and works once.
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.5;color:#52695f;">
+                  Button not working? Copy this address into your browser:<br />
+                  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation"
+                     style="color:#067a52;word-break:break-all;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/accept-invitation</a>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 8px 0 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:#8aa89f;">
+                trade-agent gives advisory information only and is not investment advice. If you weren't expecting this invitation, you can ignore this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
