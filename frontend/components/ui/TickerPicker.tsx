@@ -20,6 +20,8 @@ interface Props {
   onPick?: (match: SymbolMatch) => void;
   /** The user's own holdings and watchlist: offered first, and without a network request. */
   suggestions?: SymbolMatch[];
+  /** A compact field with no outer margin, to sit in a row with other small controls. */
+  dense?: boolean;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Props {
  * Yahoo by name, ticker or ISIN once there are two characters and a short pause, and offers the
  * user's own holdings first. A failed search just shows nothing; typing still works.
  */
-export function TickerPicker({ label, value, onChange, onPick, suggestions = [] }: Props) {
+export function TickerPicker({ label, value, onChange, onPick, suggestions = [], dense = false }: Props) {
   const query = value.trim();
   const [picked, setPicked] = useState<string | null>(null);
   const [answer, setAnswer] = useState<{ query: string; matches: SymbolMatch[] } | null>(null);
@@ -91,7 +93,8 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [] 
         <TextField
           {...params}
           label={label}
-          margin="normal"
+          size={dense ? "small" : undefined}
+          margin={dense ? "none" : "normal"}
           helperText={noMatch ? "No match. You can still type the ticker." : undefined}
           slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, autoComplete: "off" } }}
         />
