@@ -2,12 +2,15 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+// Allowlist: "/\evil.example" and "/<tab>/evil.example" pass a startsWith("/") check but go off-site.
+const NEXT_PAGES = new Set(["/accept-invitation", "/reset-password"]);
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const rawNext = searchParams.get("next");
-  const next = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/accept-invitation";
+  const next = rawNext && NEXT_PAGES.has(rawNext) ? rawNext : "/accept-invitation";
 
   if (tokenHash && type) {
     const supabase = await createClient();

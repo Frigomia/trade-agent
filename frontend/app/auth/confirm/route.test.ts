@@ -65,4 +65,30 @@ describe("GET /auth/confirm", () => {
 
     expect(response.headers.get("location")).toBe("https://example.com/accept-invitation");
   });
+
+  it("follows next to the password-reset page", async () => {
+    verifyOtp.mockResolvedValue({ error: null });
+    const request = new NextRequest(
+      "https://example.com/auth/confirm?token_hash=abc&type=recovery&next=/reset-password",
+    );
+
+    const response = await GET(request);
+
+    expect(response.headers.get("location")).toBe("https://example.com/reset-password");
+  });
+
+  // Browsers read a backslash as a slash and drop tabs, so the first two go off-site despite the
+  // leading "/"; the third is a same-site page the emails never link to.
+  it.each([
+    ["a backslash", "/%5Cevil.example"],
+    ["a tab", "/%09/evil.example"],
+    ["an unlisted page", "/today"],
+  ])("ignores a next param with %s", async (_label, next) => {
+    verifyOtp.mockResolvedValue({ error: null });
+    const request = new NextRequest(`https://example.com/auth/confirm?token_hash=abc&type=invite&next=${next}`);
+
+    const response = await GET(request);
+
+    expect(response.headers.get("location")).toBe("https://example.com/accept-invitation");
+  });
 });

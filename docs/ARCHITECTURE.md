@@ -838,6 +838,9 @@ just believed done.
       variable (see `docs/RUNBOOK.md`); open until the first deploy sets it
 - [ ] Frontend session token handling reviewed for production — the frontend now
       exists and uses `@supabase/ssr`; confirm the cookie flags before deploying
+- [x] Frontend hardening (`frontend/lib/securityHeaders.ts`): CSP (no framing, plugins or other connection
+      targets than the site, the API and Supabase), `nosniff`, referrer and permissions policies, HSTS;
+      `/auth/confirm` follows `next` only to `/accept-invitation` or `/reset-password`. `script-src` still allows inline scripts (Next.js needs them); a nonce would tighten that.
 - [x] TLS enforced to Postgres (`sslmode=require`) and Redis, not just
       browser-to-frontend — with `APP_ENV=production` the app refuses to start
       without it (`config.py`); local dev stays plain Docker Postgres
