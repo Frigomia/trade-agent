@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { Drawer, Box, Typography, TextField, Button, Alert, Divider, IconButton } from "@mui/material";
 import { X } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import { useAction } from "@/lib/useAction";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
 interface UserDetailProps {
@@ -17,59 +18,39 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
   const [analysisLimit, setAnalysisLimit] = useState("");
   const [chatLimit, setChatLimit] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { run, submitting, error } = useAction();
 
-  async function patchLimits(body: Record<string, number | null>) {
-    setError(null);
-    try {
-      await apiFetch(`/admin/users/${user.id}/limits`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
+  const patchLimits = (body: Record<string, number | null>) =>
+    run(async () => {
+      await apiFetch(`/admin/users/${user.id}/limits`, { method: "PATCH", body: JSON.stringify(body) });
       onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
+    });
 
   async function handleSetLimits(event: FormEvent) {
     event.preventDefault();
     const body: Record<string, number> = {};
     if (analysisLimit !== "") body.analysis_limit = Number(analysisLimit);
     if (chatLimit !== "") body.chat_limit = Number(chatLimit);
-    if (Object.keys(body).length === 0) {
-      return;
-    }
-    setSubmitting(true);
+    if (Object.keys(body).length === 0) return;
     await patchLimits(body);
-    setSubmitting(false);
   }
 
-  async function handleStatusAction(action: "disable" | "enable") {
-    setError(null);
-    try {
+  const handleStatusAction = (action: "disable" | "enable") =>
+    run(async () => {
       await apiFetch(`/admin/users/${user.id}/${action}`, { method: "POST" });
       onChanged();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
+    });
 
-  async function handleRemove() {
-    setError(null);
-    try {
+  const handleRemove = () =>
+    run(async () => {
       await apiFetch(`/admin/users/${user.id}`, {
         method: "DELETE",
         body: JSON.stringify({ confirm_email: confirmEmail }),
       });
       onChanged();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    }
-  }
+    });
 
   return (
     <Box>

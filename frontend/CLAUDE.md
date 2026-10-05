@@ -7,10 +7,8 @@ theme) · SWR (reads and job polling) · Supabase Auth (browser client plus SSR
 helpers) · `d3-scale` and `d3-shape` (chart maths only) · Vitest + React Testing
 Library · npm.
 
-Tailwind v4 is installed and its theme/utilities layers are imported in
-`app/globals.css`, but nothing is styled with it: styling is MUI `sx` and the
-theme, driven by CSS variables (`--bg`, `--accent`, `--up`, `--down`, ...).
-Don't start writing Tailwind classes unless asked.
+Styling is MUI `sx` and the theme, driven by CSS variables (`--bg`, `--accent`,
+`--up`, `--down`, ...). There is no Tailwind (it was removed as unused).
 
 The visual design system (tokens, colours, type, components, do's and don'ts) is
 recorded in [`../DESIGN.md`](../DESIGN.md); read it before building or restyling a screen.
