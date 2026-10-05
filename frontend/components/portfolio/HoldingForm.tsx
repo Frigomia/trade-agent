@@ -7,6 +7,8 @@ import { apiFetch } from "@/lib/api/client";
 import type { AssetType, HoldingSummary } from "@/lib/api/portfolio-types";
 import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
+import { TickerPicker } from "@/components/ui/TickerPicker";
+import type { SymbolMatch } from "@/lib/tickerSearch";
 
 export interface HoldingFormProps {
   open: boolean;
@@ -46,6 +48,12 @@ function HoldingFormBody({
   const normalizedTicker = ticker.trim().toUpperCase();
   // POST /portfolio/holdings is an upsert: adding a held ticker silently overwrites it.
   const replacesExisting = !editing && heldTickers.includes(normalizedTicker);
+
+  // A search result fills the name and type too; both stay editable below.
+  function handlePick(match: SymbolMatch) {
+    setName(match.name);
+    setAssetType(match.type);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -100,14 +108,11 @@ function HoldingFormBody({
       <Typography variant="h6" sx={{ fontWeight: 650 }}>
         {editing ? `Edit ${holding.ticker}` : "Add holding"}
       </Typography>
-      <TextField
-        label="Ticker"
-        value={ticker}
-        onChange={(e) => setTicker(e.target.value)}
-        disabled={editing}
-        fullWidth
-        margin="normal"
-      />
+      {editing ? (
+        <TextField label="Ticker" value={ticker} disabled fullWidth margin="normal" />
+      ) : (
+        <TickerPicker label="Ticker" value={ticker} onChange={setTicker} onPick={handlePick} />
+      )}
       {replacesExisting && (
         <Alert severity="warning">
           You already hold {normalizedTicker}. This replaces its shares and average cost; use Log a

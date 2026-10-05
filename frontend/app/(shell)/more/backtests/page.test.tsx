@@ -323,4 +323,22 @@ describe("BacktestsPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: /AAPL/ }));
     expect(await screen.findByText("Could not load that backtest.")).toBeInTheDocument();
   });
+  it("offers the user's own holdings in the ticker field", async () => {
+    mockApi({
+      "/backtest/results": () => [],
+      "/portfolio/summary": () => ({
+        holdings: [{ ticker: "VWCE.DE", name: "Vanguard FTSE All-World", asset_type: "ETF", shares: 4 }],
+        watchlist: [],
+      }),
+    });
+    renderFresh();
+
+    await waitFor(() => expect(calls("/portfolio/summary")).toHaveLength(1));
+    const field = screen.getByLabelText("Ticker");
+    await waitFor(() => {
+      fireEvent.focus(field);
+      fireEvent.keyDown(field, { key: "ArrowDown" });
+      expect(screen.getByText("VWCE.DE")).toBeInTheDocument();
+    });
+  });
 });

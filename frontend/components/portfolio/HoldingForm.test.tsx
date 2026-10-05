@@ -91,6 +91,36 @@ describe("HoldingForm", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("fills the ticker, name and type from a search result", async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith("/market/search")
+        ? [{ symbol: "VWCE.DE", name: "Vanguard FTSE All-World", type: "ETF", exchange: "XETRA" }]
+        : {},
+    );
+    const { onSaved } = setup();
+
+    type("Ticker", "vwce");
+    fireEvent.click(await screen.findByText("VWCE.DE", {}, { timeout: 3000 }));
+    type("Shares", "40");
+    type("Average cost", "112.8");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings")!;
+    expect(JSON.parse((post[1] as RequestInit).body as string)).toMatchObject({
+      ticker: "VWCE.DE",
+      name: "Vanguard FTSE All-World",
+      asset_type: "ETF",
+    });
+    expect(screen.getByLabelText("Name")).toHaveValue("Vanguard FTSE All-World");
+  });
+
+  it("keeps the ticker locked while editing, with no search", () => {
+    setup({ holding: HELD });
+
+    expect(screen.getByLabelText("Ticker")).toBeDisabled();
+  });
+
   it("prefills the ticker", () => {
     setup({ prefillTicker: "NVDA" });
 

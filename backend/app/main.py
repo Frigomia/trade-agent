@@ -9,7 +9,17 @@ from fastapi.responses import JSONResponse
 from app.admin.service import AdminError
 from app.config import settings
 from app.db import check_runtime_role, engine
-from app.routers import admin, analysis, backtest, chat, me, memory, portfolio, preferences
+from app.routers import (
+    admin,
+    analysis,
+    backtest,
+    chat,
+    market,
+    me,
+    memory,
+    portfolio,
+    preferences,
+)
 from app.snapshots import PriceUnavailable
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
@@ -38,6 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(portfolio.router)
+app.include_router(market.router)
 app.include_router(analysis.router)
 app.include_router(backtest.router)
 app.include_router(memory.router)

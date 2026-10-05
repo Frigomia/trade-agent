@@ -8,6 +8,8 @@ import type { AssetType } from "@/lib/api/portfolio-types";
 import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Panel } from "@/components/ui/Panel";
+import { TickerPicker } from "@/components/ui/TickerPicker";
+import type { SymbolMatch } from "@/lib/tickerSearch";
 
 const STEPS = ["Add holdings", "Run an analysis on Today", "Decide"];
 
@@ -22,9 +24,17 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
   const [costBasis, setCostBasis] = useState("");
   const [showMore, setShowMore] = useState(false);
   const [name, setName] = useState("");
+  const [pickedNote, setPickedNote] = useState<string | undefined>();
   const [assetType, setAssetType] = useState<AssetType>("STOCK");
   const [firstPurchase, setFirstPurchase] = useState(todayIso);
   const { run, submitting, error, setError } = useAction();
+
+  // A search result fills the name and type too; both stay editable in the optional row.
+  function handlePick(match: SymbolMatch) {
+    setName(match.name);
+    setAssetType(match.type);
+    setPickedNote([match.name, match.exchange].filter(Boolean).join(" · "));
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -63,12 +73,15 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
       </Typography>
       <Panel component="form" aria-label="First holding" onSubmit={handleSubmit} sx={{ p: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1.2fr 1fr 1.2fr" }, gap: 1.5 }}>
-          <TextField
+          <TickerPicker
             label="Ticker"
-            placeholder="AAPL"
             value={ticker}
-            onChange={(e) => setTicker(e.target.value)}
-            autoComplete="off"
+            onChange={(next) => {
+              setTicker(next);
+              setPickedNote(undefined);
+            }}
+            onPick={handlePick}
+            helperText={pickedNote}
           />
           <TextField
             label="Shares"
