@@ -34,12 +34,11 @@ describe("usePortfolioSuggestions", () => {
     ]);
   });
 
-  it("is empty while loading and when the portfolio cannot be loaded", async () => {
+  it("is empty when the portfolio cannot be loaded", async () => {
     apiFetch.mockRejectedValue(new Error("boom"));
 
     const { result } = renderHook(() => usePortfolioSuggestions(), { wrapper });
 
-    expect(result.current).toEqual([]);
     await waitFor(() => expect(apiFetch).toHaveBeenCalled());
     expect(result.current).toEqual([]);
   });

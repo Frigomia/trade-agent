@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { Autocomplete, Box, TextField, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import { MIN_SEARCH_LENGTH, type SymbolMatch } from "@/lib/tickerSearch";
+import type { SymbolMatch } from "@/lib/tickerSearch";
 
 const DEBOUNCE_MS = 300;
+const MIN_QUERY_LENGTH = 2;
 const PORTFOLIO_GROUP = "In your portfolio";
 const SEARCH_GROUP = "Search results";
 
@@ -19,7 +20,6 @@ interface Props {
   onPick?: (match: SymbolMatch) => void;
   /** The user's own holdings and watchlist: offered first, and without a network request. */
   suggestions?: SymbolMatch[];
-  helperText?: string;
 }
 
 /**
@@ -27,12 +27,12 @@ interface Props {
  * Yahoo by name, ticker or ISIN once there are two characters and a short pause, and offers the
  * user's own holdings first. A failed search just shows nothing; typing still works.
  */
-export function TickerPicker({ label, value, onChange, onPick, suggestions = [], helperText }: Props) {
+export function TickerPicker({ label, value, onChange, onPick, suggestions = [] }: Props) {
   const query = value.trim();
   const [picked, setPicked] = useState<string | null>(null);
   const [answer, setAnswer] = useState<{ query: string; matches: SymbolMatch[] } | null>(null);
   // The symbol just filled in is not a new question to ask Yahoo.
-  const searchable = query.length >= MIN_SEARCH_LENGTH && query !== picked;
+  const searchable = query.length >= MIN_QUERY_LENGTH && query !== picked;
 
   useEffect(() => {
     if (!searchable) return;
@@ -92,7 +92,7 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
           {...params}
           label={label}
           margin="normal"
-          helperText={noMatch ? "No match. You can still type the ticker." : helperText}
+          helperText={noMatch ? "No match. You can still type the ticker." : undefined}
           slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, autoComplete: "off" } }}
         />
       )}

@@ -114,6 +114,7 @@ async def search_symbols(query: str) -> list[dict[str, str]]:
         return list(json.loads(cached))
 
     def _fetch() -> list[dict[str, str]]:
+        # Ask for double: futures, crypto and the like are filtered out below, and 8 should remain.
         quotes = yf.Search(normalized, max_results=SEARCH_MAX_RESULTS * 2, news_count=0).quotes
         matches = [
             {

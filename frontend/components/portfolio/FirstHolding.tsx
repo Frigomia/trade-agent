@@ -24,7 +24,6 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
   const [costBasis, setCostBasis] = useState("");
   const [showMore, setShowMore] = useState(false);
   const [name, setName] = useState("");
-  const [pickedNote, setPickedNote] = useState<string | undefined>();
   const [assetType, setAssetType] = useState<AssetType>("STOCK");
   const [firstPurchase, setFirstPurchase] = useState(todayIso);
   const { run, submitting, error, setError } = useAction();
@@ -33,7 +32,6 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
-    setPickedNote([match.name, match.exchange].filter(Boolean).join(" · "));
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -73,16 +71,7 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
       </Typography>
       <Panel component="form" aria-label="First holding" onSubmit={handleSubmit} sx={{ p: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1.2fr 1fr 1.2fr" }, gap: 1.5 }}>
-          <TickerPicker
-            label="Ticker"
-            value={ticker}
-            onChange={(next) => {
-              setTicker(next);
-              setPickedNote(undefined);
-            }}
-            onPick={handlePick}
-            helperText={pickedNote}
-          />
+          <TickerPicker label="Ticker" value={ticker} onChange={setTicker} onPick={handlePick} />
           <TextField
             label="Shares"
             type="number"

@@ -7,5 +7,3 @@ export interface SymbolMatch {
   type: AssetType;
   exchange: string;
 }
-
-export const MIN_SEARCH_LENGTH = 2;

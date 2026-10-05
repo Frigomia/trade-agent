@@ -50,6 +50,8 @@ describe("TickerPicker", () => {
   it("searches after two characters and a short pause, and lists the matches", async () => {
     render(<Harness />);
 
+    await type("v");
+    expect(apiFetch).not.toHaveBeenCalled();
     await type("vw");
 
     expect(apiFetch).toHaveBeenCalledTimes(1);
@@ -59,11 +61,8 @@ describe("TickerPicker", () => {
     expect(screen.getByText(/XETRA/)).toBeInTheDocument();
   });
 
-  it("does not search for a single character, and waits out fast typing", async () => {
+  it("waits out fast typing and searches once for the final text", async () => {
     render(<Harness />);
-
-    await type("v");
-    expect(apiFetch).not.toHaveBeenCalled();
 
     fireEvent.change(box(), { target: { value: "vw" } });
     fireEvent.change(box(), { target: { value: "vwc" } });
