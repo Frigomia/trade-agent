@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Drawer, Box, Typography, TextField, Button, Alert, Divider } from "@mui/material";
+import { Drawer, Box, Typography, TextField, Button, Alert, Divider, IconButton } from "@mui/material";
+import { X } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
@@ -163,9 +164,50 @@ interface UserDetailDrawerProps extends Omit<UserDetailProps, "user"> {
 
 export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerProps) {
   if (!user) return null;
+  // A bottom sheet, not a side drawer: a 400px drawer is wider than a phone, so the backdrop was
+  // unreachable and nothing closed it. Here the page stays visible above the sheet (tap it to
+  // dismiss), the header with the Close button stays put while the long form scrolls, and Escape works.
   return (
-    <Drawer anchor="right" open onClose={onClose}>
-      <Box sx={{ width: 400, p: 3 }}>
+    <Drawer
+      anchor="bottom"
+      open
+      onClose={onClose}
+      slotProps={{
+        paper: { sx: { maxHeight: "92dvh", borderTopLeftRadius: 20, borderTopRightRadius: 20 } },
+      }}
+    >
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 1,
+          bgcolor: "inherit",
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          px: 1.5,
+          pt: 1.5,
+          pb: 0.5,
+        }}
+      >
+        <Box
+          aria-hidden
+          sx={{
+            position: "absolute",
+            top: 8,
+            left: "50%",
+            width: 36,
+            height: 4,
+            borderRadius: 2,
+            bgcolor: "var(--line2)",
+            transform: "translateX(-50%)",
+          }}
+        />
+        <IconButton aria-label="Close" onClick={onClose} size="small">
+          <X size={20} />
+        </IconButton>
+      </Box>
+      <Box sx={{ px: 3, pb: 3 }}>
         <UserDetailContent user={user} onClose={onClose} onChanged={onChanged} />
       </Box>
     </Drawer>

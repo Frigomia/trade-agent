@@ -59,6 +59,24 @@ describe("UserDetailDrawer", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("has a Close button that closes the sheet", () => {
+    const onClose = vi.fn();
+    render(<UserDetailDrawer user={USER} onClose={onClose} onChanged={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes on Escape", () => {
+    const onClose = vi.fn();
+    render(<UserDetailDrawer user={USER} onClose={onClose} onChanged={vi.fn()} />);
+
+    fireEvent.keyDown(screen.getByRole("presentation"), { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("sets an analysis-run limit override without touching chat_limit", async () => {
     apiFetch.mockResolvedValue(USER);
     const onChanged = vi.fn();
