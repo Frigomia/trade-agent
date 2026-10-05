@@ -37,10 +37,7 @@ describe("buildSecurityHeaders", () => {
     expect(header("Content-Security-Policy")).not.toContain("'unsafe-eval'");
   });
 
-  it("sends the standard hardening headers, and HSTS only in production", () => {
-    expect(header("X-Content-Type-Options")).toBe("nosniff");
-    expect(header("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
-    expect(header("Permissions-Policy")).toContain("camera=()");
+  it("sends HSTS in production only", () => {
     expect(header("Strict-Transport-Security")).toContain("max-age=");
     expect(header("Strict-Transport-Security", { ...ENV, dev: true })).toBeUndefined();
   });

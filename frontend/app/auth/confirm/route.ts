@@ -2,8 +2,7 @@ import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Only the pages the invite and reset emails link to. Checking for a leading "/" is not enough:
-// browsers read "/\evil.example" and "/<tab>/evil.example" as off-site, so an open redirect hides there.
+// Allowlist: "/\evil.example" and "/<tab>/evil.example" pass a startsWith("/") check but go off-site.
 const NEXT_PAGES = new Set(["/accept-invitation", "/reset-password"]);
 
 export async function GET(request: NextRequest) {

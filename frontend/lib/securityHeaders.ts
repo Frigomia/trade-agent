@@ -1,8 +1,3 @@
-export interface Header {
-  key: string;
-  value: string;
-}
-
 // "https://host/some/path" -> "https://host". Missing or malformed values are skipped, never thrown on.
 function origin(url: string | undefined): string | null {
   if (!url) return null;
@@ -27,7 +22,7 @@ export function buildSecurityHeaders({
   apiUrl?: string;
   supabaseUrl?: string;
   dev: boolean;
-}): Header[] {
+}): { key: string; value: string }[] {
   const connect = ["'self'", origin(apiUrl), origin(supabaseUrl)].filter((o): o is string => o !== null);
   const csp = [
     "default-src 'self'",
@@ -42,7 +37,7 @@ export function buildSecurityHeaders({
     "object-src 'none'",
   ].join("; ");
 
-  const headers: Header[] = [
+  const headers = [
     { key: "Content-Security-Policy", value: csp },
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
