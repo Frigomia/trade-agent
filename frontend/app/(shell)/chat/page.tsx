@@ -101,7 +101,9 @@ function ChatScreen() {
   const empty = messages !== undefined && messages.length === 0 && pending === null;
 
   return (
-    <Box sx={{ maxWidth: 760, mx: "auto", display: "flex", flexDirection: "column", minHeight: { xs: "calc(100dvh - 150px)", md: "calc(100dvh - 60px)" } }}>
+    // On phones the page runs down to the tab bar: -8px cancels the shell's bottom padding, so the
+    // pinned composer sits flush on the bar with nothing showing in between.
+    <Box sx={{ maxWidth: 760, mx: "auto", display: "flex", flexDirection: "column", mb: { xs: "-8px", md: 0 }, minHeight: { xs: "calc(100dvh - var(--tabbar-h) - 16px)", md: "calc(100dvh - 60px)" } }}>
       <PageHeader
         title="Chat"
         actions={
@@ -139,7 +141,7 @@ function ChatScreen() {
         <div ref={endRef} />
       </Box>
 
-      <Box sx={{ position: "sticky", bottom: { xs: 76, md: 16 }, pt: 1, pb: 0.5, bgcolor: "var(--bg)", zIndex: 1 }}>
+      <Box sx={{ position: "sticky", bottom: { xs: "var(--tabbar-h)", md: 16 }, pt: 1, pb: 0.5, bgcolor: "var(--bg)", zIndex: 1 }}>
         {error && (
           <Alert severity="error" sx={{ mb: 1 }}>
             {error}
