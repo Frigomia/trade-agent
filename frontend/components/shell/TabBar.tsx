@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { Box } from "@mui/material";
 import { PHONE_TABS, isActive, type NavItem } from "./navItems";
@@ -9,10 +10,28 @@ import type { Role } from "@/lib/auth/session";
 export function TabBar({ role }: { role: Role }) {
   const pathname = usePathname();
   const tabs = PHONE_TABS.filter((item: NavItem) => !item.adminOnly || role === "admin");
+  const ref = useRef<HTMLElement>(null);
+
+  // Publish the bar's real height (it changes with the font and the safe-area inset) so a screen can
+  // pin something right above it, as the chat composer does, without guessing a number.
+  useEffect(() => {
+    const bar = ref.current;
+    if (!bar || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty("--tabbar-h", `${bar.offsetHeight}px`);
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--tabbar-h");
+    };
+  }, []);
 
   return (
     <Box
       component="nav"
+      ref={ref}
       aria-label="Main"
       sx={{
         display: { xs: "flex", md: "none" },
