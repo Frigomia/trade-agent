@@ -225,6 +225,93 @@ describe("PortfolioPage", () => {
     expect(screen.getByText("ASML")).toBeInTheDocument();
   });
 
+  describe("adding to the watchlist", () => {
+    const postedWatch = () => {
+      const call = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/watchlist" && c[1]?.method === "POST");
+      return call ? JSON.parse(call[1].body) : null;
+    };
+
+    it("adds a holding to the watchlist from its row, with its own type, and refreshes", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "AAPL" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+      const before = count("GET /portfolio/summary");
+
+      fireEvent.click(screen.getByRole("button", { name: /add aapl to watchlist/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "AAPL", asset_type: "STOCK" }));
+      await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    });
+
+    it("explains the icon with a tooltip", async () => {
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      fireEvent.mouseOver(screen.getByRole("button", { name: /add aapl to watchlist/i }));
+
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Add to watchlist");
+    });
+
+    it("shows a holding that is already watched as done, not as something to add", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        watchlist: [{ ticker: "AAPL", asset_type: "STOCK", note: null, current_price: 200 }],
+      });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      expect(screen.queryByRole("button", { name: /add aapl to watchlist/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /aapl is on your watchlist/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /add msft to watchlist/i })).toBeEnabled();
+    });
+
+    it("still opens the editor when the row itself is tapped", async () => {
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      fireEvent.click(screen.getByRole("button", { name: "Edit AAPL" }));
+
+      expect(await screen.findByText("Save holding")).toBeInTheDocument();
+    });
+
+    it("will not add a ticker that is already on the watchlist, whatever the case", async () => {
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "asml" } });
+
+      expect(screen.getByRole("button", { name: /^add to watchlist$/i })).toBeDisabled();
+      expect(screen.getByText(/already on your watchlist/i)).toBeInTheDocument();
+    });
+
+    it("adds a searched ETF with the type the search gave it", async () => {
+      handlers["GET /market/search?q=vwce"] = () => [
+        { symbol: "VWCE.DE", name: "Vanguard FTSE All-World", type: "ETF", exchange: "XETRA" },
+      ];
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "VWCE.DE" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "vwce" } });
+      fireEvent.click(await screen.findByText("VWCE.DE", {}, { timeout: 3000 }));
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "VWCE.DE", asset_type: "ETF" }));
+      expect(screen.getByLabelText("Watchlist type")).toHaveValue("ETF");
+    });
+
+    it("still adds a hand-typed ticker", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NEWONE" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "newone" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NEWONE", asset_type: "STOCK" }));
+    });
+  });
+
   describe("empty portfolio", () => {
     const EMPTY: PortfolioSummary = {
       ...SUMMARY,

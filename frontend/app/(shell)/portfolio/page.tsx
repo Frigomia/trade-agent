@@ -13,9 +13,10 @@ import {
   DialogContentText,
   IconButton,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { Camera, Plus, X } from "lucide-react";
+import { Camera, Check, Eye, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import type {
@@ -31,10 +32,14 @@ import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
+import { TickerPicker } from "@/components/ui/TickerPicker";
 import { PageHeader } from "@/components/shell/PageHeader";
 
 const DASH = "—";
 const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr" };
+// The watch icon sits outside the row's edit button (a button cannot hold a button), in its own
+// column; the header leaves the same room so the other columns stay lined up.
+const WATCH_COL = 44;
 
 function plColor(value: number | null): string {
   return value !== null && value < 0 ? "var(--down)" : "var(--up)";
@@ -49,7 +54,19 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () => void }) {
+function HoldingRow({
+  holding,
+  watched,
+  watching,
+  onEdit,
+  onWatch,
+}: {
+  holding: HoldingSummary;
+  watched: boolean;
+  watching: boolean;
+  onEdit: () => void;
+  onWatch: () => void;
+}) {
   const cell = { display: { xs: "none", md: "block" }, textAlign: "right" as const };
   const value = holding.market_value !== null ? formatAmount(holding.market_value) : DASH;
   const pl =
@@ -57,6 +74,7 @@ function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () =
       ? `${formatSigned(holding.unrealized_pl)} · ${formatPct(holding.unrealized_pl_pct)}`
       : DASH;
   return (
+    <Box sx={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--line)" }}>
     <ButtonBase
       aria-label={`Edit ${holding.ticker}`}
       onClick={onEdit}
@@ -64,11 +82,11 @@ function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () =
         display: "grid",
         gridTemplateColumns: COLUMNS,
         gap: 2,
-        width: "100%",
+        flex: 1,
+        minWidth: 0,
         textAlign: "left",
         alignItems: "center",
         py: 1.5,
-        borderBottom: "1px solid var(--line)",
       }}
     >
       <Box>
@@ -91,6 +109,21 @@ function HoldingRow({ holding, onEdit }: { holding: HoldingSummary; onEdit: () =
       <Typography sx={{ ...cell, fontWeight: 600 }}>{value}</Typography>
       <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
     </ButtonBase>
+    <Tooltip title={watched ? "On your watchlist" : "Add to watchlist"}>
+      {/* A span, so the tooltip still shows on the disabled button. */}
+      <span style={{ width: WATCH_COL, display: "flex", justifyContent: "center", flex: "none" }}>
+        <IconButton
+          size="small"
+          aria-label={watched ? `${holding.ticker} is on your watchlist` : `Add ${holding.ticker} to watchlist`}
+          disabled={watched || watching}
+          onClick={onWatch}
+          sx={{ color: watched ? "var(--up)" : "var(--muted)" }}
+        >
+          {watched ? <Check size={16} /> : <Eye size={16} />}
+        </IconButton>
+      </span>
+    </Tooltip>
+    </Box>
   );
 }
 
@@ -136,15 +169,19 @@ export default function PortfolioPage() {
     });
   }
 
-  function addToWatchlist() {
-    const ticker = watchTicker.trim().toUpperCase();
-    if (!ticker) return;
+  // Tickers are stored upper-cased, so compare that way.
+  const watched = new Set((summary?.watchlist ?? []).map((w) => w.ticker.toUpperCase()));
+  const typedTicker = watchTicker.trim().toUpperCase();
+  const alreadyWatched = watched.has(typedTicker);
+
+  function addToWatchlist(ticker = typedTicker, assetType: AssetType = watchType) {
+    if (!ticker || watched.has(ticker)) return;
     return watch.run(async () => {
       await apiFetch("/portfolio/watchlist", {
         method: "POST",
-        body: JSON.stringify({ ticker, asset_type: watchType }),
+        body: JSON.stringify({ ticker, asset_type: assetType }),
       });
-      setWatchTicker("");
+      if (ticker === typedTicker) setWatchTicker("");
       mutateSummary();
     });
   }
@@ -237,6 +274,7 @@ export default function PortfolioPage() {
               display: { xs: "none", md: "grid" },
               gridTemplateColumns: COLUMNS,
               gap: 2,
+              pr: `${WATCH_COL}px`,
               py: 1,
               fontSize: 12,
               color: "var(--muted)",
@@ -255,7 +293,10 @@ export default function PortfolioPage() {
             <HoldingRow
               key={holding.ticker}
               holding={holding}
+              watched={watched.has(holding.ticker.toUpperCase())}
+              watching={watch.submitting}
               onEdit={() => setHoldingForm({ open: true, holding })}
+              onWatch={() => void addToWatchlist(holding.ticker, holding.asset_type)}
             />
           ))}
         </Panel>
@@ -299,13 +340,15 @@ export default function PortfolioPage() {
           </Box>
         ))}
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
-          <TextField
-            size="small"
-            sx={{ flex: "1 1 120px" }}
-            label="Watchlist ticker"
-            value={watchTicker}
-            onChange={(e) => setWatchTicker(e.target.value)}
-          />
+          <Box sx={{ flex: "1 1 120px", minWidth: 0 }}>
+            <TickerPicker
+              dense
+              label="Watchlist ticker"
+              value={watchTicker}
+              onChange={setWatchTicker}
+              onPick={(match) => setWatchType(match.type)}
+            />
+          </Box>
           <TextField
             select
             size="small"
@@ -320,10 +363,18 @@ export default function PortfolioPage() {
             <option value="STOCK">Stock</option>
             <option value="ETF">ETF</option>
           </TextField>
-          <Button variant="outlined" onClick={addToWatchlist} sx={{ whiteSpace: "nowrap" }}>
+          <Button
+            variant="outlined"
+            disabled={alreadyWatched || watch.submitting}
+            onClick={() => void addToWatchlist()}
+            sx={{ whiteSpace: "nowrap" }}
+          >
             Add to watchlist
           </Button>
         </Box>
+        {alreadyWatched && (
+          <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 0.75 }}>Already on your watchlist.</Typography>
+        )}
         {watch.error && (
           <Alert severity="error" sx={{ mt: 1 }}>
             {watch.error}
