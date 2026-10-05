@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
 
@@ -156,8 +156,8 @@ describe("PortfolioPage", () => {
     expect(screen.getByText("702.40")).toBeInTheDocument();
   });
 
-  it("shows an empty state and disables Log a trade when there are no holdings", async () => {
-    handlers["GET /portfolio/summary"] = () => ({
+  describe("empty portfolio", () => {
+    const EMPTY: PortfolioSummary = {
       ...SUMMARY,
       holdings: [],
       watchlist: [],
@@ -165,12 +165,126 @@ describe("PortfolioPage", () => {
       total_cost_basis: 0,
       total_pl: 0,
       total_pl_pct: null,
-    });
-    renderFresh();
+    };
 
-    await waitFor(() => expect(screen.getByText(/your portfolio is empty/i)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /log a trade/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /record snapshot/i })).toBeDisabled();
+    // The page header has its own "Add holding" button; this is the one inside the first-holding form.
+    const addHoldingButton = () =>
+      within(screen.getByRole("form", { name: /first holding/i })).getByRole("button", { name: /^add holding$/i });
+
+    function fillFirstHolding(ticker: string, shares: string, cost: string) {
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: ticker } });
+      fireEvent.change(screen.getByLabelText("Shares"), { target: { value: shares } });
+      fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: cost } });
+    }
+
+    it("asks what you own with an inline form, and disables Log a trade and Record snapshot", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      renderFresh();
+
+      expect(await screen.findByText(/what do you own/i)).toBeInTheDocument();
+      expect(screen.getByLabelText("Ticker")).toBeInTheDocument();
+      expect(screen.getByText(/nothing is bought or sold/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /log a trade/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /record snapshot/i })).toBeDisabled();
+    });
+
+    it("saves the first holding with sensible defaults and refreshes the portfolio", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+      const before = count("GET /portfolio/summary");
+
+      fillFirstHolding(" aapl ", "10", "150");
+      fireEvent.click(addHoldingButton());
+
+      await waitFor(() => expect(count("POST /portfolio/holdings")).toBe(1));
+      const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+      expect(JSON.parse(post[1].body)).toEqual({
+        ticker: "AAPL",
+        name: "AAPL",
+        asset_type: "STOCK",
+        shares: 10,
+        cost_basis: 150,
+        first_purchase_date: new Date().toISOString().slice(0, 10),
+        sector: null,
+        target_weight: null,
+      });
+      await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    });
+
+    it("sends the optional name, type and date when they are filled in", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+
+      fillFirstHolding("VWCE", "3", "100.5");
+      fireEvent.click(screen.getByRole("button", { name: /name, type and first purchase date/i }));
+      fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Vanguard All-World" } });
+      fireEvent.change(screen.getByLabelText("Type"), { target: { value: "ETF" } });
+      fireEvent.change(screen.getByLabelText("First purchase date"), { target: { value: "2024-03-01" } });
+      fireEvent.click(addHoldingButton());
+
+      await waitFor(() => expect(count("POST /portfolio/holdings")).toBe(1));
+      const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+      expect(JSON.parse(post[1].body)).toMatchObject({
+        ticker: "VWCE",
+        name: "Vanguard All-World",
+        asset_type: "ETF",
+        first_purchase_date: "2024-03-01",
+      });
+    });
+
+    it("does not save without a ticker, shares and an average cost", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+
+      fillFirstHolding("AAPL", "0", "150");
+      fireEvent.click(addHoldingButton());
+
+      expect(await screen.findByText(/enter a ticker, shares and an average cost/i)).toBeInTheDocument();
+      expect(count("POST /portfolio/holdings")).toBe(0);
+    });
+
+    it("shows the backend's reason when saving fails", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["POST /portfolio/holdings"] = () => {
+        throw new FakeApiError(422, "Invalid ticker");
+      };
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+
+      fillFirstHolding("???", "1", "1");
+      fireEvent.click(addHoldingButton());
+
+      expect(await screen.findByText(/invalid ticker/i)).toBeInTheDocument();
+    });
+
+    it("titles the side panel 'Or just watch' until something is watched", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      renderFresh();
+
+      expect(await screen.findByText(/or just watch/i)).toBeInTheDocument();
+    });
+
+    it("keeps the form and calls the panel 'Watchlist' when only a watchlist exists", async () => {
+      handlers["GET /portfolio/summary"] = () => ({ ...EMPTY, watchlist: SUMMARY.watchlist });
+      renderFresh();
+
+      expect(await screen.findByText(/what do you own/i)).toBeInTheDocument();
+      expect(screen.getByText("Watchlist")).toBeInTheDocument();
+      expect(screen.queryByText(/or just watch/i)).not.toBeInTheDocument();
+      expect(screen.getByText("ASML")).toBeInTheDocument();
+    });
+
+    it("does not show the first-holding form once there is a holding", async () => {
+      renderFresh();
+
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+      expect(screen.queryByText(/what do you own/i)).not.toBeInTheDocument();
+    });
   });
 
   it("shows an inline error when the summary fails to load", async () => {

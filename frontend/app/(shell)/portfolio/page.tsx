@@ -15,6 +15,7 @@ import type {
 import { formatAmount, formatPct, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { Amount } from "@/components/portfolio/Amount";
+import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
@@ -101,6 +102,8 @@ export default function PortfolioPage() {
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
+  // Nothing owned and nothing watched yet: the watchlist panel is the "or" next to the first-holding form.
+  const justWatching = summary !== undefined && open.length === 0 && summary.watchlist.length === 0;
 
   const recordSnapshot = () =>
     snapshot.run(async () => {
@@ -164,15 +167,6 @@ export default function PortfolioPage() {
         </Alert>
       )}
 
-      {summary && open.length === 0 && (
-        <Box sx={{ textAlign: "center", py: 5 }}>
-          <Typography sx={{ color: "var(--muted)", mb: 2 }}>Your portfolio is empty.</Typography>
-          <Button variant="contained" onClick={() => setHoldingForm({ open: true })}>
-            Add holding
-          </Button>
-        </Box>
-      )}
-
       {summary && open.length > 0 && (
         <>
           <Box sx={{ display: "flex", gap: 4, alignItems: "flex-end", flexWrap: "wrap", mb: 1 }}>
@@ -210,6 +204,7 @@ export default function PortfolioPage() {
           alignItems: "start",
         }}
       >
+      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} />}
       {open.length > 0 && (
         <Panel sx={{ p: "8px 18px" }}>
           <Box
@@ -242,7 +237,14 @@ export default function PortfolioPage() {
       )}
 
       <Panel sx={{ p: "16px 18px" }}>
-        <Typography sx={{ fontWeight: 600, mb: 1 }}>Watchlist</Typography>
+        <Typography sx={{ fontWeight: 600, mb: justWatching ? 0.25 : 1 }}>
+          {justWatching ? "Or just watch" : "Watchlist"}
+        </Typography>
+        {justWatching && (
+          <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mb: 1 }}>
+            Follow a stock or ETF you don&apos;t own yet.
+          </Typography>
+        )}
         {(summary?.watchlist ?? []).map((item) => (
           <Box
             key={item.ticker}
