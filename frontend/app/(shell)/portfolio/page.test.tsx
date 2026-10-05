@@ -236,6 +236,30 @@ describe("PortfolioPage", () => {
       });
     });
 
+    it("fills the ticker, name and type from a search result", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["GET /market/search?q=vwce"] = () => [
+        { symbol: "VWCE.DE", name: "Vanguard FTSE All-World", type: "ETF", exchange: "XETRA" },
+      ];
+      handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "vwce" } });
+      fireEvent.click(await screen.findByText("VWCE.DE", {}, { timeout: 3000 }));
+      fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "3" } });
+      fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: "100" } });
+      fireEvent.click(addHoldingButton());
+
+      await waitFor(() => expect(count("POST /portfolio/holdings")).toBe(1));
+      const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+      expect(JSON.parse(post[1].body)).toMatchObject({
+        ticker: "VWCE.DE",
+        name: "Vanguard FTSE All-World",
+        asset_type: "ETF",
+      });
+    });
+
     it("does not save without a ticker, shares and an average cost", async () => {
       handlers["GET /portfolio/summary"] = () => EMPTY;
       renderFresh();

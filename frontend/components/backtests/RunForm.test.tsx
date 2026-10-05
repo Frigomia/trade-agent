@@ -61,3 +61,31 @@ describe("RunForm", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/running the backtest/i);
   });
 });
+
+describe("RunForm ticker suggestions", () => {
+  const OWNED = [
+    { symbol: "VWCE.DE", name: "Vanguard FTSE All-World", type: "ETF" as const, exchange: "" },
+    { symbol: "AAPL", name: "Apple Inc.", type: "STOCK" as const, exchange: "" },
+  ];
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-30T10:00:00Z"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("offers the user's own holdings when the ticker field is opened, and runs the one picked", () => {
+    const onRun = setup({ suggestions: OWNED });
+
+    const field = screen.getByLabelText("Ticker");
+    fireEvent.focus(field);
+    fireEvent.keyDown(field, { key: "ArrowDown" });
+    expect(screen.getByText(/in your portfolio/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("VWCE.DE"));
+    fireEvent.click(screen.getByRole("button", { name: "Run backtest" }));
+
+    expect(onRun).toHaveBeenCalledWith({ ticker: "VWCE.DE", start: "2023-09-30", end: "2026-09-30" });
+  });
+});

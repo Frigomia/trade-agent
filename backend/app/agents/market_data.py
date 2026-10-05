@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 QUOTE_CACHE_TTL = 300
 FUNDAMENTALS_CACHE_TTL = 900
 HISTORY_CACHE_TTL = 86400
+SEARCH_CACHE_TTL = 3600
+SEARCH_MAX_RESULTS = 8
 
 RETRY_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
@@ -95,4 +97,37 @@ async def fetch_price_history(ticker: str, start: date, end: date) -> list[float
     if not result:
         return result
     await redis.set(cache_key, json.dumps(result), ex=HISTORY_CACHE_TTL)
+    return result
+
+
+# Yahoo also returns futures, crypto, indexes and currencies; only these two are things you hold.
+_SEARCH_TYPES = {"EQUITY": "STOCK", "ETF": "ETF"}
+
+
+async def search_symbols(query: str) -> list[dict[str, str]]:
+    """Stocks and ETFs matching a name, a ticker or an ISIN, as `{symbol, name, type, exchange}`."""
+    normalized = query.strip().lower()
+    redis = get_redis()
+    cache_key = f"search:{normalized}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        return list(json.loads(cached))
+
+    def _fetch() -> list[dict[str, str]]:
+        # Ask for double: futures, crypto and the like are filtered out below, and 8 should remain.
+        quotes = yf.Search(normalized, max_results=SEARCH_MAX_RESULTS * 2, news_count=0).quotes
+        matches = [
+            {
+                "symbol": quote["symbol"],
+                "name": quote.get("longname") or quote.get("shortname") or quote["symbol"],
+                "type": _SEARCH_TYPES[quote["quoteType"]],
+                "exchange": quote.get("exchDisp") or quote.get("exchange") or "",
+            }
+            for quote in quotes
+            if quote.get("symbol") and quote.get("quoteType") in _SEARCH_TYPES
+        ]
+        return matches[:SEARCH_MAX_RESULTS]
+
+    result = await _retry_fetch(_fetch)
+    await redis.set(cache_key, json.dumps(result), ex=SEARCH_CACHE_TTL)
     return result

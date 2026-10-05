@@ -6,6 +6,7 @@ import { Alert, Box, List, ListItemButton, ListItemText, Typography } from "@mui
 import { apiFetch } from "@/lib/api/client";
 import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/lib/backtest";
 import { useAction } from "@/lib/useAction";
+import { usePortfolioSuggestions } from "@/lib/portfolio/usePortfolioSuggestions";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
 import { Panel } from "@/components/ui/Panel";
@@ -17,6 +18,7 @@ export default function BacktestsPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const { run, submitting, error } = useAction();
+  const suggestions = usePortfolioSuggestions();
 
   const { data: list, error: listError, mutate: mutateList } = useSWR<BacktestListItem[]>("/backtest/results", apiFetch);
 
@@ -77,7 +79,7 @@ export default function BacktestsPage() {
           <Typography component="h2" sx={{ fontSize: 17, fontWeight: 650, mb: 0.5 }}>
             Run a backtest
           </Typography>
-          <RunForm onRun={start} running={submitting || jobRunning} error={error} />
+          <RunForm onRun={start} running={submitting || jobRunning} error={error} suggestions={suggestions} />
         </Panel>
 
         <Box sx={{ gridArea: "result", minWidth: 0 }}>
