@@ -128,6 +128,23 @@ def upsert_watchlist_item(
     return item
 
 
+@router.delete(
+    "/watchlist/{ticker}",
+    status_code=204,
+    dependencies=[
+        Depends(rate_limiter("portfolio_watchlist_delete", limit=WRITE_LIMIT_PER_MINUTE))
+    ],
+)
+def delete_watchlist_item(
+    ticker: str, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> None:
+    item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=ticker.upper()).one_or_none()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Watchlist item not found")
+    db.delete(item)
+    db.commit()
+
+
 @router.post("/trades", response_model=TradeOut)
 def log_trade(
     payload: TradeIn,

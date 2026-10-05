@@ -2,8 +2,20 @@
 
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
-import { Alert, Box, Button, ButtonBase, TextField, Typography } from "@mui/material";
-import { Camera, Plus } from "lucide-react";
+import {
+  Alert,
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  IconButton,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Camera, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import type {
@@ -110,6 +122,19 @@ export default function PortfolioPage() {
       await apiFetch("/portfolio/snapshot", { method: "POST" });
       mutateSnapshots();
     });
+
+  // The ticker in the confirmation dialog. It is kept after the dialog closes so the text does not
+  // go blank while the dialog fades out.
+  const [removing, setRemoving] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  async function confirmRemoval() {
+    setConfirmOpen(false);
+    await watch.run(async () => {
+      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(removing)}`, { method: "DELETE" });
+      mutateSummary();
+    });
+  }
 
   function addToWatchlist() {
     const ticker = watchTicker.trim().toUpperCase();
@@ -248,7 +273,7 @@ export default function PortfolioPage() {
         {(summary?.watchlist ?? []).map((item) => (
           <Box
             key={item.ticker}
-            sx={{ display: "flex", py: 1, borderBottom: "1px solid var(--line)" }}
+            sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid var(--line)" }}
           >
             <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontWeight: 600 }}>{item.ticker}</Typography>
@@ -259,6 +284,18 @@ export default function PortfolioPage() {
             <Typography>
               {item.current_price !== null ? formatAmount(item.current_price) : DASH}
             </Typography>
+            <IconButton
+              size="small"
+              aria-label={`Remove ${item.ticker} from watchlist`}
+              disabled={watch.submitting}
+              onClick={() => {
+                setRemoving(item.ticker);
+                setConfirmOpen(true);
+              }}
+              sx={{ ml: 0.5, color: "var(--muted)" }}
+            >
+              <X size={16} />
+            </IconButton>
           </Box>
         ))}
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
@@ -294,6 +331,18 @@ export default function PortfolioPage() {
         )}
       </Panel>
       </Box>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogContent>
+          <DialogContentText>Remove {removing} from your watchlist?</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button color="error" onClick={() => void confirmRemoval()}>
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <TradeSheet
         open={tradeOpen}

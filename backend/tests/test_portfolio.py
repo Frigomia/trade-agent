@@ -698,3 +698,44 @@ def test_portfolio_writes_are_rate_limited(client, path, payload):
     for _ in range(60):
         assert client.post(path, json=payload).status_code == 200
     assert client.post(path, json=payload).status_code == 429
+
+
+def test_delete_watchlist_item(client):
+    for ticker in ("ASML", "VWCE"):
+        client.post("/portfolio/watchlist", json={"ticker": ticker, "asset_type": "STOCK"})
+
+    response = client.delete("/portfolio/watchlist/ASML")
+
+    assert response.status_code == 204
+    assert [w["ticker"] for w in client.get("/portfolio/watchlist").json()] == ["VWCE"]
+
+
+def test_delete_missing_watchlist_item_returns_404(client):
+    response = client.delete("/portfolio/watchlist/NOPE")
+
+    assert response.status_code == 404
+
+
+def test_delete_watchlist_item_never_touches_another_users_row(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    other = auth_headers(OTHER_USER_ID)
+    assert (
+        client.post(
+            "/portfolio/watchlist", json={"ticker": "AAPL", "asset_type": "STOCK"}, headers=other
+        ).status_code
+        == 200
+    )
+
+    assert client.delete("/portfolio/watchlist/AAPL").status_code == 404
+    assert db_session.query(WatchlistItem).filter_by(user_id=OTHER_USER_ID).count() == 1
+
+
+def test_delete_watchlist_item_requires_authentication(anon_client):
+    assert anon_client.delete("/portfolio/watchlist/ASML").status_code == 401
+
+
+def test_delete_watchlist_item_is_rate_limited(client):
+    for _ in range(60):
+        assert client.delete("/portfolio/watchlist/NOPE").status_code == 404
+
+    assert client.delete("/portfolio/watchlist/NOPE").status_code == 429
