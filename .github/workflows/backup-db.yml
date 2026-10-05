@@ -39,7 +39,11 @@ jobs:
           # The repository must be private (the artifact is only as private as it is); the passphrase
           # protects the dump. The backup role needs BYPASSRLS, and --schema=public keeps Supabase's
           # auth.* out. See docs/RUNBOOK.md.
-          pg_dump --format=custom --schema=public --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
+          # The runner image ships PostgreSQL 16 and puts its pg_dump first on PATH, so the 17 client
+          # installed above would never run, and pg_dump refuses to dump a newer server.
+          PG_DUMP=/usr/lib/postgresql/17/bin/pg_dump
+          "$PG_DUMP" --version
+          "$PG_DUMP" --format=custom --schema=public --no-owner --no-privileges "$BACKUP_DATABASE_URL" \
             | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
                 --passphrase-file "$RUNNER_TEMP/passphrase" \
                 -o "$FILE"
