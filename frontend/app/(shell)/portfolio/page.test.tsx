@@ -156,16 +156,44 @@ describe("PortfolioPage", () => {
     expect(screen.getByText("702.40")).toBeInTheDocument();
   });
 
-  it("removes a watchlist item and refreshes the list", async () => {
+  // The × button only asks; the dialog's Remove button does it.
+  const confirmRemoval = () =>
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^remove$/i }));
+
+  it("asks before removing a watchlist item, and does nothing until confirmed", async () => {
+    renderFresh();
+    await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+
+    expect(screen.getByRole("dialog")).toHaveTextContent(/remove asml from your watchlist\?/i);
+    expect(count("DELETE /portfolio/watchlist/ASML")).toBe(0);
+  });
+
+  it("keeps the item when the dialog is cancelled", async () => {
+    renderFresh();
+    await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(count("DELETE /portfolio/watchlist/ASML")).toBe(0);
+    expect(screen.getByText("ASML")).toBeInTheDocument();
+  });
+
+  it("removes a watchlist item once confirmed, and refreshes the list", async () => {
     handlers["DELETE /portfolio/watchlist/ASML"] = () => null;
     renderFresh();
     await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
     const before = count("GET /portfolio/summary");
 
     fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+    confirmRemoval();
 
     await waitFor(() => expect(count("DELETE /portfolio/watchlist/ASML")).toBe(1));
     await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   it("encodes the ticker when removing it", async () => {
@@ -178,6 +206,7 @@ describe("PortfolioPage", () => {
     await waitFor(() => expect(screen.getByText("^GSPC")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /remove \^gspc from watchlist/i }));
+    confirmRemoval();
 
     await waitFor(() => expect(count("DELETE /portfolio/watchlist/%5EGSPC")).toBe(1));
   });
@@ -190,6 +219,7 @@ describe("PortfolioPage", () => {
     await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+    confirmRemoval();
 
     expect(await screen.findByText(/watchlist item not found/i)).toBeInTheDocument();
     expect(screen.getByText("ASML")).toBeInTheDocument();

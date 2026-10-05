@@ -2,7 +2,19 @@
 
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
-import { Alert, Box, Button, ButtonBase, IconButton, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  IconButton,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { Camera, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
@@ -111,11 +123,18 @@ export default function PortfolioPage() {
       mutateSnapshots();
     });
 
-  const removeFromWatchlist = (ticker: string) =>
-    watch.run(async () => {
-      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(ticker)}`, { method: "DELETE" });
+  // The ticker in the confirmation dialog. It is kept after the dialog closes so the text does not
+  // go blank while the dialog fades out.
+  const [removing, setRemoving] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  async function confirmRemoval() {
+    setConfirmOpen(false);
+    await watch.run(async () => {
+      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(removing)}`, { method: "DELETE" });
       mutateSummary();
     });
+  }
 
   function addToWatchlist() {
     const ticker = watchTicker.trim().toUpperCase();
@@ -269,7 +288,10 @@ export default function PortfolioPage() {
               size="small"
               aria-label={`Remove ${item.ticker} from watchlist`}
               disabled={watch.submitting}
-              onClick={() => void removeFromWatchlist(item.ticker)}
+              onClick={() => {
+                setRemoving(item.ticker);
+                setConfirmOpen(true);
+              }}
               sx={{ ml: 0.5, color: "var(--muted)" }}
             >
               <X size={16} />
@@ -309,6 +331,18 @@ export default function PortfolioPage() {
         )}
       </Panel>
       </Box>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogContent>
+          <DialogContentText>Remove {removing} from your watchlist?</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button color="error" onClick={() => void confirmRemoval()}>
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <TradeSheet
         open={tradeOpen}
