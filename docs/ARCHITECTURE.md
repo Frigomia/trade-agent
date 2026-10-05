@@ -250,6 +250,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that) |
+| DELETE | `/portfolio/watchlist/{ticker}` | — | Removes the caller's watchlist item (`204`; `404` if it is not on the list); 60 requests a minute per user |
 | GET | `/market/search?q=` | — | Stocks and ETFs matching a name, ticker or ISIN (`yfinance` search): up to 8 of `{symbol, name, type, exchange}`; `q` is 2–60 characters; cached an hour; 30 requests a minute per user; an empty list when Yahoo fails. The ticker field in the holding and backtest forms uses it |
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |

@@ -156,6 +156,45 @@ describe("PortfolioPage", () => {
     expect(screen.getByText("702.40")).toBeInTheDocument();
   });
 
+  it("removes a watchlist item and refreshes the list", async () => {
+    handlers["DELETE /portfolio/watchlist/ASML"] = () => null;
+    renderFresh();
+    await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+    const before = count("GET /portfolio/summary");
+
+    fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+
+    await waitFor(() => expect(count("DELETE /portfolio/watchlist/ASML")).toBe(1));
+    await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+  });
+
+  it("encodes the ticker when removing it", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      watchlist: [{ ticker: "^GSPC", asset_type: "ETF", note: null, current_price: 5000 }],
+    });
+    handlers["DELETE /portfolio/watchlist/%5EGSPC"] = () => null;
+    renderFresh();
+    await waitFor(() => expect(screen.getByText("^GSPC")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove \^gspc from watchlist/i }));
+
+    await waitFor(() => expect(count("DELETE /portfolio/watchlist/%5EGSPC")).toBe(1));
+  });
+
+  it("keeps the item and says why when the removal fails", async () => {
+    handlers["DELETE /portfolio/watchlist/ASML"] = () => {
+      throw new FakeApiError(404, "Watchlist item not found");
+    };
+    renderFresh();
+    await waitFor(() => expect(screen.getByText("ASML")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /remove asml from watchlist/i }));
+
+    expect(await screen.findByText(/watchlist item not found/i)).toBeInTheDocument();
+    expect(screen.getByText("ASML")).toBeInTheDocument();
+  });
+
   describe("empty portfolio", () => {
     const EMPTY: PortfolioSummary = {
       ...SUMMARY,

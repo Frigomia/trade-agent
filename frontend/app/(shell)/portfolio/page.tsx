@@ -2,8 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
-import { Alert, Box, Button, ButtonBase, TextField, Typography } from "@mui/material";
-import { Camera, Plus } from "lucide-react";
+import { Alert, Box, Button, ButtonBase, IconButton, TextField, Typography } from "@mui/material";
+import { Camera, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import type {
@@ -109,6 +109,12 @@ export default function PortfolioPage() {
     snapshot.run(async () => {
       await apiFetch("/portfolio/snapshot", { method: "POST" });
       mutateSnapshots();
+    });
+
+  const removeFromWatchlist = (ticker: string) =>
+    watch.run(async () => {
+      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(ticker)}`, { method: "DELETE" });
+      mutateSummary();
     });
 
   function addToWatchlist() {
@@ -248,7 +254,7 @@ export default function PortfolioPage() {
         {(summary?.watchlist ?? []).map((item) => (
           <Box
             key={item.ticker}
-            sx={{ display: "flex", py: 1, borderBottom: "1px solid var(--line)" }}
+            sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid var(--line)" }}
           >
             <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontWeight: 600 }}>{item.ticker}</Typography>
@@ -259,6 +265,15 @@ export default function PortfolioPage() {
             <Typography>
               {item.current_price !== null ? formatAmount(item.current_price) : DASH}
             </Typography>
+            <IconButton
+              size="small"
+              aria-label={`Remove ${item.ticker} from watchlist`}
+              disabled={watch.submitting}
+              onClick={() => void removeFromWatchlist(item.ticker)}
+              sx={{ ml: 0.5, color: "var(--muted)" }}
+            >
+              <X size={16} />
+            </IconButton>
           </Box>
         ))}
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
