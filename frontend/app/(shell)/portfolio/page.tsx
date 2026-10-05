@@ -57,13 +57,11 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
 function HoldingRow({
   holding,
   watched,
-  watching,
   onEdit,
   onWatch,
 }: {
   holding: HoldingSummary;
   watched: boolean;
-  watching: boolean;
   onEdit: () => void;
   onWatch: () => void;
 }) {
@@ -115,7 +113,7 @@ function HoldingRow({
         <IconButton
           size="small"
           aria-label={watched ? `${holding.ticker} is on your watchlist` : `Add ${holding.ticker} to watchlist`}
-          disabled={watched || watching}
+          disabled={watched}
           onClick={onWatch}
           sx={{ color: watched ? "var(--up)" : "var(--muted)" }}
         >
@@ -174,14 +172,14 @@ export default function PortfolioPage() {
   const typedTicker = watchTicker.trim().toUpperCase();
   const alreadyWatched = watched.has(typedTicker);
 
-  function addToWatchlist(ticker = typedTicker, assetType: AssetType = watchType) {
-    if (!ticker || watched.has(ticker)) return;
+  function addToWatchlist(ticker: string, assetType: AssetType) {
+    if (!ticker) return;
     return watch.run(async () => {
       await apiFetch("/portfolio/watchlist", {
         method: "POST",
         body: JSON.stringify({ ticker, asset_type: assetType }),
       });
-      if (ticker === typedTicker) setWatchTicker("");
+      setWatchTicker("");
       mutateSummary();
     });
   }
@@ -294,7 +292,6 @@ export default function PortfolioPage() {
               key={holding.ticker}
               holding={holding}
               watched={watched.has(holding.ticker.toUpperCase())}
-              watching={watch.submitting}
               onEdit={() => setHoldingForm({ open: true, holding })}
               onWatch={() => void addToWatchlist(holding.ticker, holding.asset_type)}
             />
@@ -366,7 +363,7 @@ export default function PortfolioPage() {
           <Button
             variant="outlined"
             disabled={alreadyWatched || watch.submitting}
-            onClick={() => void addToWatchlist()}
+            onClick={() => void addToWatchlist(typedTicker, watchType)}
             sx={{ whiteSpace: "nowrap" }}
           >
             Add to watchlist
