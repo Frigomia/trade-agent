@@ -61,7 +61,7 @@ export default function AdminPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         You manage access, not data.
       </Alert>
-      <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
         {(["all", "active", "invited", "disabled"] as const).map((value) => {
           const count =
             value === "all" ? (users ?? []).length : (users ?? []).filter((u) => u.status === value).length;
@@ -76,7 +76,8 @@ export default function AdminPage() {
         })}
       </Box>
       <Box
-        sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
+        // minmax(0, 1fr) on phones too: a bare grid column is `auto`, which grows to its widest row.
+        sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
       >
       <Panel sx={{ p: "4px 18px" }}>
       {filtered.map((user) => {
@@ -88,6 +89,8 @@ export default function AdminPage() {
           sx={{
             display: "flex",
             alignItems: "center",
+            // Wrap so a long address or the Resend/Revoke buttons drop to a second line on a phone.
+            flexWrap: "wrap",
             gap: 1.5,
             py: 1.5,
             borderBottom: "1px solid var(--line)",
@@ -97,7 +100,9 @@ export default function AdminPage() {
           }}
         >
           <Avatar email={user.email} />
-          <Typography sx={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          <Typography
+            sx={{ fontWeight: 600, flex: "1 1 96px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          >
             {user.email}
           </Typography>
           <Chip label={user.role} size="small" />
