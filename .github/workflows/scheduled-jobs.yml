@@ -48,5 +48,7 @@ jobs:
             exit 1
           fi
           # The machine gets the app's secrets and is removed when the command exits.
-          flyctl machine run "$IMAGE" python -m app.scheduled daily \
-            --app "$APP" --region fra --rm --restart no --vm-memory 512 --env APP_ENV=production
+          # Flags first, then `--`: flyctl's `-m` means --metadata, so without the `--` it would swallow
+          # the `-m` of `python -m app.scheduled` ("invalid key/value pairs specified for flag metadata").
+          flyctl machine run --app "$APP" --region fra --rm --restart no --vm-memory 512 \
+            --env APP_ENV=production "$IMAGE" -- python -m app.scheduled daily
