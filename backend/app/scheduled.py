@@ -17,7 +17,7 @@ from app.agents.jobs import create_job, default_ticker_infos, get_job_status, ru
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.memory.outcomes import evaluate_due_outcomes
-from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot, UserApiKey
+from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot
 from app.redis_client import get_redis
 from app.snapshots import record_snapshot
 from app.usage import (
@@ -192,6 +192,7 @@ async def _analyze_user(
         except claude_keys.ClaudeKeyRequired:
             return "skipped"  # includes a key that could not be decrypted (flagged inside)
         limit = effective_limit(user, "analysis_run", defaults)
+        role = user.role  # read while the session is open
     # The session is closed: the run below must not hold a database connection for minutes.
     # One run per user per UTC day: a second command run the same day (for example "Re-run jobs"
     # after a red run) must not be charged again. Set only now, so a skipped user keeps no marker.
@@ -200,12 +201,11 @@ async def _analyze_user(
         return "skipped"
     try:
         await check_and_increment_usage("analysis_run", str(user_id), limit)
-    except UsageLimitExceeded:
+    except Exception as exc:
         await _forget_marker(marker)  # nothing was charged, so the user may still run today
-        return "skipped"  # raced past the limit after pause_state; usage already took it back
-    except Exception:
-        await _forget_marker(marker)  # the counter could not be read or written: nothing charged
-        raise
+        if isinstance(exc, UsageLimitExceeded):
+            return "skipped"  # raced past the limit after pause_state; usage already took it back
+        raise  # the counter could not be read or written
     try:
         job_id = await create_job(user_id, infos)
         async with asyncio.timeout(run_seconds):
@@ -218,8 +218,7 @@ async def _analyze_user(
         return "failed"
     errored = status is not None and any("error" in r for r in status["results"])
     with app_db.scoped_session(user_id) as db:
-        key = db.query(UserApiKey).filter_by(user_id=user_id).one_or_none()
-        rejected = key is not None and key.status != "ok"
+        rejected = not claude_keys.has_usable_key(db, user_id, role)  # flagged during the run
     return "failed" if errored or rejected else "ran"
 
 
