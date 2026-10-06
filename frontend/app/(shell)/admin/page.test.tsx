@@ -48,6 +48,7 @@ const USERS: AdminUserOut[] = [
     monthly_analysis_used: 5,
     monthly_chat_limit: 500,
     monthly_chat_used: 10,
+    claude_key_state: "ok",
   },
   {
     id: "u2",
@@ -63,6 +64,7 @@ const USERS: AdminUserOut[] = [
     monthly_analysis_used: 0,
     monthly_chat_limit: 500,
     monthly_chat_used: 0,
+    claude_key_state: "none",
   },
   {
     id: "u3",
@@ -78,6 +80,7 @@ const USERS: AdminUserOut[] = [
     monthly_analysis_used: 0,
     monthly_chat_limit: 500,
     monthly_chat_used: 0,
+    claude_key_state: "needs_attention",
   },
 ];
 
@@ -187,5 +190,20 @@ describe("AdminPage", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /user details/i })[1]);
 
     await waitFor(() => expect(screen.getByText(/remove user/i)).toBeInTheDocument());
+  });
+
+  it("shows each person's Claude state as a chip and the note, and nothing else about keys", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    const { container } = renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
+    expect(screen.getByText("Claude")).toBeInTheDocument(); // column header
+    expect(screen.getAllByText("Connected")).toHaveLength(1);
+    expect(screen.getAllByText("Not connected")).toHaveLength(1); // the invited user
+    expect(screen.getAllByText("Needs attention")).toHaveLength(1);
+    expect(
+      screen.getByText("You see only whether a key is connected, never the key and never its digits."),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/sk-ant|last four|…w{4}/i);
   });
 });

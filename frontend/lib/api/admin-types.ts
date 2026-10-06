@@ -12,6 +12,8 @@ export interface AdminUserOut {
   monthly_analysis_used: number | null;
   monthly_chat_limit: number | null;
   monthly_chat_used: number | null;
+  /** Only whether a key is connected; the key and its digits are never sent to admins. */
+  claude_key_state: "none" | "ok" | "needs_attention";
 }
 
 export interface LimitDefaults {

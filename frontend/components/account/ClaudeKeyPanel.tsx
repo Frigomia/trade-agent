@@ -3,19 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { KeyRound, RefreshCw, Trash2 } from "lucide-react";
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Skeleton, Typography } from "@mui/material";
+import { ClaudeStateChip } from "@/components/claude/ClaudeStateChip";
 import { Panel } from "@/components/ui/Panel";
 import { useClaudeKey } from "@/lib/claudeKey";
 import { useAction } from "@/lib/useAction";
 
 const GUIDE = "/more/connect-claude";
 const STEP_KEY = `${GUIDE}?step=5`;
-
-const CHIP = {
-  ok: { label: "Connected", color: "var(--up)", bg: "var(--up-bg)" },
-  warn: { label: "Needs attention", color: "var(--warn)", bg: "var(--warn-bg)" },
-  none: { label: "Not connected", color: "var(--muted)", bg: "transparent" },
-} as const;
 
 /** The Account "Claude" panel: connection state, replace/reconnect, and removing the key. */
 export function ClaudeKeyPanel() {
@@ -29,7 +24,6 @@ export function ClaudeKeyPanel() {
   }
 
   const kind = !status?.connected ? "none" : status.needs_attention ? "warn" : "ok";
-  const chip = CHIP[kind];
 
   return (
     <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }} aria-busy={isLoading}>
@@ -37,14 +31,7 @@ export function ClaudeKeyPanel() {
         <Typography component="h2" sx={{ fontSize: 16, fontWeight: 650 }}>
           Claude
         </Typography>
-        {status && (
-          <Chip
-            size="small"
-            label={chip.label}
-            variant="outlined"
-            sx={{ color: chip.color, borderColor: chip.color, bgcolor: chip.bg, fontWeight: 600 }}
-          />
-        )}
+        {status && <ClaudeStateChip kind={kind} />}
       </Box>
 
       {!status && error && (

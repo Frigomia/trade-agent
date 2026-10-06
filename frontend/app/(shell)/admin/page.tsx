@@ -8,6 +8,7 @@ import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
 import { UserDetailContent, UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
+import { ClaudeStateChip, chipKind } from "@/components/claude/ClaudeStateChip";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Panel } from "@/components/ui/Panel";
@@ -15,6 +16,12 @@ import { Panel } from "@/components/ui/Panel";
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
 // Only people who have signed in have limits and access to manage.
+// Fixed desktop column widths so the header and every row line up.
+const ROLE_W = 64;
+const STATUS_W = 84;
+const CLAUDE_W = 128;
+const ACTIONS_W = 150;
+
 const hasDetail = (user: AdminUserOut) => user.status === "active" || user.status === "disabled";
 
 export default function AdminPage() {
@@ -79,7 +86,18 @@ export default function AdminPage() {
         // minmax(0, 1fr) on phones too: a bare grid column is `auto`, which grows to its widest row.
         sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
       >
+      <Box>
       <Panel sx={{ p: "4px 18px" }}>
+      <Box
+        aria-hidden
+        sx={{ display: { xs: "none", md: "flex" }, gap: 1.5, py: 1, fontSize: 12, fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}
+      >
+        <Box sx={{ flex: 1 }}>Person</Box>
+        <Box sx={{ width: ROLE_W }}>Role</Box>
+        <Box sx={{ width: STATUS_W }}>Status</Box>
+        <Box sx={{ width: CLAUDE_W }}>Claude</Box>
+        <Box sx={{ width: ACTIONS_W }} />
+      </Box>
       {filtered.map((user) => {
         const clickable = isDesktop && hasDetail(user);
         return (
@@ -105,8 +123,17 @@ export default function AdminPage() {
           >
             {user.email}
           </Typography>
-          <Chip label={user.role} size="small" />
-          <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
+          {/* On a phone the role and status drop out; the Claude chip sits at the right. */}
+          <Box sx={{ display: { xs: "none", md: "block" }, width: ROLE_W }}>
+            <Chip label={user.role} size="small" />
+          </Box>
+          <Box sx={{ display: { xs: "none", md: "block" }, width: STATUS_W }}>
+            <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
+          </Box>
+          <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
+            <ClaudeStateChip kind={chipKind(user.claude_key_state)} />
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", width: { xs: "100%", md: ACTIONS_W }, justifyContent: "flex-end", "&:empty": { display: "none" } }}>
           {user.status === "invited" && (
             <>
               <Button size="small" onClick={() => handleAction(user.id, "resend")}>
@@ -131,10 +158,15 @@ export default function AdminPage() {
               <MoreHorizontal size={18} />
             </IconButton>
           )}
+          </Box>
         </Box>
         );
       })}
       </Panel>
+      <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mt: 1.5, px: 0.5 }}>
+        You see only whether a key is connected, never the key and never its digits.
+      </Typography>
+      </Box>
       {isDesktop && (
         <Panel sx={{ p: "20px 22px", position: "sticky", top: 24, maxHeight: "calc(100vh - 48px)", overflowY: "auto" }}>
           {selectedUser ? (

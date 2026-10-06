@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Drawer, Box, Typography, TextField, Button, Alert, Divider, IconButton } from "@mui/material";
 import { X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
+import { ClaudeStateChip, chipKind } from "@/components/claude/ClaudeStateChip";
 import { useAction } from "@/lib/useAction";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
@@ -58,6 +59,10 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
           {user.email}
         </Typography>
         <Typography sx={{ color: "var(--muted)", fontSize: 13, mt: 0.5 }}>{user.status}</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Claude</Typography>
+          <ClaudeStateChip kind={chipKind(user.claude_key_state)} />
+        </Box>
 
         <Divider sx={{ my: 2 }} />
 

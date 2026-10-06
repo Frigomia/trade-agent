@@ -27,6 +27,7 @@ const USERS: AdminUserOut[] = [
     monthly_analysis_used: 7,
     monthly_chat_limit: 500,
     monthly_chat_used: 42,
+    claude_key_state: "none",
   },
 ];
 
