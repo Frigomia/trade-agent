@@ -30,7 +30,7 @@ vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} 
 import TodayPage from "./page";
 
 function renderFresh(ui: React.ReactElement) {
-  return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>);
+  return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>{ui}</SWRConfig>);
 }
 
 function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
@@ -291,7 +291,9 @@ describe("TodayPage without a usable Claude key", () => {
       if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
       if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
       if (path === "/analysis/run" && init?.method === "POST") {
-        return runError ? Promise.reject(runError) : Promise.resolve({ job_id: "job-1" });
+        if (!runError) return Promise.resolve({ job_id: "job-1" });
+        keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+        return Promise.reject(runError);
       }
       return Promise.reject(new Error("unexpected " + path));
     });
@@ -331,6 +333,9 @@ describe("TodayPage without a usable Claude key", () => {
 
     await screen.findByText(/nothing to decide right now/i);
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/me"));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
     expect(screen.queryByText("Connect Claude to start analyzing")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
   });
@@ -355,5 +360,47 @@ describe("TodayPage without a usable Claude key", () => {
     expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
     expect(screen.queryByText("Connect Claude to use this.")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("locks an admin whose own key is flagged", async () => {
+    role = "admin";
+    keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeDisabled();
+  });
+
+  it("shows no card while the status request is still pending", async () => {
+    keyStatus = undefined;
+    apiFetch.mockImplementation((path: string) => {
+      if (path === "/me/claude-key") return new Promise(() => {});
+      if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
+      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
+      return Promise.reject(new Error("unexpected " + path));
+    });
+    renderFresh(<TodayPage />);
+
+    await screen.findByText(/nothing to decide right now/i);
+    expect(screen.queryByText(/connect claude to/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Your Claude key needs attention")).not.toBeInTheDocument();
+  });
+
+  it("unlocks after a 409 once a refetch finds the key usable again", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: false };
+    runError = new FakeApiError(409, "Connect Claude to use this.", "claude_key_required");
+    renderFresh(<TodayPage />);
+
+    await screen.findByText(/nothing to decide right now/i);
+    fireEvent.click(screen.getByRole("button", { name: /^run analysis$/i }));
+    await screen.findByText("Your Claude key needs attention");
+
+    keyStatus = { connected: true, last4: "wxyz", needs_attention: false };
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await waitFor(() => expect(screen.queryByText("Your Claude key needs attention")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SWRConfig } from "swr";
 
 const apiFetch = vi.fn();
@@ -41,7 +41,7 @@ function msg(id: number, role: "user" | "assistant", content: string) {
 
 function renderFresh() {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
       <ChatPage />
     </SWRConfig>,
   );
@@ -271,7 +271,11 @@ describe("ChatPage without a usable Claude key", () => {
       if (path === "/me") return { role };
       if (path === HISTORY_PATH) return history;
       if (path === "/me/usage") return usage;
-      if (path === "/chat" && init?.method === "POST" && chatError) throw chatError;
+      if (path === "/chat" && init?.method === "POST" && chatError) {
+        // The backend flags the key as it refuses.
+        keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+        throw chatError;
+      }
       throw new Error(`unexpected ${init?.method ?? "GET"} ${path}`);
     });
   });
@@ -307,6 +311,9 @@ describe("ChatPage without a usable Claude key", () => {
 
     expect(await screen.findByLabelText("Message")).toBeInTheDocument();
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/me"));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
     expect(screen.queryByText("Connect Claude to use Chat")).not.toBeInTheDocument();
   });
 
@@ -329,5 +336,44 @@ describe("ChatPage without a usable Claude key", () => {
     expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
     expect(screen.queryByText(/could not get a reply/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+  });
+
+  it("locks an admin whose own key is flagged", async () => {
+    role = "admin";
+    keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+    renderFresh();
+
+    expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
+  });
+
+  it("shows no card while the status request is still pending", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/me/claude-key") return new Promise(() => {});
+      if (path === HISTORY_PATH) return history;
+      if (path === "/me/usage") return usage;
+      throw new Error(`unexpected ${path}`);
+    });
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText(/claude/i)).not.toBeInTheDocument();
+  });
+
+  it("unlocks after a 409 once a refetch finds the key usable again", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: false };
+    chatError = new FakeApiError(409, "Connect Claude to use this.", "claude_key_required");
+    renderFresh();
+
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Your Claude key needs attention");
+
+    keyStatus = { connected: true, last4: "wxyz", needs_attention: false };
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText("Your Claude key needs attention")).not.toBeInTheDocument();
   });
 });

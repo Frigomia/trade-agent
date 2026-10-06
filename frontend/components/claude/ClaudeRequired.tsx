@@ -6,6 +6,12 @@ import { AlertTriangle, KeyRound } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { ClaudeLock } from "@/lib/claudeKey";
 
+const RECONNECT = {
+  title: "Your Claude key needs attention",
+  text: "Anthropic did not accept your key. It may have been revoked, or the account may be out of credit.",
+  cta: "Reconnect",
+};
+
 const COPY = {
   chat: {
     connect: {
@@ -13,11 +19,7 @@ const COPY = {
       text: "Chat and analysis run on your own Claude account. Setting it up takes about five minutes, once.",
       cta: "Connect Claude",
     },
-    reconnect: {
-      title: "Your Claude key needs attention",
-      text: "Anthropic did not accept your key. It may have been revoked, or the account may be out of credit.",
-      cta: "Reconnect",
-    },
+    reconnect: RECONNECT,
   },
   today: {
     connect: {
@@ -25,11 +27,7 @@ const COPY = {
       text: "Run analysis and Chat use your own Claude account. About five minutes, once.",
       cta: "Set up",
     },
-    reconnect: {
-      title: "Your Claude key needs attention",
-      text: "Anthropic did not accept your key. It may have been revoked, or the account may be out of credit.",
-      cta: "Reconnect",
-    },
+    reconnect: RECONNECT,
   },
 } as const;
 

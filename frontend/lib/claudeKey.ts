@@ -21,8 +21,8 @@ export function isClaudeKeyRequired(error: unknown): boolean {
  * The caller's Claude key status. `save` and `remove` throw the ApiError (run them inside
  * `useAction`). The key string only travels in the PUT body: the hook keeps just the response.
  */
-export function useClaudeKey() {
-  const { data, error, isLoading, mutate } = useSWR<ClaudeKeyStatus>(PATH, apiFetch);
+export function useClaudeKey(onStatus?: (status: ClaudeKeyStatus) => void) {
+  const { data, error, isLoading, mutate } = useSWR<ClaudeKeyStatus>(PATH, apiFetch, { onSuccess: onStatus });
 
   async function save(apiKey: string): Promise<void> {
     // The PUT response becomes the cached status; SWR then revalidates with GET.
@@ -48,8 +48,11 @@ export type ClaudeLock = "connect" | "reconnect" | null;
  * An admin with no personal key uses the server key, so only a flagged key locks an admin.
  */
 export function useClaudeLock(): { lock: ClaudeLock; markRequired: () => void } {
-  const { status, refresh } = useClaudeKey();
   const [forced, setForced] = useState(false);
+  // A refetch that finds the key usable again (e.g. back from reconnecting) lifts the forced lock.
+  const { status, refresh } = useClaudeKey((s) => {
+    if (s.connected && !s.needs_attention) setForced(false);
+  });
   const needsRole = status !== undefined && !status.connected;
   const { data: me } = useSWR<{ role: string }>(needsRole ? "/me" : null, apiFetch);
 
