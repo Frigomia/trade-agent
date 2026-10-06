@@ -18,27 +18,26 @@ interface Step {
   link?: { label: string; href: string };
 }
 
-// ponytail: only the API keys deep link is verified; the others open the console root until their pages are confirmed.
 const STEPS: Step[] = [
   {
     title: "Create an Anthropic account",
-    text: "Sign up at console.anthropic.com with any email.",
-    link: { label: "Open console.anthropic.com", href: "https://console.anthropic.com" },
+    text: "Sign up at platform.claude.com with any email.",
+    link: { label: "Open platform.claude.com", href: "https://platform.claude.com" },
   },
   {
     title: "Add a small amount of credit",
     text: "Under Billing, add credit. Claude is pay-as-you-go: you pay Anthropic only for what you use. Their pricing page has the current rates.",
-    link: { label: "Open Billing", href: "https://console.anthropic.com" },
+    link: { label: "Open Billing", href: "https://platform.claude.com/settings/billing" },
   },
   {
     title: "Set a monthly spend limit",
-    text: "In the console, set a monthly limit so usage can never go past what you chose.",
-    link: { label: "Open limits", href: "https://console.anthropic.com" },
+    text: "In the billing settings, set a monthly spend limit so usage can never go past what you chose.",
+    link: { label: "Open billing settings", href: "https://platform.claude.com/settings/billing" },
   },
   {
     title: "Create a key",
     text: "On the API keys page, create a key and name it trade-agent. Copy it straight away: Anthropic shows it only once.",
-    link: { label: "Open API keys", href: "https://console.anthropic.com/settings/keys" },
+    link: { label: "Open API keys", href: "https://platform.claude.com/settings/keys" },
   },
   {
     title: "Paste it here",

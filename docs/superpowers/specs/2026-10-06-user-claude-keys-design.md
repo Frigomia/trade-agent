@@ -84,10 +84,10 @@ and never in a response.
 ## Frontend
 
 - One reusable **Connect Claude** guide, five short steps with a link each:
-  1. create an Anthropic account (console.anthropic.com);
-  2. add a small amount of credit under Billing (link to Anthropic's pricing, no numbers that go stale);
-  3. set a monthly spend limit;
-  4. create a key on the API keys page, name it `trade-agent`, copy it at once (it is shown only once);
+  1. create an Anthropic account (platform.claude.com, the Anthropic console);
+  2. add a small amount of credit under Billing (link to platform.claude.com/settings/billing, no numbers that go stale);
+  3. set a monthly spend limit in the billing settings (same link);
+  4. create a key on the API keys page (platform.claude.com/settings/keys), name it `trade-agent`, copy it at once (it is shown only once);
   5. paste it here and press "Check and save", then see "Connected" with the last four characters.
   Under it, a plain note: stored encrypted, used only for your own analyses and chat, removable at any
   time, and trade-agent never places trades. The exact menu names and links are checked against
@@ -132,3 +132,4 @@ rate limit on saving, and that no module keeps a decrypted key between requests.
   no credit (otherwise another zero-cost check is chosen).
 - The exact Anthropic exception types for an invalid key, a billing problem and a network failure.
 - Not verified against live Anthropic: a no-credit key is caught at first use (the key-listing check at save time may not detect an account with zero credit, so such a key shows as connected until it is used, when a rejected response flips it to needs_attention).
+- The console is now platform.claude.com (console.anthropic.com redirects). The settings/keys deep link was not independently verified.

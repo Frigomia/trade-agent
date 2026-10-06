@@ -61,7 +61,7 @@ describe("ConnectClaudeGuide", () => {
     renderGuide();
     expect(screen.getByText("Step 1 of 5")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Create an Anthropic account" })).toBeInTheDocument();
-    expect(screen.getByText(/sign up at console\.anthropic\.com/i)).toBeInTheDocument();
+    expect(screen.getByText(/sign up at platform.claude.com/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
     const link = screen.getByRole("link", { name: /open console\.anthropic\.com/i });
     expect(link).toHaveAttribute("target", "_blank");
@@ -208,5 +208,23 @@ describe("ConnectClaudeGuide", () => {
     expect(JSON.stringify({ ...localStorage })).not.toContain("SECRET");
     expect(JSON.stringify({ ...sessionStorage })).not.toContain("SECRET");
     expect(window.location.href).not.toContain("SECRET");
+  });
+});
+
+describe("ConnectClaudeGuide links", () => {
+  it.each([
+    ["1", /open platform\.claude\.com/i, "https://platform.claude.com"],
+    ["2", /open billing$/i, "https://platform.claude.com/settings/billing"],
+    ["3", /open billing settings/i, "https://platform.claude.com/settings/billing"],
+    ["4", /open api keys/i, "https://platform.claude.com/settings/keys"],
+  ])("step %s points at the right page", (step, name, href) => {
+    apiFetch.mockResolvedValue(NOT_CONNECTED);
+    search = `step=${step}`;
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <ConnectClaudeGuide />
+      </SWRConfig>,
+    );
+    expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
   });
 });
