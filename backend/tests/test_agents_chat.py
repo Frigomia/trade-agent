@@ -87,6 +87,7 @@ def test_run_chat_calls_claude_with_history_and_web_search(monkeypatch, db_sessi
     call_kwargs = mock_client.messages.create.call_args.kwargs
     assert call_kwargs["model"] == settings.anthropic_model
     assert call_kwargs["tools"][0]["type"] == "web_search_20260209"
+    assert call_kwargs["tools"][0]["max_uses"] == 5
     assert "untrusted" in call_kwargs["system"].lower()
     messages = call_kwargs["messages"]
     assert messages[0] == {"role": "user", "content": "what's my AAPL position?"}
