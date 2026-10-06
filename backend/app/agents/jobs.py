@@ -107,8 +107,11 @@ async def _process_ticker(
                     db.commit()
                     db.refresh(rec)
                     entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
-        except Exception:
-            logger.exception("Analysis failed for ticker %s", ticker_info["ticker"])
+        except Exception as exc:
+            # class name only: exception text and traceback can carry a user's key or prompt
+            logger.error(
+                "Analysis failed for ticker %s (%s)", ticker_info["ticker"], type(exc).__name__
+            )
             entry = {"ticker": ticker_info["ticker"], "error": "analysis failed"}
         await redis.rpush(f"job:{job_id}:results", json.dumps(entry))
         await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)

@@ -7,9 +7,18 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 import app.redis_client as redis_client_module
-from app import scheduled
-from app.models import Holding, PortfolioSnapshot, Recommendation
+from app import claude_keys, scheduled
+from app.models import (
+    AppUser,
+    Holding,
+    InvestmentPreferences,
+    PortfolioSnapshot,
+    Recommendation,
+    UserApiKey,
+    WatchlistItem,
+)
 from app.redis_client import get_redis
+from app.usage import _usage_key
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 THIRD_USER_ID = uuid.UUID("33333333-3333-3333-3333-333333333333")
@@ -225,17 +234,28 @@ def test_an_outcome_failure_for_one_user_does_not_stop_the_next(env):
 
 def test_summary_line_lists_every_counter():
     line = scheduled.Summary(
-        users=3, snapshots_recorded=2, snapshots_skipped=1, outcomes_evaluated=4, failures=0
+        users=3,
+        snapshots_recorded=2,
+        snapshots_skipped=1,
+        outcomes_evaluated=4,
+        failures=0,
+        analysis_runs=5,
+        analysis_skipped=6,
+        analysis_failures=7,
     ).line()
     assert line == (
-        "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0"
+        "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0 "
+        "analysis_runs=5 analysis_skipped=6 analysis_failures=7"
     )
 
 
 def _arun(coro):
     """Fresh Redis client per event loop (see tests/conftest.py)."""
     redis_client_module._redis = None
-    return asyncio.run(coro)
+    try:
+        return asyncio.run(coro)
+    finally:
+        redis_client_module._redis = None
 
 
 def _run_command(command, quote=None, compute=None):
@@ -495,3 +515,247 @@ def test_main_rejects_an_unknown_command_with_exit_2():
     with pytest.raises(SystemExit) as caught:
         scheduled.main(["nope"])
     assert caught.value.code == 2
+
+
+MONDAY = datetime(2026, 10, 5, 5, 30, tzinfo=UTC)
+SATURDAY = datetime(2026, 10, 10, 5, 30, tzinfo=UTC)
+
+
+def _opted_in(db, user_id, *, key=True, role="user", status="active"):
+    add_app_user(db, user_id, role=role, status=status)
+    db.add(InvestmentPreferences(user_id=user_id, auto_analysis=True))
+    if key:
+        db.add(
+            UserApiKey(
+                user_id=user_id,
+                ciphertext=claude_keys.encrypt_key(user_id, "sk-ant-test-key-0000"),
+                last4="0000",
+            )
+        )
+    db.commit()
+
+
+def _state(action="BUY"):
+    return {
+        "action": action,
+        "reasoning": ["x"],
+        "ai_analysis": None,
+        "suggested_position_pct": 0.05,
+        "quote": {"price": 100.0},
+        "fundamental_score": 5,
+        "technical_signal": "NEUTRAL",
+    }
+
+
+def _run_analysis(now=MONDAY, graph=None):
+    summary = scheduled.Summary()
+    graph = graph or AsyncMock(return_value=_state())
+    with patch("app.agents.jobs.run_graph_for_ticker", graph):
+        _arun(scheduled.run_analysis(summary, now=now))
+    return summary, graph
+
+
+def _recs(db, user_id):
+    return db.query(Recommendation).filter_by(user_id=user_id).all()
+
+
+def _usage(user_id):
+    return _arun(get_redis().get(_usage_key("analysis_run", str(user_id))))
+
+
+def test_an_opted_in_user_gets_scheduled_recommendations_and_one_run_is_counted(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    summary, graph = _run_analysis()
+    recs = _recs(env, USER_ID)
+    assert [(r.ticker, r.source, r.status) for r in recs] == [("AAPL", "scheduled", "PENDING")]
+    assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (1, 0, 0)
+    # the run was made with the user's own client, never the server key
+    assert graph.await_args.args[4] is not None
+    assert _usage(USER_ID) == "1"
+
+
+def test_a_user_who_has_not_opted_in_is_left_alone(env):
+    add_app_user(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped) == (0, 0)
+
+
+def test_weekends_do_nothing(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    summary, graph = _run_analysis(now=SATURDAY)
+    graph.assert_not_awaited()
+    assert summary.analysis_runs == 0
+
+
+def test_only_active_users_run(env):
+    _opted_in(env, USER_ID, status="invited")
+    _holding(env, USER_ID, "AAPL")
+    _, graph = _run_analysis()
+    graph.assert_not_awaited()
+
+
+def test_a_user_without_a_key_is_skipped_not_failed(env):
+    _opted_in(env, USER_ID, key=False)
+    _holding(env, USER_ID, "AAPL")
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_skipped, summary.analysis_failures) == (1, 0)
+
+
+def test_an_admin_without_a_personal_key_uses_the_server_key(env):
+    _opted_in(env, USER_ID, key=False, role="admin")
+    _holding(env, USER_ID, "AAPL")
+    summary, graph = _run_analysis()
+    assert summary.analysis_runs == 1
+    assert graph.await_args.args[4] is None  # client None = the server's key, admin only
+
+
+def test_a_user_at_the_monthly_limit_is_skipped_and_one_below_it_runs(env):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    for uid in (USER_ID, OTHER_USER_ID):
+        _holding(env, uid, "AAPL")
+        env.query(AppUser).filter_by(id=uid).update({"monthly_analysis_limit": 2})
+    env.commit()
+
+    async def seed():
+        redis = get_redis()
+        await redis.set(_usage_key("analysis_run", str(USER_ID)), 2)  # used all
+        await redis.set(_usage_key("analysis_run", str(OTHER_USER_ID)), 1)  # one left
+
+    _arun(seed())
+    summary, _ = _run_analysis()
+    assert _recs(env, USER_ID) == []
+    assert len(_recs(env, OTHER_USER_ID)) == 1
+    assert (summary.analysis_runs, summary.analysis_skipped) == (1, 1)
+
+
+def test_a_fresh_pending_call_is_skipped_and_an_old_one_is_replaced(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, USER_ID, "MSFT")
+    now = MONDAY.replace(tzinfo=None)
+    for ticker, age in (("AAPL", 1), ("MSFT", 4)):
+        env.add(
+            Recommendation(
+                user_id=USER_ID,
+                ticker=ticker,
+                asset_type="STOCK",
+                action="HOLD",
+                reasoning=["old"],
+                created_at=now - timedelta(days=age),
+            )
+        )
+    env.commit()
+    summary, graph = _run_analysis()
+    assert [c.args[1] for c in graph.await_args_list] == ["MSFT"]  # AAPL is fresh: left alone
+    by_ticker = {}
+    for r in _recs(env, USER_ID):
+        by_ticker.setdefault(r.ticker, []).append((r.source, r.status))
+    assert by_ticker["AAPL"] == [("manual", "PENDING")]
+    assert sorted(by_ticker["MSFT"]) == [("manual", "SUPERSEDED"), ("scheduled", "PENDING")]
+    assert summary.analysis_runs == 1
+
+
+def test_running_twice_on_the_same_day_skips_everything_the_second_time(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _run_analysis()
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped) == (0, 1)
+    assert _usage(USER_ID) == "1"
+
+
+def test_nothing_to_analyze_counts_no_run(env):
+    _opted_in(env, USER_ID)  # no holdings, no watchlist
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, OTHER_USER_ID, "AAPL", shares=0)  # a closed position is not analyzed
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped) == (0, 2)
+    assert _usage(USER_ID) is None
+
+
+def test_the_watchlist_is_analyzed_too(env):
+    _opted_in(env, USER_ID)
+    env.add(WatchlistItem(user_id=USER_ID, ticker="NVDA", asset_type="STOCK"))
+    env.commit()
+    _run_analysis()
+    assert [(r.ticker, r.source) for r in _recs(env, USER_ID)] == [("NVDA", "scheduled")]
+
+
+def test_one_failing_user_does_not_stop_the_others_and_the_command_fails(env, caplog):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, OTHER_USER_ID, "MSFT")
+
+    async def graph(user_id, ticker, *args):
+        if user_id == USER_ID:
+            raise RuntimeError("boom sk-ant-test-key-0000")
+        return _state()
+
+    with caplog.at_level(logging.DEBUG):
+        summary, _ = _run_analysis(graph=AsyncMock(side_effect=graph))
+    assert len(_recs(env, OTHER_USER_ID)) == 1
+    assert summary.analysis_failures == 1 and summary.analysis_runs == 2
+    assert "sk-ant-test-key-0000" not in caplog.text
+
+
+def test_a_key_anthropic_rejects_during_the_run_counts_as_a_failure_and_is_flagged(env):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, OTHER_USER_ID, "MSFT")
+
+    async def graph(user_id, ticker, *args):
+        if user_id == USER_ID:
+            claude_keys.mark_needs_attention(user_id)  # what graph.news_agent does on a 401
+        return _state()
+
+    summary, _ = _run_analysis(graph=AsyncMock(side_effect=graph))
+    env.expire_all()
+    assert env.query(UserApiKey).filter_by(user_id=USER_ID).one().status == "needs_attention"
+    assert summary.analysis_failures == 1
+    assert len(_recs(env, OTHER_USER_ID)) == 1
+
+
+def test_an_undecryptable_key_is_skipped_and_flagged_not_crashed(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    env.query(UserApiKey).update({"ciphertext": b"not a real ciphertext at all, no."})
+    env.commit()
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_skipped, summary.analysis_failures) == (1, 0)
+    env.expire_all()
+    assert env.query(UserApiKey).one().status == "needs_attention"
+
+
+def test_a_run_past_the_time_budget_skips_the_remaining_users(env, monkeypatch):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, OTHER_USER_ID, "MSFT")
+    monkeypatch.setattr(scheduled, "MAX_ANALYSIS_SECONDS", -1)
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert summary.analysis_skipped == 2
+
+
+def test_the_analysis_command_runs_the_step_and_exits_non_zero_on_a_failed_user(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    graph = AsyncMock(side_effect=RuntimeError("boom"))
+    # run_job swallows a per-ticker error into the job results; the user still counts as failed
+    with (
+        patch("app.agents.jobs.run_graph_for_ticker", graph),
+        patch("app.scheduled.datetime") as clock,
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("analysis")) == 1
