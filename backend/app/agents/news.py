@@ -74,7 +74,7 @@ async def run_news_agent(
             model=settings.anthropic_model,
             max_tokens=4096,
             system=NEWS_AGENT_SYSTEM_PROMPT,
-            tools=[{"type": "web_search_20260209", "name": "web_search"}],
+            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 3}],
             messages=[{"role": "user", "content": user_message}],
         )
 

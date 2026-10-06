@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
+from app.body_limit import BodySizeLimitMiddleware
 from app.claude_keys import (  # noqa: F401
     ClaudeKeyRejected,
     ClaudeKeyRequired,
@@ -52,6 +53,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Trading Agent API", lifespan=lifespan, **docs_kwargs(settings.app_env))
+# Added first so CORS wraps it: a 413 still carries CORS headers the browser can read.
+app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],

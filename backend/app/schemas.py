@@ -11,13 +11,20 @@ from pydantic import (
     StringConstraints,
 )
 
-# Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A".
-# Excludes path metacharacters (/, ?, #, ..) that yfinance interpolates
-# unescaped into its request URL. Pattern is case-insensitive because
+# Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
+# Excludes path metacharacters (/, ?, #) and any ".." that yfinance interpolates
+# unescaped into its request URL (the regex engine has no look-ahead, so a "." must be
+# followed by another non-dot character); the first character must be a letter, digit
+# or "^" (so "." and "-x" are out). Pattern is case-insensitive because
 # pydantic-core checks the pattern before applying to_upper.
 Ticker = Annotated[
     str,
-    StringConstraints(strip_whitespace=True, to_upper=True, pattern=r"^[A-Za-z0-9.\-^]{1,20}$"),
+    StringConstraints(
+        strip_whitespace=True,
+        to_upper=True,
+        max_length=20,
+        pattern=r"^[A-Za-z0-9^](?:[A-Za-z0-9\-]|\.[A-Za-z0-9\-])*$",
+    ),
 ]
 
 # Matches every DB column comment that already documents this as the only

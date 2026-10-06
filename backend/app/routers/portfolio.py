@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
+from app.http_headers import no_store
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import (
@@ -30,7 +31,9 @@ logger = logging.getLogger(__name__)
 # The router-level dependency makes authentication run before anything else on every route,
 # even one whose handler forgets to ask for the user.
 router = APIRouter(
-    prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(get_current_user)]
+    prefix="/portfolio",
+    tags=["portfolio"],
+    dependencies=[Depends(get_current_user), Depends(no_store)],
 )
 
 # Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
@@ -145,7 +148,11 @@ def delete_watchlist_item(
     db.commit()
 
 
-@router.post("/trades", response_model=TradeOut)
+@router.post(
+    "/trades",
+    response_model=TradeOut,
+    dependencies=[Depends(rate_limiter("portfolio_trades", limit=WRITE_LIMIT_PER_MINUTE))],
+)
 def log_trade(
     payload: TradeIn,
     user: CurrentUser = Depends(get_current_user),

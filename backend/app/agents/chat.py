@@ -123,7 +123,7 @@ async def run_chat(
             model=settings.anthropic_model,
             max_tokens=4096,
             system=system_prompt,
-            tools=[{"type": "web_search_20260209", "name": "web_search"}],
+            tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 5}],
             messages=messages,
         )
 

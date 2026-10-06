@@ -261,7 +261,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that) |
 | DELETE | `/portfolio/watchlist/{ticker}` | — | Removes the caller's watchlist item (`204`; `404` if it is not on the list); 60 requests a minute per user |
 | GET | `/market/search?q=` | — | Stocks and ETFs matching a name, ticker or ISIN (`yfinance` search): up to 8 of `{symbol, name, type, exchange}`; `q` is 2–60 characters; cached an hour; 30 requests a minute per user; an empty list when Yahoo fails. The ticker field in the holding and backtest forms uses it |
-| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis |
+| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis; 60 requests a minute per user |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
@@ -300,6 +300,11 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/admin/users/{id}/revoke` | — | **Admin only.** Delete a pending invitation. `204` |
 | POST | `/admin/users/{id}/disable` or `/admin/users/{id}/enable` | — | **Admin only.** Ban/unban in Supabase and set status; disabling takes effect on the next request |
 | DELETE | `/admin/users/{id}` | `{confirm_email}` | **Admin only.** Permanent removal: disables, deletes the user's rows (through their own RLS scope), the Supabase user, then the `app_users` row; retryable. `204`; `422` if `confirm_email` does not match |
+
+Cross-cutting behaviour: every request body is capped at 64 KiB (`app/body_limit.py`, plain ASGI
+middleware); a larger one, declared by `Content-Length` or streamed, gets `413
+{"detail": "Request body too large."}` before it is buffered or parsed, and `GET`/`HEAD`
+are untouched. Responses under `/portfolio` and `GET /me/export` carry `Cache-Control: no-store`.
 
 Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
@@ -411,6 +416,11 @@ before attempting this — a fake approval gate is worse than an honest
 ---
 
 ## 9. MCP server
+
+> **Status: NOT built yet.** There is no `backend/app/mcp_server.py`; everything below is the
+> design. When it is built it must take an explicit user id (there is no request or JWT on a
+> stdio server) and open every database session with `scoped_session(user_id)` so RLS applies.
+> It must never connect with the owner (`MIGRATION_DATABASE_URL`) URL, which bypasses RLS.
 
 `backend/app/mcp_server.py`, stdio transport (standard for local Claude
 Desktop integration). Run with:
@@ -599,8 +609,9 @@ and invited users; nobody can sign up on their own.
 - **First admin**: create your user in the Supabase dashboard, then run
   `python -m app.auth.bootstrap_admin <email> <supabase-uid>` (it refuses to run
   if an admin already exists).
-- **Frontend** (built): `@supabase/ssr` in Next.js: login page,
-  middleware that redirects unauthenticated requests, session token attached to
+- **Frontend** (built): `@supabase/ssr` in Next.js: login page, a proxy (`frontend/proxy.ts`) that only
+  refreshes the session cookie, server-side enforcement in the layouts `app/(shell)/layout.tsx` and
+  `app/(shell)/admin/layout.tsx` (they redirect unauthenticated or non-admin users), session token attached to
   every backend request.
 - New env vars: `SUPABASE_URL` (backend), `SUPABASE_SECRET_KEY` (backend, secret),
   `INVITE_REDIRECT_URL` (backend), `INVITE_LINK_HOURS` (backend, optional, default 24),
@@ -689,10 +700,18 @@ and invited users; nobody can sign up on their own.
      `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation`.
      Without this change, invite links still point at the old implicit-flow URL and will not work
      even with the frontend code in place.
-  2. **Authentication → URL Configuration → Redirect URLs**: add the deployed frontend's
-     `<origin>/auth/confirm` and `<origin>/reset-password` to the allow-list — `resetPasswordForEmail`
-     builds its `redirectTo` from `window.location.origin`, so every origin the app is served from
-     needs both paths allow-listed, or Supabase silently redirects to the Site URL instead.
+  2. **Authentication → URL Configuration → Redirect URLs**: allow-list the exact production origin's
+     `<origin>/auth/confirm` and `<origin>/reset-password` and nothing broader. Never use a wildcard
+     such as `*.vercel.app`: any site on that domain could then receive the redirect. The frontend
+     builds the reset-password `redirectTo` from `NEXT_PUBLIC_SITE_URL` (set it in Vercel to the
+     production origin; it falls back to `window.location.origin` only when unset), so preview
+     deployments do not need their own entries. Email links are confirmed in two steps:
+     `GET /auth/confirm` only shows a "Continue" page (so a link click or an email scanner cannot
+     swap the session or burn the token), and the same-origin `POST /auth/confirm` calls
+     `verifyOtp` (types `invite` and `recovery` only) and redirects to `/accept-invitation` or
+     `/reset-password`. After a recovery link the route sets a 15-minute `ta_recovery` cookie;
+     `/reset-password` shows the new-password form only with that cookie or a
+     `PASSWORD_RECOVERY` event, and sends any other signed-in user to `/more/account`.
   **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
   walkthrough against a live Supabase project has not been performed — the implementing agent's
   sandboxed environment has no browser or email access. This remains a required manual

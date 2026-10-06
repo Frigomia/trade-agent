@@ -739,3 +739,16 @@ def test_delete_watchlist_item_is_rate_limited(client):
         assert client.delete("/portfolio/watchlist/NOPE").status_code == 404
 
     assert client.delete("/portfolio/watchlist/NOPE").status_code == 429
+
+
+def test_log_trade_is_rate_limited(client):
+    payload = {"date": "2024-03-01", "ticker": "NOPE", "action": "BUY", "shares": 1, "price": 1.0}
+    for _ in range(60):
+        assert client.post("/portfolio/trades", json=payload).status_code == 404
+
+    assert client.post("/portfolio/trades", json=payload).status_code == 429
+
+
+@pytest.mark.parametrize("path", ["/portfolio/holdings", "/portfolio/snapshots"])
+def test_portfolio_responses_are_not_cacheable(client, path):
+    assert client.get(path).headers["cache-control"] == "no-store"
