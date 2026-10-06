@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { Alert, Box, Button, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { ChangePasswordForm } from "@/components/account/ChangePasswordForm";
+import { ClaudeKeyPanel } from "@/components/account/ClaudeKeyPanel";
 import { DataActions } from "@/components/account/DataActions";
 import { UsageSummary } from "@/components/account/UsageSummary";
 import { apiFetch } from "@/lib/api/client";
@@ -98,6 +99,7 @@ export default function AccountPage() {
             </Panel>
           )}
           {usageError && <Alert severity="error">Could not load your usage.</Alert>}
+          <ClaudeKeyPanel />
           <Panel component="nav" sx={{ p: "4px 18px" }}>
             {LINKS.map((l) => (
               <SettingsRow key={l.href} icon={l.icon} label={l.label} component={Link} href={l.href} />

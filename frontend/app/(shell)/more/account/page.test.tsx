@@ -13,6 +13,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 vi.mock("@/components/account/ChangePasswordForm", () => ({ ChangePasswordForm: () => "change-password" }));
 vi.mock("@/components/account/DataActions", () => ({ DataActions: ({ email }: { email: string }) => `data-actions:${email}` }));
 
+vi.mock("@/components/account/ClaudeKeyPanel", () => ({ ClaudeKeyPanel: () => "claude-key-panel" }));
+
 import AccountPage from "./page";
 
 function renderFresh() {
@@ -46,6 +48,7 @@ describe("AccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /change password/i }));
     expect(screen.getByText("change-password")).toBeInTheDocument();
     expect(screen.getByText("data-actions:me@example.com")).toBeInTheDocument();
+    expect(screen.getByText("claude-key-panel")).toBeInTheDocument();
   });
 
   it("signs out and returns to login", async () => {
