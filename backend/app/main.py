@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
+from app.body_limit import BodySizeLimitMiddleware
 from app.claude_keys import (  # noqa: F401
     ClaudeKeyRejected,
     ClaudeKeyRequired,
@@ -58,6 +59,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(BodySizeLimitMiddleware)
 app.include_router(portfolio.router)
 app.include_router(market.router)
 app.include_router(analysis.router)
