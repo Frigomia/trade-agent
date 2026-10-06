@@ -15,6 +15,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { CostBasisTile, TodayDesktop } from "@/components/recommendations/TodayDesktop";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
+import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
+import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
 const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
 
@@ -55,6 +57,7 @@ export default function TodayPage() {
   const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const [jobId, setJobId] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const { lock, markRequired } = useClaudeLock();
 
   // jobId is deliberately never cleared once set: `job` stays cached after polling stops, so the
   // FAILED/DONE banners below keep rendering. A second Run-analysis click just sets a new id.
@@ -77,7 +80,8 @@ export default function TodayPage() {
       });
       setJobId(job_id);
     } catch (err) {
-      setRunError(err instanceof ApiError ? err.detail : "Something went wrong.");
+      if (isClaudeKeyRequired(err)) markRequired();
+      else setRunError(err instanceof ApiError ? err.detail : "Something went wrong.");
     }
   }
 
@@ -106,7 +110,7 @@ export default function TodayPage() {
           <Button
             variant="text"
             startIcon={<Play size={14} />}
-            disabled={running}
+            disabled={running || lock !== null}
             onClick={runAnalysis}
             sx={{
               minHeight: 0,
@@ -122,6 +126,15 @@ export default function TodayPage() {
           </Button>
         }
       />
+      {lock && (
+        <>
+          <ClaudeRequired variant="today" lock={lock} />
+          <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mb: 1.5 }}>
+            {lock === "reconnect" ? "Reconnect Claude to run an analysis" : "Connect Claude to run an analysis"}. Everything else
+            works without it.
+          </Typography>
+        </>
+      )}
       <Box sx={{ display: "flex", gap: 1.25 }}>
         <PortfolioTile />
         {isDesktop && <CostBasisTile />}
@@ -148,7 +161,7 @@ export default function TodayPage() {
         </Alert>
       )}
       {recommendations?.length === 0 && emptyKind !== null && (
-        <TodayEmpty firstRun={emptyKind === "first-run"} running={running} onRun={runAnalysis} />
+        <TodayEmpty firstRun={emptyKind === "first-run"} running={running} locked={lock !== null} onRun={runAnalysis} />
       )}
       {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
       {!isDesktop && recommendations?.map((recommendation) => (

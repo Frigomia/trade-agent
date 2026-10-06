@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { ApiError, apiFetch } from "@/lib/api/client";
 
@@ -35,5 +36,32 @@ export function useClaudeKey() {
     await mutate();
   }
 
-  return { status: data, error, isLoading, save, remove };
+  return { status: data, error, isLoading, save, remove, refresh: mutate };
+}
+
+export type ClaudeLock = "connect" | "reconnect" | null;
+
+/**
+ * Whether Chat and Run analysis are locked behind a Claude key, and `markRequired` for when a
+ * request answers 409 claude_key_required (a key revoked mid-session). Unknown never locks: while
+ * the status loads, or if it fails to load, the normal UI shows and the backend still enforces.
+ * An admin with no personal key uses the server key, so only a flagged key locks an admin.
+ */
+export function useClaudeLock(): { lock: ClaudeLock; markRequired: () => void } {
+  const { status, refresh } = useClaudeKey();
+  const [forced, setForced] = useState(false);
+  const needsRole = status !== undefined && !status.connected;
+  const { data: me } = useSWR<{ role: string }>(needsRole ? "/me" : null, apiFetch);
+
+  let lock: ClaudeLock = null;
+  if (forced || status?.needs_attention) lock = "reconnect";
+  else if (needsRole && me?.role === "user") lock = "connect";
+
+  return {
+    lock,
+    markRequired: () => {
+      setForced(true);
+      void refresh();
+    },
+  };
 }

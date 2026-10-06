@@ -12,6 +12,8 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { UsageMeter } from "@/components/chat/UsageMeter";
 import { Composer } from "@/components/chat/Composer";
+import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
+import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
 const HISTORY_PATH = `/chat/messages?session_id=${CHAT_SESSION}`;
 
@@ -35,6 +37,7 @@ function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const { lock, markRequired } = useClaudeLock();
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const wasPending = useRef(false);
@@ -74,7 +77,8 @@ function ChatScreen() {
       });
     } catch (err) {
       setDraft(message);
-      if (err instanceof ApiError && err.status === 429 && /monthly/i.test(err.detail)) {
+      if (isClaudeKeyRequired(err)) markRequired();
+      else if (err instanceof ApiError && err.status === 429 && /monthly/i.test(err.detail)) {
         setLimitHit(true);
       } else {
         setError("Could not get a reply. Try again.");
@@ -123,7 +127,7 @@ function ChatScreen() {
       />
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, justifyContent: "flex-end", pb: 1.5 }}>
-        {empty && (
+        {empty && !lock && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
             <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
@@ -152,17 +156,23 @@ function ChatScreen() {
             {limitNote}
           </Alert>
         )}
-        <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>
-          Advisory only, not investment advice.
-        </Typography>
-        <Composer
-          value={draft}
-          onChange={setDraft}
-          inputRef={inputRef}
-          onSend={() => void send(draft)}
-          disabled={atLimit || pending !== null}
-          placeholder={atLimit ? `Chat is paused until ${resetDate}` : "Ask about your portfolio"}
-        />
+        {lock ? (
+          <ClaudeRequired variant="chat" lock={lock} />
+        ) : (
+          <>
+            <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>
+              Advisory only, not investment advice.
+            </Typography>
+            <Composer
+              value={draft}
+              onChange={setDraft}
+              inputRef={inputRef}
+              onSend={() => void send(draft)}
+              disabled={atLimit || pending !== null}
+              placeholder={atLimit ? `Chat is paused until ${resetDate}` : "Ask about your portfolio"}
+            />
+          </>
+        )}
       </Box>
 
       <Dialog open={confirmClear} onClose={() => setConfirmClear(false)}>
