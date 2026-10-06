@@ -18,8 +18,8 @@ export async function createClient() {
               cookieStore.set(name, value, options),
             );
           } catch {
-            // Called from a Server Component, where cookies can't be written; a middleware
-            // (added when sub-project 4 builds real auth) refreshes the session instead.
+            // Called from a Server Component, where cookies can't be written; the proxy
+            // (frontend/proxy.ts) refreshes the session instead.
           }
         },
       },
