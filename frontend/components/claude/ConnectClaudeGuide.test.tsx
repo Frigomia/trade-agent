@@ -63,7 +63,7 @@ describe("ConnectClaudeGuide", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Create an Anthropic account" })).toBeInTheDocument();
     expect(screen.getByText(/sign up at platform.claude.com/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
-    const link = screen.getByRole("link", { name: /open console\.anthropic\.com/i });
+    const link = screen.getByRole("link", { name: /open platform.claude.com/i });
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
