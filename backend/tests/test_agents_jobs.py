@@ -1,8 +1,9 @@
 import asyncio
+from datetime import date
 from unittest.mock import AsyncMock, patch
 
-from app.agents.jobs import create_job, get_job_status, run_job
-from app.models import Recommendation
+from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
+from app.models import Holding, Recommendation, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID
 
 FAKE_STATE_BUY = {
@@ -166,3 +167,52 @@ def test_the_job_hands_the_same_client_to_every_ticker(session_local, app_sessio
     asyncio.run(_run())
 
     assert seen == [sentinel, sentinel]
+
+
+def _run_one_ticker(app_session_local, source=None):
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        extra = {} if source is None else {"source": source}
+        with (
+            patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_BUY)),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, OTHER_USER_ID, tickers, **extra)
+
+    asyncio.run(_run())
+
+
+def test_a_scheduled_run_stores_its_recommendations_as_scheduled(session_local, app_session_local):
+    _run_one_ticker(app_session_local, source="scheduled")
+    with session_local() as db:
+        assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "scheduled"
+
+
+def test_a_manual_run_stores_manual(session_local, app_session_local):
+    _run_one_ticker(app_session_local)
+    with session_local() as db:
+        assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "manual"
+
+
+def test_default_ticker_infos_lists_open_holdings_then_the_watchlist(session_local):
+    with session_local() as db:
+        for ticker, shares in (("AAPL", 5), ("OLD", 0)):
+            db.add(
+                Holding(
+                    user_id=USER_ID,
+                    ticker=ticker,
+                    name=ticker,
+                    asset_type="STOCK",
+                    shares=shares,
+                    cost_basis=100.0,
+                    first_purchase_date=date(2024, 1, 1),
+                )
+            )
+        db.add(WatchlistItem(user_id=USER_ID, ticker="MSFT", asset_type="STOCK"))
+        db.commit()
+        open_only = default_ticker_infos(db, USER_ID, open_only=True)
+        everything = default_ticker_infos(db, USER_ID)
+    assert [i["ticker"] for i in open_only] == ["AAPL", "MSFT"]  # the closed position is absent
+    assert [i["is_held"] for i in open_only] == [True, False]
+    assert [i["ticker"] for i in everything] == ["AAPL", "OLD", "MSFT"]
