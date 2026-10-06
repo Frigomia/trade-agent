@@ -3,12 +3,15 @@ import { createClient } from "@/lib/supabase/client";
 export class ApiError extends Error {
   status: number;
   detail: string;
+  /** Machine-readable reason some endpoints add next to `detail` (e.g. "claude_key_required"). */
+  code?: string;
 
-  constructor(status: number, detail: string) {
+  constructor(status: number, detail: string, code?: string) {
     super(detail);
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.code = code;
   }
 }
 
@@ -39,8 +42,10 @@ function buildHeaders(init: RequestInit, authorization?: string): Headers {
 async function handleApiResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = response.statusText;
+    let code: string | undefined;
     try {
-      const body = (await response.json()) as { detail?: string | { msg: string }[] };
+      const body = (await response.json()) as { detail?: string | { msg: string }[]; code?: unknown };
+      if (typeof body.code === "string") code = body.code;
       if (typeof body.detail === "string") {
         detail = body.detail;
       } else if (Array.isArray(body.detail)) {
@@ -50,7 +55,7 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
     } catch {
       // Error body wasn't JSON (a proxy error page, a timeout) — statusText is still useful.
     }
-    throw new ApiError(response.status, detail);
+    throw new ApiError(response.status, detail, code);
   }
 
   if (response.status === 204) {
