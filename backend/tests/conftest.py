@@ -14,10 +14,11 @@ import app.redis_client as redis_client_module
 from app import rls
 from app.auth.supabase_admin import get_supabase_admin
 from app.auth.tokens import get_key_resolver
+from app.claude_keys import encrypt_key
 from app.config import settings
 from app.db import Base, get_session_factory
 from app.main import app
-from app.models import AppUser
+from app.models import AppUser, UserApiKey
 from tests.auth_support import (
     ADMIN_ID,
     TEST_SUPABASE_URL,
@@ -146,10 +147,40 @@ def _install_overrides(app_engine: Engine) -> None:
 
 
 @pytest.fixture()
-def client(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, None]:
-    """Authenticated as USER_ID (an active AppUser), served through the restricted DB role."""
+def client_no_key(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, None]:
+    """Authenticated as USER_ID (an active AppUser) who has NOT connected a Claude key yet."""
     with sessionmaker(bind=engine)() as setup:
         setup.add(AppUser(id=USER_ID, email="user@example.com", role="user", status="active"))
+        setup.commit()
+    _install_overrides(app_engine)
+    with TestClient(app, headers=auth_headers(USER_ID)) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def client(engine: Engine, app_engine: Engine) -> Generator[TestClient, None, None]:
+    """Authenticated as USER_ID, an active AppUser who has connected a Claude key (so the Claude-
+    backed routes work), served through the restricted DB role."""
+    with sessionmaker(bind=engine)() as setup:
+        setup.add(
+            AppUser(
+                id=USER_ID,
+                email="user@example.com",
+                role="user",
+                status="active",
+                claude_key_state="ok",
+            )
+        )
+        setup.add(
+            UserApiKey(
+                user_id=USER_ID,
+                ciphertext=encrypt_key(USER_ID, "sk-ant-test-key-0000"),
+                key_version=1,
+                last4="0000",
+                status="ok",
+            )
+        )
         setup.commit()
     _install_overrides(app_engine)
     with TestClient(app, headers=auth_headers(USER_ID)) as test_client:

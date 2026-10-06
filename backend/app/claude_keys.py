@@ -1,10 +1,13 @@
 """Per-user Claude API keys: encryption at rest, and (later) which client a request uses."""
 
+import asyncio
 import base64
 import binascii
 import os
 import uuid
 
+import anthropic
+from anthropic import Anthropic
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from app.config import settings
@@ -60,3 +63,42 @@ def decrypt_key(user_id: uuid.UUID, blob: bytes) -> str:
         # `from None`: the underlying error text must not travel with this one.
         raise KeyEncryptionError("stored key could not be decrypted") from None
     return plain.decode()
+
+
+class ClaudeKeyRejected(Exception):
+    """Anthropic would not accept the key right now. `code` is stable for the frontend; `message`
+    is shown to the user; neither carries the key or Anthropic's raw response."""
+
+    def __init__(self, code: str, message: str, http_status: int = 422) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.http_status = http_status
+
+
+async def verify_key(api_key: str) -> None:
+    """One free call (listing models costs no tokens) with the key; raises ClaudeKeyRejected."""
+
+    def _check() -> None:
+        Anthropic(api_key=api_key, max_retries=0, timeout=10.0).models.list(limit=1)
+
+    try:
+        await asyncio.to_thread(_check)
+    except anthropic.AuthenticationError:
+        raise ClaudeKeyRejected(
+            "invalid_key", "Anthropic did not accept that key. Check that you copied all of it."
+        ) from None
+    except (anthropic.PermissionDeniedError, anthropic.BadRequestError):
+        raise ClaudeKeyRejected(
+            "key_not_usable",
+            "That key cannot be used right now. Check that the account has credit and that "
+            "the key is allowed to make requests.",
+        ) from None
+    except anthropic.APIConnectionError:
+        raise ClaudeKeyRejected(
+            "anthropic_unreachable", "Could not reach Anthropic. Try again in a moment.", 502
+        ) from None
+    except anthropic.APIStatusError:
+        raise ClaudeKeyRejected(
+            "anthropic_unavailable", "Anthropic is busy right now. Try again in a moment.", 502
+        ) from None

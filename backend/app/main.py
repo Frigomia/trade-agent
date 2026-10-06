@@ -2,7 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -15,6 +15,7 @@ from app.routers import (
     analysis,
     backtest,
     chat,
+    claude_key,
     market,
     me,
     memory,
@@ -56,9 +57,22 @@ app.include_router(backtest.router)
 app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(preferences.router)
+app.include_router(claude_key.router)
 app.include_router(me.router)
 app.include_router(me.active_router)
 app.include_router(admin.router)
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_with_code(_request: Request, exc: HTTPException) -> JSONResponse:
+    """A detail given as {"message", "code"} is returned as {"detail": message, "code": code}, so
+    the frontend can branch on `code` for the Claude-key errors; every other HTTPException keeps
+    FastAPI's usual shape."""
+    if isinstance(exc.detail, dict) and "code" in exc.detail:
+        body = {"detail": exc.detail["message"], "code": exc.detail["code"]}
+    else:
+        body = {"detail": exc.detail}
+    return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
 
 
 @app.exception_handler(AdminError)

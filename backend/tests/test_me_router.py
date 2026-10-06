@@ -165,8 +165,8 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
         elif table_name == "portfolio_snapshots":
             other_row.total_market_value = 999
         db_session.add(other_row)
-        # The client fixture already saves a key for USER_ID (one row per user), so seeding a
-        # second one would violate the unique user_id.
+        # The client fixture saves a key for USER_ID (one row per user), so seeding a second
+        # one would violate the unique user_id.
         if table_name != "user_api_keys":
             db_session.add(ROW_FACTORIES[table_name](USER_ID))
     db_session.add(InvestmentPreferences(user_id=USER_ID, notes="caller-notes"))
@@ -207,9 +207,10 @@ def test_export_is_403_for_an_invited_user(client, db_session):
 def test_delete_my_data_wipes_only_the_callers_rows(client, db_session, engine):
     add_app_user(db_session, OTHER_USER_ID)
     for table_name in rls.USER_TABLES:
-        db_session.add_all(
-            [ROW_FACTORIES[table_name](USER_ID), ROW_FACTORIES[table_name](OTHER_USER_ID)]
-        )
+        db_session.add(ROW_FACTORIES[table_name](OTHER_USER_ID))
+        # The client fixture already saved a key for USER_ID (one row per user).
+        if table_name != "user_api_keys":
+            db_session.add(ROW_FACTORIES[table_name](USER_ID))
     db_session.commit()
 
     response = client.request("DELETE", "/me/data", json={"confirm": True})
