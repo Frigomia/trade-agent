@@ -46,6 +46,7 @@ def test_startup_skips_the_role_check_outside_production(monkeypatch):
 def test_startup_runs_the_role_check_in_production(monkeypatch):
     check = MagicMock()
     monkeypatch.setattr(main, "check_runtime_role", check)
+    monkeypatch.setattr(main, "check_master_secret", MagicMock())
     monkeypatch.setattr(main.settings, "app_env", "production")
     monkeypatch.setattr(main, "engine", MagicMock())
     _run_lifespan()
@@ -58,3 +59,31 @@ def test_startup_refuses_an_unsafe_role_in_production(monkeypatch):
     monkeypatch.setattr(main, "engine", MagicMock())
     with pytest.raises(UnsafeRuntimeRoleError):
         _run_lifespan()
+
+
+def test_startup_checks_the_key_secret_in_production(monkeypatch):
+    check = MagicMock()
+    monkeypatch.setattr(main, "check_runtime_role", MagicMock())
+    monkeypatch.setattr(main, "check_master_secret", check)
+    monkeypatch.setattr(main.settings, "app_env", "production")
+    monkeypatch.setattr(main, "engine", MagicMock())
+    _run_lifespan()
+    check.assert_called_once()
+
+
+def test_startup_refuses_without_the_key_secret_in_production(monkeypatch):
+    monkeypatch.setattr(main, "check_runtime_role", MagicMock())
+    monkeypatch.setattr(
+        main, "check_master_secret", MagicMock(side_effect=main.KeyEncryptionError("x"))
+    )
+    monkeypatch.setattr(main.settings, "app_env", "production")
+    monkeypatch.setattr(main, "engine", MagicMock())
+    with pytest.raises(main.KeyEncryptionError):
+        _run_lifespan()
+
+
+def test_startup_skips_the_key_secret_check_outside_production(monkeypatch):
+    check = MagicMock()
+    monkeypatch.setattr(main, "check_master_secret", check)
+    _run_lifespan()
+    check.assert_not_called()

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.admin.service import AdminError
+from app.claude_keys import KeyEncryptionError, check_master_secret  # noqa: F401
 from app.config import settings
 from app.db import check_runtime_role, engine
 from app.routers import (
@@ -37,6 +38,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if settings.app_env == "production":
         with engine.connect() as conn:
             check_runtime_role(conn)
+        check_master_secret()
     yield
 
 

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
     migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only
     supabase_secret_key: str | None = None  # backend-only secret for Supabase Auth admin calls
+    key_encryption_secret: str | None = None  # base64 of 32 random bytes; encrypts Claude keys
     invite_redirect_url: str | None = None  # where the emailed invitation link lands (frontend)
     invite_link_hours: int = 24  # display hint only; Supabase enforces the real link expiry
     cors_allowed_origins: str = "http://localhost:3000"  # comma-separated frontend origin(s)
