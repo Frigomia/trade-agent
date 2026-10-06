@@ -105,7 +105,9 @@ describe("ConnectClaudeGuide", () => {
     renderGuide("5");
     const field = screen.getByLabelText(/claude api key/i);
     expect(field).toHaveAttribute("type", "password");
-    expect(field).toHaveAttribute("autocomplete", "off");
+    expect(field).toHaveAttribute("autocomplete", "new-password");
+    expect(field).toHaveAttribute("data-1p-ignore");
+    expect(field).toHaveAttribute("data-lpignore", "true");
     expect(field).toHaveAttribute("spellcheck", "false");
     expect(screen.getByRole("button", { name: "Check and save" })).toBeDisabled();
     type("x");

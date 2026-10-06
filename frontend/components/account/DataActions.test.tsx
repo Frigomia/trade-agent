@@ -89,6 +89,7 @@ describe("DataActions", () => {
     render(<DataActions email="me@example.com" />);
     fireEvent.click(screen.getByRole("button", { name: /^delete my data$/i }));
     expect(screen.getByText(/holdings, watchlist, trades, recommendations/i)).toBeInTheDocument();
+    expect(screen.getByText(/snapshots and your claude key/i)).toBeInTheDocument();
     expect(screen.getByText(/sign-in and access stay/i)).toBeInTheDocument();
     expect(screen.getByText(/removing access is done by your administrator/i)).toBeInTheDocument();
   });

@@ -161,7 +161,14 @@ function KeyField({
           error={Boolean(error)}
           helperText={error}
           slotProps={{
-            htmlInput: { autoComplete: "off", spellCheck: false },
+            // autocomplete="off" is ignored on password fields; these stop browsers and password managers
+            // (1Password, LastPass) offering to save or fill the key.
+            htmlInput: {
+              autoComplete: "new-password",
+              spellCheck: false,
+              "data-1p-ignore": true,
+              "data-lpignore": "true",
+            },
             formHelperText: { role: "alert" },
             inputLabel: { shrink: true },
           }}

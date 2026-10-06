@@ -14,7 +14,7 @@ describe("ClaudeRequired", () => {
     render(<ClaudeRequired variant="chat" lock="reconnect" />);
     expect(screen.getByText("Your Claude key needs attention")).toBeInTheDocument();
     expect(screen.getByText(/did not accept your key/i)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Reconnect" })).toHaveAttribute("href", "/more/connect-claude");
+    expect(screen.getByRole("link", { name: "Reconnect" })).toHaveAttribute("href", "/more/connect-claude?step=5");
   });
 
   it("today, not connected", () => {

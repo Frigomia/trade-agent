@@ -58,7 +58,7 @@ export function ClaudeRequired({ variant, lock }: { variant: "chat" | "today"; l
         <Typography sx={{ fontSize: 14, fontWeight: 650 }}>{title}</Typography>
         <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mt: 0.25 }}>{text}</Typography>
       </Box>
-      <Button component={Link} href="/more/connect-claude" variant={warn ? "outlined" : "contained"} size="small">
+      <Button component={Link} href={warn ? "/more/connect-claude?step=5" : "/more/connect-claude"} variant={warn ? "outlined" : "contained"} size="small">
         {cta}
       </Button>
     </Panel>
