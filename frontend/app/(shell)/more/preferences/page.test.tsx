@@ -129,7 +129,7 @@ describe("PreferencesPage", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
-    it("sends the saved values with auto_analysis, never the unsaved draft, and keeps the draft", async () => {
+    it("sends only auto_analysis, leaves the saved fields as they are, and keeps the draft", async () => {
       let server: Record<string, unknown> = { ...LOADED, auto_analysis: false, auto_analysis_paused: null };
       apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
         if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
@@ -141,15 +141,40 @@ describe("PreferencesPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /remove energy/i }));
       fireEvent.click(screen.getByRole("switch", { name: LABEL }));
       await waitFor(() => expect(posts()).toHaveLength(1));
-      expect(JSON.parse(posts()[0][1].body)).toEqual({
-        risk_tolerance: "moderate",
-        sector_avoid_list: ["Energy"],
-        notes: "long term",
-        auto_analysis: true,
-      });
+      expect(JSON.parse(posts()[0][1].body)).toEqual({ auto_analysis: true });
+      // the server keeps what it had saved (it applies only the fields sent)
+      expect(server).toMatchObject({ risk_tolerance: "moderate", sector_avoid_list: ["Energy"], notes: "long term" });
       await waitFor(() => expect(screen.getByRole("switch", { name: LABEL })).toBeChecked());
       expect(screen.getByLabelText(/notes/i)).toHaveValue("unsaved draft");
       expect(screen.queryByText("Energy")).not.toBeInTheDocument();
+    });
+
+    it("disables the switch while the save is in flight", async () => {
+      let finish: (v: unknown) => void = () => {};
+      apiFetch.mockImplementation((_p: string, init?: RequestInit) =>
+        init?.method === "POST"
+          ? new Promise((resolve) => {
+              finish = resolve;
+            })
+          : Promise.resolve({ ...LOADED, auto_analysis: false, auto_analysis_paused: null }),
+      );
+      renderFresh();
+      fireEvent.click(await screen.findByRole("switch", { name: LABEL }));
+      await waitFor(() => expect(screen.getByRole("switch", { name: LABEL })).toBeDisabled());
+      fireEvent.click(screen.getByRole("switch", { name: LABEL }));
+      expect(posts()).toHaveLength(1);
+      finish({});
+      await waitFor(() => expect(screen.getByRole("switch", { name: LABEL })).toBeEnabled());
+    });
+
+    it("says the limit is 0 instead of 'all 0 runs'", async () => {
+      const paused = { reason: "limit", limit: 0, resumes_on: "2026-11-01" };
+      apiFetch.mockImplementation(async () => ({ ...LOADED, auto_analysis: true, auto_analysis_paused: paused }));
+      renderFresh();
+      const line = await screen.findByRole("status");
+      expect(line).toHaveTextContent("Paused: your monthly limit is 0 runs.");
+      expect(line).not.toHaveTextContent(/used all/);
+      expect(line).not.toHaveTextContent(/resumes on/);
     });
 
     it("Save preferences leaves the switch alone", async () => {

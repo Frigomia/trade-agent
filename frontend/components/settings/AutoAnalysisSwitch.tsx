@@ -24,6 +24,7 @@ function PausedText({ paused }: { paused: AutoAnalysisPaused }) {
       </>
     );
   }
+  if (paused.limit === 0) return <>Paused: your monthly limit is 0 runs.</>;
   const used = paused.limit === null ? "all your runs" : `all ${paused.limit} runs`;
   return (
     <>
@@ -33,13 +34,10 @@ function PausedText({ paused }: { paused: AutoAnalysisPaused }) {
   );
 }
 
-/**
- * Saves on toggle. POST /preferences replaces the other fields, so it re-sends the SAVED values from
- * `saved` (the loaded server data), never the form's unsaved draft.
- */
+/** Saves on toggle. POST /preferences only updates the fields sent, so only `auto_analysis` goes. */
 export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onSaved: () => unknown }) {
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
-  const { run, error } = useAction();
+  const { run, submitting, error } = useAction();
   const on = optimistic ?? Boolean(saved.auto_analysis);
   const paused = on ? saved.auto_analysis_paused : null;
 
@@ -49,12 +47,7 @@ export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onS
       try {
         await apiFetch("/preferences", {
           method: "POST",
-          body: JSON.stringify({
-            risk_tolerance: saved.risk_tolerance,
-            sector_avoid_list: saved.sector_avoid_list,
-            notes: saved.notes,
-            auto_analysis: next,
-          }),
+          body: JSON.stringify({ auto_analysis: next }),
         });
         await onSaved();
       } finally {
@@ -76,6 +69,7 @@ export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onS
         </Box>
         <Switch
           checked={on}
+          disabled={submitting}
           onChange={(_, next) => toggle(next)}
           slotProps={{ input: { "aria-labelledby": "auto-analysis-label", "aria-describedby": "auto-analysis-hint" } }}
           sx={paused ? { "& .MuiSwitch-switchBase.Mui-checked": { color: "var(--warn)" }, "& .MuiSwitch-track": { bgcolor: "var(--warn)" } } : undefined}

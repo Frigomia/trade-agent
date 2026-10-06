@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
@@ -79,6 +79,28 @@ describe("TodayPage", () => {
     renderFresh(<TodayPage />);
 
     await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+  });
+
+  describe("last analysis line", () => {
+    afterEach(() => vi.useRealTimers());
+    const made = "2026-01-05T12:00:00"; // a Monday, UTC
+    const madeAt = new Date(Date.parse(made + "Z"));
+    const time = madeAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    it("shows only the time when the newest call is from today", async () => {
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date(madeAt.getTime() + 60_000) });
+      mockApi({ recs: [rec({ created_at: made })], summary: SUMMARY_WITH_HOLDING });
+      renderFresh(<TodayPage />);
+      expect(await screen.findByText(`Last analysis ${time}`)).toBeInTheDocument();
+    });
+
+    it("adds the weekday when the newest call is from an earlier day", async () => {
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date(madeAt.getTime() + 2 * 86_400_000) });
+      mockApi({ recs: [rec({ created_at: made })], summary: SUMMARY_WITH_HOLDING });
+      renderFresh(<TodayPage />);
+      const weekday = madeAt.toLocaleDateString([], { weekday: "short" });
+      expect(await screen.findByText(`Last analysis ${weekday} ${time}`)).toBeInTheDocument();
+    });
   });
 
   it("shows the portfolio tile", async () => {
