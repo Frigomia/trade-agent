@@ -2,7 +2,13 @@ import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
-from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
+from app.agents.jobs import (
+    MAX_RUN_TICKERS,
+    create_job,
+    default_ticker_infos,
+    get_job_status,
+    run_job,
+)
 from app.models import Holding, Recommendation, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID
 
@@ -216,3 +222,11 @@ def test_default_ticker_infos_lists_open_holdings_then_the_watchlist(session_loc
     assert [i["ticker"] for i in open_only] == ["AAPL", "MSFT"]  # the closed position is absent
     assert [i["is_held"] for i in open_only] == [True, False]
     assert [i["ticker"] for i in everything] == ["AAPL", "OLD", "MSFT"]
+
+
+def test_default_ticker_infos_is_capped(session_local):
+    with session_local() as db:
+        for i in range(MAX_RUN_TICKERS + 2):
+            db.add(WatchlistItem(user_id=USER_ID, ticker=f"T{i}", asset_type="STOCK"))
+        db.commit()
+        assert len(default_ticker_infos(db, USER_ID)) == MAX_RUN_TICKERS

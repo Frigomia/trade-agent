@@ -73,11 +73,10 @@ async def run_analysis(
 def _build_ticker_infos(
     db: Session, user_id: uuid.UUID, tickers: list[str] | None
 ) -> list[dict[str, Any]]:
-    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
-    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
-
     ticker_infos: list[dict[str, Any]]
     if tickers:
+        holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
+        watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
         ticker_infos = []
         for ticker in tickers:
             if ticker in holdings:
