@@ -21,6 +21,7 @@ from app.models import (
     PortfolioSnapshot,
     Recommendation,
     Trade,
+    UserApiKey,
     WatchlistItem,
 )
 
@@ -129,6 +130,9 @@ ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
     "investment_preferences": lambda uid: InvestmentPreferences(user_id=uid, sector_avoid_list=[]),
     "portfolio_snapshots": lambda uid: PortfolioSnapshot(
         user_id=uid, total_market_value=1, total_cost_basis=1
+    ),
+    "user_api_keys": lambda uid: UserApiKey(
+        user_id=uid, ciphertext=b"x" * 40, key_version=1, last4="abcd", status="ok"
     ),
 }
 

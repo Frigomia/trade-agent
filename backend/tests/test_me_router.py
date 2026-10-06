@@ -159,13 +159,16 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
     for table_name in rls.USER_TABLES:
         if table_name == "investment_preferences":
             continue
-        caller_row = ROW_FACTORIES[table_name](USER_ID)
         other_row = ROW_FACTORIES[table_name](OTHER_USER_ID)
         if table_name == "chat_messages":
             other_row.content = "other user's message"
         elif table_name == "portfolio_snapshots":
             other_row.total_market_value = 999
-        db_session.add_all([caller_row, other_row])
+        db_session.add(other_row)
+        # The client fixture already saves a key for USER_ID (one row per user), so seeding a
+        # second one would violate the unique user_id.
+        if table_name != "user_api_keys":
+            db_session.add(ROW_FACTORIES[table_name](USER_ID))
     db_session.add(InvestmentPreferences(user_id=USER_ID, notes="caller-notes"))
     db_session.add(InvestmentPreferences(user_id=OTHER_USER_ID, notes="other-notes"))
     db_session.commit()
@@ -175,11 +178,13 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
     assert response.status_code == 200
     body = response.json()
     assert body["profile"]["id"] == str(USER_ID)
+    assert "user_api_keys" not in body
 
     rows_with_user_id = set(rls.USER_TABLES) - {
         "investment_preferences",
         "chat_messages",
         "portfolio_snapshots",
+        "user_api_keys",
     }
     for table_name in rows_with_user_id:
         rows = body[table_name]

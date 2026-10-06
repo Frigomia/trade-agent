@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -124,6 +125,24 @@ class InvestmentPreferences(Base):
     )
 
 
+class UserApiKey(Base):
+    """A user's own Claude API key, encrypted by the application (see app.claude_keys). The
+    plaintext never reaches this table; `last4` is the only readable part."""
+
+    __tablename__ = "user_api_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True, index=True)
+    ciphertext: Mapped[bytes] = mapped_column(LargeBinary)
+    key_version: Mapped[int] = mapped_column(default=1)
+    last4: Mapped[str] = mapped_column(String(4))
+    status: Mapped[str] = mapped_column(String(20), default="ok")  # "ok" | "needs_attention"
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
 
@@ -155,6 +174,9 @@ class AppUser(Base):
     # NULL means "use Settings.default_monthly_*_limit". Set only by the admin API.
     monthly_analysis_limit: Mapped[int | None] = mapped_column(nullable=True)
     monthly_chat_limit: Mapped[int | None] = mapped_column(nullable=True)
+    # Mirrors user_api_keys (which the admin cannot read: it is row-level secured): "none" | "ok"
+    # | "needs_attention". Written in the same transaction as every change to the key row.
+    claude_key_state: Mapped[str] = mapped_column(String(20), default="none", server_default="none")
 
 
 class AppSettings(Base):
