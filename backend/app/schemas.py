@@ -91,6 +91,7 @@ class RecommendationOut(BaseModel):
     ai_analysis: str | None
     suggested_position_pct: float | None
     status: str
+    source: str = "manual"
     reviewed_at: datetime | None
     fundamental_score: int | None
     technical_signal: str | None
@@ -178,10 +179,17 @@ SectorName = Annotated[
 MAX_AVOID_SECTORS = 20
 
 
+class AutoAnalysisPaused(BaseModel):
+    reason: Literal["no_key", "limit"]
+    limit: int | None = None
+    resumes_on: date | None = None
+
+
 class PreferencesIn(BaseModel):
     risk_tolerance: RiskTolerance | None = None
     sector_avoid_list: list[SectorName] = Field(default_factory=list, max_length=MAX_AVOID_SECTORS)
     notes: str | None = Field(default=None, max_length=2000)
+    auto_analysis: bool | None = None  # None: leave as it is
 
 
 class PreferencesOut(BaseModel):
@@ -193,6 +201,9 @@ class PreferencesOut(BaseModel):
     risk_tolerance: RiskTolerance | None = None
     sector_avoid_list: list[str] = Field(default_factory=list)
     notes: str | None = None
+    auto_analysis: bool = False
+    # Only filled when auto_analysis is on
+    auto_analysis_paused: AutoAnalysisPaused | None = None
 
 
 class PortfolioSnapshotOut(BaseModel):

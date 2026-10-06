@@ -64,6 +64,27 @@ describe("RecommendationCard", () => {
     expect(screen.getByText("Earnings beat on services.")).toBeInTheDocument();
   });
 
+  it("tags a scheduled recommendation as Automatic and leaves a manual one untagged", () => {
+    const { unmount } = render(
+      <RecommendationCard recommendation={rec({ source: "scheduled" })} onDecided={vi.fn()} />,
+    );
+    expect(screen.getByText("Automatic")).toBeInTheDocument();
+    unmount();
+
+    render(<RecommendationCard recommendation={rec({ source: "manual" })} onDecided={vi.fn()} />);
+    expect(screen.queryByText("Automatic")).not.toBeInTheDocument();
+  });
+
+  it("lets the header row wrap so a narrow phone does not overflow", () => {
+    render(<RecommendationCard recommendation={rec({ source: "scheduled" })} onDecided={vi.fn()} />);
+    expect(screen.getByText("AAPL").closest("a")?.parentElement).toHaveStyle({ flexWrap: "wrap" });
+  });
+
+  it("treats a recommendation with no source as manual", () => {
+    render(<RecommendationCard recommendation={rec()} onDecided={vi.fn()} />);
+    expect(screen.queryByText("Automatic")).not.toBeInTheDocument();
+  });
+
   it("omits the price row when the live quote is unavailable", () => {
     render(
       <RecommendationCard

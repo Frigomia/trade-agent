@@ -32,7 +32,7 @@ def test_a_user_with_a_key_gets_a_client_built_from_it(db_session):
     with patch("app.claude_keys.Anthropic") as constructor:
         client = resolve_client(db_session, USER_ID, "user")
 
-    constructor.assert_called_once_with(api_key=KEY)
+    constructor.assert_called_once_with(api_key=KEY, timeout=180.0, max_retries=2)
     assert client is constructor.return_value
 
 

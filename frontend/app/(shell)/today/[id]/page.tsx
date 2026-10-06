@@ -7,6 +7,7 @@ import { Box, Typography, Alert, useMediaQuery, useTheme } from "@mui/material";
 import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { AutomaticTag } from "@/components/recommendations/AutomaticTag";
 import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
 import { Amount } from "@/components/portfolio/Amount";
 import { Pill } from "@/components/ui/Pill";
@@ -101,11 +102,12 @@ function RecommendationDetail() {
   // Phone: the evidence first, the actions pinned to the bottom of the screen.
   return (
     <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
         </Typography>
         <ActionChip action={recommendation.action} />
+        <AutomaticTag source={recommendation.source} />
         <Box sx={{ flex: 1 }} />
         <Pill tone="warn">Pending</Pill>
       </Box>

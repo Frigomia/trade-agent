@@ -1,4 +1,15 @@
+import asyncio
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+
+from redis.exceptions import ConnectionError as RedisConnectionError
+
+import app.redis_client as redis_client_module
+from app.auto_analysis import next_month_start
+from app.config import settings
 from app.models import InvestmentPreferences
+from app.redis_client import get_redis
+from app.usage import _usage_key
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
@@ -10,6 +21,8 @@ def test_get_preferences_returns_defaults_when_none_exist(client):
         "risk_tolerance": None,
         "sector_avoid_list": [],
         "notes": None,
+        "auto_analysis": False,
+        "auto_analysis_paused": None,
     }
 
 
@@ -137,3 +150,85 @@ def test_get_preferences_and_export_still_work_for_an_old_row_over_the_limits(cl
     exported = client.get("/me/export")
     assert exported.status_code == 200
     assert exported.json()["investment_preferences"]["sector_avoid_list"] == old
+
+
+def test_auto_analysis_defaults_to_off(client):
+    body = client.get("/preferences").json()
+    assert body["auto_analysis"] is False
+    assert body["auto_analysis_paused"] is None
+
+
+def test_the_switch_round_trips_and_saving_other_fields_keeps_it(client):
+    assert client.post("/preferences", json={"auto_analysis": True}).json()["auto_analysis"] is True
+    # an older client that does not send the field must not turn it off
+    again = client.post("/preferences", json={"risk_tolerance": "moderate"}).json()
+    assert again["auto_analysis"] is True
+    off = client.post("/preferences", json={"auto_analysis": False}).json()
+    assert off["auto_analysis"] is False
+
+
+def test_an_enabled_switch_with_a_key_and_room_is_not_paused(client):
+    client.post("/preferences", json={"auto_analysis": True})
+    assert client.get("/preferences").json()["auto_analysis_paused"] is None
+
+
+def test_an_enabled_switch_without_a_key_is_paused_for_the_key(client_no_key):
+    client_no_key.post("/preferences", json={"auto_analysis": True})
+    paused = client_no_key.get("/preferences").json()["auto_analysis_paused"]
+    assert paused["reason"] == "no_key"
+
+
+def test_an_enabled_switch_at_the_monthly_limit_reports_the_limit_and_the_resume_date(client):
+    client.post("/preferences", json={"auto_analysis": True})
+    limit = settings.default_monthly_analysis_limit
+    try:
+        redis_client_module._redis = None  # the earlier request bound the client to its own loop
+        asyncio.run(get_redis().set(_usage_key("analysis_run", str(USER_ID)), limit))
+    finally:
+        redis_client_module._redis = None  # the cached client is bound to that closed loop
+    paused = client.get("/preferences").json()["auto_analysis_paused"]
+    assert paused["reason"] == "limit"
+    assert paused["limit"] == limit
+    assert paused["resumes_on"] == next_month_start(datetime.now(UTC).date()).isoformat()
+
+
+def test_a_disabled_switch_is_never_reported_as_paused(client_no_key):
+    assert client_no_key.get("/preferences").json()["auto_analysis_paused"] is None
+
+
+def test_a_post_with_only_the_switch_leaves_the_other_fields_alone(client):
+    client.post(
+        "/preferences",
+        json={"risk_tolerance": "aggressive", "sector_avoid_list": ["tobacco"], "notes": "n"},
+    )
+    body = client.post("/preferences", json={"auto_analysis": True}).json()
+    assert body["auto_analysis"] is True
+    assert body["risk_tolerance"] == "aggressive"
+    assert body["sector_avoid_list"] == ["tobacco"]
+    assert body["notes"] == "n"
+
+
+def test_a_field_sent_as_null_is_cleared_but_a_null_switch_is_ignored(client):
+    client.post(
+        "/preferences", json={"risk_tolerance": "aggressive", "notes": "n", "auto_analysis": True}
+    )
+    body = client.post(
+        "/preferences", json={"risk_tolerance": None, "notes": None, "auto_analysis": None}
+    ).json()
+    assert body["risk_tolerance"] is None
+    assert body["notes"] is None
+    assert body["auto_analysis"] is True
+
+
+def test_preferences_still_load_and_save_when_redis_is_down(client, caplog):
+    client.post("/preferences", json={"auto_analysis": True})
+    down = AsyncMock(side_effect=RedisConnectionError("secret-host:6379"))
+    with patch("app.auto_analysis.get_usage", down):
+        got = client.get("/preferences")
+        saved = client.post("/preferences", json={"notes": "still saved"})
+    assert got.status_code == 200 and saved.status_code == 200
+    assert got.json()["auto_analysis"] is True
+    assert got.json()["auto_analysis_paused"] is None
+    assert saved.json()["notes"] == "still saved"
+    assert "ConnectionError" in caplog.text
+    assert "secret-host" not in caplog.text

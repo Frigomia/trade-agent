@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import claude_keys
-from app.agents.jobs import create_job, get_job_status, run_job
+from app.agents.jobs import (
+    MAX_RUN_TICKERS,
+    create_job,
+    default_ticker_infos,
+    get_job_status,
+    run_job,
+)
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
@@ -28,9 +34,6 @@ router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(
 _track_background_task = make_task_tracker("analysis")
 
 
-# Each ticker in a run is its own graph run (a Claude web search plus an embedding call), yet a
-# run counts once against the monthly cap, so the number per run is bounded.
-MAX_RUN_TICKERS = 50
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
 
 
@@ -70,11 +73,10 @@ async def run_analysis(
 def _build_ticker_infos(
     db: Session, user_id: uuid.UUID, tickers: list[str] | None
 ) -> list[dict[str, Any]]:
-    holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
-    watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
-
     ticker_infos: list[dict[str, Any]]
     if tickers:
+        holdings = {h.ticker: h for h in db.query(Holding).filter_by(user_id=user_id)}
+        watchlist = {w.ticker: w for w in db.query(WatchlistItem).filter_by(user_id=user_id)}
         ticker_infos = []
         for ticker in tickers:
             if ticker in holdings:
@@ -92,14 +94,7 @@ def _build_ticker_infos(
             else:
                 raise HTTPException(status_code=404, detail=f"Unknown ticker: {ticker}")
     else:
-        ticker_infos = [
-            {"ticker": h.ticker, "asset_type": h.asset_type, "is_held": True}
-            for h in holdings.values()
-        ] + [
-            {"ticker": w.ticker, "asset_type": w.asset_type, "is_held": False}
-            for w in watchlist.values()
-        ]
-        ticker_infos = ticker_infos[:MAX_RUN_TICKERS]  # holdings come first, then the watchlist
+        ticker_infos = default_ticker_infos(db, user_id)
     return ticker_infos
 
 

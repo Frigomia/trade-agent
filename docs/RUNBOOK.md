@@ -221,7 +221,8 @@ verified without a real Fly app.
       `APP_ENV=production` to the one-off machine with `--env`, because `machine run` does not apply
       `fly.toml`). Then open the one-off
       machine's logs in the Fly dashboard (or `fly logs -a <app-name>`) and confirm the summary
-      line `users=... failures=0`. The `flyctl machine run` flags in the workflow are unverified
+      line `users=... failures=0 ... analysis_failures=0` (all the counters are explained in
+      section 3a). The `flyctl machine run` flags in the workflow are unverified
       until this run. A failed job may still not turn the GitHub run red (UNVERIFIED), so keep
       checking the logs. If the GitHub run is green while the job itself failed, the workflow does
       not surface job failures: switch to the `flyctl ssh console` fallback written in the
@@ -244,6 +245,65 @@ verified without a real Fly app.
 - [ ] Push a trivial change to `backend/` on `master` and confirm "Deploy backend" runs after
       Backend CI and that `fly status -a <app-name>` still shows one machine.
 - [ ] In the app, send a chat message and run one analysis in production.
+
+## 3a. The scheduled job and its summary line
+
+The daily job (`python -m app.scheduled daily`, started by the "Scheduled jobs" workflow at 05:30 UTC)
+does three things in order: portfolio snapshots, outcome evaluation, and, on weekdays only, the
+automatic analysis for people who switched it on in Preferences. On Saturday and Sunday (UTC) the
+analysis step logs "weekend, nothing to do" and changes nothing. The one-off Fly machine for the job
+has 1 GB of memory (the app machine stays at 512 MB). It is headroom for the pipeline's three
+concurrent tickers plus pandas and yfinance across many users in one long-lived process; the 512 MB
+app machine only ever runs one user's run at a time.
+
+When it finishes it logs one summary line, for example:
+
+```
+users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0 analysis_runs=2 analysis_skipped=1 analysis_failures=0
+```
+
+- `users`: active users seen.
+- `snapshots_recorded` / `snapshots_skipped`: snapshots written, and users skipped (no open holdings,
+  or one already recorded today).
+- `outcomes_evaluated`: recommendations whose outcome was scored.
+- `failures`: snapshot or outcome steps that failed for a user.
+- `analysis_runs`: automatic runs started. Each one counted against that person's monthly run limit,
+  including a run that ended with errors.
+- `analysis_skipped`: users who were not analyzed. This is normal and not a problem. The reasons:
+  they have no Claude key, they have used up their monthly runs, every ticker already has a pending
+  call from the last 3 calendar days (nothing new to analyze), they already ran today, or the time budget ran out before their turn.
+  A weekend run does nothing at all.
+- `analysis_failures`: users whose run raised an error, had a ticker that errored, or whose key the
+  provider rejected.
+
+The job exits non-zero, and the GitHub run should turn red, when `failures` or `analysis_failures`
+is above zero. So a run can now be red with `failures=0 analysis_failures=1`: look at the analysis
+counter, not only `failures`. A failure for one user never stops the others; they still run.
+
+Troubleshooting:
+
+- To run only the analysis step (it still does nothing on a weekend), use
+  `python -m app.scheduled analysis` in a one-off machine or `fly ssh console`. The analysis step
+  has its own lock, shared by `daily` and `analysis`: they cannot overlap, and the second one logs
+  "another analysis run is in progress" and does nothing.
+- Time budget: 2400 seconds, measured from the start of the command (snapshots and outcomes count).
+  Users not reached are counted as skipped and logged ("time budget used up", plus one line with
+  the count). A user's run still going at the end of the budget plus a 300 second grace is cut off
+  and counted as failed; each Claude request has a 180 second timeout. Users are rotated daily
+  (the starting position moves each day), so nobody is permanently last.
+- A same-day re-run is a no-op per user: each user who got as far as running has a marker for the
+  day, so "Re-run jobs" after a red run does NOT retry a user who already ran that day, and charges
+  nothing. A person who needs another run uses Run analysis in the app. A user skipped (no key,
+  limit reached, nothing to analyze) has no marker and is looked at again.
+- Freshness is by calendar day (UTC): a Monday call counts as fresh through Wednesday and is stale
+  on Thursday. A ticker that always errors or yields no call has no pending call, so it is analyzed
+  again, and counts a run against the monthly limit, every weekday.
+- Failed tickers are logged as `Analysis failed for ticker <T> (<ExceptionClass>)`, with the exception
+  class name only and no traceback. This is on purpose: a traceback carries the exception message,
+  which can include key material. The same is true for manual runs from the app. To diagnose, find
+  the class name, then reproduce locally for that ticker.
+- Who pays: each person's automatic run uses their own Claude key. An admin with no key of their own
+  uses the server key (`ANTHROPIC_API_KEY`), so their automatic runs are billed to it.
 
 ## 4. Spend and abuse limits
 

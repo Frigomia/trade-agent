@@ -5,16 +5,40 @@ import uuid
 from typing import Any
 
 from anthropic import Anthropic
+from sqlalchemy.orm import Session
 
 from app.agents.graph import run_graph_for_ticker
 from app.db import scoped_session
-from app.models import Recommendation
+from app.models import Holding, Recommendation, WatchlistItem
 from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
 JOB_TTL_SECONDS = 3600
 MAX_CONCURRENT_TICKERS = 3
+MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search plus an embedding)
+
+
+def default_ticker_infos(
+    db: Session,
+    user_id: uuid.UUID,
+    *,
+    open_only: bool = False,
+    exclude: frozenset[str] | set[str] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Every holding followed by the watchlist, capped at MAX_RUN_TICKERS. `open_only` leaves out
+    holdings with no shares left (the scheduled run analyzes what the person still owns).
+    `exclude` tickers are dropped before the cap, so they never use up a slot."""
+    holdings = db.query(Holding).filter_by(user_id=user_id)
+    if open_only:
+        holdings = holdings.filter(Holding.shares > 0)
+    infos = [
+        {"ticker": h.ticker, "asset_type": h.asset_type, "is_held": True} for h in holdings
+    ] + [
+        {"ticker": w.ticker, "asset_type": w.asset_type, "is_held": False}
+        for w in db.query(WatchlistItem).filter_by(user_id=user_id)
+    ]
+    return [i for i in infos if i["ticker"] not in exclude][:MAX_RUN_TICKERS]
 
 
 async def create_job(user_id: uuid.UUID, tickers: list[dict[str, Any]]) -> str:
@@ -50,6 +74,7 @@ async def _process_ticker(
     ticker_info: dict[str, Any],
     semaphore: asyncio.Semaphore,
     client: Anthropic | None = None,
+    source: str = "manual",
 ) -> None:
     redis = get_redis()
     async with semaphore:
@@ -81,13 +106,18 @@ async def _process_ticker(
                         price_at_recommendation=state["quote"]["price"],
                         fundamental_score=state["fundamental_score"],
                         technical_signal=state["technical_signal"],
+                        source=source,
                     )
                     db.add(rec)
                     db.commit()
                     db.refresh(rec)
                     entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
-        except Exception:
-            logger.exception("Analysis failed for ticker %s", ticker_info["ticker"])
+        except Exception as exc:
+            # Class name only, no traceback: a traceback carries the exception message, which can
+            # include key material. Manual runs therefore log no traceback either.
+            logger.error(
+                "Analysis failed for ticker %s (%s)", ticker_info["ticker"], type(exc).__name__
+            )
             entry = {"ticker": ticker_info["ticker"], "error": "analysis failed"}
         await redis.rpush(f"job:{job_id}:results", json.dumps(entry))
         await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
@@ -101,16 +131,18 @@ async def run_job(
     # client=None means "the server's own Claude key (admin only)". Any caller acting for a regular
     # user (for example a scheduled analysis command) must pass that user's client.
     client: Anthropic | None = None,
+    source: str = "manual",
 ) -> None:
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_TICKERS)
     try:
         results = await asyncio.gather(
-            *(_process_ticker(job_id, user_id, t, semaphore, client) for t in tickers),
+            *(_process_ticker(job_id, user_id, t, semaphore, client, source) for t in tickers),
             return_exceptions=True,
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.exception("Unhandled error in _process_ticker", exc_info=result)
+                # Class name only: a traceback carries the message, which can include key material.
+                logger.error("Unhandled error in _process_ticker (%s)", type(result).__name__)
     finally:
         redis = get_redis()
         await redis.hset(f"job:{job_id}", "status", "DONE")

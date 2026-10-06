@@ -20,11 +20,14 @@ import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
 const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
 
-// Time the newest pending recommendation was made, in local time.
-function lastAnalysis(recs: RecommendationOut[] | undefined): string | null {
+// When the newest pending recommendation was made, in local time: just the time when it is from
+// today, otherwise with the weekday ("Mon 07:31") so an old call is not mistaken for a fresh one.
+function lastAnalysis(recs: RecommendationOut[] | undefined, now: number): string | null {
   if (!recs || recs.length === 0) return null;
-  const newest = recs.map((r) => r.created_at).sort().at(-1)!;
-  return new Date(toTime(newest)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const newest = new Date(toTime(recs.map((r) => r.created_at).sort().at(-1)!));
+  const time = newest.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (newest.toDateString() === new Date(now).toDateString()) return time;
+  return `${newest.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
 function AwaitingTile({ recommendations }: { recommendations: RecommendationOut[] }) {
@@ -56,6 +59,7 @@ export default function TodayPage() {
   // Same key as PortfolioTile, so SWR shares one request.
   const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [now] = useState(() => Date.now()); // lazy: the purity lint forbids Date.now() in render
   const [runError, setRunError] = useState<string | null>(null);
   const { lock, markRequired } = useClaudeLock();
 
@@ -88,7 +92,7 @@ export default function TodayPage() {
   const failedCount = job?.status === "DONE" ? job.results.filter((r) => r.error).length : 0;
 
   const pending = recommendations ?? [];
-  const lastRun = lastAnalysis(recommendations);
+  const lastRun = lastAnalysis(recommendations, now);
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;

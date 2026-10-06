@@ -1,9 +1,17 @@
 export type RiskTolerance = "conservative" | "moderate" | "aggressive";
 
+export interface AutoAnalysisPaused {
+  reason: "no_key" | "limit";
+  limit: number | null;
+  resumes_on: string | null; // YYYY-MM-DD
+}
+
 export interface Preferences {
   risk_tolerance: RiskTolerance | null;
   sector_avoid_list: string[];
   notes: string | null;
+  auto_analysis: boolean;
+  auto_analysis_paused: AutoAnalysisPaused | null; // only set while auto_analysis is on
 }
 
 export const NOTES_MAX = 2000; // matches PreferencesIn.notes max_length

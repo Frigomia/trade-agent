@@ -152,6 +152,9 @@ Recommendation
       when the job created this row),
   outcome_forward_return_pct (Numeric(8,4), nullable -- set once a
       lookback-window price fetch evaluates the outcome),
+  source ("manual"|"scheduled", not null, default "manual" -- whether a person
+      started the run or the weekday automatic analysis did; the Today screen
+      tags "scheduled" calls as Automatic),
   outcome_evaluated_at (nullable -- when the outcome was last evaluated),
   embedding (pgvector Vector(1024), nullable -- Voyage embedding of the
       recommendation's situation text, for similarity recall)
@@ -170,6 +173,7 @@ BacktestResult
 
 InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
+  auto_analysis (bool, not null, default false: weekday automatic analysis switch; the API leaves it unchanged when a save omits it),
   sector_avoid_list (JSON list[str], not null, default []; the API accepts at most 20 items, each
   stripped, 1-50 characters, no control characters — reads stay lenient for older rows),
   notes (nullable), updated_at
@@ -278,8 +282,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar`. Rate limited: 5/min per user |
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
-| GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
-| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
+| GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes `auto_analysis` and `auto_analysis_paused` (`null` when not paused or when the usage counter cannot be read) |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
 | DELETE | `/chat/messages?session_id=main` | — | Deletes the caller's messages of that session. `204` |
@@ -535,9 +539,10 @@ default — same dialect and models as production, started with
 
 | Command | What it does |
 |---|---|
-| `daily` | Snapshots, then outcome evaluation, for every active user |
+| `daily` | Snapshots, outcome evaluation, then (weekdays only) automatic analysis, for every active user |
 | `snapshots` | Portfolio snapshots only |
 | `outcomes` | Recommendation outcome evaluation only |
+| `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |
 
 - **Runtime role:** same `DATABASE_URL` as the API; each user is processed in
   its own `scoped_session`, so RLS applies exactly as for a request.
@@ -545,14 +550,52 @@ default — same dialect and models as production, started with
   today (UTC), is skipped, so the page-open snapshot hook and the job coexist.
 - **Outcomes:** per user, up to 20 batches of 50 due recommendations per run;
   anything left over is picked up by the next run.
+- **Automatic analysis:** the third step, `app/scheduled.py::run_analysis`, opt-in per user through
+  `investment_preferences.auto_analysis` (off by default). It does nothing on Saturday and Sunday
+  (UTC). For each opted-in active user it runs inside that user's `scoped_session` and uses that
+  user's own Claude client (`claude_keys.resolve_client`); only an admin with no key of their own
+  falls back to the server key. The user is skipped, and counted as skipped rather than failed,
+  when `auto_analysis.pause_state` says they have no usable key or have used their monthly
+  `analysis_run` limit (the same rule the Preferences screen shows), or when nothing is left to
+  analyze. The tickers are the open holdings followed by the watchlist, minus every ticker that has
+  a PENDING recommendation made today or in the 2 calendar days before (UTC; `FRESH_CALENDAR_DAYS`):
+  a Monday call is fresh through Wednesday and stale on Thursday, whatever the time of day. The
+  fresh tickers are removed before the 50-ticker cap, so they never use up a slot. An older pending
+  call is analyzed again and superseded by the new one. When at least one ticker is left, the step
+  sets a per-user per-day marker (`auto_analysis:ran:<user_id>:<YYYY-MM-DD>`, UTC, 25 h expiry),
+  counts one run against the user's monthly limit and runs the same pipeline as
+  `POST /analysis/run` (3 tickers at a time); each stored call has `source = "scheduled"`. The
+  marker makes a same-day re-run a no-op for that user, so "Re-run jobs" after a red run does not
+  charge anyone twice (a user who needs a retry uses Run analysis in the app); it is removed when
+  the limit check refuses the run, and a user skipped for no key, the limit or nothing to analyze
+  never gets one. A ticker that always errors or yields no call has no pending call, so it is
+  analyzed again, and counts a run, every weekday. The database session is closed before the run
+  starts, so no connection is held for minutes. The step has its own lock
+  (`scheduled:analysis-step`), shared by `daily` and `analysis`, so they cannot analyze at the same
+  time. A time budget of `MAX_ANALYSIS_SECONDS` = 2400, measured from the start of the command
+  (snapshots and outcomes count), bounds the step: once it is used up, users not yet reached are
+  skipped and logged. A user's run that is still going is cut off at the end of the budget plus
+  `ANALYSIS_GRACE_SECONDS` = 300 (counted as a failed run); the Claude client has a 180 s timeout
+  and 2 retries. The worst case, 2700 s, stays under the 3600 s lock. Users are processed in a
+  rotation that starts at a different place each day (`date.toordinal() % users`), so nobody is
+  permanently last. A failure for one user (a ticker that errored,
+  a Claude error, a key the provider rejected, an exception) is counted and logged by user id and
+  exception class name only, and never stops the others. Because the run was already counted
+  against the limit, a failed run is counted in both `analysis_runs` and `analysis_failures`.
 - **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
-  expiry. If it is held, the run logs it and exits 0 without doing any work.
-- **Logging:** one info line per user per step, plus a final summary line.
+  expiry and a random owner token (released only if it still holds that token). If it is held, the
+  run logs it and exits 0 without doing any work. The analysis step also takes
+  `scheduled:analysis-step` (same rules), so `daily` and `analysis` never overlap in it.
+- **Logging:** one info line per user per step, plus a final summary line:
+  `users snapshots_recorded snapshots_skipped outcomes_evaluated failures analysis_runs
+  analysis_skipped analysis_failures`. Failures are logged by class name only.
 - **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
   user failed (a holding that cannot be priced counts as a failure for that
-  user), or Redis unreachable; `2` unknown command (argparse). One user's
-  failure never stops the others.
-- **Cadence:** weekdays around 23:00 UTC, after the EU and US closes.
+  user; `failures` or `analysis_failures` above zero), or Redis unreachable;
+  `2` unknown command (argparse). One user's failure never stops the others.
+- **Cadence:** the GitHub Actions cron runs once a day at 05:30 UTC; the
+  cron and Task Scheduler examples below use weekdays at 23:00 UTC, after the EU
+  and US closes.
 
 Triggers (copy-paste):
 
@@ -569,7 +612,8 @@ time.
 Fly.io (§13): the daily job is started by the GitHub Actions cron in
 `.github/workflows/scheduled-jobs.yml`, which runs it in a one-off Fly machine
 on the deployed image (with `APP_ENV=production` passed explicitly). See
-`docs/RUNBOOK.md`. Because the job is idempotent, a late or repeated run is fine.
+`docs/RUNBOOK.md`. Snapshots and outcomes are idempotent, so a late or repeated run is
+fine for them; the analysis step is only mostly so (see the same-day re-run note above).
 
 ---
 
