@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { Alert, Box, Button, Chip, SvgIcon, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
+import { AutoAnalysisSwitch } from "@/components/settings/AutoAnalysisSwitch";
 import {
   addSector,
   MAX_SECTORS,
@@ -27,7 +28,7 @@ export default function PreferencesPage() {
   return <PreferencesForm initial={data} onSaved={() => mutate()} />;
 }
 
-function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: () => void }) {
+function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: () => unknown }) {
   const [risk, setRisk] = useState<RiskTolerance | null>(initial.risk_tolerance);
   const [sectors, setSectors] = useState<string[]>(initial.sector_avoid_list);
   const [sectorInput, setSectorInput] = useState("");
@@ -133,6 +134,10 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         <Section title="Appearance">
           <AppearanceSetting />
         </Section>
+
+        <Panel sx={{ p: "20px 24px" }}>
+          <AutoAnalysisSwitch saved={initial} onSaved={onSaved} />
+        </Panel>
 
         {error && <Alert severity="error">{error}</Alert>}
         <Panel
