@@ -102,7 +102,7 @@ function RecommendationDetail() {
   // Phone: the evidence first, the actions pinned to the bottom of the screen.
   return (
     <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
         <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
         </Typography>

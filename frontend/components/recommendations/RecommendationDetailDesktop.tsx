@@ -31,7 +31,7 @@ export function RecommendationDetailDesktop({
   return (
     <Box sx={{ maxWidth: 760, mx: "auto", pb: 1 }}>
       <Panel sx={{ p: "24px 28px" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", rowGap: 0.75 }}>
           <Typography sx={{ fontSize: 38, fontWeight: 650, letterSpacing: "-0.035em" }}>
             {recommendation.ticker}
           </Typography>

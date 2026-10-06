@@ -88,6 +88,7 @@ describe("RecommendationDetailPage", () => {
     apiFetch.mockResolvedValue(rec({ source: "scheduled" }));
     const { unmount } = renderFresh(<RecommendationDetailPage />);
     await waitFor(() => expect(screen.getByText("Automatic")).toBeInTheDocument());
+    expect(screen.getByText("NVDA").parentElement).toHaveStyle({ flexWrap: "wrap" });
     unmount();
 
     apiFetch.mockResolvedValue(rec({ source: "manual" }));

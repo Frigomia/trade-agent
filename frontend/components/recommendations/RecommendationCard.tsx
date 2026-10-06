@@ -86,7 +86,7 @@ export function RecommendationCard({
 
   return (
     <Panel sx={{ p: "14px", mt: 1.5 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
         <Link
           href={`/today/${recommendation.id}`}
           style={{ color: "inherit", textDecoration: "none" }}

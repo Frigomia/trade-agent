@@ -53,6 +53,8 @@ export function TodayDesktop({ recommendations }: { recommendations: Recommendat
                 display: "flex",
                 alignItems: "center",
                 gap: 1.25,
+                flexWrap: "wrap",
+                rowGap: 0.5,
                 py: 1.25,
                 borderBottom: "1px solid var(--line)",
                 "&:last-of-type": { borderBottom: 0 },
