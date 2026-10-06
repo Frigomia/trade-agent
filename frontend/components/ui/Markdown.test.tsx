@@ -21,4 +21,33 @@ describe("Markdown", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
   });
+
+  describe("link destinations", () => {
+    it("shows the destination host after the link text", () => {
+      render(<Markdown>{"[the report](https://www.Example.com/a/b?x=1)"}</Markdown>);
+      expect(screen.getByRole("link", { name: "the report" })).toHaveAttribute(
+        "href",
+        "https://www.Example.com/a/b?x=1",
+      );
+      expect(screen.getByText("(www.example.com)")).toBeInTheDocument();
+    });
+
+    it("does not repeat the host when the text already is the host or URL", () => {
+      const { container } = render(
+        <Markdown>{"[example.com](https://example.com) and [https://news.example.org/story](https://news.example.org/story)"}</Markdown>,
+      );
+      expect(container.textContent).not.toContain("(");
+    });
+
+    it("shows the address for mailto links", () => {
+      render(<Markdown>{"[contact us](mailto:ir@example.com)"}</Markdown>);
+      expect(screen.getByText("(ir@example.com)")).toBeInTheDocument();
+    });
+
+    it("keeps javascript: links inert and unannotated", () => {
+      const { container } = render(<Markdown>{"[click](javascript:alert(1))"}</Markdown>);
+      expect(container.querySelector("a")?.getAttribute("href") ?? "").not.toContain("javascript");
+      expect(container.textContent).not.toContain("(");
+    });
+  });
 });
