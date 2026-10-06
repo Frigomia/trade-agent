@@ -37,10 +37,7 @@ features, showing a user's real Anthropic spend (their own console does that).
 
 ## Storage and encryption
 
-- New table `user_api_keys`: `user_id` (primary key), `ciphertext`, `key_version`, `last4`,
-  `status` (`ok` or `needs_attention`), `created_at`, `updated_at`. One key per user. It is added to
-  `USER_TABLES` and `RUNTIME_TABLES`, so it gets the same forced owner-only policy as the other
-  user tables. The admin API never selects from it.
+- New table `user_api_keys`: `id` (integer primary key, like every user table), `user_id` (unique), `ciphertext`, `key_version`, `last4`, `status` (`ok` or `needs_attention`), `created_at`, `updated_at`. One key per user. It is added to `USER_TABLES` and `RUNTIME_TABLES`, so it gets the same forced owner-only policy as the other user tables. The admin API never selects from it. Because the admin cannot read it either (the policy is owner-only), `app_users` gets a plain `claude_key_state` column (`none`, `ok` or `needs_attention`), updated in the same transaction as every save, delete or status change; the admin Users screen reads that.
 - The new migration is hand-written (a new file; generated migrations are never edited), creates the
   table and grants the runtime role access through `app/rls.py` like the others.
 - Encryption: AES-256-GCM, a fresh random 12-byte nonce per save, and the user's id bound in as
@@ -48,8 +45,7 @@ features, showing a user's real Anthropic spend (their own console does that).
   `nonce || ciphertext+tag`. `key_version` names which master secret encrypted it, so the secret can be
   rotated by re-encrypting rows later.
 - The master secret is a new setting, `KEY_ENCRYPTION_SECRET` (32 random bytes, base64), set as a Fly
-  secret. With `APP_ENV=production` the app refuses to start without it, the same pattern as the TLS
-  guard (the message names the setting and never prints a value). Development and tests use a fixed
+  secret. With `APP_ENV=production` the web process refuses to start without a valid secret, the same pattern as the runtime-role start-up check (the message names the setting and never prints a value); the release command and the one-off jobs are not blocked, but decrypting without the secret raises an error that names the setting. Development and tests use a fixed
   throwaway secret.
 - If the master secret is lost, saved keys cannot be decrypted and each user re-enters theirs. The
   RUNBOOK says so and tells the owner to keep a copy of the secret in a password manager.
@@ -104,7 +100,7 @@ and never in a response.
 
 ## Other effects
 
-- Deleting someone's data deletes their key row. The data export includes only "connected: yes or no".
+- Deleting someone's data (or removing the user) deletes their key row, because every user table is cleared. The data export does not include the key.
 - The audit and logs: connect and disconnect are logged by user id and the event name, with no key
   material.
 - ARCHITECTURE gets the new table, the three routes and the new setting; the RUNBOOK gets the secret, its

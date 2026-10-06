@@ -39,9 +39,7 @@ run comes from the same function. Build that first.
 ## Data change
 
 - `investment_preferences.auto_analysis`: boolean, default false, through a new hand-written migration.
-- `recommendations` gets a way to mark a call as replaced: a new status value `SUPERSEDED` (not deleted,
-  so Track record and the memory features keep seeing it) and a `source` column (`manual` or
-  `scheduled`) so the screen can label automatic calls. Both through the same migration.
+- `recommendations` gets a `source` column (`manual` or `scheduled`), so the screen can label automatic calls. The `SUPERSEDED` status already exists: `app/agents/jobs.py` already marks an older PENDING call of the same ticker `SUPERSEDED` when a new one is created, so the scheduled step reuses that and only adds the rule that a pending call younger than 3 days is skipped. The migration for the new column is hand-written.
 - The preferences API gains the optional `auto_analysis` field, and returns whether automatic analysis is
   currently paused and why (`limit reached` or `no Claude key`).
 
@@ -102,4 +100,3 @@ mentions the new step and its counters.
 
 - How the manual path is best called for a user from the scheduled command (the same function, or a thin shared
   helper), and where the "one run per day" count is recorded.
-- Whether `SUPERSEDED` needs a database constraint change or only the application's status list.
