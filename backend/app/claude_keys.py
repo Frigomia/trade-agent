@@ -188,8 +188,9 @@ def require_claude_key(
 
 
 def has_usable_key(db: Session, user_id: uuid.UUID, role: str) -> bool:
-    """True when a request for this user could get a Claude client: a saved key that is `ok`, or no
-    key at all for an admin (who then uses the server key). Decrypts nothing and builds no client."""
+    """True when a request for this user could get a Claude client: a saved key that is `ok`, or
+    no key at all for an admin (who then uses the server key). Decrypts nothing, builds no
+    client."""
     try:
         _usable_key_row(db, user_id, role)
     except ClaudeKeyRequired:
