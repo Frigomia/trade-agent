@@ -12,8 +12,10 @@ from app import claude_keys
 from app.models import AppUser, Recommendation
 from app.usage import LimitDefaults, effective_limit, get_usage
 
-# A pending call this young is left alone; an older one is analyzed again and superseded.
-STALE_AFTER = timedelta(days=3)
+# A pending call made today or in the 2 calendar days before is left alone; an older one is
+# analyzed again and superseded. A Monday call is fresh until Wednesday and stale on Thursday,
+# whatever time of day the calls were made or the job runs.
+FRESH_CALENDAR_DAYS = 2
 
 
 @dataclass(frozen=True)
@@ -24,14 +26,15 @@ class Pause:
 
 
 def fresh_pending_tickers(db: Session, user_id: uuid.UUID, now: datetime) -> set[str]:
-    """Tickers that already have a PENDING recommendation younger than STALE_AFTER (`now` is naive
-    UTC, like the created_at column)."""
+    """Tickers that already have a PENDING recommendation made within FRESH_CALENDAR_DAYS calendar
+    days (UTC) of `now` (`now` is naive UTC, like the created_at column)."""
+    cutoff = datetime(now.year, now.month, now.day) - timedelta(days=FRESH_CALENDAR_DAYS)
     rows = (
         db.query(Recommendation.ticker)
         .filter(
             Recommendation.user_id == user_id,
             Recommendation.status == "PENDING",
-            Recommendation.created_at > now - STALE_AFTER,
+            Recommendation.created_at >= cutoff,
         )
         .distinct()
         .all()

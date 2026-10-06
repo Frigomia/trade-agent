@@ -21,6 +21,9 @@ from app.models import AppUser, UserApiKey
 logger = logging.getLogger(__name__)
 
 KEY_VERSION = 1
+# The SDK defaults (600 s per request, 2 retries) could stall one user's run for a very long time.
+CLIENT_TIMEOUT_SECONDS = 180.0
+CLIENT_MAX_RETRIES = 2
 _NONCE_BYTES = 12
 _SECRET_BYTES = 32
 # Used outside production only, so local runs and tests need no configuration. Production refuses to
@@ -147,7 +150,11 @@ def resolve_client(db: Session, user_id: uuid.UUID, role: str) -> Anthropic | No
     if row is None:
         return None
     try:
-        return Anthropic(api_key=decrypt_key(user_id, row.ciphertext))
+        return Anthropic(
+            api_key=decrypt_key(user_id, row.ciphertext),
+            timeout=CLIENT_TIMEOUT_SECONDS,
+            max_retries=CLIENT_MAX_RETRIES,
+        )
     except KeyEncryptionError:
         logger.warning("A saved Claude key for user %s could not be decrypted", user_id)
         # Flag it so the Account page and the admin list show it; this runs in its own session.

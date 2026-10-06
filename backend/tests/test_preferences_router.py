@@ -1,5 +1,8 @@
 import asyncio
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 import app.redis_client as redis_client_module
 from app.auto_analysis import next_month_start
@@ -191,3 +194,41 @@ def test_an_enabled_switch_at_the_monthly_limit_reports_the_limit_and_the_resume
 
 def test_a_disabled_switch_is_never_reported_as_paused(client_no_key):
     assert client_no_key.get("/preferences").json()["auto_analysis_paused"] is None
+
+
+def test_a_post_with_only_the_switch_leaves_the_other_fields_alone(client):
+    client.post(
+        "/preferences",
+        json={"risk_tolerance": "aggressive", "sector_avoid_list": ["tobacco"], "notes": "n"},
+    )
+    body = client.post("/preferences", json={"auto_analysis": True}).json()
+    assert body["auto_analysis"] is True
+    assert body["risk_tolerance"] == "aggressive"
+    assert body["sector_avoid_list"] == ["tobacco"]
+    assert body["notes"] == "n"
+
+
+def test_a_field_sent_as_null_is_cleared_but_a_null_switch_is_ignored(client):
+    client.post(
+        "/preferences", json={"risk_tolerance": "aggressive", "notes": "n", "auto_analysis": True}
+    )
+    body = client.post(
+        "/preferences", json={"risk_tolerance": None, "notes": None, "auto_analysis": None}
+    ).json()
+    assert body["risk_tolerance"] is None
+    assert body["notes"] is None
+    assert body["auto_analysis"] is True
+
+
+def test_preferences_still_load_and_save_when_redis_is_down(client, caplog):
+    client.post("/preferences", json={"auto_analysis": True})
+    down = AsyncMock(side_effect=RedisConnectionError("secret-host:6379"))
+    with patch("app.auto_analysis.get_usage", down):
+        got = client.get("/preferences")
+        saved = client.post("/preferences", json={"notes": "still saved"})
+    assert got.status_code == 200 and saved.status_code == 200
+    assert got.json()["auto_analysis"] is True
+    assert got.json()["auto_analysis_paused"] is None
+    assert saved.json()["notes"] == "still saved"
+    assert "ConnectionError" in caplog.text
+    assert "secret-host" not in caplog.text

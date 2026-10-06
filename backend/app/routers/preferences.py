@@ -1,6 +1,8 @@
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
+from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -11,6 +13,8 @@ from app.config import settings
 from app.models import AppUser, InvestmentPreferences
 from app.schemas import AutoAnalysisPaused, PreferencesIn, PreferencesOut
 from app.usage import load_limit_defaults
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["preferences"], dependencies=[Depends(get_current_user)])
 
@@ -28,7 +32,12 @@ async def _out(
         defaults = await run_in_threadpool(load_limit_defaults, db, settings)
         if row is not None:
             # One short key lookup runs on the loop inside pause_state; the usage read is async.
-            pause = await pause_state(db, row, defaults, datetime.now(UTC).date())
+            try:
+                pause = await pause_state(db, row, defaults, datetime.now(UTC).date())
+            except RedisError as exc:
+                # The usage counter is unreadable: report "unknown" instead of failing the screen.
+                logger.warning("Preferences: usage read failed (%s)", type(exc).__name__)
+                return out
             if pause is not None:
                 out.auto_analysis_paused = AutoAnalysisPaused(
                     reason=pause.reason, limit=pause.limit, resumes_on=pause.resumes_on
@@ -45,8 +54,9 @@ async def get_preferences(
 
 
 def _save(db: Session, user: CurrentUser, payload: PreferencesIn) -> InvestmentPreferences:
-    values = payload.model_dump()
-    auto = values.pop("auto_analysis")  # None means the client did not send it
+    # Only the fields the client actually sent; the rest keep their stored values.
+    values = payload.model_dump(exclude_unset=True)
+    auto = values.pop("auto_analysis", None)  # an explicit null is ignored (the column is not null)
     pref = _load(db, user)
     if pref is None:
         pref = InvestmentPreferences(user_id=user.id, **values)

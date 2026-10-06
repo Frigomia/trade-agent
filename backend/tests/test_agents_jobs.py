@@ -230,3 +230,13 @@ def test_default_ticker_infos_is_capped(session_local):
             db.add(WatchlistItem(user_id=USER_ID, ticker=f"T{i}", asset_type="STOCK"))
         db.commit()
         assert len(default_ticker_infos(db, USER_ID)) == MAX_RUN_TICKERS
+
+
+def test_default_ticker_infos_drops_excluded_tickers_before_the_cap(session_local):
+    with session_local() as db:
+        for i in range(MAX_RUN_TICKERS + 10):
+            db.add(WatchlistItem(user_id=USER_ID, ticker=f"T{i}", asset_type="STOCK"))
+        db.commit()
+        excluded = {f"T{i}" for i in range(MAX_RUN_TICKERS)}  # the first 50 are already fresh
+        infos = default_ticker_infos(db, USER_ID, exclude=excluded)
+    assert [i["ticker"] for i in infos] == [f"T{i}" for i in range(MAX_RUN_TICKERS, 60)]

@@ -1,5 +1,6 @@
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+import uuid
+from datetime import UTC, date, datetime
 
 from sqlalchemy.orm import Session
 
@@ -8,7 +9,7 @@ from app import auto_analysis, claude_keys
 from app.models import Recommendation, UserApiKey
 from app.redis_client import get_redis
 from app.usage import LimitDefaults
-from tests.auth_support import USER_ID, add_app_user
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 DEFAULTS = LimitDefaults(analysis_runs=3, chat_messages=10)
 
@@ -21,16 +22,22 @@ def _run(coro):  # type: ignore[no-untyped-def]
         redis_client_module._redis = None
 
 
-def _rec(db: Session, ticker: str, status: str = "PENDING", days_old: int = 0) -> None:
+def _rec(
+    db: Session,
+    ticker: str,
+    status: str = "PENDING",
+    created_at: datetime | None = None,
+    user_id: uuid.UUID = USER_ID,
+) -> None:
     db.add(
         Recommendation(
-            user_id=USER_ID,
+            user_id=user_id,
             ticker=ticker,
             asset_type="STOCK",
             action="BUY",
             reasoning=["x"],
             status=status,
-            created_at=datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days_old),
+            created_at=created_at or datetime(2026, 10, 8, 9, 0),
         )
     )
     db.commit()
@@ -48,14 +55,29 @@ def _key(db: Session, status: str = "ok") -> None:
     db.commit()
 
 
-def test_a_pending_call_younger_than_three_days_is_fresh_and_an_older_one_is_not(
+def test_freshness_is_by_calendar_day_not_by_hours(db_session: Session) -> None:
+    add_app_user(db_session, OTHER_USER_ID)
+    now = datetime(2026, 10, 8, 5, 30)  # a Thursday
+    _rec(db_session, "SAME", created_at=datetime(2026, 10, 8, 5, 0))  # today
+    _rec(db_session, "EDGE", created_at=datetime(2026, 10, 6, 0, 0))  # 2 calendar days old: fresh
+    _rec(db_session, "STALE", created_at=datetime(2026, 10, 5, 23, 59))  # 3 calendar days: stale
+    _rec(db_session, "LATE", created_at=datetime(2026, 10, 6, 23, 59))  # Tuesday evening: fresh
+    _rec(db_session, "DONE", status="APPROVED", created_at=datetime(2026, 10, 8, 1, 0))
+    _rec(db_session, "OLDER", status="SUPERSEDED", created_at=datetime(2026, 10, 8, 1, 0))
+    _rec(db_session, "NO", status="REJECTED", created_at=datetime(2026, 10, 8, 1, 0))
+    _rec(db_session, "THEIRS", created_at=datetime(2026, 10, 8, 1, 0), user_id=OTHER_USER_ID)
+    fresh = auto_analysis.fresh_pending_tickers(db_session, USER_ID, now)
+    assert fresh == {"SAME", "EDGE", "LATE"}
+
+
+def test_a_monday_call_is_fresh_through_wednesday_and_stale_on_thursday(
     db_session: Session,
 ) -> None:
-    _rec(db_session, "AAPL", days_old=2)
-    _rec(db_session, "MSFT", days_old=3, status="PENDING")
-    _rec(db_session, "NVDA", days_old=0, status="APPROVED")
-    now = datetime.now(UTC).replace(tzinfo=None)
-    assert auto_analysis.fresh_pending_tickers(db_session, USER_ID, now) == {"AAPL"}
+    _rec(db_session, "AAPL", created_at=datetime(2026, 10, 5, 23, 0))  # Monday night
+    for day, expected in ((5, True), (6, True), (7, True), (8, False)):
+        now = datetime(2026, 10, day, 5, 30)
+        fresh = auto_analysis.fresh_pending_tickers(db_session, USER_ID, now)
+        assert (fresh == {"AAPL"}) is expected, day
 
 
 def test_next_month_start_rolls_over_the_year() -> None:

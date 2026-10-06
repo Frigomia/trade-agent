@@ -252,8 +252,9 @@ The daily job (`python -m app.scheduled daily`, started by the "Scheduled jobs" 
 does three things in order: portfolio snapshots, outcome evaluation, and, on weekdays only, the
 automatic analysis for people who switched it on in Preferences. On Saturday and Sunday (UTC) the
 analysis step logs "weekend, nothing to do" and changes nothing. The one-off Fly machine for the job
-has 1 GB of memory (the app machine stays at 512 MB), because the analysis runs three tickers at a
-time with pandas and yfinance.
+has 1 GB of memory (the app machine stays at 512 MB). It is headroom for the pipeline's three
+concurrent tickers plus pandas and yfinance across many users in one long-lived process; the 512 MB
+app machine only ever runs one user's run at a time.
 
 When it finishes it logs one summary line, for example:
 
@@ -270,7 +271,7 @@ users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0
   including a run that ended with errors.
 - `analysis_skipped`: users who were not analyzed. This is normal and not a problem. The reasons:
   they have no Claude key, they have used up their monthly runs, every ticker already has a pending
-  call younger than 3 days (nothing new to analyze), or the time budget ran out before their turn.
+  call from the last 3 calendar days (nothing new to analyze), they already ran today, or the time budget ran out before their turn.
   A weekend run does nothing at all.
 - `analysis_failures`: users whose run raised an error, had a ticker that errored, or whose key the
   provider rejected.
@@ -282,16 +283,21 @@ counter, not only `failures`. A failure for one user never stops the others; the
 Troubleshooting:
 
 - To run only the analysis step (it still does nothing on a weekend), use
-  `python -m app.scheduled analysis` in a one-off machine or `fly ssh console`. It takes the same
-  Redis lock as the daily run, so it exits without work if a run is in progress.
-- Time budget: the analysis step stops starting new users after 2400 seconds. Users not reached are
-  counted as skipped and logged ("time budget used up"); a user's run already in progress can finish
-  past the budget. They are picked up the next weekday, or by a manual `analysis` run.
-- A manual re-run on the same day is mostly safe: tickers that already have a pending call younger
-  than 3 days are skipped and count nothing. But a ticker whose first run produced no call (the
-  pipeline decided to skip it) or errored has no pending call, so the re-run analyzes it again and
-  counts another run against the monthly limit. "At most one run a day" rests on the cron, not on
-  the code.
+  `python -m app.scheduled analysis` in a one-off machine or `fly ssh console`. The analysis step
+  has its own lock, shared by `daily` and `analysis`: they cannot overlap, and the second one logs
+  "another analysis run is in progress" and does nothing.
+- Time budget: 2400 seconds, measured from the start of the command (snapshots and outcomes count).
+  Users not reached are counted as skipped and logged ("time budget used up", plus one line with
+  the count). A user's run still going at the end of the budget plus a 300 second grace is cut off
+  and counted as failed; each Claude request has a 180 second timeout. Users are rotated daily
+  (the starting position moves each day), so nobody is permanently last.
+- A same-day re-run is a no-op per user: each user who got as far as running has a marker for the
+  day, so "Re-run jobs" after a red run does NOT retry a user who already ran that day, and charges
+  nothing. A person who needs another run uses Run analysis in the app. A user skipped (no key,
+  limit reached, nothing to analyze) has no marker and is looked at again.
+- Freshness is by calendar day (UTC): a Monday call counts as fresh through Wednesday and is stale
+  on Thursday. A ticker that always errors or yields no call has no pending call, so it is analyzed
+  again, and counts a run against the monthly limit, every weekday.
 - Failed tickers are logged as `Analysis failed for ticker <T> (<ExceptionClass>)`, with the exception
   class name only and no traceback. This is on purpose: a traceback carries the exception message,
   which can include key material. The same is true for manual runs from the app. To diagnose, find

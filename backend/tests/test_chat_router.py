@@ -252,7 +252,9 @@ def test_chat_uses_the_callers_own_key(client, monkeypatch):
         response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
 
     assert response.status_code == 200
-    constructor.assert_called_once_with(api_key="sk-ant-test-key-0000")
+    constructor.assert_called_once_with(
+        api_key="sk-ant-test-key-0000", timeout=180.0, max_retries=2
+    )
     assert mock_run.call_args.kwargs["client"] is constructor.return_value
 
 

@@ -9,6 +9,8 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from redis.asyncio import Redis
+
 from app import claude_keys
 from app import db as app_db
 from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
@@ -126,14 +128,51 @@ async def run_outcomes(summary: Summary) -> None:
             logger.warning("Outcome evaluation failed for user %s: %s", user_id, type(exc).__name__)
 
 
-# One user's run can take minutes (up to 50 tickers, 3 at a time). A global budget keeps the whole
-# command inside its lock and its machine: users not reached are skipped and logged.
+# One user's run can take minutes (up to 50 tickers, 3 at a time). The budget is measured from the
+# start of the whole command (snapshots and outcomes included) and keeps it inside its lock and its
+# machine: users not reached are skipped and logged. A user who starts just inside the budget is
+# still cut off at the end of it plus a grace period, so one stuck run cannot hold the command.
 MAX_ANALYSIS_SECONDS = 2400
+ANALYSIS_GRACE_SECONDS = 300
+# The command ends at most MAX_ANALYSIS_SECONDS + ANALYSIS_GRACE_SECONDS = 2700 s after it started
+# (snapshots and outcomes are inside the budget), well under LOCK_SECONDS = 3600.
+LOCK_SECONDS = 3600
+ANALYSIS_LOCK_KEY = "scheduled:analysis-step"
+# A same-day marker outlives the UTC day (25 h) so a late retry cannot slip past it.
+RAN_MARKER_SECONDS = 90000
+
+# Delete the lock only while it still holds our token, so a run that outlived its lock never
+# removes the next run's lock. Check and delete happen in one step inside Redis.
+_RELEASE_IF_OWNER = (
+    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) end return 0"
+)
 
 
-async def _analyze_user(user_id: uuid.UUID, now: datetime, defaults: LimitDefaults) -> str:
+async def _release_lock(redis: Redis, key: str, token: str, label: str) -> None:
+    try:
+        await redis.eval(_RELEASE_IF_OWNER, 1, key, token)
+    except Exception as exc:
+        # The lock expires on its own after LOCK_SECONDS.
+        logger.warning("%s: lock release failed (%s)", label, type(exc).__name__)
+
+
+def _ran_marker_key(user_id: uuid.UUID, now: datetime) -> str:
+    return f"auto_analysis:ran:{user_id}:{now.strftime('%Y-%m-%d')}"
+
+
+async def _forget_marker(key: str) -> None:
+    try:
+        await get_redis().delete(key)
+    except Exception as exc:
+        # Not charged, but blocked until the marker expires: say so.
+        logger.warning("Analysis: could not clear the same-day marker (%s)", type(exc).__name__)
+
+
+async def _analyze_user(
+    user_id: uuid.UUID, now: datetime, defaults: LimitDefaults, run_seconds: float
+) -> str:
     """One user's automatic run: "off" | "skipped" | "ran" | "failed". The key's client exists only
-    inside this call."""
+    inside this call. `run_seconds` is how long the run itself may take before it is cut off."""
     with app_db.scoped_session(user_id) as db:
         prefs = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
         if prefs is None or not prefs.auto_analysis:
@@ -144,9 +183,7 @@ async def _analyze_user(user_id: uuid.UUID, now: datetime, defaults: LimitDefaul
         if await pause_state(db, user, defaults, now.date()) is not None:
             return "skipped"
         fresh = fresh_pending_tickers(db, user_id, now.replace(tzinfo=None))
-        infos = [
-            t for t in default_ticker_infos(db, user_id, open_only=True) if t["ticker"] not in fresh
-        ]
+        infos = default_ticker_infos(db, user_id, open_only=True, exclude=fresh)
         if not infos:
             return "skipped"
         try:
@@ -156,16 +193,27 @@ async def _analyze_user(user_id: uuid.UUID, now: datetime, defaults: LimitDefaul
             return "skipped"  # includes a key that could not be decrypted (flagged inside)
         limit = effective_limit(user, "analysis_run", defaults)
     # The session is closed: the run below must not hold a database connection for minutes.
+    # One run per user per UTC day: a second command run the same day (for example "Re-run jobs"
+    # after a red run) must not be charged again. Set only now, so a skipped user keeps no marker.
+    marker = _ran_marker_key(user_id, now)
+    if not await get_redis().set(marker, "1", nx=True, ex=RAN_MARKER_SECONDS):
+        return "skipped"
     try:
         await check_and_increment_usage("analysis_run", str(user_id), limit)
     except UsageLimitExceeded:
+        await _forget_marker(marker)  # nothing was charged, so the user may still run today
         return "skipped"  # raced past the limit after pause_state; usage already took it back
+    except Exception:
+        await _forget_marker(marker)  # the counter could not be read or written: nothing charged
+        raise
     try:
         job_id = await create_job(user_id, infos)
-        await run_job(job_id, user_id, infos, client=client, source="scheduled")
+        async with asyncio.timeout(run_seconds):
+            await run_job(job_id, user_id, infos, client=client, source="scheduled")
         status = await get_job_status(job_id, user_id)
     except Exception as exc:
-        # The run was already counted against the limit: report it as a failed run.
+        # The run was already counted against the limit: report it as a failed run. This includes
+        # TimeoutError from the cut-off above; the marker stays, so it is not retried today.
         logger.warning("Analysis user %s: run raised %s", user_id, type(exc).__name__)
         return "failed"
     errored = status is not None and any("error" in r for r in status["results"])
@@ -175,26 +223,54 @@ async def _analyze_user(user_id: uuid.UUID, now: datetime, defaults: LimitDefaul
     return "failed" if errored or rejected else "ran"
 
 
-async def run_analysis(summary: Summary, now: datetime | None = None) -> None:
+async def run_analysis(
+    summary: Summary, now: datetime | None = None, started: float | None = None
+) -> None:
     """Opt-in weekday analysis (Monday to Friday, UTC). A user's failure is counted and logged by
-    id and class name; the others still run."""
+    id and class name; the others still run. `started` is the command's start on the monotonic
+    clock (the time budget counts from there); it defaults to now.
+
+    Takes its own lock, shared by `daily` and `analysis`, so two commands never analyze (and charge
+    people's keys) at the same time."""
     now = now or datetime.now(UTC)
+    started = time.monotonic() if started is None else started
     if now.weekday() >= 5:
         logger.info("Analysis: weekend, nothing to do")
         return
+    redis = get_redis()
+    token = uuid.uuid4().hex
+    if not await redis.set(ANALYSIS_LOCK_KEY, token, nx=True, ex=LOCK_SECONDS):
+        logger.warning("Analysis: another analysis run is in progress, nothing to do")
+        return
+    try:
+        await _analyze_all(summary, now, started)
+    finally:
+        await _release_lock(redis, ANALYSIS_LOCK_KEY, token, "Analysis")
+
+
+async def _analyze_all(summary: Summary, now: datetime, started: float) -> None:
     ids = active_user_ids()
     if summary.users == 0:
         summary.users = len(ids)
+    if ids:
+        # Start somewhere different each day, so the same people are not always last when the
+        # budget runs out.
+        k = now.date().toordinal() % len(ids)
+        ids = ids[k:] + ids[:k]
     with app_db.SessionLocal() as db:
         defaults = load_limit_defaults(db, settings)
-    started = time.monotonic()
+    not_reached = 0
     for user_id in ids:
-        if time.monotonic() - started > MAX_ANALYSIS_SECONDS:
+        remaining = MAX_ANALYSIS_SECONDS - (time.monotonic() - started)
+        if remaining <= 0:
             summary.analysis_skipped += 1
+            not_reached += 1
             logger.warning("Analysis user %s: skipped (time budget used up)", user_id)
             continue
         try:
-            outcome = await _analyze_user(user_id, now, defaults)
+            outcome = await _analyze_user(
+                user_id, now, defaults, remaining + ANALYSIS_GRACE_SECONDS
+            )
         except Exception as exc:
             summary.analysis_failures += 1
             logger.warning("Analysis failed for user %s: %s", user_id, type(exc).__name__)
@@ -208,24 +284,27 @@ async def run_analysis(summary: Summary, now: datetime | None = None) -> None:
             summary.analysis_failures += 1
             logger.warning("Analysis user %s: finished with errors", user_id)
         logger.info("Analysis user %s: %s", user_id, outcome)
+    if not_reached:
+        logger.warning("Analysis: %d users not reached, budget used up", not_reached)
 
 
 COMMANDS = ("daily", "snapshots", "outcomes", "analysis")
-LOCK_SECONDS = 3600
 
 
 async def run_command(command: str) -> int:
     key = f"scheduled:{command}"
+    token = uuid.uuid4().hex
     redis = None
     try:
         redis = get_redis()
-        acquired = await redis.set(key, "1", nx=True, ex=LOCK_SECONDS)
+        acquired = await redis.set(key, token, nx=True, ex=LOCK_SECONDS)
     except Exception as exc:
         logger.error("Scheduled %s: cannot reach Redis (%s)", command, type(exc).__name__)
         return 1
     if not acquired:
         logger.warning("Scheduled %s: already running, nothing to do", command)
         return 0
+    started = time.monotonic()
     summary = Summary()
     try:
         if command in ("daily", "snapshots"):
@@ -233,19 +312,14 @@ async def run_command(command: str) -> int:
         if command in ("daily", "outcomes"):
             await run_outcomes(summary)
         if command in ("daily", "analysis"):
-            await run_analysis(summary)
+            await run_analysis(summary, started=started)
         logger.info("Scheduled %s done: %s", command, summary.line())
     except Exception as exc:
         # class name only: exception text can carry connection strings
         logger.error("Scheduled %s failed (%s)", command, type(exc).__name__)
         return 1
     finally:
-        try:
-            # ponytail: unconditional delete; a run longer than LOCK_SECONDS could delete the
-            # next run's lock. Add an owner token if runs ever approach an hour.
-            await redis.delete(key)
-        except Exception as exc:
-            logger.warning("Scheduled %s: lock release failed (%s)", command, type(exc).__name__)
+        await _release_lock(redis, key, token, f"Scheduled {command}")
     return 1 if summary.failures or summary.analysis_failures else 0
 
 

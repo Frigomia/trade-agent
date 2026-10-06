@@ -20,10 +20,15 @@ MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search pl
 
 
 def default_ticker_infos(
-    db: Session, user_id: uuid.UUID, *, open_only: bool = False
+    db: Session,
+    user_id: uuid.UUID,
+    *,
+    open_only: bool = False,
+    exclude: frozenset[str] | set[str] = frozenset(),
 ) -> list[dict[str, Any]]:
     """Every holding followed by the watchlist, capped at MAX_RUN_TICKERS. `open_only` leaves out
-    holdings with no shares left (the scheduled run analyzes what the person still owns)."""
+    holdings with no shares left (the scheduled run analyzes what the person still owns).
+    `exclude` tickers are dropped before the cap, so they never use up a slot."""
     holdings = db.query(Holding).filter_by(user_id=user_id)
     if open_only:
         holdings = holdings.filter(Holding.shares > 0)
@@ -33,7 +38,7 @@ def default_ticker_infos(
         {"ticker": w.ticker, "asset_type": w.asset_type, "is_held": False}
         for w in db.query(WatchlistItem).filter_by(user_id=user_id)
     ]
-    return infos[:MAX_RUN_TICKERS]
+    return [i for i in infos if i["ticker"] not in exclude][:MAX_RUN_TICKERS]
 
 
 async def create_job(user_id: uuid.UUID, tickers: list[dict[str, Any]]) -> str:
@@ -136,7 +141,8 @@ async def run_job(
         )
         for result in results:
             if isinstance(result, Exception):
-                logger.exception("Unhandled error in _process_ticker", exc_info=result)
+                # Class name only: a traceback carries the message, which can include key material.
+                logger.error("Unhandled error in _process_ticker (%s)", type(result).__name__)
     finally:
         redis = get_redis()
         await redis.hset(f"job:{job_id}", "status", "DONE")
