@@ -11,6 +11,7 @@ import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { SIGNAL_LABEL } from "./EvidencePanel";
+import { AutomaticTag } from "./AutomaticTag";
 import { ActionChip } from "./RecommendationCard";
 
 /** The desktop part of Today from the mockup: value over time beside the compact review list. */
@@ -72,6 +73,7 @@ export function TodayDesktop({ recommendations }: { recommendations: Recommendat
                 </Typography>
               </Link>
               <ActionChip action={rec.action} />
+              <AutomaticTag source={rec.source} />
             </Box>
           ))}
         </Box>

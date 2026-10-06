@@ -84,6 +84,18 @@ describe("RecommendationDetailPage", () => {
     expect(screen.getByText(/conflicts with the fundamentals reading/i)).toBeInTheDocument();
   });
 
+  it("shows the Automatic tag in the header for a scheduled recommendation only", async () => {
+    apiFetch.mockResolvedValue(rec({ source: "scheduled" }));
+    const { unmount } = renderFresh(<RecommendationDetailPage />);
+    await waitFor(() => expect(screen.getByText("Automatic")).toBeInTheDocument());
+    unmount();
+
+    apiFetch.mockResolvedValue(rec({ source: "manual" }));
+    renderFresh(<RecommendationDetailPage />);
+    await waitFor(() => expect(screen.getByText("NVDA")).toBeInTheDocument());
+    expect(screen.queryByText("Automatic")).not.toBeInTheDocument();
+  });
+
   it("says a newer analysis replaced a superseded recommendation, with no approve/dismiss", async () => {
     apiFetch.mockResolvedValue(rec({ status: "SUPERSEDED" }));
     renderFresh(<RecommendationDetailPage />);

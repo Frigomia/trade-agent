@@ -6,6 +6,7 @@ import { Amount } from "@/components/portfolio/Amount";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { AskAboutThis } from "./AskAboutThis";
+import { AutomaticTag } from "./AutomaticTag";
 import { DecisionActions } from "./DecisionActions";
 import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
 import { ActionChip, ChangePill } from "./RecommendationCard";
@@ -35,6 +36,7 @@ export function RecommendationDetailDesktop({
             {recommendation.ticker}
           </Typography>
           <ActionChip action={recommendation.action} />
+          <AutomaticTag source={recommendation.source} />
           <Box sx={{ flex: 1 }} />
           <Pill tone="warn">Pending</Pill>
         </Box>

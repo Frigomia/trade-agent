@@ -6,6 +6,7 @@ import { Globe } from "lucide-react";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
+import { AutomaticTag } from "./AutomaticTag";
 import { DecisionActions } from "./DecisionActions";
 import { EvidencePanel } from "./EvidencePanel";
 
@@ -95,6 +96,7 @@ export function RecommendationCard({
           </Typography>
         </Link>
         <ActionChip action={recommendation.action} />
+        <AutomaticTag source={recommendation.source} />
         <Box sx={{ flex: 1 }} />
         <PriceBlock recommendation={recommendation} />
       </Box>

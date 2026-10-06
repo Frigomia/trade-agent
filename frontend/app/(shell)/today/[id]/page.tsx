@@ -7,6 +7,7 @@ import { Box, Typography, Alert, useMediaQuery, useTheme } from "@mui/material";
 import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { AutomaticTag } from "@/components/recommendations/AutomaticTag";
 import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
 import { Amount } from "@/components/portfolio/Amount";
 import { Pill } from "@/components/ui/Pill";
@@ -106,6 +107,7 @@ function RecommendationDetail() {
           {recommendation.ticker}
         </Typography>
         <ActionChip action={recommendation.action} />
+        <AutomaticTag source={recommendation.source} />
         <Box sx={{ flex: 1 }} />
         <Pill tone="warn">Pending</Pill>
       </Box>

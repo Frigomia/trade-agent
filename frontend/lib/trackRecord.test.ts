@@ -75,6 +75,15 @@ describe("buildTrackRecord", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("counts a scheduled recommendation like a manual one", () => {
+    const { matched, scored } = buildTrackRecord([
+      rec("BUY", 0.05, { source: "scheduled" }),
+      rec("BUY", 0.05, { source: "manual" }),
+    ]);
+    expect(matched).toBe(2);
+    expect(scored).toBe(2);
+  });
+
   it("keeps a resolved row with no valid outcome as unscored", () => {
     const { rows, scored } = buildTrackRecord([rec("BUY", null)]);
     expect(rows).toHaveLength(1);

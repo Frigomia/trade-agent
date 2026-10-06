@@ -9,6 +9,7 @@ export interface RecommendationOut {
   ticker: string;
   asset_type: "ETF" | "STOCK";
   action: Action;
+  source?: "manual" | "scheduled"; // absent on older payloads: treat as manual
   reasoning: string[];
   ai_analysis: string | null;
   suggested_position_pct: number | null;
