@@ -3,8 +3,11 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
 from app.claude_keys import KeyEncryptionError, check_master_secret  # noqa: F401
@@ -64,15 +67,26 @@ app.include_router(admin.router)
 
 
 @app.exception_handler(HTTPException)
-async def _http_exception_with_code(_request: Request, exc: HTTPException) -> JSONResponse:
+async def _http_exception_with_code(_request: Request, exc: HTTPException) -> Response:
     """A detail given as {"message", "code"} is returned as {"detail": message, "code": code}, so
     the frontend can branch on `code` for the Claude-key errors; every other HTTPException keeps
     FastAPI's usual shape."""
-    if isinstance(exc.detail, dict) and "code" in exc.detail:
-        body = {"detail": exc.detail["message"], "code": exc.detail["code"]}
-    else:
-        body = {"detail": exc.detail}
+    if not (isinstance(exc.detail, dict) and "code" in exc.detail):
+        return await http_exception_handler(_request, exc)  # keeps body-less statuses body-less
+    body = {"detail": exc.detail["message"], "code": exc.detail["code"]}
     return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_without_input(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    """Pydantic echoes the request body as `input` in a 422; on the key route that body is a secret,
+    so drop it there. Every other route keeps FastAPI's usual response."""
+    if request.url.path != "/me/claude-key":
+        return await request_validation_exception_handler(request, exc)
+    errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
 @app.exception_handler(AdminError)

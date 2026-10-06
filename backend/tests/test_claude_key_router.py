@@ -78,10 +78,18 @@ def test_a_badly_shaped_key_is_rejected_without_echoing_it_or_calling_anthropic(
     response = _put(client_no_key, key=bad)
 
     assert response.status_code == 422
+    assert response.json()["code"] == "bad_format"
     if len(bad) > 8:
         assert bad not in response.text
     anthropic_ok.assert_not_called()
     assert db_session.query(UserApiKey).count() == 0
+
+
+def test_a_misnamed_field_does_not_echo_the_key(client_no_key, anthropic_ok):
+    response = client_no_key.put("/me/claude-key", json={"apiKey": KEY})
+
+    assert response.status_code == 422
+    assert KEY not in response.text
 
 
 def test_a_key_anthropic_rejects_is_not_stored(client_no_key, db_session, anthropic_ok):

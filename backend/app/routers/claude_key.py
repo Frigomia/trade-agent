@@ -73,7 +73,7 @@ async def save_key(
         and " " not in api_key
     )
     if not well_formed:
-        raise HTTPException(status_code=422, detail=BAD_FORMAT)
+        raise HTTPException(status_code=422, detail={"message": BAD_FORMAT, "code": "bad_format"})
     try:
         await claude_keys.verify_key(api_key)
     except claude_keys.ClaudeKeyRejected as rejected:
