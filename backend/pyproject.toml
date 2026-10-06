@@ -18,6 +18,7 @@ dependencies = [
     "pgvector",
     "httpx",
     "pyjwt[crypto]>=2.15.0",
+    "cryptography>=50.0.1",
 ]
 
 [dependency-groups]
