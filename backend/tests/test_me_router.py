@@ -233,3 +233,9 @@ def test_delete_my_data_is_403_for_an_invited_user(client, db_session):
         "DELETE", "/me/data", json={"confirm": True}, headers=auth_headers(OTHER_USER_ID)
     )
     assert response.status_code == 403
+
+
+def test_export_is_not_cacheable(client):
+    response = client.get("/me/export")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"

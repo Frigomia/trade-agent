@@ -5,6 +5,7 @@ from app import usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
 from app.db import get_session_factory
+from app.http_headers import no_store
 from app.models import (
     AppUser,
     BacktestResult,
@@ -79,7 +80,7 @@ async def get_usage_summary(
     )
 
 
-@active_router.get("/export", response_model=ExportOut)
+@active_router.get("/export", response_model=ExportOut, dependencies=[Depends(no_store)])
 def export_data(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
