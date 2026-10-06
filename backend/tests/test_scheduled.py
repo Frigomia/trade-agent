@@ -18,7 +18,7 @@ from app.models import (
     WatchlistItem,
 )
 from app.redis_client import get_redis
-from app.usage import _usage_key
+from app.usage import UsageLimitExceeded, _usage_key
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 THIRD_USER_ID = uuid.UUID("33333333-3333-3333-3333-333333333333")
@@ -521,6 +521,10 @@ MONDAY = datetime(2026, 10, 5, 5, 30, tzinfo=UTC)
 SATURDAY = datetime(2026, 10, 10, 5, 30, tzinfo=UTC)
 
 
+def _key_text(user_id):
+    return f"sk-ant-test-key-{str(user_id)[-4:]}"  # a different key per test user
+
+
 def _opted_in(db, user_id, *, key=True, role="user", status="active"):
     add_app_user(db, user_id, role=role, status=status)
     db.add(InvestmentPreferences(user_id=user_id, auto_analysis=True))
@@ -528,8 +532,8 @@ def _opted_in(db, user_id, *, key=True, role="user", status="active"):
         db.add(
             UserApiKey(
                 user_id=user_id,
-                ciphertext=claude_keys.encrypt_key(user_id, "sk-ant-test-key-0000"),
-                last4="0000",
+                ciphertext=claude_keys.encrypt_key(user_id, _key_text(user_id)),
+                last4=_key_text(user_id)[-4:],
             )
         )
     db.commit()
@@ -571,7 +575,7 @@ def test_an_opted_in_user_gets_scheduled_recommendations_and_one_run_is_counted(
     assert [(r.ticker, r.source, r.status) for r in recs] == [("AAPL", "scheduled", "PENDING")]
     assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (1, 0, 0)
     # the run was made with the user's own client, never the server key
-    assert graph.await_args.args[4] is not None
+    assert graph.await_args.args[4].api_key == _key_text(USER_ID)
     assert _usage(USER_ID) == "1"
 
 
@@ -697,14 +701,14 @@ def test_one_failing_user_does_not_stop_the_others_and_the_command_fails(env, ca
 
     async def graph(user_id, ticker, *args):
         if user_id == USER_ID:
-            raise RuntimeError("boom sk-ant-test-key-0000")
+            raise RuntimeError("boom " + _key_text(user_id))
         return _state()
 
     with caplog.at_level(logging.DEBUG):
         summary, _ = _run_analysis(graph=AsyncMock(side_effect=graph))
     assert len(_recs(env, OTHER_USER_ID)) == 1
     assert summary.analysis_failures == 1 and summary.analysis_runs == 2
-    assert "sk-ant-test-key-0000" not in caplog.text
+    assert _key_text(USER_ID) not in caplog.text
 
 
 def test_a_key_anthropic_rejects_during_the_run_counts_as_a_failure_and_is_flagged(env):
@@ -759,3 +763,56 @@ def test_the_analysis_command_runs_the_step_and_exits_non_zero_on_a_failed_user(
     ):
         clock.now.return_value = MONDAY
         assert _arun(scheduled.run_command("analysis")) == 1
+
+
+def test_each_user_runs_with_their_own_key(env):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, OTHER_USER_ID, "MSFT")
+    _, graph = _run_analysis()
+    keys = {c.args[0]: c.args[4].api_key for c in graph.await_args_list}
+    assert keys == {USER_ID: _key_text(USER_ID), OTHER_USER_ID: _key_text(OTHER_USER_ID)}
+
+
+def test_a_user_who_races_past_the_limit_is_skipped(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    race = AsyncMock(side_effect=UsageLimitExceeded("analysis_run", 1))
+    with patch("app.scheduled.check_and_increment_usage", race):
+        summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (0, 1, 0)
+
+
+def test_a_run_that_raises_after_the_increment_counts_as_a_run_and_a_failure(env):
+    _opted_in(env, USER_ID)
+    _opted_in(env, OTHER_USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _holding(env, OTHER_USER_ID, "MSFT")
+    real = scheduled.run_job
+
+    async def run_job(job_id, user_id, *args, **kwargs):
+        if user_id == USER_ID:
+            raise RuntimeError("redis went away")
+        return await real(job_id, user_id, *args, **kwargs)
+
+    with patch("app.scheduled.run_job", run_job):
+        summary, _ = _run_analysis()
+    assert (summary.analysis_runs, summary.analysis_failures) == (2, 1)
+    assert _usage(USER_ID) == "1"
+    assert len(_recs(env, OTHER_USER_ID)) == 1
+
+
+def test_the_daily_command_runs_the_analysis_step_too(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    with (
+        patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=_state())),
+        patch("app.scheduled.datetime") as clock,
+        patch("app.snapshots.fetch_quote_and_history", _price_ok()),
+        patch("app.memory.outcomes.compute_outcome", AsyncMock(return_value=0.05)),
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("daily")) == 0
+    assert [(r.ticker, r.source) for r in _recs(env, USER_ID)] == [("AAPL", "scheduled")]

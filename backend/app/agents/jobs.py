@@ -108,7 +108,8 @@ async def _process_ticker(
                     db.refresh(rec)
                     entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
         except Exception as exc:
-            # class name only: exception text and traceback can carry a user's key or prompt
+            # Class name only, no traceback: a traceback carries the exception message, which can
+            # include key material. Manual runs therefore log no traceback either.
             logger.error(
                 "Analysis failed for ticker %s (%s)", ticker_info["ticker"], type(exc).__name__
             )

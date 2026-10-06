@@ -18,7 +18,13 @@ from app.memory.outcomes import evaluate_due_outcomes
 from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot, UserApiKey
 from app.redis_client import get_redis
 from app.snapshots import record_snapshot
-from app.usage import LimitDefaults, check_and_increment_usage, effective_limit, load_limit_defaults
+from app.usage import (
+    LimitDefaults,
+    UsageLimitExceeded,
+    check_and_increment_usage,
+    effective_limit,
+    load_limit_defaults,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -150,10 +156,18 @@ async def _analyze_user(user_id: uuid.UUID, now: datetime, defaults: LimitDefaul
             return "skipped"  # includes a key that could not be decrypted (flagged inside)
         limit = effective_limit(user, "analysis_run", defaults)
     # The session is closed: the run below must not hold a database connection for minutes.
-    await check_and_increment_usage("analysis_run", str(user_id), limit)
-    job_id = await create_job(user_id, infos)
-    await run_job(job_id, user_id, infos, client=client, source="scheduled")
-    status = await get_job_status(job_id, user_id)
+    try:
+        await check_and_increment_usage("analysis_run", str(user_id), limit)
+    except UsageLimitExceeded:
+        return "skipped"  # raced past the limit after pause_state; usage already took it back
+    try:
+        job_id = await create_job(user_id, infos)
+        await run_job(job_id, user_id, infos, client=client, source="scheduled")
+        status = await get_job_status(job_id, user_id)
+    except Exception as exc:
+        # The run was already counted against the limit: report it as a failed run.
+        logger.warning("Analysis user %s: run raised %s", user_id, type(exc).__name__)
+        return "failed"
     errored = status is not None and any("error" in r for r in status["results"])
     with app_db.scoped_session(user_id) as db:
         key = db.query(UserApiKey).filter_by(user_id=user_id).one_or_none()
