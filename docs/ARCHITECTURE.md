@@ -178,16 +178,25 @@ PortfolioSnapshot
   id, user_id, created_at, total_market_value (Numeric(18,2)),
   total_cost_basis (Numeric(18,2)) -- point-in-time portfolio totals, for value history charts
 
+UserApiKey
+  id, user_id (unique), ciphertext (the encrypted key, AES-256-GCM), key_version, last4 (the final
+  four characters, stored in plaintext for display), status ("ok"|"needs_attention"),
+  created_at, updated_at
+  -- encrypted at rest by the application with KEY_ENCRYPTION_SECRET, never returned or logged;
+  -- owner-only row-level security; not included in GET /me/export. One key per user.
+
 AppUser
   id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("invited"|"active"|"disabled"),
   created_at, invited_at, accepted_terms_at, last_seen_at,
-  monthly_analysis_limit (nullable integer), monthly_chat_limit (nullable integer)
+  monthly_analysis_limit (nullable integer), monthly_chat_limit (nullable integer),
+  claude_key_state ("none"|"ok"|"needs_attention")
   -- no user_id, no RLS; read on every request by the auth path. The runtime role may
   -- INSERT/DELETE rows and UPDATE only status, accepted_terms_at, last_seen_at, invited_at,
-  -- monthly_analysis_limit, monthly_chat_limit: it cannot change id, email, or role.
+  -- monthly_analysis_limit, monthly_chat_limit, claude_key_state: it cannot change id, email, or role.
   -- NULL on a limit column means "use the system default" (the app_settings value below, else
   -- Settings.default_monthly_analysis_limit / default_monthly_chat_limit). Set only by the admin API
-  -- (PATCH /admin/users/{id}/limits).
+  -- (PATCH /admin/users/{id}/limits). claude_key_state is updated in the same transaction as every
+  -- key save, delete or status change (the admin Users screen reads it).
 
 AppSettings
   id (always 1; a CHECK constraint keeps it a single row),
@@ -256,7 +265,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
-| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first) |
+| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
@@ -271,7 +280,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
-| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message |
+| POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
 | DELETE | `/chat/messages?session_id=main` | — | Deletes the caller's messages of that session. `204` |
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
@@ -279,6 +288,9 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
 | GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
+| GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
+| PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
+| DELETE | `/me/claude-key` | — | Removes it (`204`, safe to repeat) |
 | GET | `/admin/limit-defaults` | — | **Admin only.** The monthly limits users without a personal override get: `{analysis_limit, chat_limit}` (the stored defaults, else the environment values) |
 | PUT | `/admin/limit-defaults` | `{analysis_limit, chat_limit}` | **Admin only.** Sets both defaults (non-negative integers, both required). Everyone without a personal override follows them immediately; personal overrides are untouched |
 | PATCH | `/admin/users/{id}/limits` | `{analysis_limit?, chat_limit?}` | **Admin only.** Sets or clears (via explicit `null`) a per-user monthly override; an omitted field is left unchanged |
@@ -560,6 +572,8 @@ on the deployed image (with `APP_ENV=production` passed explicitly). See
 | Cache | Upstash (Redis) | Set `REDIS_URL` as a Fly secret |
 | Secrets | Fly secrets / Vercel env vars | Never commit `.env` — add it to `.gitignore` from the first commit |
 | CI/CD | GitHub Actions | `deploy-backend.yml` (deploys to Fly after Backend CI passes on master), `scheduled-jobs.yml` (daily job) and `backup-db.yml` (daily encrypted `pg_dump --schema=public` made by a dedicated read-only role, kept 30 days; see the runbook). All three use the GitHub Environment `production` (master only, holds the secrets); Vercel's own GitHub integration handles the frontend |
+
+**Per-user Claude keys:** encrypted at rest with `KEY_ENCRYPTION_SECRET` (required in production), never returned or logged. `KEY_ENCRYPTION_SECRET` is a 32-byte base64 secret that must be generated once and stored as a Fly secret before the first deploy of this feature.
 
 **Production TLS guard.** `APP_ENV=production` (default `development`) makes the backend, the
 Alembic release command and the scheduled job refuse to start unless `DATABASE_URL` and

@@ -131,3 +131,4 @@ rate limit on saving, and that no module keeps a decrypted key between requests.
 - The current names and links in Anthropic's console, and whether listing models works with a key that has
   no credit (otherwise another zero-cost check is chosen).
 - The exact Anthropic exception types for an invalid key, a billing problem and a network failure.
+- Not verified against live Anthropic: a no-credit key is caught at first use (the key-listing check at save time may not detect an account with zero credit, so such a key shows as connected until it is used, when a rejected response flips it to needs_attention).
