@@ -412,18 +412,22 @@ def test_outcomes_still_run_after_a_snapshot_failure(env):
     assert env.query(Recommendation).one().outcome_evaluated_at is not None
 
 
-def test_daily_runs_snapshots_before_outcomes():
+def test_daily_runs_snapshots_then_outcomes_then_analysis():
     parent = Mock()
     parent.attach_mock(AsyncMock(), "snapshots")
     parent.attach_mock(AsyncMock(), "outcomes")
+    parent.attach_mock(AsyncMock(), "analysis")
     with (
         patch("app.scheduled.run_snapshots", parent.snapshots),
         patch("app.scheduled.run_outcomes", parent.outcomes),
+        # Unpatched, this step queries the database on weekdays (and does nothing on weekends), so
+        # the test would depend on the day it runs.
+        patch("app.scheduled.run_analysis", parent.analysis),
     ):
         assert _arun(scheduled.run_command("daily")) == 0
 
     names = [c[0] for c in parent.mock_calls]
-    assert names == ["snapshots", "outcomes"]
+    assert names == ["snapshots", "outcomes", "analysis"]
 
 
 def test_the_lock_has_a_ttl_while_the_run_is_in_progress():
