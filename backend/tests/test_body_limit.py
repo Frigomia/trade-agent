@@ -44,7 +44,7 @@ def test_normal_requests_pass(client):
 
 
 def _run_asgi(chunks: list[bytes], headers: list[tuple[bytes, bytes]]):
-    """Drive the middleware directly with a streamed body; return (sent messages, bytes the app saw)."""
+    """Drive the middleware with a streamed body; return (sent, bytes seen, unread chunks)."""
     seen = 0
 
     async def app(scope, receive, send):

@@ -53,13 +53,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Trading Agent API", lifespan=lifespan, **docs_kwargs(settings.app_env))
+# Added first so CORS wraps it: a 413 still carries CORS headers the browser can read.
+app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_allowed_origins.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(BodySizeLimitMiddleware)
 app.include_router(portfolio.router)
 app.include_router(market.router)
 app.include_router(analysis.router)
