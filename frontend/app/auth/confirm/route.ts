@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { RECOVERY_COOKIE } from "@/lib/auth/recovery";
 
 // Allowlist: "/\evil.example" and "/<tab>/evil.example" pass a startsWith("/") check but go off-site.
 const NEXT_PAGES = new Set(["/accept-invitation", "/reset-password"]);
@@ -98,5 +99,11 @@ export async function POST(request: NextRequest) {
   });
   if (error) return errorPage(400, BAD_LINK);
 
-  return NextResponse.redirect(new URL(params.next, request.url), 303);
+  const response = NextResponse.redirect(new URL(params.next, request.url), 303);
+  if (params.entry.type === "recovery") {
+    // Marks that this session came from a reset link, so /reset-password only offers the form
+    // then, not to whoever happens to be signed in. Readable by the page on purpose; short-lived.
+    response.cookies.set(RECOVERY_COOKIE, "1", { maxAge: 900, path: "/", sameSite: "lax", secure: true });
+  }
+  return response;
 }

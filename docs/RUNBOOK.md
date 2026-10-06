@@ -29,8 +29,9 @@ either way, but a private repository means the encrypted file is not downloadabl
 
 1. Create the project.
 2. Authentication, Sign In / Providers: disable public email sign-ups.
-3. Authentication, URL Configuration: add the Vercel origin's `<origin>/auth/confirm` and
-   `<origin>/reset-password` to Redirect URLs, set the Site URL to the Vercel origin (the invite
+3. Authentication, URL Configuration: add the exact production origin's
+   `<origin>/auth/confirm` and `<origin>/reset-password` to Redirect URLs (exact origins only, never a
+   wildcard such as `*.vercel.app`; also set `NEXT_PUBLIC_SITE_URL` to that origin in Vercel), set the Site URL to the Vercel origin (the invite
    template builds its link from `{{ .SiteURL }}`; with the default Site URL, invitation emails
    point to the wrong host), and set the Invite email template as described in
    ARCHITECTURE section 13 ("Owner setup: invite email template and redirect allow-list"). The

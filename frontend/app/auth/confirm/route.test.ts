@@ -158,3 +158,22 @@ describe("POST /auth/confirm", () => {
     expect(response.headers.get("location")).toBe(`${ORIGIN}/accept-invitation`);
   });
 });
+
+describe("POST /auth/confirm recovery marker", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    verifyOtp.mockResolvedValue({ error: null });
+  });
+
+  it("sets a short-lived ta_recovery cookie after a recovery verification", async () => {
+    const response = await POST(postRequest({ token_hash: "abc", type: "recovery", next: "/reset-password" }));
+    const cookie = response.cookies.get("ta_recovery");
+    expect(cookie?.value).toBe("1");
+    expect(cookie?.maxAge).toBeLessThanOrEqual(900);
+  });
+
+  it("does not set it for an invitation", async () => {
+    const response = await POST(postRequest({ token_hash: "abc", type: "invite" }));
+    expect(response.cookies.get("ta_recovery")).toBeUndefined();
+  });
+});

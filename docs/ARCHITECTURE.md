@@ -700,10 +700,18 @@ and invited users; nobody can sign up on their own.
      `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite&next=/accept-invitation`.
      Without this change, invite links still point at the old implicit-flow URL and will not work
      even with the frontend code in place.
-  2. **Authentication → URL Configuration → Redirect URLs**: add the deployed frontend's
-     `<origin>/auth/confirm` and `<origin>/reset-password` to the allow-list — `resetPasswordForEmail`
-     builds its `redirectTo` from `window.location.origin`, so every origin the app is served from
-     needs both paths allow-listed, or Supabase silently redirects to the Site URL instead.
+  2. **Authentication → URL Configuration → Redirect URLs**: allow-list the exact production origin's
+     `<origin>/auth/confirm` and `<origin>/reset-password` and nothing broader. Never use a wildcard
+     such as `*.vercel.app`: any site on that domain could then receive the redirect. The frontend
+     builds the reset-password `redirectTo` from `NEXT_PUBLIC_SITE_URL` (set it in Vercel to the
+     production origin; it falls back to `window.location.origin` only when unset), so preview
+     deployments do not need their own entries. Email links are confirmed in two steps:
+     `GET /auth/confirm` only shows a "Continue" page (so a link click or an email scanner cannot
+     swap the session or burn the token), and the same-origin `POST /auth/confirm` calls
+     `verifyOtp` (types `invite` and `recovery` only) and redirects to `/accept-invitation` or
+     `/reset-password`. After a recovery link the route sets a 15-minute `ta_recovery` cookie;
+     `/reset-password` shows the new-password form only with that cookie or a
+     `PASSWORD_RECOVERY` event, and sends any other signed-in user to `/more/account`.
   **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
   walkthrough against a live Supabase project has not been performed — the implementing agent's
   sandboxed environment has no browser or email access. This remains a required manual
