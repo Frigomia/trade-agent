@@ -170,6 +170,7 @@ BacktestResult
 
 InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
+  auto_analysis (bool, not null, default false: weekday automatic analysis switch; the API leaves it unchanged when a save omits it),
   sector_avoid_list (JSON list[str], not null, default []; the API accepts at most 20 items, each
   stripped, 1-50 characters, no control characters — reads stay lenient for older rows),
   notes (nullable), updated_at
@@ -279,7 +280,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist) |
-| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults) |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences (full replace — omitted fields reset to defaults, except `auto_analysis`, which is left unchanged when omitted). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
 | DELETE | `/chat/messages?session_id=main` | — | Deletes the caller's messages of that session. `204` |
