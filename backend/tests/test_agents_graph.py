@@ -159,3 +159,43 @@ def test_an_admins_server_client_rejection_is_not_flagged():
         asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=None))
 
     mark.assert_not_called()
+
+
+def _run_graph_with_news_error(error):
+    from unittest.mock import MagicMock
+
+    closes = [100.0 - i for i in range(60)]
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch("app.agents.news.run_news_agent", AsyncMock(side_effect=error)),
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=MagicMock()))
+    return mark
+
+
+def _bad_request(message):
+    import anthropic
+    import httpx
+
+    request = httpx.Request("POST", "https://api.anthropic.com")
+    return anthropic.BadRequestError(
+        message, response=httpx.Response(400, request=request), body=None
+    )
+
+
+def test_an_out_of_credit_account_is_flagged_in_the_graph():
+    mark = _run_graph_with_news_error(_bad_request("Your credit balance is too low"))
+
+    mark.assert_called_once_with(USER_ID)
+
+
+def test_a_generic_bad_request_is_not_flagged_in_the_graph():
+    mark = _run_graph_with_news_error(_bad_request("messages: text is empty"))
+
+    mark.assert_not_called()

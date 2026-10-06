@@ -97,7 +97,6 @@ def _count(engine, table_name: str, user_id) -> int:
 
 
 def test_usage_starts_at_zero_with_the_default_limits(client):
-
     response = client.get("/me/usage")
 
     assert response.status_code == 200

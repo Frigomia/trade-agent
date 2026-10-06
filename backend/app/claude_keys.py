@@ -170,6 +170,15 @@ def mark_needs_attention(user_id: uuid.UUID) -> None:
         logger.warning("Claude key for user %s was rejected by Anthropic", user_id)
 
 
+def is_key_problem(exc: Exception) -> bool:
+    """True when an Anthropic error means the caller's key itself is unusable: rejected, not
+    permitted, or the account is out of credit. Any other BadRequestError (for example one caused
+    by our own prompt) is not the key's fault and must not flag it."""
+    if isinstance(exc, anthropic.AuthenticationError | anthropic.PermissionDeniedError):
+        return True
+    return isinstance(exc, anthropic.BadRequestError) and "credit balance" in str(exc).lower()
+
+
 def require_claude_key(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> None:

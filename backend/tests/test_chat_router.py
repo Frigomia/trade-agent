@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.claude_keys import encrypt_key
 from app.config import settings
 from app.models import AppUser, ChatMessage, UserApiKey
@@ -293,3 +295,44 @@ def test_a_key_anthropic_rejects_mid_chat_asks_for_a_reconnect(
     db_session.expire_all()
     assert db_session.query(UserApiKey).one().status == "needs_attention"
     assert db_session.get(AppUser, USER_ID).claude_key_state == "needs_attention"
+
+
+def _status_error(cls, status, message):
+    import httpx
+
+    request = httpx.Request("POST", "https://api.anthropic.com")
+    return cls(message, response=httpx.Response(status, request=request), body=None)
+
+
+def test_an_account_out_of_credit_asks_for_a_reconnect(client, db_session, app_session_local):
+    import anthropic
+
+    out_of_credit = _status_error(
+        anthropic.BadRequestError, 400, "Your credit balance is too low to access the API"
+    )
+    with (
+        patch("app.routers.chat.run_chat", AsyncMock(side_effect=out_of_credit)),
+        patch("app.db.SessionLocal", app_session_local),
+    ):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "claude_key_required"
+    assert "reconnect" in response.json()["detail"].lower()
+    db_session.expire_all()
+    assert db_session.query(UserApiKey).one().status == "needs_attention"
+
+
+def test_a_generic_bad_request_does_not_flag_the_key(client, db_session, app_session_local):
+    import anthropic
+
+    bad_prompt = _status_error(anthropic.BadRequestError, 400, "messages: text is empty")
+    with (
+        patch("app.routers.chat.run_chat", AsyncMock(side_effect=bad_prompt)),
+        patch("app.db.SessionLocal", app_session_local),
+        pytest.raises(anthropic.BadRequestError),
+    ):
+        client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    db_session.expire_all()
+    assert db_session.query(UserApiKey).one().status == "ok"

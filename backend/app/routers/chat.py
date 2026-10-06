@@ -75,8 +75,8 @@ async def chat(
         reply = await run_chat(
             db, user.id, payload.session_id, payload.message, history=history, client=client
         )
-    except anthropic.AuthenticationError:
-        if client is not None:
+    except anthropic.APIStatusError as exc:
+        if client is not None and claude_keys.is_key_problem(exc):
             await run_in_threadpool(claude_keys.mark_needs_attention, user.id)
             raise claude_keys.ClaudeKeyRequired(needs_attention=True) from None
         raise

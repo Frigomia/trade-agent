@@ -2,14 +2,13 @@ import logging
 import uuid
 from typing import Any, TypedDict
 
-import anthropic
 from anthropic import Anthropic
 from langgraph.graph import END, START, StateGraph
 from starlette.concurrency import run_in_threadpool
 
 from app.agents import context, market_data, news
 from app.analysis import fundamental, recommend, technical
-from app.claude_keys import mark_needs_attention
+from app.claude_keys import is_key_problem, mark_needs_attention
 from app.db import scoped_session
 
 logger = logging.getLogger(__name__)
@@ -101,14 +100,11 @@ async def news_agent(state: AnalysisState) -> dict[str, Any]:
             state["context"],
             client=state["client"],
         )
-    except anthropic.AuthenticationError:
-        # Anthropic rejected the caller's own key (revoked or invalid): flag it so the screen asks
-        # for a reconnect. The server key (client is None) is never flagged.
-        if state["client"] is not None:
-            await run_in_threadpool(mark_needs_attention, state["user_id"])
-        logger.warning("Claude key rejected for %s", state["ticker"])
-        ai_analysis = None
     except Exception as exc:
+        # Anthropic rejected the caller's own key (revoked, invalid, or out of credit): flag it so
+        # the screen asks for a reconnect. The server key (client is None) is never flagged.
+        if state["client"] is not None and is_key_problem(exc):
+            await run_in_threadpool(mark_needs_attention, state["user_id"])
         logger.warning("Web second opinion failed for %s: %s", state["ticker"], type(exc).__name__)
         ai_analysis = None
     return {"ai_analysis": ai_analysis}
