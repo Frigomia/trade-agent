@@ -1,0 +1,171 @@
+/* Connect Claude drafts. Tokens come from base.css (the app's own dark/light tokens). */
+.tag{width:1280px;max-width:100%}
+.frame{height:auto;min-height:420px}
+.main{overflow:visible;padding-bottom:28px}
+.stack{display:flex;flex-direction:column;gap:16px}
+h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.01em;line-height:1.3}
+h3{margin:0;font-size:14px;font-weight:650}
+p{margin:0}
+svg.i.sm{width:15px;height:15px}
+.mono{font-family:ui-monospace,"Geist Mono",Menlo,Consolas,monospace;letter-spacing:.01em}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.btn:disabled,.btn.dis,.pill.dis{opacity:.45;box-shadow:none}
+.pill.dis{background:var(--panel);color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px;text-align:right}
+
+/* chips */
+.ckchip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+.ckchip svg.i{width:13px;height:13px}
+.ckchip.ok{background:var(--up-bg);color:var(--accent)}
+.ckchip.warn{background:rgba(244,192,79,.13);color:var(--warn)}
+:root[data-theme=light] .ckchip.warn{background:rgba(154,91,0,.1)}
+.ckchip.none{border:1px solid var(--line2);color:var(--muted)}
+
+/* paste field */
+.paste{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.paste .field{flex:1;min-width:220px}
+.input.key{letter-spacing:.14em;color:var(--text)}
+.input.err{border-color:var(--down)}
+.input.ph{letter-spacing:0;color:var(--muted)}
+.errmsg{color:var(--down);font-size:12.5px;margin-top:2px}
+.note.safe{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:var(--text2);font-size:12.5px;line-height:1.55}
+.note.safe svg.i{color:var(--accent);margin-top:1px}
+.num{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:650;font-size:13px;border:1px solid var(--line2);color:var(--muted);flex:none}
+.num.cur{background:var(--accent-solid);color:var(--on-accent);border-color:transparent;box-shadow:var(--btn-shadow)}
+.num.done{background:var(--up-bg);color:var(--accent);border-color:transparent}
+.num svg.i{width:15px;height:15px}
+.ext{display:inline-flex;align-items:center;gap:6px}
+
+/* ---------- Direction A: one step at a time ---------- */
+.gA{display:grid;grid-template-columns:230px 1fr;gap:20px;max-width:960px;align-items:start}
+.rail{padding:10px 0}
+.rail .r{display:flex;gap:12px;align-items:center;padding:10px 16px;color:var(--muted);font-size:13px;position:relative}
+.rail .r.cur{color:var(--text);font-weight:650}
+.rail .r.done{color:var(--text2)}
+.rail .r+.r:before{content:"";position:absolute;left:30px;top:-10px;height:20px;width:2px;background:var(--line2)}
+.rail .r.done+.r:before,.rail .r.cur:before{background:var(--accent)}
+.stepcard{padding:24px 26px;display:flex;flex-direction:column;gap:14px}
+.stepcard .k{font-size:11px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)}
+.stepcard p{color:var(--text2);font-size:13.5px;max-width:520px;line-height:1.6}
+.dots{display:none}
+.big-ok{display:flex;gap:16px;align-items:center}
+.big-ok .ok{width:46px;height:46px;border-radius:50%;background:var(--up-bg);color:var(--accent);display:grid;place-items:center;flex:none}
+.big-ok .ok svg{width:22px;height:22px}
+.shown{padding:12px 14px;border-radius:13px;border:1px solid var(--line2);display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px}
+
+/* ---------- Direction B: the whole page ---------- */
+.gB{max-width:860px;padding:6px 0}
+.gB .hd{padding:18px 22px 6px}
+.gB .hd p{color:var(--muted);font-size:12.5px;margin-top:4px}
+.gB .st{display:grid;grid-template-columns:34px 1fr auto;gap:14px;align-items:start;padding:15px 22px}
+.gB .st+.st{border-top:1px solid var(--line)}
+.gB .st b{display:block;font-size:14px;font-weight:650}
+.gB .st p{color:var(--muted);font-size:12.5px;max-width:520px;margin-top:2px}
+.gB .st.open{background:var(--up-bg)}
+.gB .st .inl{margin-top:12px}
+.gB .st.done{opacity:.8}
+
+/* ---------- Direction C: the key card ---------- */
+.gC{display:grid;grid-template-columns:1fr 400px;gap:20px;max-width:960px;align-items:start}
+.gC .steps{padding:6px 0}
+.gC .s{display:grid;grid-template-columns:30px 1fr auto;gap:12px;padding:12px 18px;align-items:center}
+.gC .s+.s{border-top:1px solid var(--line)}
+.gC .s b{font-size:13.5px;font-weight:650;display:block}
+.gC .s small{color:var(--muted);font-size:12px}
+.vault{position:relative;border-radius:22px;padding:20px;min-height:230px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(145deg,rgba(52,231,169,.14),rgba(24,120,190,.08) 55%,rgba(255,255,255,.03));border:1px solid var(--line2);box-shadow:var(--shadow)}
+:root[data-theme=light] .vault{background:linear-gradient(145deg,rgba(52,231,169,.24),rgba(80,160,255,.1) 55%,rgba(255,255,255,.7))}
+.vault .top{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text2)}
+.vault .top .lg{display:flex;align-items:center;gap:8px;font-weight:650}
+.slot{border:1.5px dashed var(--line2);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;background:rgba(0,0,0,.12)}
+:root[data-theme=light] .slot{background:rgba(255,255,255,.6)}
+.vault .digits{font-size:20px;letter-spacing:.06em;font-weight:500;color:var(--text)}
+.vault.warn{border-color:rgba(244,192,79,.5);background:linear-gradient(145deg,rgba(244,192,79,.13),rgba(255,255,255,.03))}
+.vault .foot{margin-top:auto;display:flex;gap:8px;flex-wrap:wrap}
+
+/* ---------- locked states ---------- */
+.chatbox{min-height:250px;display:flex;flex-direction:column;justify-content:flex-end;gap:12px}
+.bubble{align-self:flex-start;max-width:520px;padding:12px 14px;border-radius:16px;background:var(--panel);border:1px solid var(--line);color:var(--text2);font-size:13px}
+.composer{display:flex;gap:8px}
+.composer .input{flex:1;opacity:.5}
+.lockcard{display:flex;gap:14px;align-items:center;padding:16px 18px;flex-wrap:wrap}
+.lockcard .ic{width:42px;height:42px;border-radius:13px;background:var(--up-bg);color:var(--accent);display:grid;place-items:center;flex:none}
+.lockcard.warn .ic{background:rgba(244,192,79,.13);color:var(--warn)}
+.lockcard b{display:block;font-size:14px;font-weight:650}
+.lockcard p{color:var(--muted);font-size:12.5px;margin-top:2px;max-width:480px}
+.lockbar{display:flex;gap:12px;align-items:center;padding:12px 16px;border-radius:14px;background:var(--up-bg);color:var(--text);flex-wrap:wrap;border:1px solid var(--line)}
+.lockbar.warn{background:rgba(244,192,79,.12)}
+.lockbar span.t{flex:1;min-width:200px;font-size:13px}
+.lockbar svg.i{color:var(--accent)}
+.lockbar.warn svg.i{color:var(--warn)}
+.lockslot{display:flex;gap:14px;align-items:center;padding:14px 16px;border:1.5px dashed var(--line2);border-radius:18px;flex-wrap:wrap}
+.lockslot.warn{border-color:rgba(244,192,79,.55)}
+.lockslot .kk{padding:7px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--muted);font-size:13px}
+.lockslot .t{flex:1;min-width:180px;font-size:13px;color:var(--text2)}
+.lockslot .t b{color:var(--text);display:block;font-size:14px}
+
+/* ---------- Today reminder ---------- */
+.remind{display:flex;gap:14px;align-items:center;padding:14px 18px;margin-bottom:14px;flex-wrap:wrap}
+.remind .t{flex:1;min-width:200px}
+.remind b{display:block;font-size:14px;font-weight:650}
+.remind p{color:var(--muted);font-size:12.5px}
+.remind .ic{width:38px;height:38px;border-radius:12px;background:var(--up-bg);color:var(--accent);display:grid;place-items:center;flex:none}
+.remind.warn .ic{background:rgba(244,192,79,.13);color:var(--warn)}
+.remind.strip{padding:10px 14px;border-radius:14px;background:var(--up-bg);box-shadow:none}
+.remind.ghost{border:1.5px dashed var(--line2);background:transparent;box-shadow:none}
+
+/* ---------- Account ---------- */
+.acc{padding:18px 20px;display:flex;flex-direction:column;gap:14px;max-width:760px}
+.acc .rowk{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.acc .kv{padding:10px 14px;border-radius:13px;border:1px solid var(--line2);font-size:14px;display:flex;gap:10px;align-items:center}
+.dlg{position:relative;max-width:420px;padding:20px;border-radius:20px;background:var(--bg);border:1px solid var(--line2);box-shadow:0 30px 60px -20px #000;display:flex;flex-direction:column;gap:12px}
+:root[data-theme=light] .dlg{box-shadow:0 30px 60px -24px rgba(6,60,45,.4)}
+.dlg p{color:var(--text2);font-size:13px;line-height:1.55}
+.btn.danger{background:var(--down);color:#fff;box-shadow:none}
+
+/* ---------- Admin ---------- */
+.tbl{max-width:960px}
+.tr{display:grid;grid-template-columns:1.6fr .7fr .8fr 1fr 150px;gap:12px;padding:12px 18px;align-items:center;font-size:13px}
+.tr+.tr{border-top:1px solid var(--line)}
+.tr.h{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;padding-top:14px}
+.tr small{display:block;color:var(--muted);font-size:12px}
+.fine{max-width:960px;margin-top:10px;color:var(--muted);font-size:12px}
+
+/* ---------- phone ---------- */
+.phone .tag{width:390px}
+.phone .frame{width:390px;grid-template-columns:1fr;min-height:560px}
+.phone .side{display:none}
+.phone .main{padding:16px 14px 84px}
+.phone .head h1{font-size:20px}
+.phone .gA,.phone .gC{grid-template-columns:1fr}
+.phone .gC .vault{order:-1}
+.phone .rail{display:none}
+.phone .dots{display:flex;gap:6px;margin-bottom:2px}
+.dots i{width:22px;height:4px;border-radius:2px;background:var(--line2)}
+.dots i.on{background:var(--accent)}
+.phone .gB .st{grid-template-columns:30px 1fr;padding:14px 16px}
+.phone .gB .st .ext-btn{grid-column:2}
+.phone .gC .s{grid-template-columns:30px 1fr;padding:12px 14px}
+.phone .gC .s .btn{grid-column:2;justify-self:start}
+.phone .tr{grid-template-columns:1fr auto;grid-template-areas:"n c" "m m"}
+.phone .tr.h{display:none}
+.phone .tr .role,.phone .tr .stat,.phone .tr .use{display:none}
+.phone .stepcard{padding:18px 16px}
+.phone .paste .btn{width:100%;justify-content:center}
+.phone .lockcard .btn{width:100%;justify-content:center}
+.phone .acc .rowk .btn{flex:1;justify-content:center}
+.tabbar{display:none}
+.phone .tabbar{display:flex;position:absolute;left:0;right:0;bottom:0;padding:8px 6px 12px;background:var(--bg);border-top:1px solid var(--line);justify-content:space-around;color:var(--muted);font-size:10.5px}
+.tabbar div{display:flex;flex-direction:column;align-items:center;gap:3px;padding:2px 8px}
+.tabbar div.on{color:var(--accent)}
+.tabbar svg.i{width:20px;height:20px}
+
+/* fields (same look as the Portfolio drafts) */
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:12px;color:var(--text2);font-weight:500}
+.input{height:42px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.045);padding:0 14px;display:flex;align-items:center;color:var(--muted);font-size:14px}
+:root[data-theme=light] .input{background:rgba(255,255,255,.9)}
+.gB{padding-bottom:6px}
+.gB .st:last-child{padding-bottom:20px}
+.vault{min-height:0}
+.vault .foot{margin-top:6px}
