@@ -2,7 +2,7 @@ name: Scheduled jobs
 
 on:
   schedule:
-    - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, then outcome evaluation
+    - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, outcome evaluation, then automatic analysis (weekdays only)
   workflow_dispatch:
 
 permissions:
@@ -50,5 +50,5 @@ jobs:
           # The machine gets the app's secrets and is removed when the command exits.
           # Flags first, then `--`: flyctl's `-m` means --metadata, so without the `--` it would swallow
           # the `-m` of `python -m app.scheduled` ("invalid key/value pairs specified for flag metadata").
-          flyctl machine run --app "$APP" --region fra --rm --restart no --vm-memory 512 \
+          flyctl machine run --app "$APP" --region fra --rm --restart no --vm-memory 1024 \
             --env APP_ENV=production "$IMAGE" -- python -m app.scheduled daily

@@ -152,6 +152,9 @@ Recommendation
       when the job created this row),
   outcome_forward_return_pct (Numeric(8,4), nullable -- set once a
       lookback-window price fetch evaluates the outcome),
+  source ("manual"|"scheduled", not null, default "manual" -- whether a person
+      started the run or the weekday automatic analysis did; the Today screen
+      tags "scheduled" calls as Automatic),
   outcome_evaluated_at (nullable -- when the outcome was last evaluated),
   embedding (pgvector Vector(1024), nullable -- Voyage embedding of the
       recommendation's situation text, for similarity recall)
@@ -536,9 +539,10 @@ default — same dialect and models as production, started with
 
 | Command | What it does |
 |---|---|
-| `daily` | Snapshots, then outcome evaluation, for every active user |
+| `daily` | Snapshots, outcome evaluation, then (weekdays only) automatic analysis, for every active user |
 | `snapshots` | Portfolio snapshots only |
 | `outcomes` | Recommendation outcome evaluation only |
+| `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |
 
 - **Runtime role:** same `DATABASE_URL` as the API; each user is processed in
   its own `scoped_session`, so RLS applies exactly as for a request.
@@ -546,14 +550,40 @@ default — same dialect and models as production, started with
   today (UTC), is skipped, so the page-open snapshot hook and the job coexist.
 - **Outcomes:** per user, up to 20 batches of 50 due recommendations per run;
   anything left over is picked up by the next run.
+- **Automatic analysis:** the third step, `app/scheduled.py::run_analysis`, opt-in per user through
+  `investment_preferences.auto_analysis` (off by default). It does nothing on Saturday and Sunday
+  (UTC). For each opted-in active user it runs inside that user's `scoped_session` and uses that
+  user's own Claude client (`claude_keys.resolve_client`); only an admin with no key of their own
+  falls back to the server key. The user is skipped, and counted as skipped rather than failed,
+  when `auto_analysis.pause_state` says they have no usable key or have used their monthly
+  `analysis_run` limit (the same rule the Preferences screen shows), or when nothing is left to
+  analyze. The tickers are the open holdings followed by the watchlist, minus every ticker that has
+  a PENDING recommendation younger than 3 days (`STALE_AFTER`); an older pending call is analyzed
+  again and superseded by the new one. When at least one ticker is left, the step counts one run
+  against the user's monthly limit and runs the same pipeline as `POST /analysis/run` (3 tickers at
+  a time); each stored call has `source = "scheduled"`. The database session is closed before the
+  run starts, so no connection is held for minutes. A time budget of `MAX_ANALYSIS_SECONDS` = 2400
+  bounds the whole step: once it is used up, users not yet reached are skipped and logged, while a
+  user's run already in progress may finish past it. A failure for one user (a ticker that errored,
+  a Claude error, a key the provider rejected, an exception) is counted and logged by user id and
+  exception class name only, and never stops the others. Because the run was already counted
+  against the limit, a failed run is counted in both `analysis_runs` and `analysis_failures`. At
+  most one run a day is not enforced in code beyond the cron: a same-day re-run skips tickers that
+  already have a pending call younger than 3 days, but a ticker whose first run produced no call
+  (the pipeline decided to skip) or errored has no pending call, so it is analyzed again and counts
+  another run.
 - **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
   expiry. If it is held, the run logs it and exits 0 without doing any work.
-- **Logging:** one info line per user per step, plus a final summary line.
+- **Logging:** one info line per user per step, plus a final summary line:
+  `users snapshots_recorded snapshots_skipped outcomes_evaluated failures analysis_runs
+  analysis_skipped analysis_failures`. Failures are logged by class name only.
 - **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
   user failed (a holding that cannot be priced counts as a failure for that
-  user), or Redis unreachable; `2` unknown command (argparse). One user's
-  failure never stops the others.
-- **Cadence:** weekdays around 23:00 UTC, after the EU and US closes.
+  user; `failures` or `analysis_failures` above zero), or Redis unreachable;
+  `2` unknown command (argparse). One user's failure never stops the others.
+- **Cadence:** the GitHub Actions cron runs once a day at 05:30 UTC; the
+  cron and Task Scheduler examples below use weekdays at 23:00 UTC, after the EU
+  and US closes.
 
 Triggers (copy-paste):
 
@@ -570,7 +600,8 @@ time.
 Fly.io (§13): the daily job is started by the GitHub Actions cron in
 `.github/workflows/scheduled-jobs.yml`, which runs it in a one-off Fly machine
 on the deployed image (with `APP_ENV=production` passed explicitly). See
-`docs/RUNBOOK.md`. Because the job is idempotent, a late or repeated run is fine.
+`docs/RUNBOOK.md`. Snapshots and outcomes are idempotent, so a late or repeated run is
+fine for them; the analysis step is only mostly so (see the same-day re-run note above).
 
 ---
 
