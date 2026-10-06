@@ -192,4 +192,27 @@ describe("UserDetailDrawer", () => {
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(baseElement.textContent).not.toMatch(/sk-ant|last four/i);
   });
+
+  it("shows an admin without a personal key as using the server key, not as not connected", () => {
+    render(
+      <UserDetailDrawer
+        user={{ ...USER, role: "admin", claude_key_state: "none" }}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Server key")).toBeInTheDocument();
+    expect(screen.queryByText("Not connected")).not.toBeInTheDocument();
+  });
+
+  it("still flags an admin whose own key needs attention", () => {
+    render(
+      <UserDetailDrawer
+        user={{ ...USER, role: "admin", claude_key_state: "needs_attention" }}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+  });
 });

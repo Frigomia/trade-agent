@@ -131,7 +131,7 @@ export default function AdminPage() {
             <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
           </Box>
           <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
-            <ClaudeStateChip kind={chipKind(user.claude_key_state)} />
+            <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", width: { xs: "100%", md: ACTIONS_W }, justifyContent: "flex-end", "&:empty": { display: "none" } }}>
           {user.status === "invited" && (

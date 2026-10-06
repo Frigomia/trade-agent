@@ -204,6 +204,14 @@ describe("AdminPage", () => {
     expect(screen.getByText("Connected")).toBeVisible();
   });
 
+  it("shows an admin without a personal key as Server key, not Not connected", async () => {
+    apiFetch.mockResolvedValue([{ ...USERS[0], role: "admin", claude_key_state: "none" }]);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("Server key")).toBeInTheDocument());
+    expect(screen.queryByText("Not connected")).not.toBeInTheDocument();
+  });
+
   it("shows each person's Claude state as a chip and the note, and nothing else about keys", async () => {
     apiFetch.mockResolvedValue(USERS);
     const { container } = renderFresh(<AdminPage />);

@@ -61,7 +61,7 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
         <Typography sx={{ color: "var(--muted)", fontSize: 13, mt: 0.5 }}>{user.status}</Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Claude</Typography>
-          <ClaudeStateChip kind={chipKind(user.claude_key_state)} />
+          <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
         </Box>
 
         <Divider sx={{ my: 2 }} />
