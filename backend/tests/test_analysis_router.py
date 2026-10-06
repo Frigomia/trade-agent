@@ -1,7 +1,8 @@
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.models import AppUser, Holding, Recommendation
+from app.claude_keys import encrypt_key
+from app.models import AppUser, Holding, Recommendation, UserApiKey
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
@@ -182,6 +183,15 @@ def test_cannot_approve_another_users_recommendation(client, db_session):
 
 def test_run_analysis_builds_the_job_for_the_token_user(client, db_session):
     add_app_user(db_session, OTHER_USER_ID)
+    db_session.add(
+        UserApiKey(
+            user_id=OTHER_USER_ID,
+            ciphertext=encrypt_key(OTHER_USER_ID, "sk-ant-other-0000"),
+            key_version=1,
+            last4="0000",
+            status="ok",
+        )
+    )
     db_session.add_all(
         [
             Holding(
@@ -207,6 +217,7 @@ def test_run_analysis_builds_the_job_for_the_token_user(client, db_session):
     db_session.commit()
 
     with (
+        patch("app.claude_keys.Anthropic") as constructor,
         patch("app.routers.analysis.create_job", AsyncMock(return_value="job-123")) as mock_create,
         patch("app.routers.analysis.run_job", AsyncMock()) as mock_run,
         patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
@@ -216,7 +227,9 @@ def test_run_analysis_builds_the_job_for_the_token_user(client, db_session):
     assert response.status_code == 202
     infos = [{"ticker": "MSFT", "asset_type": "STOCK", "is_held": True}]
     mock_create.assert_awaited_once_with(OTHER_USER_ID, infos)
-    mock_run.assert_called_once_with("job-123", OTHER_USER_ID, infos)
+    mock_run.assert_called_once_with(
+        "job-123", OTHER_USER_ID, infos, client=constructor.return_value
+    )
 
 
 def test_job_status_is_looked_up_for_the_token_user(client, db_session):
@@ -543,3 +556,51 @@ def test_list_recommendations_is_rate_limited(client):
     for _ in range(30):
         assert client.get("/analysis/recommendations").status_code == 200
     assert client.get("/analysis/recommendations").status_code == 429
+
+
+def _close_coro_module(coro):
+    coro.close()  # avoids a dangling task, as in the first test of this file
+    return MagicMock()
+
+
+def test_run_analysis_without_a_connected_key_is_a_409(client_no_key):
+    response = client_no_key.post("/analysis/run", json={})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "claude_key_required"
+
+
+def test_run_analysis_does_not_count_a_run_when_the_key_is_missing(client_no_key):
+    import asyncio
+
+    from app import usage
+
+    client_no_key.post("/analysis/run", json={})
+
+    assert asyncio.run(usage.get_usage("analysis_run", str(USER_ID))) == 0
+
+
+def test_run_analysis_gives_the_job_the_callers_own_client(client, db_session):
+    db_session.add(
+        Holding(
+            user_id=USER_ID,
+            ticker="AAPL",
+            name="Apple",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+
+    with (
+        patch("app.claude_keys.Anthropic") as constructor,
+        patch("app.routers.analysis.create_job", AsyncMock(return_value="job-1")),
+        patch("app.routers.analysis.run_job", AsyncMock()) as mock_run_job,
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro_module),
+    ):
+        response = client.post("/analysis/run", json={})
+
+    assert response.status_code == 202
+    assert mock_run_job.call_args.kwargs["client"] is constructor.return_value

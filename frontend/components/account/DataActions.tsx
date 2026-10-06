@@ -63,7 +63,7 @@ export function DataActions({ email }: { email: string }) {
         <Box sx={{ display: "grid", gap: 1.5 }}>
           <Typography sx={{ fontSize: 14 }}>
             This permanently deletes your holdings, watchlist, trades, recommendations, chats, backtests,
-            preferences and snapshots.
+            preferences, snapshots and your Claude key.
           </Typography>
           <Typography sx={{ color: "var(--muted)", fontSize: 13 }}>
             Your sign-in and access stay. Removing access is done by your administrator.

@@ -26,7 +26,9 @@ FAKE_STATE_SKIP = {
 
 
 def test_job_lifecycle_completes_and_records_results(session_local, app_session_local):
-    async def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool) -> dict:
+    async def _fake_run_graph(
+        user_id, ticker: str, asset_type: str, is_held: bool, client=None
+    ) -> dict:
         assert user_id == OTHER_USER_ID
         return FAKE_STATE_BUY if ticker == "AAPL" else FAKE_STATE_SKIP
 
@@ -92,7 +94,7 @@ def test_get_job_status_hides_other_users_jobs():
 def test_a_new_run_supersedes_the_tickers_unreviewed_recommendations(
     session_local, app_session_local
 ):
-    def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool) -> dict:
+    def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool, client=None) -> dict:
         return FAKE_STATE_BUY
 
     async def _run() -> None:
@@ -138,3 +140,29 @@ def test_a_new_run_supersedes_the_tickers_unreviewed_recommendations(
             check.close()
 
     asyncio.run(_run())
+
+
+def test_the_job_hands_the_same_client_to_every_ticker(session_local, app_session_local):
+    seen: list[object] = []
+
+    async def _fake_run_graph(user_id, ticker, asset_type, is_held, client=None) -> dict:
+        seen.append(client)
+        return FAKE_STATE_SKIP
+
+    sentinel = object()
+
+    async def _run() -> None:
+        tickers = [
+            {"ticker": "AAPL", "asset_type": "STOCK", "is_held": False},
+            {"ticker": "MSFT", "asset_type": "STOCK", "is_held": False},
+        ]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        with (
+            patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(side_effect=_fake_run_graph)),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, OTHER_USER_ID, tickers, client=sentinel)
+
+    asyncio.run(_run())
+
+    assert seen == [sentinel, sentinel]

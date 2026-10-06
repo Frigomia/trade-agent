@@ -8,7 +8,7 @@ from sqlalchemy.orm import DeclarativeBase, Session, SessionTransaction, session
 
 from app.config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+engine = create_engine(settings.database_url, pool_pre_ping=True, hide_parameters=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Key in Session.info holding the user id whose rows the session may see (see rls.py).

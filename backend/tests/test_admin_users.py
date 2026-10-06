@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth.supabase_admin import get_supabase_admin
 from app.config import settings
 from app.main import app
-from app.models import AppSettings, AppUser
+from app.models import AppSettings, AppUser, UserApiKey
 from tests.auth_support import ADMIN_ID, OTHER_USER_ID, USER_ID, add_app_user
 
 OLD = datetime(2020, 1, 1)
@@ -78,7 +78,7 @@ def test_list_never_exposes_financial_fields(admin_client):
         assert set(user) == {
             "id", "email", "role", "status", "created_at", "invited_at",
             "invite_expires_at", "accepted_terms_at", "last_seen_at",
-            "monthly_analysis_limit", "monthly_analysis_used",
+            "monthly_analysis_limit", "monthly_analysis_used", "claude_key_state",
             "monthly_chat_limit", "monthly_chat_used",
         }  # fmt: skip
 
@@ -420,3 +420,39 @@ def test_an_admin_set_default_applies_to_a_users_own_usage_view(admin_client, cl
 
     assert body["analysis_runs"]["limit"] == 9
     assert body["chat_messages"]["limit"] == 11
+
+
+def test_the_users_list_shows_who_has_connected_claude(admin_client, db_session):
+    add_app_user(db_session, USER_ID, status="active", email="a@example.com")
+    add_app_user(db_session, OTHER_USER_ID, status="active", email="b@example.com")
+    db_session.query(AppUser).filter_by(id=USER_ID).update({"claude_key_state": "ok"})
+    db_session.query(AppUser).filter_by(id=OTHER_USER_ID).update(
+        {"claude_key_state": "needs_attention"}
+    )
+    db_session.commit()
+
+    rows = {row["email"]: row for row in admin_client.get("/admin/users").json()}
+
+    assert rows["a@example.com"]["claude_key_state"] == "ok"
+    assert rows["b@example.com"]["claude_key_state"] == "needs_attention"
+    assert rows["admin@example.com"]["claude_key_state"] == "none"
+
+
+def test_the_users_list_exposes_no_key_material(admin_client, db_session):
+    add_app_user(db_session, USER_ID, status="active", email="a@example.com")
+    db_session.add(
+        UserApiKey(
+            user_id=USER_ID,
+            ciphertext=b"secret-ciphertext-bytes....",
+            key_version=1,
+            last4="9f3a",
+            status="ok",
+        )
+    )
+    db_session.commit()
+
+    body = admin_client.get("/admin/users").text
+
+    assert "9f3a" not in body
+    assert "ciphertext" not in body
+    assert "last4" not in body

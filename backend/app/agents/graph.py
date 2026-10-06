@@ -2,10 +2,13 @@ import logging
 import uuid
 from typing import Any, TypedDict
 
+from anthropic import Anthropic
 from langgraph.graph import END, START, StateGraph
+from starlette.concurrency import run_in_threadpool
 
 from app.agents import context, market_data, news
 from app.analysis import fundamental, recommend, technical
+from app.claude_keys import is_key_problem, mark_needs_attention
 from app.db import scoped_session
 
 logger = logging.getLogger(__name__)
@@ -25,6 +28,7 @@ class AnalysisState(TypedDict):
     reasoning: list[str]
     context: str | None
     ai_analysis: str | None
+    client: Anthropic | None
 
 
 async def fetch_data(state: AnalysisState) -> dict[str, Any]:
@@ -90,9 +94,17 @@ async def news_agent(state: AnalysisState) -> dict[str, Any]:
     # failure here (billing, rate limit, outage) must not discard the whole ticker's result.
     try:
         ai_analysis = await news.run_news_agent(
-            state["ticker"], state["action"], state["reasoning"], state["context"]
+            state["ticker"],
+            state["action"],
+            state["reasoning"],
+            state["context"],
+            client=state["client"],
         )
     except Exception as exc:
+        # Anthropic rejected the caller's own key (revoked, invalid, or out of credit): flag it so
+        # the screen asks for a reconnect. The server key (client is None) is never flagged.
+        if state["client"] is not None and is_key_problem(exc):
+            await run_in_threadpool(mark_needs_attention, state["user_id"])
         logger.warning("Web second opinion failed for %s: %s", state["ticker"], type(exc).__name__)
         ai_analysis = None
     return {"ai_analysis": ai_analysis}
@@ -120,7 +132,13 @@ def build_graph() -> Any:
 
 
 async def run_graph_for_ticker(
-    user_id: uuid.UUID, ticker: str, asset_type: str, is_held: bool
+    user_id: uuid.UUID,
+    ticker: str,
+    asset_type: str,
+    is_held: bool,
+    # client=None means "the server's own Claude key (admin only)". Callers acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
+    client: Anthropic | None = None,
 ) -> AnalysisState:
     app_graph = build_graph()
     initial_state: AnalysisState = {
@@ -137,6 +155,7 @@ async def run_graph_for_ticker(
         "reasoning": [],
         "context": None,
         "ai_analysis": None,
+        "client": client,
     }
     result: AnalysisState = await app_graph.ainvoke(initial_state)
     return result

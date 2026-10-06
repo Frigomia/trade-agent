@@ -57,11 +57,13 @@ def api_roles(engine: Engine) -> Generator[None, None, None]:
     admin.dispose()
 
 
-def test_migration_is_the_single_head():
+def test_migration_is_in_the_single_chain():
+    # Later migrations build on this one, so it is no longer the head; the chain stays linear.
     config = Config(str(BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND / "migrations"))
-    heads = ScriptDirectory.from_config(config).get_heads()
-    assert heads == [_migration().revision]
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1
+    assert _migration().revision in {r.revision for r in script.walk_revisions()}
 
 
 def test_revoke_removes_public_api_access_to_app_tables(engine, api_roles):

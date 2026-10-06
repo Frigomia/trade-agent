@@ -40,6 +40,7 @@ const USER: AdminUserOut = {
   monthly_analysis_used: 5,
   monthly_chat_limit: 500,
   monthly_chat_used: 10,
+  claude_key_state: "ok",
 };
 
 const DISABLED_USER: AdminUserOut = {
@@ -178,5 +179,40 @@ describe("UserDetailDrawer", () => {
       }),
     );
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it.each([
+    ["ok", "Connected"],
+    ["needs_attention", "Needs attention"],
+    ["none", "Not connected"],
+  ] as const)("shows Claude state %s as %s, never a key", (state, label) => {
+    const { baseElement } = render(
+      <UserDetailDrawer user={{ ...USER, claude_key_state: state }} onClose={vi.fn()} onChanged={vi.fn()} />,
+    );
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(baseElement.textContent).not.toMatch(/sk-ant|last four/i);
+  });
+
+  it("shows an admin without a personal key as using the server key, not as not connected", () => {
+    render(
+      <UserDetailDrawer
+        user={{ ...USER, role: "admin", claude_key_state: "none" }}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Server key")).toBeInTheDocument();
+    expect(screen.queryByText("Not connected")).not.toBeInTheDocument();
+  });
+
+  it("still flags an admin whose own key needs attention", () => {
+    render(
+      <UserDetailDrawer
+        user={{ ...USER, role: "admin", claude_key_state: "needs_attention" }}
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
   });
 });

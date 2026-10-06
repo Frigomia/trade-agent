@@ -108,6 +108,28 @@ describe("apiFetch", () => {
     await expect(promise).rejects.toMatchObject({ status: 401, detail: "Not authenticated" });
   });
 
+  it("exposes the error body's code on ApiError", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ detail: "Connect Claude first", code: "claude_key_required" }), {
+        status: 409,
+      }),
+    );
+
+    await expect(apiFetch("/chat")).rejects.toMatchObject({
+      status: 409,
+      detail: "Connect Claude first",
+      code: "claude_key_required",
+    });
+  });
+
+  it("leaves code undefined when the body has none", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ detail: "Nope" }), { status: 429 }));
+
+    await expect(apiFetch("/chat")).rejects.toHaveProperty("code", undefined);
+  });
+
   it("falls back to the response's status text when the error body isn't JSON", async () => {
     mockSession(null);
     vi.mocked(fetch).mockResolvedValue(new Response("<html>Bad Gateway</html>", { status: 502, statusText: "Bad Gateway" }));

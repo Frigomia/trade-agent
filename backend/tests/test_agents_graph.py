@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from unittest.mock import AsyncMock, patch
 
 from app.agents.graph import run_graph_for_ticker
@@ -105,3 +106,122 @@ def test_a_failing_web_opinion_does_not_discard_the_recommendation():
     assert result["action"] == "BUY"
     assert result["fundamental_score"] == 100
     assert result["ai_analysis"] is None
+
+
+def _rejected_key_error():
+    import anthropic
+    import httpx
+
+    return anthropic.AuthenticationError(
+        "nope",
+        response=httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com")),
+        body=None,
+    )
+
+
+def test_the_news_agent_receives_the_callers_client_and_a_rejected_key_is_flagged():
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    closes = [100.0 - i for i in range(60)]  # a steady fall: OVERSOLD
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch(
+            "app.agents.news.run_news_agent", AsyncMock(side_effect=_rejected_key_error())
+        ) as mock_news,
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        result = asyncio.run(
+            run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=client)
+        )
+
+    assert mock_news.call_args.kwargs["client"] is client
+    mark.assert_called_once_with(USER_ID)
+    assert result["ai_analysis"] is None  # the recommendation itself still comes through
+
+
+def test_a_rejected_key_in_the_graph_is_never_logged(caplog):
+    from anthropic import Anthropic
+
+    key = "sk-ant-api03-graph-log-check-0123456789"
+    caplog.set_level(logging.DEBUG)
+    closes = [100.0 - i for i in range(60)]
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch("app.agents.news.run_news_agent", AsyncMock(side_effect=_rejected_key_error())),
+        patch("app.agents.graph.mark_needs_attention"),
+    ):
+        asyncio.run(
+            run_graph_for_ticker(
+                USER_ID, "VWCE", "ETF", is_held=False, client=Anthropic(api_key=key)
+            )
+        )
+
+    assert key not in caplog.text
+
+
+def test_an_admins_server_client_rejection_is_not_flagged():
+    closes = [100.0 - i for i in range(60)]
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch("app.agents.news.run_news_agent", AsyncMock(side_effect=_rejected_key_error())),
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=None))
+
+    mark.assert_not_called()
+
+
+def _run_graph_with_news_error(error):
+    from unittest.mock import MagicMock
+
+    closes = [100.0 - i for i in range(60)]
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch("app.agents.news.run_news_agent", AsyncMock(side_effect=error)),
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=MagicMock()))
+    return mark
+
+
+def _bad_request(message):
+    import anthropic
+    import httpx
+
+    request = httpx.Request("POST", "https://api.anthropic.com")
+    return anthropic.BadRequestError(
+        message, response=httpx.Response(400, request=request), body=None
+    )
+
+
+def test_an_out_of_credit_account_is_flagged_in_the_graph():
+    mark = _run_graph_with_news_error(_bad_request("Your credit balance is too low"))
+
+    mark.assert_called_once_with(USER_ID)
+
+
+def test_a_generic_bad_request_is_not_flagged_in_the_graph():
+    mark = _run_graph_with_news_error(_bad_request("messages: text is empty"))
+
+    mark.assert_not_called()

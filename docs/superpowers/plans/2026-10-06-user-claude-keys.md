@@ -1901,7 +1901,7 @@ The backend (Tasks 1-6) is complete and can be pushed on its own. No frontend co
 - Create: `docs/design/claude-keys/` (draft HTML pages and screenshots; kept in the repo as the design reference once chosen)
 - Create: `direction-approved.md` in that folder (the huashu gate file: what was shown, the screenshot paths, the user's exact choice)
 
-- [ ] **Step 1: Run the design skills**
+- [x] **Step 1: Run the design skills**
 
 Invoke `huashu-design` (three real HTML directions with screenshots, using the app's tokens from `frontend/app/globals.css` and `DESIGN.md`) and `impeccable` (shape, then critique and polish of the chosen direction). The three directions must cover the same screens, each in dark and light and at phone width:
 1. the **Connect Claude guide**: five numbered steps with a link each (account, credit, spend limit, create key, paste), the paste box, "Check and save", the saved state ("Connected" with the last four characters), and the reassurance note;
@@ -1912,19 +1912,19 @@ Invoke `huashu-design` (three real HTML directions with screenshots, using the a
 
 Use the real copy from the spec; no invented prices or limits; no emoji; no Buy/Sell wording.
 
-- [ ] **Step 2: Present and stop**
+- [x] **Step 2: Present and stop**
 
 Show the three directions (screenshots) and wait for the user's choice or mix. Do not start Task 8 until they answer.
 
-- [ ] **Step 3: Record the decision**
+- [x] **Step 3: Record the decision**
 
 Write `docs/design/claude-keys/direction-approved.md` with the shown directions, the screenshot paths and the user's choice in their words. Then write Part 2 of this plan (Tasks 8-12 below, with the chosen design's exact structure and copy filled in) and commit both.
 
 ---
 
-## Part 2 — Frontend (written after the design pick)
+## Part 2 — Frontend (design picked: direction A, "one step at a time")
 
-These tasks are listed with their behaviour and tests now so nothing is lost; their component code is written after Task 7, from the chosen direction. Each follows the same rhythm (failing Vitest test, run, implement, run, `eslint`/`tsc`/full suite, commit) and uses `useAction`, SWR, `apiFetch` and the existing MUI components.
+The user picked direction A on 2026-10-06. The decision, the references and the rules that come with it are in `docs/design/claude-keys/direction-approved.md`; the drafts to match are `docs/design/claude-keys/a-one-step-at-a-time.html` and `shots/a-*`. Every task below follows that file. Exact copy comes from `ck.js` in the same folder (the steps, the safety note, the rejected-key line, the locked and reconnect texts); copy it verbatim, and check the Anthropic link names and URLs once against their current pages when Task 9 is built. Each task follows the same rhythm (failing Vitest test, run, implement, run, `eslint`/`tsc`/full suite, commit) and uses `useAction`, SWR, `apiFetch` and the existing MUI components.
 
 ### Task 8: API types and the `useClaudeKey` hook
 
@@ -1936,11 +1936,15 @@ Behaviour to test: `useClaudeKey()` returns `{status, save(key), remove()}` from
 
 **Files:** `frontend/components/claude/ConnectClaudeGuide.tsx` and its test.
 
-Behaviour to test: the five steps render with their links (`target="_blank"`, `rel="noopener noreferrer"`); the paste box is a password-type field with `autoComplete="off"`; "Check and save" is disabled until the field has content, shows a progress state, and on success shows "Connected" with the last four characters and clears the field; each rejection message from the backend is shown inline without echoing the key; a transient failure keeps what was typed.
+Route: `frontend/app/(shell)/more/connect-claude/page.tsx` renders the component; Today, the locked Chat and Account link to `/more/connect-claude`.
+
+Behaviour to test (direction A): one step card at a time with the rail (desktop) or five progress dashes (phone); "Step N of 5" label, the step title, text and the "Open ..." link (`target="_blank"`, `rel="noopener noreferrer"`); steps 1-4 show "Back" (not on step 1) and "I have the key, next"; earlier rail items are buttons that jump back, later ones are inert; steps before the current one show a check; the current step is read from and written to `?step=` (clamped to 1-5, default 1) so a refresh keeps the place. Step 5: a password-type field with `autoComplete="off"` and `spellCheck={false}`; "Check and save" is disabled until the field has content and shows "Checking with Anthropic…" while in flight; on success the card becomes "Claude is connected" with `sk-ant-…<last4>`, a Connected chip and a "Go to Today" button, and the field is cleared; a rejection (`invalid_key`, `key_not_usable`, `bad_format`, `anthropic_unreachable`, `anthropic_unavailable`) shows the backend message inline under the field without echoing the key, and `invalid_key` uses the fixed line "Anthropic did not accept this key. Check that you copied all of it, then try again."; a transient failure keeps what was typed. The key is held only in the field's own state: never in the URL, storage or any state after a save, and going Back from step 5 and returning shows an empty box. The reassurance note sits under every step.
 
 ### Task 10: Locked states and the Today reminder
 
 **Files:** `frontend/components/claude/ClaudeRequired.tsx` (the card), edits to `frontend/app/(shell)/chat/page.tsx`, `frontend/app/(shell)/today/page.tsx` and its Run analysis button, with tests in the existing page tests.
+
+Design A: Chat shows a compact card in the composer's place (key icon, "Connect Claude to use Chat", "Chat and analysis run on your own Claude account. Setting it up takes about five minutes, once.", button "Connect Claude"); the reconnect variant is amber with "Your Claude key needs attention", "Anthropic did not accept your key. It may have been revoked, or the account may be out of credit." and "Reconnect". Today shows a card at the top ("Connect Claude to start analyzing", "Run analysis and Chat use your own Claude account. About five minutes, once.", "Set up"), and Run analysis is disabled with the line "Connect Claude to run an analysis. Everything else works without it." (reconnect: "Reconnect Claude to run an analysis").
 
 Behaviour to test: without a connected key Chat shows the card instead of the composer, Run analysis is disabled with the card or message, and Today shows the reminder; with a connected key none of them show; a `409 claude_key_required` response from `/chat` or `/analysis/run` (for example a key revoked mid-session) turns the screen into the reconnect variant without a generic error; other screens (Portfolio, Watchlist, Track record, Backtests, Preferences) are unaffected.
 
@@ -1948,11 +1952,15 @@ Behaviour to test: without a connected key Chat shows the card instead of the co
 
 **Files:** `frontend/components/account/ClaudeKeyPanel.tsx`, mounted in `frontend/app/(shell)/more/account/page.tsx`, with a test.
 
-Behaviour to test: not connected shows the guide; connected shows "Connected" and `sk-ant-…<last4>` with Replace (opens the guide) and Remove (a confirmation dialog, then `DELETE`); `needs_attention` shows the reconnect prompt; removing refreshes the status and re-locks Chat.
+Design A: a "Claude" panel with a status chip (Connected / Needs attention / Not connected). Not connected: "Connect your own Claude account to use Chat and Run analysis." and a "Connect Claude" button (opens `/more/connect-claude`). Remove opens "Remove your Claude key?" ("Chat and Run analysis stop working until you connect a key again. Your portfolio, watchlist and past recommendations stay as they are.", buttons "Keep it" and "Remove key").
+
+Behaviour to test: not connected shows the Connect button to the guide; connected shows "Connected" and `sk-ant-…<last4>` with Replace (opens the guide) and Remove (a confirmation dialog, then `DELETE`); `needs_attention` shows the reconnect prompt; removing refreshes the status and re-locks Chat.
 
 ### Task 12: Admin Users row
 
 **Files:** `frontend/lib/api/admin-types.ts` (`claude_key_state`), the Users page row and detail sheet, with tests in the existing admin tests.
+
+Design A: a "Claude" column on the desktop table and a chip on the right of each row on a phone (the role, status and usage columns drop out of the phone row as in the draft), with the note "You see only whether a key is connected, never the key and never its digits."
 
 Behaviour to test: each row shows connected / not connected / needs attention from `claude_key_state`; nothing else about keys is displayed; the phone layout does not overflow.
 

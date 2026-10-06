@@ -3,10 +3,19 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
+from app.claude_keys import (  # noqa: F401
+    ClaudeKeyRejected,
+    ClaudeKeyRequired,
+    KeyEncryptionError,
+    check_master_secret,
+)
 from app.config import settings
 from app.db import check_runtime_role, engine
 from app.routers import (
@@ -14,6 +23,7 @@ from app.routers import (
     analysis,
     backtest,
     chat,
+    claude_key,
     market,
     me,
     memory,
@@ -37,6 +47,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if settings.app_env == "production":
         with engine.connect() as conn:
             check_runtime_role(conn)
+        check_master_secret()
     yield
 
 
@@ -54,9 +65,38 @@ app.include_router(backtest.router)
 app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(preferences.router)
+app.include_router(claude_key.router)
 app.include_router(me.router)
 app.include_router(me.active_router)
 app.include_router(admin.router)
+
+
+@app.exception_handler(ClaudeKeyRejected)
+async def _claude_key_rejected(_request: Request, exc: ClaudeKeyRejected) -> JSONResponse:
+    """The frontend branches on `code`; the message never carries the key or Anthropic's reply."""
+    return JSONResponse(
+        status_code=exc.http_status, content={"detail": exc.message, "code": exc.code}
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_error_without_input(
+    request: Request, exc: RequestValidationError
+) -> Response:
+    """Pydantic echoes the request body as `input` in a 422; on the key route that body is a secret,
+    so drop it there. Every other route keeps FastAPI's usual response."""
+    # endswith, not ==: the path may carry a root-path or mount prefix.
+    if not request.url.path.endswith("/me/claude-key"):
+        return await request_validation_exception_handler(request, exc)
+    errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
+
+@app.exception_handler(ClaudeKeyRequired)
+async def _claude_key_required(_request: Request, exc: ClaudeKeyRequired) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"detail": str(exc), "code": "claude_key_required"}
+    )
 
 
 @app.exception_handler(AdminError)

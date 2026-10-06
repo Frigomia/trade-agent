@@ -10,10 +10,12 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from app import claude_keys
 from app.agents.jobs import create_job, get_job_status, run_job
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
+from app.claude_keys import require_claude_key
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut, Ticker
@@ -46,6 +48,7 @@ class AnalysisRunIn(BaseModel):
     "/run",
     status_code=202,
     dependencies=[
+        Depends(require_claude_key),
         Depends(rate_limiter("analysis_run", limit=5)),
         Depends(check_monthly_usage("analysis_run")),
     ],
@@ -55,10 +58,11 @@ async def run_analysis(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> dict[str, str]:
+    client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
     # The queries are synchronous, so they run in a worker thread to keep the event loop free.
     ticker_infos = await run_in_threadpool(_build_ticker_infos, db, user.id, payload.tickers)
     job_id = await create_job(user.id, ticker_infos)
-    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos))
+    task = asyncio.create_task(run_job(job_id, user.id, ticker_infos, client=client))
     _track_background_task(task)
     return {"job_id": job_id}
 

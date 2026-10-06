@@ -107,18 +107,45 @@ authenticated, so:
 
 Create the Redis database with TLS on and copy the `rediss://` URL (this is `REDIS_URL`).
 
+### Per-user Claude keys
+
+#### Create the secret (once, before the first deploy of this feature)
+
+Generate it with `openssl rand -base64 32` and set it as a Fly secret in the dashboard (or
+`fly secrets import` from a file kept outside the repo). Keep a copy in your password manager.
+With `APP_ENV=production` the web process refuses to start without a valid secret.
+
+#### If the secret is lost or changed
+
+Saved keys can no longer be decrypted. Nothing breaks loudly: the first use of a saved key flags it, and each
+user sees "Your Claude key needs attention" with a Reconnect button, then saves their key again. Restoring the old value brings the saved keys back.
+
+#### Rotation
+
+`user_api_keys.key_version` records which secret encrypted a row. Rotation (re-encrypting every row with a
+new secret) is not built yet; if needed, it is a small one-off script.
+
+#### Checks after the first deploy
+
+1. As an invited test user: Chat and Run analysis answer with "Connect Claude to use this."; save a key
+   (Account); both work.
+2. In the Supabase SQL editor: `SELECT user_id, last4, status FROM user_api_keys;` shows rows, and
+   `SELECT convert_from(ciphertext, 'LATIN1') FROM user_api_keys LIMIT 1;` shows unreadable bytes, never
+   `sk-ant-`.
+3. Remove the key in Account: the row disappears and Chat is locked again.
+
 ### Fly
 
 1. `fly apps create <app-name>`.
 2. Put the same name in the `app = ` line near the top of `backend/fly.toml`
    (`app = "<app-name>"`). The workflows read the app name from that line.
-3. Set the nine secrets (see the table in section 7 for where each value comes from). Avoid typing
+3. Set the ten secrets (see the table in section 7 for where each value comes from). Avoid typing
    values on the command line, where they land in shell history. Write them as `NAME=value` lines
    in a file kept outside the repository (for example `secrets.env`), from `backend/` run
    `fly secrets import < secrets.env` (UNVERIFIED: check `fly secrets import --help`), then delete
-   the file. If you typed any secret inline, clear your shell history. The nine names are
+   the file. If you typed any secret inline, clear your shell history. The ten names are
    `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`,
-   `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL` and `CORS_ALLOWED_ORIGINS`.
+   `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `INVITE_REDIRECT_URL`, `CORS_ALLOWED_ORIGINS` and `KEY_ENCRYPTION_SECRET`.
    The app accepts Supabase's `postgresql://` string for `DATABASE_URL` and
    `MIGRATION_DATABASE_URL` (it rewrites it to `postgresql+psycopg://`); add `?sslmode=require`.
    `INVITE_REDIRECT_URL` and `CORS_ALLOWED_ORIGINS` are not known yet; put a temporary value now
@@ -289,6 +316,7 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 | `SUPABASE_SECRET_KEY` | Fly secrets | Supabase API keys (bypasses RLS on Supabase's own tables) | Fly app, owner |
 | `INVITE_REDIRECT_URL` | Fly secrets | Vercel origin plus the accept-invitation path | Fly app, owner |
 | `CORS_ALLOWED_ORIGINS` | Fly secrets | The Vercel origin only | Fly app, owner |
+| `KEY_ENCRYPTION_SECRET` | Fly secrets | Base64 of 32 random bytes; keep a copy in your password manager | Fly app, owner |
 | `APP_ENV` | `backend/fly.toml` (`production`, not secret) | Committed config | Anyone with repo access |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel env vars | Fly URL, Supabase project settings (public by design) | Vercel project members, and browsers |
 | `FLY_API_TOKEN` | GitHub Environment secret (`production`) | `fly tokens create deploy -a <app-name>` | Workflows running on `master` (Environment rule), repository admins |

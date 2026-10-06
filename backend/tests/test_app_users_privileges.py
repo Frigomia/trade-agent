@@ -24,6 +24,7 @@ def _can_update(engine, column: str) -> bool:
         "invited_at",
         "monthly_analysis_limit",
         "monthly_chat_limit",
+        "claude_key_state",
     ],
 )
 def test_runtime_role_can_update_the_lifecycle_columns(engine, column):

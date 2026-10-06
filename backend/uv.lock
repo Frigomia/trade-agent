@@ -2371,6 +2371,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "alembic" },
     { name = "anthropic" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langgraph" },
@@ -2398,6 +2399,7 @@ dev = [
 requires-dist = [
     { name = "alembic" },
     { name = "anthropic" },
+    { name = "cryptography", specifier = ">=50.0.1" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "langgraph" },

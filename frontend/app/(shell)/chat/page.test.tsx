@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SWRConfig } from "swr";
 
 const apiFetch = vi.fn();
@@ -7,10 +7,12 @@ const { FakeApiError } = vi.hoisted(() => {
   class FakeApiError extends Error {
     status: number;
     detail: string;
-    constructor(status: number, detail: string) {
+    code?: string;
+    constructor(status: number, detail: string, code?: string) {
       super(detail);
       this.status = status;
       this.detail = detail;
+      this.code = code;
     }
   }
   return { FakeApiError };
@@ -39,7 +41,7 @@ function msg(id: number, role: "user" | "assistant", content: string) {
 
 function renderFresh() {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
       <ChatPage />
     </SWRConfig>,
   );
@@ -246,5 +248,132 @@ describe("ChatPage", () => {
     expect(await screen.findByLabelText("Message")).toHaveValue("Why WATCH on KO?");
     expect(apiFetch).not.toHaveBeenCalledWith("/chat", expect.anything());
     expect(replace).toHaveBeenCalledWith("/chat");
+  });
+});
+
+describe("ChatPage without a usable Claude key", () => {
+  let keyStatus: unknown;
+  let role: string;
+  let chatError: unknown;
+
+  beforeEach(() => {
+    apiFetch.mockReset();
+    search = "";
+    history = [];
+    keyStatus = { connected: false, last4: null, needs_attention: false };
+    role = "user";
+    chatError = null;
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string }) => {
+      if (path === "/me/claude-key") {
+        if (keyStatus instanceof Error) throw keyStatus;
+        return keyStatus;
+      }
+      if (path === "/me") return { role };
+      if (path === HISTORY_PATH) return history;
+      if (path === "/me/usage") return usage;
+      if (path === "/chat" && init?.method === "POST" && chatError) {
+        // The backend flags the key as it refuses.
+        keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+        throw chatError;
+      }
+      throw new Error(`unexpected ${init?.method ?? "GET"} ${path}`);
+    });
+  });
+
+  it("shows the connect card instead of the composer", async () => {
+    renderFresh();
+
+    expect(await screen.findByText("Connect Claude to use Chat")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Connect Claude" })).toHaveAttribute("href", "/more/connect-claude");
+    expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+  });
+
+  it("shows the reconnect card for a flagged key", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+    renderFresh();
+
+    expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+  });
+
+  it("shows the composer with a connected key", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: false };
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText("Connect Claude to use Chat")).not.toBeInTheDocument();
+  });
+
+  it("never locks an admin who has no personal key", async () => {
+    role = "admin";
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/me"));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+    expect(screen.queryByText("Connect Claude to use Chat")).not.toBeInTheDocument();
+  });
+
+  it("does not lock the user out when the status request fails", async () => {
+    keyStatus = new Error("boom");
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText("Connect Claude to use Chat")).not.toBeInTheDocument();
+  });
+
+  it("turns into the reconnect card on a 409 claude_key_required, with no generic error", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: false };
+    chatError = new FakeApiError(409, "Connect Claude to use this.", "claude_key_required");
+    renderFresh();
+
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
+    expect(screen.queryByText(/could not get a reply/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+  });
+
+  it("locks an admin whose own key is flagged", async () => {
+    role = "admin";
+    keyStatus = { connected: true, last4: "abcd", needs_attention: true };
+    renderFresh();
+
+    expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
+  });
+
+  it("shows no card while the status request is still pending", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/me/claude-key") return new Promise(() => {});
+      if (path === HISTORY_PATH) return history;
+      if (path === "/me/usage") return usage;
+      throw new Error(`unexpected ${path}`);
+    });
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText(/claude/i)).not.toBeInTheDocument();
+  });
+
+  it("unlocks after a 409 once a refetch finds the key usable again", async () => {
+    keyStatus = { connected: true, last4: "abcd", needs_attention: false };
+    chatError = new FakeApiError(409, "Connect Claude to use this.", "claude_key_required");
+    renderFresh();
+
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Your Claude key needs attention");
+
+    keyStatus = { connected: true, last4: "wxyz", needs_attention: false };
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(await screen.findByLabelText("Message")).toBeInTheDocument();
+    expect(screen.queryByText("Your Claude key needs attention")).not.toBeInTheDocument();
   });
 });

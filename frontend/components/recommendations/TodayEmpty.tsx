@@ -10,6 +10,8 @@ interface Props {
   /** True for someone with no holdings and no watchlist yet: they get the first steps. */
   firstRun: boolean;
   running: boolean;
+  /** No usable Claude key: the run buttons stay off. */
+  locked?: boolean;
   onRun: () => void;
 }
 
@@ -28,7 +30,7 @@ const STEPS = [
   },
 ];
 
-function FirstSteps({ running, onRun }: Omit<Props, "firstRun">) {
+function FirstSteps({ running, locked, onRun }: Omit<Props, "firstRun">) {
   return (
     <Panel sx={{ maxWidth: 760, mt: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", px: 2.5, pt: 2, pb: 1 }}>
@@ -90,7 +92,7 @@ function FirstSteps({ running, onRun }: Omit<Props, "firstRun">) {
               </Button>
             )}
             {i === 1 && (
-              <Button variant="outlined" size="small" disabled={running} onClick={onRun}>
+              <Button variant="outlined" size="small" disabled={running || locked} onClick={onRun}>
                 {running ? "Running…" : "Run an analysis now"}
               </Button>
             )}
@@ -101,7 +103,7 @@ function FirstSteps({ running, onRun }: Omit<Props, "firstRun">) {
   );
 }
 
-function AllClear({ running, onRun }: Omit<Props, "firstRun">) {
+function AllClear({ running, locked, onRun }: Omit<Props, "firstRun">) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3, py: 5 }}>
       <Ring size={76} tone="done">
@@ -114,7 +116,7 @@ function AllClear({ running, onRun }: Omit<Props, "firstRun">) {
         <Typography sx={{ fontSize: 13, color: "var(--muted)", mt: 0.5, mb: 1.5 }}>
           New calls appear here after an analysis. Run one for a fresh look.
         </Typography>
-        <Button variant="outlined" size="small" disabled={running} onClick={onRun}>
+        <Button variant="outlined" size="small" disabled={running || locked} onClick={onRun}>
           {running ? "Running…" : "Run a fresh analysis"}
         </Button>
       </Box>
@@ -122,6 +124,6 @@ function AllClear({ running, onRun }: Omit<Props, "firstRun">) {
   );
 }
 
-export function TodayEmpty({ firstRun, running, onRun }: Props) {
-  return firstRun ? <FirstSteps running={running} onRun={onRun} /> : <AllClear running={running} onRun={onRun} />;
+export function TodayEmpty({ firstRun, running, locked, onRun }: Props) {
+  return firstRun ? <FirstSteps running={running} locked={locked} onRun={onRun} /> : <AllClear running={running} locked={locked} onRun={onRun} />;
 }

@@ -4,6 +4,8 @@ import logging
 import uuid
 from typing import Any
 
+from anthropic import Anthropic
+
 from app.agents.graph import run_graph_for_ticker
 from app.db import scoped_session
 from app.models import Recommendation
@@ -43,13 +45,21 @@ async def get_job_status(job_id: str, user_id: uuid.UUID) -> dict[str, Any] | No
 
 
 async def _process_ticker(
-    job_id: str, user_id: uuid.UUID, ticker_info: dict[str, Any], semaphore: asyncio.Semaphore
+    job_id: str,
+    user_id: uuid.UUID,
+    ticker_info: dict[str, Any],
+    semaphore: asyncio.Semaphore,
+    client: Anthropic | None = None,
 ) -> None:
     redis = get_redis()
     async with semaphore:
         try:
             state = await run_graph_for_ticker(
-                user_id, ticker_info["ticker"], ticker_info["asset_type"], ticker_info["is_held"]
+                user_id,
+                ticker_info["ticker"],
+                ticker_info["asset_type"],
+                ticker_info["is_held"],
+                client,
             )
             if state["action"] is None:
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
@@ -84,11 +94,18 @@ async def _process_ticker(
         await redis.hincrby(f"job:{job_id}", "done", 1)
 
 
-async def run_job(job_id: str, user_id: uuid.UUID, tickers: list[dict[str, Any]]) -> None:
+async def run_job(
+    job_id: str,
+    user_id: uuid.UUID,
+    tickers: list[dict[str, Any]],
+    # client=None means "the server's own Claude key (admin only)". Any caller acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
+    client: Anthropic | None = None,
+) -> None:
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_TICKERS)
     try:
         results = await asyncio.gather(
-            *(_process_ticker(job_id, user_id, t, semaphore) for t in tickers),
+            *(_process_ticker(job_id, user_id, t, semaphore, client) for t in tickers),
             return_exceptions=True,
         )
         for result in results:

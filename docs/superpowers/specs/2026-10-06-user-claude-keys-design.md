@@ -37,10 +37,7 @@ features, showing a user's real Anthropic spend (their own console does that).
 
 ## Storage and encryption
 
-- New table `user_api_keys`: `user_id` (primary key), `ciphertext`, `key_version`, `last4`,
-  `status` (`ok` or `needs_attention`), `created_at`, `updated_at`. One key per user. It is added to
-  `USER_TABLES` and `RUNTIME_TABLES`, so it gets the same forced owner-only policy as the other
-  user tables. The admin API never selects from it.
+- New table `user_api_keys`: `id` (integer primary key, like every user table), `user_id` (unique), `ciphertext`, `key_version`, `last4`, `status` (`ok` or `needs_attention`), `created_at`, `updated_at`. One key per user. It is added to `USER_TABLES` and `RUNTIME_TABLES`, so it gets the same forced owner-only policy as the other user tables. The admin API never selects from it. Because the admin cannot read it either (the policy is owner-only), `app_users` gets a plain `claude_key_state` column (`none`, `ok` or `needs_attention`), updated in the same transaction as every save, delete or status change; the admin Users screen reads that.
 - The new migration is hand-written (a new file; generated migrations are never edited), creates the
   table and grants the runtime role access through `app/rls.py` like the others.
 - Encryption: AES-256-GCM, a fresh random 12-byte nonce per save, and the user's id bound in as
@@ -48,8 +45,7 @@ features, showing a user's real Anthropic spend (their own console does that).
   `nonce || ciphertext+tag`. `key_version` names which master secret encrypted it, so the secret can be
   rotated by re-encrypting rows later.
 - The master secret is a new setting, `KEY_ENCRYPTION_SECRET` (32 random bytes, base64), set as a Fly
-  secret. With `APP_ENV=production` the app refuses to start without it, the same pattern as the TLS
-  guard (the message names the setting and never prints a value). Development and tests use a fixed
+  secret. With `APP_ENV=production` the web process refuses to start without a valid secret, the same pattern as the runtime-role start-up check (the message names the setting and never prints a value); the release command and the one-off jobs are not blocked, but decrypting without the secret raises an error that names the setting. Development and tests use a fixed
   throwaway secret.
 - If the master secret is lost, saved keys cannot be decrypted and each user re-enters theirs. The
   RUNBOOK says so and tells the owner to keep a copy of the secret in a password manager.
@@ -88,10 +84,10 @@ and never in a response.
 ## Frontend
 
 - One reusable **Connect Claude** guide, five short steps with a link each:
-  1. create an Anthropic account (console.anthropic.com);
-  2. add a small amount of credit under Billing (link to Anthropic's pricing, no numbers that go stale);
-  3. set a monthly spend limit;
-  4. create a key on the API keys page, name it `trade-agent`, copy it at once (it is shown only once);
+  1. create an Anthropic account (platform.claude.com, the Anthropic console);
+  2. add a small amount of credit under Billing (link to platform.claude.com/settings/billing, no numbers that go stale);
+  3. set a monthly spend limit in the billing settings (same link);
+  4. create a key on the API keys page (platform.claude.com/settings/keys), name it `trade-agent`, copy it at once (it is shown only once);
   5. paste it here and press "Check and save", then see "Connected" with the last four characters.
   Under it, a plain note: stored encrypted, used only for your own analyses and chat, removable at any
   time, and trade-agent never places trades. The exact menu names and links are checked against
@@ -104,7 +100,7 @@ and never in a response.
 
 ## Other effects
 
-- Deleting someone's data deletes their key row. The data export includes only "connected: yes or no".
+- Deleting someone's data (or removing the user) deletes their key row, because every user table is cleared. The data export does not include the key.
 - The audit and logs: connect and disconnect are logged by user id and the event name, with no key
   material.
 - ARCHITECTURE gets the new table, the three routes and the new setting; the RUNBOOK gets the secret, its
@@ -135,3 +131,5 @@ rate limit on saving, and that no module keeps a decrypted key between requests.
 - The current names and links in Anthropic's console, and whether listing models works with a key that has
   no credit (otherwise another zero-cost check is chosen).
 - The exact Anthropic exception types for an invalid key, a billing problem and a network failure.
+- Not verified against live Anthropic: a no-credit key is caught at first use (the key-listing check at save time may not detect an account with zero credit, so such a key shows as connected until it is used, when a rejected response flips it to needs_attention).
+- The console is now platform.claude.com (console.anthropic.com redirects). The settings/keys deep link was not independently verified.

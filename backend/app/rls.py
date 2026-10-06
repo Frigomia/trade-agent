@@ -16,6 +16,7 @@ USER_TABLES: tuple[str, ...] = (
     "backtest_results",
     "investment_preferences",
     "portfolio_snapshots",
+    "user_api_keys",
 )
 
 # Every table the runtime role may touch: the user tables, the auth table and the settings row.
@@ -33,6 +34,7 @@ APP_USERS_UPDATABLE_COLUMNS: tuple[str, ...] = (
     "invited_at",
     "monthly_analysis_limit",
     "monthly_chat_limit",
+    "claude_key_state",
 )
 
 # NULLIF: once a transaction that set the variable ends, current_setting() can return an empty
