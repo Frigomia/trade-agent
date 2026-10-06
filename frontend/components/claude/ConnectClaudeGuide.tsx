@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Box, Button, Chip, TextField, Typography } from "@mui/material";
 import { Check, ExternalLink, ShieldCheck } from "lucide-react";
@@ -115,7 +115,15 @@ function RailItem({ n, current, step, onJump }: { n: number; current: number; st
   );
 }
 
-function KeyField({ onBack, onSaved }: { onBack: () => void; onSaved: () => void }) {
+function KeyField({
+  onBack,
+  onSaved,
+  inputRef,
+}: {
+  onBack: () => void;
+  onSaved: () => void;
+  inputRef: RefObject<HTMLInputElement | null>;
+}) {
   const id = useId();
   // The pasted key lives only here; this component unmounts on save and on leaving step 5.
   const [apiKey, setApiKey] = useState("");
@@ -149,10 +157,12 @@ function KeyField({ onBack, onSaved }: { onBack: () => void; onSaved: () => void
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder="sk-ant-…"
+          inputRef={inputRef}
           error={Boolean(error)}
           helperText={error}
           slotProps={{
             htmlInput: { autoComplete: "off", spellCheck: false },
+            formHelperText: { role: "alert" },
             inputLabel: { shrink: true },
           }}
           sx={{ flex: 1, minWidth: 220 }}
@@ -238,7 +248,21 @@ export function ConnectClaudeGuide() {
   const [saved, setSaved] = useState(false);
   const { status } = useClaudeKey();
 
-  const go = (n: number) => router.replace(`${BASE}?step=${n}`);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const keyRef = useRef<HTMLInputElement>(null);
+  const moved = useRef(false);
+
+  // After a step change, hand focus to the new step so keyboard and screen-reader users keep their place.
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    (current === LAST_STEP ? keyRef : headingRef).current?.focus();
+  }, [current]);
+
+  const go = (n: number) => {
+    moved.current = true;
+    router.replace(`${BASE}?step=${n}`);
+  };
   const step = STEPS[current - 1];
 
   return (
@@ -284,7 +308,13 @@ export function ConnectClaudeGuide() {
               >
                 Step {current} of {LAST_STEP}
               </Typography>
-              <Typography variant="h6" component="h2" sx={{ fontWeight: 650 }}>
+              <Typography
+                ref={headingRef}
+                tabIndex={-1}
+                variant="h6"
+                component="h2"
+                sx={{ fontWeight: 650, "&:focus": { outline: "none" } }}
+              >
                 {step.title}
               </Typography>
               <Typography sx={{ fontSize: 13.5, color: "var(--text2)", maxWidth: 520, lineHeight: 1.6 }}>
@@ -316,7 +346,7 @@ export function ConnectClaudeGuide() {
                   </Button>
                 </Box>
               ) : (
-                <KeyField onBack={() => go(current - 1)} onSaved={() => setSaved(true)} />
+                <KeyField inputRef={keyRef} onBack={() => go(current - 1)} onSaved={() => setSaved(true)} />
               )}
             </>
           )}

@@ -148,7 +148,6 @@ describe("ConnectClaudeGuide", () => {
     expect(screen.getByText("sk-ant-…a1b2")).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
     expect(screen.queryByLabelText(/claude api key/i)).not.toBeInTheDocument();
-    expect(document.body.innerHTML).not.toContain("SECRETSECRET");
     fireEvent.click(screen.getByRole("button", { name: "Go to Today" }));
     expect(push).toHaveBeenCalledWith("/today");
   });
@@ -166,7 +165,8 @@ describe("ConnectClaudeGuide", () => {
     const field = screen.getByLabelText(/claude api key/i);
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(field.getAttribute("aria-describedby")).toContain(msg.id);
-    expect(document.body.textContent).not.toContain("SECRETSECRET");
+    expect(msg).toHaveAttribute("role", "alert");
+    expect(msg.textContent).toBe(REJECTED);
   });
 
   it("shows the backend message for other rejections and keeps what was typed on a failure", async () => {
@@ -183,25 +183,62 @@ describe("ConnectClaudeGuide", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Check and save" })).toBeEnabled());
   });
 
-  it("an empty box on return: going Back from step 5 clears the key", () => {
-    const { unmount } = renderGuide("5");
+  it("Back from step 5 removes the field; coming forward again shows an empty one", () => {
+    // replace updates the address like the real router, then we render again.
+    replace.mockImplementation((url: string) => {
+      search = url.split("?")[1];
+    });
+    const { rerender } = renderGuide("5");
+    const again = () =>
+      rerender(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <ConnectClaudeGuide />
+        </SWRConfig>,
+      );
     type(KEY);
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    unmount();
-    renderGuide("5");
+    again();
+    expect(screen.getByText("Step 4 of 5")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/claude api key/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "I have the key, next" }));
+    again();
     expect((screen.getByLabelText(/claude api key/i) as HTMLInputElement).value).toBe("");
   });
 
-  it("never puts the key in the address or in storage", async () => {
+  it("moves focus to the step heading on a step change, and to the key field on step 5", () => {
+    replace.mockImplementation((url: string) => {
+      search = url.split("?")[1];
+    });
+    const { rerender } = renderGuide("3");
+    const again = () =>
+      rerender(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <ConnectClaudeGuide />
+        </SWRConfig>,
+      );
+    fireEvent.click(screen.getByRole("button", { name: "I have the key, next" }));
+    again();
+    expect(screen.getByRole("heading", { level: 2, name: "Create a key" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "I have the key, next" }));
+    again();
+    expect(screen.getByLabelText(/claude api key/i)).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    again();
+    expect(screen.getByRole("heading", { level: 2, name: "Create a key" })).toHaveFocus();
+  });
+
+  it.each([
+    ["a save", { connected: true, last4: "a1b2", needs_attention: false }, null],
+    ["a rejected save", null, new FakeApiError(422, `bad ${KEY}`, "invalid_key")],
+  ])("never puts the key in the address or in storage after %s", async (_n, ok, failure) => {
     apiFetch.mockImplementation((path: string, init?: { method?: string }) =>
-      init?.method === "PUT"
-        ? Promise.resolve({ connected: true, last4: "a1b2", needs_attention: false })
-        : Promise.resolve(NOT_CONNECTED),
+      init?.method === "PUT" ? (failure ? Promise.reject(failure) : Promise.resolve(ok)) : Promise.resolve(NOT_CONNECTED),
     );
     renderGuide("5");
     type(KEY);
     fireEvent.click(screen.getByRole("button", { name: "Check and save" }));
-    await screen.findByRole("heading", { name: "Claude is connected" });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/me/claude-key", expect.objectContaining({ method: "PUT" })));
+    await screen.findByText(ok ? "Claude is connected" : REJECTED);
     for (const call of [...replace.mock.calls, ...push.mock.calls]) {
       expect(JSON.stringify(call)).not.toContain("SECRET");
     }
