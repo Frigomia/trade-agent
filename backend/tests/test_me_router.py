@@ -97,7 +97,6 @@ def _count(engine, table_name: str, user_id) -> int:
 
 
 def test_usage_starts_at_zero_with_the_default_limits(client):
-    from app.config import settings
 
     response = client.get("/me/usage")
 
@@ -119,21 +118,19 @@ def test_usage_is_403_for_an_invited_user(client, db_session):
 def test_usage_reflects_real_calls_and_matches_the_admin_view(
     client, admin_client, db_session, monkeypatch
 ):
-    monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
-
     def _close_coro(coro):
         coro.close()
         return MagicMock()
 
     with (
+        patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")),
         patch("app.routers.analysis.create_job", AsyncMock(return_value="job-1")),
         patch("app.routers.analysis.run_job", AsyncMock()),
         patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro),
     ):
         client.post("/analysis/run", json={})
-
-    client.post("/chat", json={"session_id": "s1", "message": "hi"})
-    client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        client.post("/chat", json={"session_id": "s1", "message": "hi"})
 
     usage = client.get("/me/usage").json()
     assert usage["analysis_runs"]["used"] == 1

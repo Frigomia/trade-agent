@@ -2,10 +2,14 @@ import logging
 import uuid
 from typing import Any, TypedDict
 
+import anthropic
+from anthropic import Anthropic
 from langgraph.graph import END, START, StateGraph
+from starlette.concurrency import run_in_threadpool
 
 from app.agents import context, market_data, news
 from app.analysis import fundamental, recommend, technical
+from app.claude_keys import mark_needs_attention
 from app.db import scoped_session
 
 logger = logging.getLogger(__name__)
@@ -25,6 +29,7 @@ class AnalysisState(TypedDict):
     reasoning: list[str]
     context: str | None
     ai_analysis: str | None
+    client: Anthropic | None
 
 
 async def fetch_data(state: AnalysisState) -> dict[str, Any]:
@@ -90,8 +95,19 @@ async def news_agent(state: AnalysisState) -> dict[str, Any]:
     # failure here (billing, rate limit, outage) must not discard the whole ticker's result.
     try:
         ai_analysis = await news.run_news_agent(
-            state["ticker"], state["action"], state["reasoning"], state["context"]
+            state["ticker"],
+            state["action"],
+            state["reasoning"],
+            state["context"],
+            client=state["client"],
         )
+    except anthropic.AuthenticationError:
+        # Anthropic rejected the caller's own key (revoked or invalid): flag it so the screen asks
+        # for a reconnect. The server key (client is None) is never flagged.
+        if state["client"] is not None:
+            await run_in_threadpool(mark_needs_attention, state["user_id"])
+        logger.warning("Claude key rejected for %s", state["ticker"])
+        ai_analysis = None
     except Exception as exc:
         logger.warning("Web second opinion failed for %s: %s", state["ticker"], type(exc).__name__)
         ai_analysis = None
@@ -120,7 +136,11 @@ def build_graph() -> Any:
 
 
 async def run_graph_for_ticker(
-    user_id: uuid.UUID, ticker: str, asset_type: str, is_held: bool
+    user_id: uuid.UUID,
+    ticker: str,
+    asset_type: str,
+    is_held: bool,
+    client: Anthropic | None = None,
 ) -> AnalysisState:
     app_graph = build_graph()
     initial_state: AnalysisState = {
@@ -137,6 +157,7 @@ async def run_graph_for_ticker(
         "reasoning": [],
         "context": None,
         "ai_analysis": None,
+        "client": client,
     }
     result: AnalysisState = await app_graph.ainvoke(initial_state)
     return result

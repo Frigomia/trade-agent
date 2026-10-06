@@ -1,12 +1,15 @@
 import logging
 import uuid
 
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
+from app import claude_keys
 from app.agents.chat import run_chat
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
+from app.claude_keys import require_claude_key
 from app.config import settings
 from app.models import ChatMessage
 from app.rate_limit import rate_limiter
@@ -51,6 +54,7 @@ def _commit_or_raise(db: Session, log_message: str) -> None:
     "/chat",
     response_model=ChatOut,
     dependencies=[
+        Depends(require_claude_key),
         Depends(rate_limiter("chat", limit=20)),
         Depends(check_monthly_usage("chat")),
     ],
@@ -60,13 +64,22 @@ async def chat(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> ChatOut:
-    if not settings.anthropic_api_key:
+    client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
+    if client is None and not settings.anthropic_api_key:
         raise HTTPException(status_code=503, detail="Chat not configured")
 
     # The database work is synchronous, so each step runs in a worker thread to keep the event
     # loop free. The same session is used one step at a time, never concurrently.
     history = await run_in_threadpool(_prepare_chat, db, user.id, payload)
-    reply = await run_chat(db, user.id, payload.session_id, payload.message, history=history)
+    try:
+        reply = await run_chat(
+            db, user.id, payload.session_id, payload.message, history=history, client=client
+        )
+    except anthropic.AuthenticationError:
+        if client is not None:
+            await run_in_threadpool(claude_keys.mark_needs_attention, user.id)
+            raise claude_keys.ClaudeKeyRequired(needs_attention=True) from None
+        raise
     await run_in_threadpool(_save_reply, db, user.id, payload.session_id, reply)
     return ChatOut(session_id=payload.session_id, message=reply)
 

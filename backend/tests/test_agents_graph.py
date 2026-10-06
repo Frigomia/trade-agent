@@ -105,3 +105,57 @@ def test_a_failing_web_opinion_does_not_discard_the_recommendation():
     assert result["action"] == "BUY"
     assert result["fundamental_score"] == 100
     assert result["ai_analysis"] is None
+
+
+def _rejected_key_error():
+    import anthropic
+    import httpx
+
+    return anthropic.AuthenticationError(
+        "nope",
+        response=httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com")),
+        body=None,
+    )
+
+
+def test_the_news_agent_receives_the_callers_client_and_a_rejected_key_is_flagged():
+    from unittest.mock import MagicMock
+
+    client = MagicMock()
+    closes = [100.0 - i for i in range(60)]  # a steady fall: OVERSOLD
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch(
+            "app.agents.news.run_news_agent", AsyncMock(side_effect=_rejected_key_error())
+        ) as mock_news,
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        result = asyncio.run(
+            run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=client)
+        )
+
+    assert mock_news.call_args.kwargs["client"] is client
+    mark.assert_called_once_with(USER_ID)
+    assert result["ai_analysis"] is None  # the recommendation itself still comes through
+
+
+def test_an_admins_server_client_rejection_is_not_flagged():
+    closes = [100.0 - i for i in range(60)]
+    with (
+        patch(
+            "app.agents.market_data.fetch_quote_and_history",
+            AsyncMock(return_value={"price": closes[-1], "closes": closes}),
+        ),
+        patch("app.agents.market_data.fetch_fundamentals", AsyncMock(return_value={})),
+        patch("app.agents.context.build_context", AsyncMock(return_value=None)),
+        patch("app.agents.news.run_news_agent", AsyncMock(side_effect=_rejected_key_error())),
+        patch("app.agents.graph.mark_needs_attention") as mark,
+    ):
+        asyncio.run(run_graph_for_ticker(USER_ID, "VWCE", "ETF", is_held=False, client=None))
+
+    mark.assert_not_called()

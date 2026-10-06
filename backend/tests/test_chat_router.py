@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
+from app.claude_keys import encrypt_key
 from app.config import settings
-from app.models import AppUser, ChatMessage
-from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
+from app.models import AppUser, ChatMessage, UserApiKey
+from tests.auth_support import ADMIN_ID, OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
-def test_chat_without_api_key_returns_503(client, monkeypatch):
+def test_chat_without_api_key_returns_503(admin_client, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", None)
-    response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
     assert response.status_code == 503
 
 
@@ -67,27 +68,27 @@ def test_chat_sessions_are_isolated(client, db_session, monkeypatch):
     assert call_kwargs["history"] == []
 
 
-def test_chat_rate_limited_after_20_calls_per_minute(client, monkeypatch):
+def test_chat_rate_limited_after_20_calls_per_minute(admin_client, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
 
     for _ in range(20):
-        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
         assert response.status_code == 503
 
-    response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
     assert response.status_code == 429
 
 
-def test_chat_is_429_after_the_monthly_limit(client, db_session, monkeypatch):
+def test_chat_is_429_after_the_monthly_limit(admin_client, db_session, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", None)  # fast 503 per call, no mocking
-    db_session.query(AppUser).filter_by(id=USER_ID).update({"monthly_chat_limit": 2})
+    db_session.query(AppUser).filter_by(id=ADMIN_ID).update({"monthly_chat_limit": 2})
     db_session.commit()
 
     for _ in range(2):
-        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+        response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
         assert response.status_code == 503
 
-    response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+    response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
     assert response.status_code == 429
     assert "Monthly limit reached" in response.json()["detail"]
 
@@ -100,6 +101,16 @@ def test_chat_requires_authentication(anon_client):
 def test_chat_persists_rows_for_the_token_user_not_a_default(client, db_session, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
     add_app_user(db_session, OTHER_USER_ID)
+    db_session.add(
+        UserApiKey(
+            user_id=OTHER_USER_ID,
+            ciphertext=encrypt_key(OTHER_USER_ID, "sk-ant-other-0000"),
+            key_version=1,
+            last4="0000",
+            status="ok",
+        )
+    )
+    db_session.commit()
 
     with patch("app.routers.chat.run_chat", AsyncMock(return_value="reply")) as mock_run:
         response = client.post(
@@ -211,3 +222,74 @@ def _history_seen_by_claude(client) -> list[tuple[str, str]]:
     with patch("app.routers.chat.run_chat", fake_run_chat):
         client.post("/chat", json={"session_id": "main", "message": "hello"})
     return seen
+
+
+def test_chat_without_a_connected_key_is_a_409_with_a_stable_code(client_no_key):
+    response = client_no_key.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "claude_key_required"
+    assert "Connect Claude" in response.json()["detail"]
+
+
+def test_chat_stores_nothing_when_the_key_is_missing(client_no_key, db_session):
+    client_no_key.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert db_session.query(ChatMessage).count() == 0
+
+
+def test_chat_uses_the_callers_own_key(client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-the-servers-own-key")
+
+    with (
+        patch("app.claude_keys.Anthropic") as constructor,
+        patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")) as mock_run,
+    ):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 200
+    constructor.assert_called_once_with(api_key="sk-ant-test-key-0000")
+    assert mock_run.call_args.kwargs["client"] is constructor.return_value
+
+
+def test_chat_for_an_admin_without_a_key_uses_the_server_key(admin_client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-the-servers-own-key")
+
+    with patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")) as mock_run:
+        response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 200
+    assert mock_run.call_args.kwargs["client"] is None
+
+
+def test_chat_for_an_admin_with_no_key_at_all_is_503(admin_client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+
+    response = admin_client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 503
+
+
+def test_a_key_anthropic_rejects_mid_chat_asks_for_a_reconnect(
+    client, db_session, app_session_local
+):
+    import anthropic
+    import httpx
+
+    rejected = anthropic.AuthenticationError(
+        "nope",
+        response=httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com")),
+        body=None,
+    )
+    with (
+        patch("app.routers.chat.run_chat", AsyncMock(side_effect=rejected)),
+        patch("app.db.SessionLocal", app_session_local),
+    ):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "claude_key_required"
+    assert "reconnect" in response.json()["detail"].lower()
+    db_session.expire_all()
+    assert db_session.query(UserApiKey).one().status == "needs_attention"
+    assert db_session.get(AppUser, USER_ID).claude_key_state == "needs_attention"

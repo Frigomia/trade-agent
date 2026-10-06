@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
-from app.claude_keys import KeyEncryptionError, check_master_secret  # noqa: F401
+from app.claude_keys import ClaudeKeyRequired, KeyEncryptionError, check_master_secret  # noqa: F401
 from app.config import settings
 from app.db import check_runtime_role, engine
 from app.routers import (
@@ -87,6 +87,13 @@ async def _validation_error_without_input(
         return await request_validation_exception_handler(request, exc)
     errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
+
+
+@app.exception_handler(ClaudeKeyRequired)
+async def _claude_key_required(_request: Request, exc: ClaudeKeyRequired) -> JSONResponse:
+    return JSONResponse(
+        status_code=409, content={"detail": str(exc), "code": "claude_key_required"}
+    )
 
 
 @app.exception_handler(AdminError)

@@ -99,9 +99,14 @@ def _get_client() -> Anthropic:
 
 
 async def run_chat(
-    db: Session, user_id: uuid.UUID, session_id: str, message: str, history: list[ChatMessage]
+    db: Session,
+    user_id: uuid.UUID,
+    session_id: str,
+    message: str,
+    history: list[ChatMessage],
+    client: Anthropic | None = None,
 ) -> str:
-    client = _get_client()
+    client = client or _get_client()
     portfolio_context = await build_portfolio_context(db, user_id)
     system_prompt = CHAT_AGENT_SYSTEM_PROMPT.format(portfolio_context=portfolio_context)
 

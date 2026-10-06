@@ -45,9 +45,14 @@ def _get_client() -> Anthropic | None:
 
 
 async def run_news_agent(
-    ticker: str, action: str, reasoning: list[str], context: str | None = None
+    ticker: str,
+    action: str,
+    reasoning: list[str],
+    context: str | None = None,
+    client: Anthropic | None = None,
 ) -> str | None:
-    client = _get_client()
+    # An explicit client is the caller's own; None means the server key (admins, and older callers).
+    client = client or _get_client()
     if client is None:
         return None
 
