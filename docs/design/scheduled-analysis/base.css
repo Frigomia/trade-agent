@@ -1,0 +1,34 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;650&display=swap");
+:root{--bg:#060d0c;--text:#e7f3ef;--text2:#cfe2dc;--muted:#8aa89f;--accent:#34e7a9;--accent-solid:#34e7a9;--on-accent:#032116;--up:#34e7a9;--down:#ff6b72;--warn:#f4c04f;--up-bg:rgba(52,231,169,.13);--panel:rgba(255,255,255,.035);--line:rgba(120,255,214,.11);--line2:rgba(120,255,214,.2);--track:rgba(255,255,255,.08);--shadow:0 18px 34px -22px #000,inset 0 1px 0 rgba(255,255,255,.05);--btn-shadow:0 12px 24px -12px rgba(52,231,169,.6);--page-glow:radial-gradient(520px 260px at 0% 0%,rgba(24,190,146,.16),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(24,120,190,.1),transparent 60%);color-scheme:dark}
+:root[data-theme=light]{--bg:#f2f8f5;--text:#0b1f19;--text2:#29473c;--muted:#52695f;--accent:#078a5f;--accent-solid:#067a52;--on-accent:#fff;--up:#067a52;--down:#c8323d;--warn:#9a5b00;--up-bg:rgba(6,122,82,.1);--panel:rgba(255,255,255,.78);--line:rgba(8,110,80,.15);--line2:rgba(8,110,80,.3);--track:rgba(10,60,45,.1);--shadow:0 16px 30px -20px rgba(6,60,45,.3),0 1px 0 rgba(6,60,45,.05),inset 0 1px 0 #fff;--btn-shadow:0 10px 20px -10px rgba(6,122,82,.55);--page-glow:radial-gradient(520px 260px at 0% 0%,rgba(52,231,169,.22),transparent 62%),radial-gradient(420px 260px at 100% 100%,rgba(80,160,255,.13),transparent 60%);color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:"Geist",system-ui,sans-serif;font-size:13px;line-height:1.5;color:var(--text);padding:24px;display:flex;flex-direction:column;gap:28px;align-items:center}
+.tag{width:1280px;font-size:12px;color:#8aa89f;letter-spacing:.02em}
+.frame{width:1280px;height:560px;display:grid;grid-template-columns:204px 1fr;background-color:var(--bg);background-image:var(--page-glow);border:1px solid var(--line);border-radius:14px;overflow:hidden;position:relative}
+.frame.short{height:420px}
+.side{border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px;background:linear-gradient(180deg,rgba(24,190,146,.08),transparent 40%)}
+.brand{display:flex;align-items:center;gap:10px;padding:2px 8px 14px;font-weight:650;font-size:14px}
+.brand i{width:34px;height:34px;border-radius:10px;background:var(--accent);display:grid;place-items:center;color:var(--on-accent)}
+.nav{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:12px;color:var(--muted);font-size:13px}
+.nav.on{background:var(--up-bg);color:var(--accent);font-weight:500}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.main{padding:22px 24px;overflow:hidden;position:relative}
+.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+h1{margin:0;font-size:22px;font-weight:650;letter-spacing:-.01em;line-height:1.3}
+.sub{color:var(--muted);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:var(--up-bg);color:var(--accent);font-size:12.5px;font-weight:500;border:0}
+.theme{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;color:var(--text2);margin-left:8px}
+.actions{display:flex;align-items:center}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow)}
+.tiles{display:flex;gap:10px;margin-bottom:18px}
+.tile{flex:1;padding:12px 14px;min-height:78px}
+.tile .l{font-size:11px;color:var(--muted)}
+.tile .v{font-size:26px;font-weight:650;letter-spacing:-.03em;line-height:1.3}
+.tile .t{font-size:13px;margin-top:4px}
+a.lnk{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 20px;border-radius:12px;background:var(--accent-solid);color:var(--on-accent);font-weight:650;font-size:13.5px;border:0;box-shadow:var(--btn-shadow)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line2);box-shadow:none;font-weight:500}
+.btn.sm{padding:8px 14px;font-size:12.5px;border-radius:10px}
+.muted{color:var(--muted)}
+.t2{color:var(--text2)}
+.note{font-size:12px;color:var(--muted)}

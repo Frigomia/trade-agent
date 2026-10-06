@@ -1102,7 +1102,9 @@ The backend (Tasks 1-6) is complete and can be pushed on its own. No frontend co
 
 ---
 
-## Part 2 — Frontend (filled in after the design pick)
+## Part 2 — Frontend (design picked: direction A, a row in Preferences)
+
+The user picked direction A on 2026-10-06. The decision and the rules that come with it are in `docs/design/scheduled-analysis/direction-approved.md`; the drafts to match are `docs/design/scheduled-analysis/a-row-in-preferences.html` (with `sa.js`, `sa.css`) and `shots/a-*`. Copy is verbatim from `sa.js` (LABEL, EXPLAIN, P_LIMIT, P_KEY).
 
 Each task follows the same rhythm (failing Vitest test, run, implement, run, `eslint` / `tsc` / full suite / build, commit) and uses the existing `useAction`, SWR, `apiFetch`, MUI components and design tokens.
 
@@ -1110,11 +1112,15 @@ Each task follows the same rhythm (failing Vitest test, run, implement, run, `es
 
 **Files:** `frontend/lib/preferences.ts` (`auto_analysis`, `auto_analysis_paused` on `Preferences`), the Preferences page/form (`frontend/app/(shell)/more/preferences/page.tsx` and its component), tests beside them.
 
+Design A: a separate panel under the existing preference fields with one row: title, the explanation line under it, the switch at the right; paused shows an amber line with a warning icon under the row. The switch saves on toggle (no Save button). IMPORTANT: `POST /preferences` replaces every field, so the toggle must send the SAVED values of risk_tolerance, sector_avoid_list and notes (from the loaded preferences, not an unsaved form draft) together with `auto_analysis`; a test must assert that toggling the switch does not change the other saved fields.
+
 Behaviour to test: the switch reflects `auto_analysis` and is off by default; toggling it sends `POST /preferences` with `auto_analysis` (and the other fields unchanged); the explanation line is always visible; when `auto_analysis_paused.reason === "limit"` the paused line shows N (`limit`) and the resume date formatted for the user's locale; when `"no_key"` it shows "Paused: connect your Claude key to turn this on." with a link to `/more/connect-claude`; the paused line only appears while the switch is on; a failed save restores the switch and shows the error.
 
 ### Task 9: The Automatic tag on Today
 
 **Files:** `frontend/lib/api/recommendation-types.ts` (`source: "manual" | "scheduled"`), `frontend/components/recommendations/RecommendationCard.tsx` (and the desktop detail view if it renders its own header), tests beside them.
+
+Design A: a small outlined pill "Automatic" with a clock icon, next to the action chip (see `a-row-in-preferences.html` Today frame).
 
 Behaviour to test: a recommendation with `source === "scheduled"` shows the "Automatic" tag, a manual one does not; `SUPERSEDED` calls are still not listed (existing behaviour, keep its test green); the Track record counts are unchanged (`lib/trackRecord.ts` already excludes `SUPERSEDED`).
 

@@ -1,0 +1,95 @@
+/* Scheduled analysis drafts. Tokens come from base.css (the app's own dark/light tokens). */
+.tag{width:1280px;max-width:100%}
+.frame{height:auto;min-height:380px}
+.main{overflow:visible;padding-bottom:28px}
+.stack{display:flex;flex-direction:column;gap:16px}
+h2{margin:0;font-size:16px;font-weight:650;letter-spacing:-.01em}
+h3{margin:0;font-size:14px;font-weight:650}
+p{margin:0}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.muted{color:var(--muted)}
+svg.i.sm{width:14px;height:14px}
+.btn:disabled,.btn.dis{opacity:.45;box-shadow:none}
+
+/* the existing preferences content, only as context */
+.ctx{padding:16px 18px;max-width:760px;display:flex;flex-direction:column;gap:12px}
+.ctx .f{display:flex;flex-direction:column;gap:6px}
+.ctx label{font-size:12px;color:var(--text2);font-weight:500}
+.input{height:40px;border-radius:13px;border:1px solid var(--line);background:rgba(255,255,255,.045);padding:0 14px;display:flex;align-items:center;color:var(--muted);font-size:14px}
+:root[data-theme=light] .input{background:rgba(255,255,255,.9)}
+
+/* the switch */
+.sw{width:44px;height:26px;border-radius:999px;border:1px solid var(--line2);background:var(--panel);position:relative;flex:none}
+.sw:after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--muted);transition:none}
+.sw.on{background:var(--accent-solid);border-color:transparent}
+.sw.on:after{left:21px;background:var(--on-accent)}
+.sw.pause{background:rgba(244,192,79,.2);border-color:var(--warn)}
+.sw.pause:after{left:21px;background:var(--warn)}
+
+/* paused line */
+.pz{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:var(--warn);line-height:1.5}
+.pz svg.i{width:16px;height:16px;margin-top:1px;flex:none}
+.pz a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+
+/* ---------- A: one row inside the Preferences panel ---------- */
+.aRow{padding:16px 18px;max-width:760px;display:flex;flex-direction:column;gap:8px}
+.aRow .top{display:flex;gap:16px;align-items:center;justify-content:space-between}
+.aRow b{font-size:14px;font-weight:650;display:block}
+
+/* ---------- B: its own card with a status line ---------- */
+.bCard{padding:18px 20px;max-width:760px;display:flex;flex-direction:column;gap:12px}
+.bCard .head2{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.status{display:inline-flex;align-items:center;gap:8px;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+.status.on{background:var(--up-bg);color:var(--accent)}
+.status.off{border:1px solid var(--line2);color:var(--muted)}
+.status.pause{background:rgba(244,192,79,.13);color:var(--warn)}
+:root[data-theme=light] .status.pause{background:rgba(154,91,0,.1)}
+.status i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.bCard .banner{padding:10px 12px;border-radius:12px;background:rgba(244,192,79,.12);display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;color:var(--text)}
+.bCard .banner .t{flex:1;min-width:200px}
+
+/* ---------- C: the weekday strip ---------- */
+.cCard{padding:18px 20px;max-width:760px;display:flex;flex-direction:column;gap:14px}
+.week{display:flex;gap:8px}
+.day{width:42px;text-align:center;font-size:11px;color:var(--muted)}
+.day i{display:block;height:34px;border-radius:11px;border:1px solid var(--line2);margin-bottom:5px}
+.day.lit i{background:var(--up-bg);border-color:var(--accent)}
+.day.dim i{background:rgba(244,192,79,.1);border-color:rgba(244,192,79,.5);border-style:dashed}
+.day.we i{border-style:dashed;opacity:.45}
+.day.we{opacity:.7}
+
+/* ---------- Today list + the Automatic tag ---------- */
+.lastline{font-size:12.5px;color:var(--muted);margin:0 0 12px}
+.recs{display:flex;flex-direction:column;gap:12px;max-width:760px}
+.rec{padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:start;position:relative}
+.rec .tk{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rec .tk b{font-size:15px;font-weight:650}
+.chip{display:inline-flex;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:650;background:var(--accent-solid);color:var(--on-accent)}
+.chip.hold{background:rgba(255,255,255,.1);color:var(--text2)}
+:root[data-theme=light] .chip.hold{background:rgba(10,60,45,.08)}
+.rec p{grid-column:1/-1;color:var(--text2);font-size:12.5px;line-height:1.5}
+.rec .px{color:var(--muted);font-size:13px}
+/* tag variants */
+.tagA{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:500;border:1px solid var(--line2);color:var(--text2)}
+.tagA svg.i{width:12px;height:12px}
+.tagB{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;grid-column:1/-1}
+.tagB svg.i{width:12px;height:12px}
+.rec.autoC:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.tagC{font-size:11px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+
+/* ---------- phone ---------- */
+.phone .tag{width:390px}
+.phone .frame{width:390px;grid-template-columns:1fr;min-height:540px}
+.phone .side{display:none}
+.phone .main{padding:16px 14px 84px}
+.phone .head h1{font-size:20px}
+.phone .week{gap:5px}
+.phone .day{width:auto;flex:1}
+.phone .aRow .top{gap:10px}
+.tabbar{display:none}
+.phone .tabbar{display:flex;position:absolute;left:0;right:0;bottom:0;padding:8px 6px 12px;background:var(--bg);border-top:1px solid var(--line);justify-content:space-around;color:var(--muted);font-size:10.5px}
+.tabbar div{display:flex;flex-direction:column;align-items:center;gap:3px;padding:2px 8px}
+.tabbar div.on{color:var(--accent)}
+.tabbar svg.i{width:20px;height:20px}
