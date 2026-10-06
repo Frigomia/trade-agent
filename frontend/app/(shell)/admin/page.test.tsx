@@ -192,6 +192,18 @@ describe("AdminPage", () => {
     await waitFor(() => expect(screen.getByText(/remove user/i)).toBeInTheDocument());
   });
 
+  it("keeps the status chip visible at phone width (no media query matches in jsdom)", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
+    for (const status of ["active", "invited", "disabled"]) {
+      // The filter chip reads "Active 1"; the row chip is the exact word.
+      expect(screen.getByText(status)).toBeVisible();
+    }
+    expect(screen.getByText("Connected")).toBeVisible();
+  });
+
   it("shows each person's Claude state as a chip and the note, and nothing else about keys", async () => {
     apiFetch.mockResolvedValue(USERS);
     const { container } = renderFresh(<AdminPage />);

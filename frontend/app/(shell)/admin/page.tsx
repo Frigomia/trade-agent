@@ -15,13 +15,13 @@ import { Panel } from "@/components/ui/Panel";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
-// Only people who have signed in have limits and access to manage.
 // Fixed desktop column widths so the header and every row line up.
 const ROLE_W = 64;
 const STATUS_W = 84;
 const CLAUDE_W = 128;
 const ACTIONS_W = 150;
 
+// Only people who have signed in have limits and access to manage.
 const hasDetail = (user: AdminUserOut) => user.status === "active" || user.status === "disabled";
 
 export default function AdminPage() {
@@ -123,11 +123,11 @@ export default function AdminPage() {
           >
             {user.email}
           </Typography>
-          {/* On a phone the role and status drop out; the Claude chip sits at the right. */}
+          {/* On a phone only the role drops out; status and the Claude chip stay, and the row wraps. */}
           <Box sx={{ display: { xs: "none", md: "block" }, width: ROLE_W }}>
             <Chip label={user.role} size="small" />
           </Box>
-          <Box sx={{ display: { xs: "none", md: "block" }, width: STATUS_W }}>
+          <Box sx={{ flex: "none", width: { md: STATUS_W } }}>
             <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
           </Box>
           <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
