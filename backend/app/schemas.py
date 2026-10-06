@@ -334,6 +334,7 @@ class AdminUserOut(BaseModel):
     invite_expires_at: datetime | None = None  # display hint, filled in by the router
     accepted_terms_at: datetime | None
     last_seen_at: datetime | None
+    claude_key_state: str = "none"  # none | ok | needs_attention; never the key or its digits
     monthly_analysis_limit: int | None = None
     monthly_analysis_used: int | None = None
     monthly_chat_limit: int | None = None
