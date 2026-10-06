@@ -202,6 +202,7 @@ def test_export_is_403_for_an_invited_user(client, db_session):
 
 def test_delete_my_data_wipes_only_the_callers_rows(client, db_session, engine):
     add_app_user(db_session, OTHER_USER_ID)
+    db_session.get(AppUser, OTHER_USER_ID).claude_key_state = "ok"
     for table_name in rls.USER_TABLES:
         db_session.add(ROW_FACTORIES[table_name](OTHER_USER_ID))
         # The client fixture already saved a key for USER_ID (one row per user).
@@ -215,6 +216,10 @@ def test_delete_my_data_wipes_only_the_callers_rows(client, db_session, engine):
     for table_name in rls.USER_TABLES:
         assert _count(engine, table_name, USER_ID) == 0, table_name
         assert _count(engine, table_name, OTHER_USER_ID) == 1, table_name
+    # The admin-visible Claude state follows the wiped key row; other users' state is untouched.
+    db_session.expire_all()
+    assert db_session.get(AppUser, USER_ID).claude_key_state == "none"
+    assert db_session.get(AppUser, OTHER_USER_ID).claude_key_state == "ok"
 
 
 def test_delete_my_data_requires_confirm(client):

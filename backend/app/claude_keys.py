@@ -119,7 +119,7 @@ class ClaudeKeyRequired(Exception):
     def __init__(self, needs_attention: bool = False) -> None:
         self.needs_attention = needs_attention
         super().__init__(
-            "Your Claude key was rejected. Reconnect it in Account to keep using this."
+            "Your Claude key needs attention. Reconnect your Claude key to continue."
             if needs_attention
             else "Connect Claude to use this."
         )
@@ -153,6 +153,8 @@ def resolve_client(db: Session, user_id: uuid.UUID, role: str) -> Anthropic | No
         return Anthropic(api_key=decrypt_key(user_id, row.ciphertext))
     except KeyEncryptionError:
         logger.warning("A saved Claude key for user %s could not be decrypted", user_id)
+        # Flag it so the Account page and the admin list show it; this runs in its own session.
+        mark_needs_attention(user_id)
         raise ClaudeKeyRequired(needs_attention=True) from None
 
 

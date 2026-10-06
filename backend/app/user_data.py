@@ -6,11 +6,12 @@ implementation, so the filtered-delete logic only needs to be correct in one pla
 
 import uuid
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import rls
 from app.db import Base, open_user_session
+from app.models import AppUser
 
 
 def delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> None:
@@ -20,4 +21,8 @@ def delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> None
         for table_name in rls.USER_TABLES:
             table = Base.metadata.tables[table_name]
             session.execute(delete(table).where(table.c.user_id == user_id))
+        # The key row is gone (it is in USER_TABLES), so the admin-visible state must say so too.
+        session.execute(
+            update(AppUser).where(AppUser.id == user_id).values(claude_key_state="none")
+        )
         session.commit()

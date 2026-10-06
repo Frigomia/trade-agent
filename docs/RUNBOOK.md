@@ -117,8 +117,8 @@ With `APP_ENV=production` the web process refuses to start without a valid secre
 
 #### If the secret is lost or changed
 
-Saved keys can no longer be decrypted. Nothing breaks loudly: each user sees "Reconnect Claude" and
-saves their key again. Restoring the old value brings the saved keys back.
+Saved keys can no longer be decrypted. Nothing breaks loudly: the first use of a saved key flags it, and each
+user sees "Your Claude key needs attention" with a Reconnect button, then saves their key again. Restoring the old value brings the saved keys back.
 
 #### Rotation
 

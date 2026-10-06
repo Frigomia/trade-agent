@@ -87,3 +87,26 @@ def test_startup_skips_the_key_secret_check_outside_production(monkeypatch):
     monkeypatch.setattr(main, "check_master_secret", check)
     _run_lifespan()
     check.assert_not_called()
+
+
+def test_the_key_route_scrubber_matches_behind_a_path_prefix():
+    from fastapi.exceptions import RequestValidationError
+    from starlette.requests import Request
+
+    secret = "sk-ant-api03-must-not-echo-0123456789"
+    scope = {"type": "http", "method": "PUT", "path": "/api/me/claude-key", "headers": []}
+    exc = RequestValidationError(
+        [{"type": "missing", "loc": ("body", "api_key"), "msg": "Field required", "input": secret}]
+    )
+
+    response = asyncio.run(main._validation_error_without_input(Request(scope), exc))
+
+    assert response.status_code == 422
+    assert secret.encode() not in response.body
+
+
+def test_database_errors_do_not_carry_bound_parameters():
+    # Bound values (a key's ciphertext, last4) must not appear in logged DB error messages.
+    from app.db import engine
+
+    assert engine.hide_parameters is True

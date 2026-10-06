@@ -3,6 +3,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -88,22 +90,27 @@ async def save_key(
 
 def _store(db: Session, user_id: uuid.UUID, api_key: str) -> UserApiKey:
     blob = claude_keys.encrypt_key(user_id, api_key)
-    row = db.query(UserApiKey).filter_by(user_id=user_id).one_or_none()
-    if row is None:
-        row = UserApiKey(user_id=user_id, ciphertext=blob, key_version=claude_keys.KEY_VERSION)
-        db.add(row)
-    row.ciphertext = blob
-    row.key_version = claude_keys.KEY_VERSION
-    row.last4 = api_key[-4:]
-    row.status = "ok"
+    values = {
+        "ciphertext": blob,
+        "key_version": claude_keys.KEY_VERSION,
+        "last4": api_key[-4:],
+        "status": "ok",
+    }
     try:
+        # One atomic statement: insert, or if the user's row already exists (even one created a
+        # moment ago by a second save) overwrite it. Two racing first saves cannot collide.
+        statement = pg_insert(UserApiKey).values(user_id=user_id, **values)
+        db.execute(
+            statement.on_conflict_do_update(
+                index_elements=["user_id"], set_={**values, "updated_at": func.now()}
+            )
+        )
         db.query(AppUser).filter_by(id=user_id).update({"claude_key_state": "ok"})
         db.commit()
     except SQLAlchemyError:
         db.rollback()
         raise
-    db.refresh(row)
-    return row
+    return db.query(UserApiKey).filter_by(user_id=user_id).one()
 
 
 @router.delete("", status_code=204)

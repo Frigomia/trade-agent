@@ -104,6 +104,8 @@ async def run_chat(
     session_id: str,
     message: str,
     history: list[ChatMessage],
+    # client=None means "the server's own Claude key (admin only)". Callers acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
     client: Anthropic | None = None,
 ) -> str:
     client = client or _get_client()

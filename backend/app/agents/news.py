@@ -49,6 +49,8 @@ async def run_news_agent(
     action: str,
     reasoning: list[str],
     context: str | None = None,
+    # client=None means "the server's own Claude key (admin only)". Callers acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
     client: Anthropic | None = None,
 ) -> str | None:
     # An explicit client is the caller's own; None means the server key (admins, and older callers).

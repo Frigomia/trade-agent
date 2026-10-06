@@ -1,3 +1,4 @@
+import base64
 from unittest.mock import patch
 
 import pytest
@@ -79,13 +80,16 @@ def test_a_flagged_key_asks_for_a_reconnect_and_never_falls_back(db_session, rol
     assert excinfo.value.needs_attention is True
 
 
-def test_a_key_that_cannot_be_decrypted_asks_for_a_reconnect(db_session):
+def test_a_key_that_cannot_be_decrypted_asks_for_a_reconnect(db_session, app_session_local):
     add_app_user(db_session, USER_ID, role="user")
     _give_key(db_session)
     db_session.query(UserApiKey).update({"ciphertext": b"not a real ciphertext at all......"})
     db_session.commit()
 
-    with pytest.raises(ClaudeKeyRequired) as excinfo:
+    with (
+        patch("app.db.SessionLocal", app_session_local),
+        pytest.raises(ClaudeKeyRequired) as excinfo,
+    ):
         resolve_client(db_session, USER_ID, "user")
 
     assert excinfo.value.needs_attention is True
@@ -130,3 +134,28 @@ def test_the_decrypted_key_is_not_kept_in_a_module_global(db_session):
 def test_the_error_message_is_fixed_text():
     assert "Connect Claude" in str(ClaudeKeyRequired())
     assert "reconnect" in str(ClaudeKeyRequired(needs_attention=True)).lower()
+
+
+def test_a_key_that_cannot_be_decrypted_is_flagged_for_the_user_and_the_admin(
+    db_session, app_session_local, monkeypatch
+):
+    add_app_user(db_session, USER_ID, role="user")
+    db_session.query(AppUser).update({"claude_key_state": "ok"})
+    _give_key(db_session)
+    # A different (valid) master secret, as after a rotation: the stored ciphertext no longer opens.
+    monkeypatch.setattr(settings, "key_encryption_secret", base64.b64encode(b"x" * 32).decode())
+
+    with patch("app.db.SessionLocal", app_session_local), pytest.raises(ClaudeKeyRequired):
+        resolve_client(db_session, USER_ID, "user")
+
+    db_session.expire_all()
+    assert db_session.query(UserApiKey).one().status == "needs_attention"
+    assert db_session.get(AppUser, USER_ID).claude_key_state == "needs_attention"
+
+
+def test_the_check_only_dependency_never_decrypts(db_session, monkeypatch):
+    add_app_user(db_session, USER_ID, role="user")
+    _give_key(db_session)
+    monkeypatch.setattr(settings, "key_encryption_secret", base64.b64encode(b"x" * 32).decode())
+
+    claude_keys._usable_key_row(db_session, USER_ID, "user")  # no error: nothing is decrypted

@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 import anthropic
@@ -212,3 +213,18 @@ def test_the_key_never_appears_in_the_logs(client_no_key, anthropic_ok, caplog):
 
     assert KEY not in caplog.text
     assert OTHER_KEY not in caplog.text
+
+
+def test_two_first_saves_at_once_end_with_one_row_and_no_error(
+    client_no_key, db_session, anthropic_ok
+):
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(_put, client_no_key, KEY)
+        second = pool.submit(_put, client_no_key, OTHER_KEY)
+
+    assert first.result().status_code == 200
+    assert second.result().status_code == 200
+    db_session.expire_all()
+    rows = db_session.query(UserApiKey).all()
+    assert len(rows) == 1
+    assert rows[0].last4 in {KEY[-4:], OTHER_KEY[-4:]}

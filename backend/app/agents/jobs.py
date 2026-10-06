@@ -98,6 +98,8 @@ async def run_job(
     job_id: str,
     user_id: uuid.UUID,
     tickers: list[dict[str, Any]],
+    # client=None means "the server's own Claude key (admin only)". Any caller acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
     client: Anthropic | None = None,
 ) -> None:
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_TICKERS)

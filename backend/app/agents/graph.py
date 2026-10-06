@@ -136,6 +136,8 @@ async def run_graph_for_ticker(
     ticker: str,
     asset_type: str,
     is_held: bool,
+    # client=None means "the server's own Claude key (admin only)". Callers acting for a regular
+    # user (for example a scheduled analysis command) must pass that user's client.
     client: Anthropic | None = None,
 ) -> AnalysisState:
     app_graph = build_graph()

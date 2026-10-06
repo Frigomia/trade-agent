@@ -346,7 +346,7 @@ graph TD;
 | `technical_agent` | 50/200-day SMA trend, 14-day RSI, drawdown from 52w high — `analysis/technical.py` |
 | `synthesizer` | Combines both into one recommendation. **Fundamentals gate the decision; technicals only time entries within that gate** — never the reverse. Logic in `analysis/recommend.py` |
 | `context_agent` | Assembles qualitative context for the LLM's reasoning: investment preferences, similar past recommendations with outcomes, and relevant session memory from chat history. Calls `build_context()` — see §15.1 step 4c |
-| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Skipped if `ANTHROPIC_API_KEY` is unset — degrades gracefully to quant-only. Also degrades to quant-only (`ai_analysis` null, exception class logged) if the call fails (billing, rate limit, outage): the second opinion never discards an already-computed recommendation |
+| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Uses the caller's own Claude key (§ per-user keys); the server `ANTHROPIC_API_KEY` is used only for an admin with no key of their own, and the step is skipped when no key applies — degrades gracefully to quant-only. A key Anthropic rejects (invalid, revoked, out of credit) flags the user's key `needs_attention`. Also degrades to quant-only (`ai_analysis` null, exception class logged) if the call fails (billing, rate limit, outage): the second opinion never discards an already-computed recommendation |
 
 Guardrails to build into every AI prompt (`agents/prompts.py`):
 not a licensed advisor, measured language only, treat quant signals as
@@ -468,6 +468,7 @@ DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/tra
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
+KEY_ENCRYPTION_SECRET=                      # base64 of 32 random bytes (openssl rand -base64 32); encrypts users' saved Claude keys; required when APP_ENV=production
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
 SUPABASE_SECRET_KEY=                        # backend only; Supabase Auth admin calls (invite, ban, delete)

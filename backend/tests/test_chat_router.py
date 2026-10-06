@@ -1,3 +1,5 @@
+import base64
+import logging
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -273,8 +275,9 @@ def test_chat_for_an_admin_with_no_key_at_all_is_503(admin_client, monkeypatch):
 
 
 def test_a_key_anthropic_rejects_mid_chat_asks_for_a_reconnect(
-    client, db_session, app_session_local
+    client, db_session, app_session_local, caplog
 ):
+    caplog.set_level(logging.DEBUG)
     import anthropic
     import httpx
 
@@ -294,6 +297,38 @@ def test_a_key_anthropic_rejects_mid_chat_asks_for_a_reconnect(
     assert "reconnect" in response.json()["detail"].lower()
     db_session.expire_all()
     assert db_session.query(UserApiKey).one().status == "needs_attention"
+    assert db_session.get(AppUser, USER_ID).claude_key_state == "needs_attention"
+    # The key and its ciphertext stay out of the logs on the rejection path.
+    assert "sk-ant-test-key-0000" not in caplog.text
+    ciphertext = db_session.query(UserApiKey).one().ciphertext
+    assert ciphertext.hex() not in caplog.text
+    assert repr(ciphertext) not in caplog.text
+
+
+def test_chat_with_a_users_key_never_logs_the_key(client, caplog):
+    caplog.set_level(logging.DEBUG)
+
+    with patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 200
+    assert "sk-ant-test-key-0000" not in caplog.text
+
+
+def test_an_undecryptable_key_asks_for_a_reconnect_and_shows_as_flagged(
+    client, db_session, app_session_local, monkeypatch
+):
+    monkeypatch.setattr(settings, "key_encryption_secret", base64.b64encode(b"x" * 32).decode())
+
+    with patch("app.db.SessionLocal", app_session_local):
+        response = client.post("/chat", json={"session_id": "s1", "message": "hi"})
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "claude_key_required"
+    status = client.get("/me/claude-key").json()
+    assert status["connected"] is True
+    assert status["needs_attention"] is True
+    db_session.expire_all()
     assert db_session.get(AppUser, USER_ID).claude_key_state == "needs_attention"
 
 
