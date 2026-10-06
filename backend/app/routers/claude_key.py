@@ -1,7 +1,8 @@
 import logging
+import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -21,9 +22,8 @@ router = APIRouter(
 )
 
 SAVE_LIMIT_PER_MINUTE = 10  # the save route must not become a way to test stolen keys
-KEY_PREFIX = "sk-ant-"
-KEY_MIN_LENGTH = 20
-KEY_MAX_LENGTH = 300
+# sk-ant- then 13-293 visible ASCII characters (no spaces): 20-300 in all.
+KEY_SHAPE = re.compile(r"sk-ant-[!-~]{13,293}")
 BAD_FORMAT = (
     "That does not look like an Anthropic API key. It starts with sk-ant- and has no spaces."
 )
@@ -67,28 +67,15 @@ async def save_key(
     db: Session = Depends(get_user_db),
 ) -> ClaudeKeyOut:
     api_key = payload.api_key.strip()
-    well_formed = (
-        KEY_MIN_LENGTH <= len(api_key) <= KEY_MAX_LENGTH
-        and api_key.startswith(KEY_PREFIX)
-        and api_key.isascii()
-        and api_key.isprintable()
-        and " " not in api_key
-    )
-    if not well_formed:
-        raise HTTPException(status_code=422, detail={"message": BAD_FORMAT, "code": "bad_format"})
-    try:
-        await claude_keys.verify_key(api_key)
-    except claude_keys.ClaudeKeyRejected as rejected:
-        raise HTTPException(
-            status_code=rejected.http_status,
-            detail={"message": rejected.message, "code": rejected.code},
-        ) from None
-    row = await run_in_threadpool(_store, db, user.id, api_key)
+    if not KEY_SHAPE.fullmatch(api_key):
+        raise claude_keys.ClaudeKeyRejected("bad_format", BAD_FORMAT)
+    await claude_keys.verify_key(api_key)
+    await run_in_threadpool(_store, db, user.id, api_key)
     logger.info("Claude key saved for user %s", user.id)
-    return _out(row)
+    return ClaudeKeyOut(connected=True, last4=api_key[-4:], needs_attention=False)
 
 
-def _store(db: Session, user_id: uuid.UUID, api_key: str) -> UserApiKey:
+def _store(db: Session, user_id: uuid.UUID, api_key: str) -> None:
     blob = claude_keys.encrypt_key(user_id, api_key)
     values = {
         "ciphertext": blob,
@@ -110,7 +97,6 @@ def _store(db: Session, user_id: uuid.UUID, api_key: str) -> UserApiKey:
     except SQLAlchemyError:
         db.rollback()
         raise
-    return db.query(UserApiKey).filter_by(user_id=user_id).one()
 
 
 @router.delete("", status_code=204)

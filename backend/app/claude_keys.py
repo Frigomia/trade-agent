@@ -61,12 +61,9 @@ def encrypt_key(user_id: uuid.UUID, api_key: str) -> bytes:
 
 
 def decrypt_key(user_id: uuid.UUID, blob: bytes) -> str:
+    key = _master_key()
     try:
-        plain = AESGCM(_master_key()).decrypt(
-            blob[:_NONCE_BYTES], blob[_NONCE_BYTES:], user_id.bytes
-        )
-    except KeyEncryptionError:
-        raise
+        plain = AESGCM(key).decrypt(blob[:_NONCE_BYTES], blob[_NONCE_BYTES:], user_id.bytes)
     except Exception:
         # `from None`: the underlying error text must not travel with this one.
         raise KeyEncryptionError("stored key could not be decrypted") from None

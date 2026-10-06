@@ -2,15 +2,20 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from app.admin.service import AdminError
-from app.claude_keys import ClaudeKeyRequired, KeyEncryptionError, check_master_secret  # noqa: F401
+from app.claude_keys import (  # noqa: F401
+    ClaudeKeyRejected,
+    ClaudeKeyRequired,
+    KeyEncryptionError,
+    check_master_secret,
+)
 from app.config import settings
 from app.db import check_runtime_role, engine
 from app.routers import (
@@ -66,15 +71,12 @@ app.include_router(me.active_router)
 app.include_router(admin.router)
 
 
-@app.exception_handler(HTTPException)
-async def _http_exception_with_code(_request: Request, exc: HTTPException) -> Response:
-    """A detail given as {"message", "code"} is returned as {"detail": message, "code": code}, so
-    the frontend can branch on `code` for the Claude-key errors; every other HTTPException keeps
-    FastAPI's usual shape."""
-    if not (isinstance(exc.detail, dict) and "code" in exc.detail):
-        return await http_exception_handler(_request, exc)  # keeps body-less statuses body-less
-    body = {"detail": exc.detail["message"], "code": exc.detail["code"]}
-    return JSONResponse(status_code=exc.status_code, content=body, headers=exc.headers)
+@app.exception_handler(ClaudeKeyRejected)
+async def _claude_key_rejected(_request: Request, exc: ClaudeKeyRejected) -> JSONResponse:
+    """The frontend branches on `code`; the message never carries the key or Anthropic's reply."""
+    return JSONResponse(
+        status_code=exc.http_status, content={"detail": exc.message, "code": exc.code}
+    )
 
 
 @app.exception_handler(RequestValidationError)
