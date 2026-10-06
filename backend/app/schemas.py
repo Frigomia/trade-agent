@@ -91,6 +91,7 @@ class RecommendationOut(BaseModel):
     ai_analysis: str | None
     suggested_position_pct: float | None
     status: str
+    source: str = "manual"
     reviewed_at: datetime | None
     fundamental_score: int | None
     technical_signal: str | None

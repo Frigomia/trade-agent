@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -16,6 +17,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import expression
 
 from app.db import Base
 
@@ -74,6 +76,8 @@ class Recommendation(Base):
     # PENDING | APPROVED | REJECTED | SUPERSEDED (a newer run replaced an unreviewed one; exactly
     # 10 characters, so it fits String(10))
     status: Mapped[str] = mapped_column(String(10), default="PENDING")
+    # "manual" (Run analysis) | "scheduled" (the weekday job); shown as an Automatic tag on Today.
+    source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     fundamental_score: Mapped[int | None] = mapped_column(nullable=True)
@@ -120,6 +124,10 @@ class InvestmentPreferences(Base):
     risk_tolerance: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sector_avoid_list: Mapped[list[str]] = mapped_column(JSON, default=list)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Opt-in weekday analysis (see app/scheduled.py); off until the user turns it on.
+    auto_analysis: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=expression.false()
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )

@@ -145,3 +145,16 @@ def test_portfolio_snapshot_roundtrip(db_session):
     assert snapshot.created_at is not None
     assert float(snapshot.total_market_value) == 15000.50
     assert float(snapshot.total_cost_basis) == 12000.00
+
+
+def test_auto_analysis_is_off_and_a_recommendation_is_manual_unless_said_otherwise(db_session):
+    pref = InvestmentPreferences(user_id=uuid.uuid4())
+    rec = Recommendation(
+        user_id=uuid.uuid4(), ticker="AAPL", asset_type="STOCK", action="BUY", reasoning=["x"]
+    )
+    db_session.add_all([pref, rec])
+    db_session.commit()
+    db_session.refresh(pref)
+    db_session.refresh(rec)
+    assert pref.auto_analysis is False
+    assert rec.source == "manual"
