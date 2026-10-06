@@ -185,3 +185,13 @@ def require_claude_key(
     usage is counted or anything is stored. It only checks that a usable key exists; it builds no
     client and decrypts nothing (the handler does that once, through resolve_client)."""
     _usable_key_row(db, user.id, user.role)
+
+
+def has_usable_key(db: Session, user_id: uuid.UUID, role: str) -> bool:
+    """True when a request for this user could get a Claude client: a saved key that is `ok`, or no
+    key at all for an admin (who then uses the server key). Decrypts nothing and builds no client."""
+    try:
+        _usable_key_row(db, user_id, role)
+    except ClaudeKeyRequired:
+        return False
+    return True
