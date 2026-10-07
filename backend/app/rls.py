@@ -17,6 +17,7 @@ USER_TABLES: tuple[str, ...] = (
     "investment_preferences",
     "portfolio_snapshots",
     "user_api_keys",
+    "telegram_links",
 )
 
 # Every table the runtime role may touch: the user tables, the auth table and the settings row.
