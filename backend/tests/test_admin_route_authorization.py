@@ -7,6 +7,8 @@ from tests.auth_support import OTHER_USER_ID, add_app_user, auth_headers
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 # The only routes an invited (not yet active) user may reach.
 INVITEE_ALLOWED = {("GET", "/me"), ("POST", "/me/accept"), ("GET", "/health"), ("POST", "/health")}
+# Not user routes: no login, 401 without the secret header. A user's JWT must not unlock them.
+SECRET_ROUTES = {("POST", "/telegram/webhook")}
 
 
 def _operations():
@@ -37,6 +39,7 @@ def test_an_invited_user_is_403_everywhere_except_the_signup_routes(client, db_s
         if (method, route_path) in INVITEE_ALLOWED or route_path == "/health":
             continue
         response = client.request(method, path, headers=headers)
-        assert response.status_code == 403, f"{method} {route_path} is reachable while invited"
+        expected = 401 if (method, route_path) in SECRET_ROUTES else 403
+        assert response.status_code == expected, f"{method} {route_path} is reachable while invited"
         checked += 1
     assert checked > 20

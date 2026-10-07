@@ -20,6 +20,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     Trade,
     UserApiKey,
     WatchlistItem,
@@ -131,6 +132,7 @@ ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
     "portfolio_snapshots": lambda uid: PortfolioSnapshot(
         user_id=uid, total_market_value=1, total_cost_basis=1
     ),
+    "telegram_links": lambda uid: TelegramLink(user_id=uid, chat_id=uid.int % 10**12 + 1),
     "user_api_keys": lambda uid: UserApiKey(
         user_id=uid, ciphertext=b"x" * 40, key_version=1, last4="abcd", status="ok"
     ),

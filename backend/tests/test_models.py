@@ -10,6 +10,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     Trade,
     WatchlistItem,
 )
@@ -158,3 +159,12 @@ def test_auto_analysis_is_off_and_a_recommendation_is_manual_unless_said_otherwi
     db_session.refresh(rec)
     assert pref.auto_analysis is False
     assert rec.source == "manual"
+
+
+def test_telegram_link_defaults(db_session):
+    link = TelegramLink(user_id=uuid.uuid4(), chat_id=123456789)
+    db_session.add(link)
+    db_session.commit()
+    db_session.refresh(link)
+    assert (link.status, link.digest_enabled, link.moves_enabled) == ("ok", True, True)
+    assert float(link.move_threshold_pct) == 5.0

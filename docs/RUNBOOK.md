@@ -135,6 +135,102 @@ new secret) is not built yet; if needed, it is a small one-off script.
    `sk-ant-`.
 3. Remove the key in Account: the row disappears and Chat is locked again.
 
+### Telegram
+
+Optional. Without it the app works as before: the Account screen says Telegram is not set up and the
+daily job skips the notify step. The bot is advisory only; it sends a short message on weekday
+mornings and never places a trade.
+
+#### Create the bot and the secrets
+
+1. In Telegram, open a chat with @BotFather and send `/newbot`. Pick a name and a username (it must
+   end in `bot`). BotFather replies with the token. Note the username too.
+2. Generate the webhook secret locally with `openssl rand -hex 32`.
+3. Set four values as Fly secrets: `TELEGRAM_BOT_TOKEN` (from BotFather), `TELEGRAM_WEBHOOK_SECRET`
+   (step 2), `TELEGRAM_BOT_USERNAME` (the username without the `@`) and `APP_URL` (the Vercel origin,
+   for the link to Today in the message). Never paste the token or the secret into a chat, a commit,
+   an issue or a screenshot. Keep them out of shell history: use the interactive prompt, or pipe the
+   line in, for example `printf 'TELEGRAM_BOT_TOKEN=<value>' | flyctl secrets import -a <app-name>`
+   typed from a password manager's copy, instead of `fly secrets set NAME=value` as an argument
+   (UNVERIFIED: check `fly secrets import --help`). Keep a copy of both in your password manager.
+4. Deploy (setting secrets restarts the machine, so a deploy is not needed just for them).
+
+#### Register the webhook (once, after the deploy)
+
+Telegram has to be told where to send messages. From a shell on the machine, which already has the
+secrets:
+
+```
+fly ssh console -a <app-name>
+python -m app.telegram set-webhook https://<api host>/telegram/webhook
+```
+
+It prints `Webhook registered`; it exits 1 and says so if the token or the secret is missing, or
+Telegram refused the call. Do this again whenever the API host, the token or the webhook secret
+changes.
+
+#### Checks after the first deploy
+
+1. Account shows Connect Telegram. Press it: Telegram opens the bot with a start button.
+2. Press Start. The bot answers "Connected. ..." and Account shows Telegram as connected. Open the
+   same link a second time: "That link has expired." (a code works once, for 10 minutes).
+3. On a weekday, when the person has a new automatic recommendation from today or an open holding
+   that moved at least their threshold, the message arrives after the daily job. To test without
+   waiting, run `python -m app.scheduled notify` by hand through `fly ssh console` on a weekday
+   (it does nothing on Saturday and Sunday, UTC). Make sure there is something to say: lower the
+   threshold in Account to 1 percent, or run an analysis first.
+4. Send `/stop` to the bot: "Disconnected." and Account shows not connected.
+5. Reconnect, then run `python -m app.scheduled notify` again the same weekday: the message was
+   already sent today, so nothing is sent (`notify_sent=0`). That is the per-day marker working.
+
+#### Reading the counters
+
+The summary line (section 3a) ends with `notify_sent`, `notify_skipped` and `notify_failures`.
+`notify_sent` is the messages Telegram accepted. `notify_skipped` is normal: nobody connected,
+nothing to say, a message already sent today, a blocked chat, a weekend, or users not reached before
+the time cap (3300 seconds from the start of the command). `notify_failures` is a send that failed or
+an exception for that user; the log has the user id and the exception class. A Telegram problem never
+turns the run red: a run whose only non-zero counter is `notify_failures` still exits 0.
+
+A failure after which Telegram may already have the message (a timeout, a dropped connection) keeps
+the day's marker on purpose, so a re-run the same day does not send it twice; that person may
+get no message that day. A refusal or a connection that could not be made clears the marker, and a
+re-run may try again.
+
+#### A blocked chat
+
+`blocked` means Telegram said the person blocked the bot or deleted the chat. The notify step marks
+the link `blocked` and stops trying (`GET /me/telegram` reports `status: "blocked"`). The person
+fixes it by unblocking the bot in Telegram and pressing Connect Telegram again: linking sets the
+status back to `ok` and keeps their settings.
+
+#### Rotating the token or the webhook secret
+
+- Token: send `/revoke` to BotFather and choose the bot, which issues a new token and kills the old
+  one. Update `TELEGRAM_BOT_TOKEN` as a Fly secret (same care as above), then run `set-webhook`
+  again. Until you do, messages from the bot stop and the notify step logs failures.
+- Webhook secret: generate a new one with `openssl rand -hex 32`, update `TELEGRAM_WEBHOOK_SECRET`,
+  then run `set-webhook` again so Telegram sends the new one. In between, the webhook answers 401
+  and Telegram retries; people can still not connect until it is done.
+- The token appears in every Bot API URL. The app keeps the `httpx` and `httpcore` loggers at
+  WARNING so it never reaches the logs, and every Telegram error is a fixed text. If you ever see a
+  token in a log, a screenshot or a paste, revoke it at once.
+
+#### Privacy
+
+Anything a person sends to the bot is visible to whoever operates the bot (BotFather account
+owner), as in any Telegram bot. The server reads only `/start` and `/stop`, replies with fixed
+texts, and never logs the content of a message. The notification message carries tickers, actions
+and percentages only, never amounts or share counts. A person's chat id is stored in
+`telegram_links` (owner-only row-level security), is not part of their data export (the export
+lists their notification settings), and is removed with the link when they disconnect or delete
+their data. The Redis mapping from the chat id to the person is removed at the same time, best
+effort: if Redis is unreachable at that moment the deletion still succeeds and the mapping stays
+until a later `/stop` from that chat finds no row, forgets it and answers "not connected". A link
+code belongs to whoever created it, so nobody should tap Start on a Connect link someone else sent
+them. Pressing Cancel in the app does not revoke an outstanding code; it expires by itself after 10
+minutes.
+
 ### Fly
 
 1. `fly apps create <app-name>`.
@@ -249,9 +345,10 @@ verified without a real Fly app.
 ## 3a. The scheduled job and its summary line
 
 The daily job (`python -m app.scheduled daily`, started by the "Scheduled jobs" workflow at 05:30 UTC)
-does three things in order: portfolio snapshots, outcome evaluation, and, on weekdays only, the
-automatic analysis for people who switched it on in Preferences. On Saturday and Sunday (UTC) the
-analysis step logs "weekend, nothing to do" and changes nothing. The one-off Fly machine for the job
+does four things in order: portfolio snapshots, outcome evaluation, and, on weekdays only, the
+automatic analysis for people who switched it on in Preferences and the Telegram messages for
+people who connected Telegram (see the Telegram section in section 2). On Saturday and Sunday (UTC)
+the analysis and notify steps log "weekend, nothing to do" and change nothing. The one-off Fly machine for the job
 has 1 GB of memory (the app machine stays at 512 MB). It is headroom for the pipeline's three
 concurrent tickers plus pandas and yfinance across many users in one long-lived process; the 512 MB
 app machine only ever runs one user's run at a time.
@@ -259,7 +356,7 @@ app machine only ever runs one user's run at a time.
 When it finishes it logs one summary line, for example:
 
 ```
-users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0 analysis_runs=2 analysis_skipped=1 analysis_failures=0
+users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0 analysis_runs=2 analysis_skipped=1 analysis_failures=0 notify_sent=2 notify_skipped=2 notify_failures=0
 ```
 
 - `users`: active users seen.
@@ -275,6 +372,9 @@ users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0
   A weekend run does nothing at all.
 - `analysis_failures`: users whose run raised an error, had a ticker that errored, or whose key the
   provider rejected.
+- `notify_sent` / `notify_skipped` / `notify_failures`: Telegram messages sent, users not messaged
+  (normal), and sends that failed. `notify_failures` never changes the exit code. Details in the
+  Telegram section of section 2.
 
 The job exits non-zero, and the GitHub run should turn red, when `failures` or `analysis_failures`
 is above zero. So a run can now be red with `failures=0 analysis_failures=1`: look at the analysis
@@ -378,6 +478,9 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 | `INVITE_REDIRECT_URL` | Fly secrets | Vercel origin plus the accept-invitation path | Fly app, owner |
 | `CORS_ALLOWED_ORIGINS` | Fly secrets | The Vercel origin only | Fly app, owner |
 | `KEY_ENCRYPTION_SECRET` | Fly secrets | Base64 of 32 random bytes; keep a copy in your password manager | Fly app, owner |
+| `TELEGRAM_BOT_TOKEN` | Fly secrets (optional) | BotFather, `/newbot`; replace with `/revoke` | Fly app, owner |
+| `TELEGRAM_WEBHOOK_SECRET` | Fly secrets (optional) | `openssl rand -hex 32` | Fly app, owner |
+| `TELEGRAM_BOT_USERNAME`, `APP_URL` | Fly secrets (optional, not secret values) | The bot's username without `@`; the Vercel origin | Fly app, owner |
 | `APP_ENV` | `backend/fly.toml` (`production`, not secret) | Committed config | Anyone with repo access |
 | `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Vercel env vars | Fly URL, Supabase project settings (public by design) | Vercel project members, and browsers |
 | `FLY_API_TOKEN` | GitHub Environment secret (`production`) | `fly tokens create deploy -a <app-name>` | Workflows running on `master` (Environment rule), repository admins |

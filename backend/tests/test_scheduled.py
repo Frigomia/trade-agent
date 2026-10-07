@@ -16,10 +16,12 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     UserApiKey,
     WatchlistItem,
 )
 from app.redis_client import get_redis
+from app.telegram import TelegramError
 from app.usage import UsageLimitExceeded, _usage_key
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
@@ -244,10 +246,14 @@ def test_summary_line_lists_every_counter():
         analysis_runs=5,
         analysis_skipped=6,
         analysis_failures=7,
+        notify_sent=8,
+        notify_skipped=9,
+        notify_failures=10,
     ).line()
     assert line == (
         "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0 "
-        "analysis_runs=5 analysis_skipped=6 analysis_failures=7"
+        "analysis_runs=5 analysis_skipped=6 analysis_failures=7 "
+        "notify_sent=8 notify_skipped=9 notify_failures=10"
     )
 
 
@@ -412,22 +418,24 @@ def test_outcomes_still_run_after_a_snapshot_failure(env):
     assert env.query(Recommendation).one().outcome_evaluated_at is not None
 
 
-def test_daily_runs_snapshots_then_outcomes_then_analysis():
+def test_daily_runs_snapshots_then_outcomes_then_analysis_then_notify():
     parent = Mock()
     parent.attach_mock(AsyncMock(), "snapshots")
     parent.attach_mock(AsyncMock(), "outcomes")
-    parent.attach_mock(AsyncMock(), "analysis")
+    parent.attach_mock(AsyncMock(return_value=True), "analysis")
+    parent.attach_mock(AsyncMock(), "notify")
     with (
         patch("app.scheduled.run_snapshots", parent.snapshots),
         patch("app.scheduled.run_outcomes", parent.outcomes),
-        # Unpatched, this step queries the database on weekdays (and does nothing on weekends), so
+        # Unpatched, these steps query the database on weekdays (and do nothing on weekends), so
         # the test would depend on the day it runs.
         patch("app.scheduled.run_analysis", parent.analysis),
+        patch("app.scheduled.run_notify", parent.notify),
     ):
         assert _arun(scheduled.run_command("daily")) == 0
 
     names = [c[0] for c in parent.mock_calls]
-    assert names == ["snapshots", "outcomes", "analysis"]
+    assert names == ["snapshots", "outcomes", "analysis", "notify"]
 
 
 def test_the_lock_has_a_ttl_while_the_run_is_in_progress():
@@ -849,7 +857,7 @@ def test_a_second_analysis_while_the_step_lock_is_held_does_nothing(env, caplog)
         summary, holder = _arun(go())
     graph.assert_not_awaited()
     assert holder == "someone-else"  # not ours to release
-    assert summary.line().endswith("analysis_runs=0 analysis_skipped=0 analysis_failures=0")
+    assert "analysis_runs=0 analysis_skipped=0 analysis_failures=0" in summary.line()
     assert "another analysis run is in progress" in caplog.text
     assert _usage(USER_ID) is None
 
@@ -1130,3 +1138,200 @@ def test_an_unhandled_ticker_error_is_logged_by_class_name_only(caplog):
     assert "Unhandled error in _process_ticker (RuntimeError)" in caplog.text
     assert "secret-key-material" not in caplog.text
     assert "Traceback" not in caplog.text
+
+
+SATURDAY = datetime(2026, 10, 10, 6, 0, tzinfo=UTC)
+
+
+class _Bot:
+    def __init__(self, fail_chats=()):
+        self.sent, self.fail_chats = [], set(fail_chats)
+
+    async def send_message(self, chat_id, text):
+        if chat_id in self.fail_chats:
+            raise TelegramError("x")
+        self.sent.append(chat_id)
+
+
+def _linked(db, user_id, chat_id, ticker):
+    add_app_user(db, user_id)
+    db.add(TelegramLink(user_id=user_id, chat_id=chat_id))
+    db.add(
+        Recommendation(
+            user_id=user_id,
+            ticker=ticker,
+            asset_type="STOCK",
+            action="ADD",
+            reasoning=["x"],
+            source="scheduled",
+            created_at=MONDAY.replace(tzinfo=None),
+        )
+    )
+    db.commit()
+
+
+def _run_notify(bot, now=MONDAY):
+    summary = scheduled.Summary()
+    with patch("app.telegram.get_bot", return_value=bot):
+        asyncio.run(scheduled.run_notify(summary, now=now))
+    redis_client_module._redis = None
+    return summary
+
+
+def test_run_notify_counts_sends_and_failures(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    summary = _run_notify(_Bot(fail_chats={1002}))
+    assert (summary.notify_sent, summary.notify_failures, summary.notify_skipped) == (1, 1, 0)
+
+
+def test_notify_failures_never_change_the_exit_code(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    with (
+        patch("app.telegram.get_bot", return_value=_Bot(fail_chats={1001})),
+        patch("app.scheduled.datetime") as clock,
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("notify")) == 0
+
+
+def test_notify_does_nothing_at_the_weekend(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    bot = _Bot()
+    summary = _run_notify(bot, now=SATURDAY)
+    assert (bot.sent, summary.notify_sent) == ([], 0)
+
+
+def test_notify_does_nothing_without_a_bot(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    summary = scheduled.Summary()
+    with patch("app.telegram.get_bot", return_value=None):
+        asyncio.run(scheduled.run_notify(summary, now=MONDAY))
+    redis_client_module._redis = None
+    assert (summary.notify_sent, summary.notify_failures, summary.notify_skipped) == (0, 0, 0)
+
+
+def test_run_notify_survives_one_user_raising_and_keeps_the_exit_code(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    real = scheduled.notify_user
+    calls = []
+
+    async def flaky(user_id, now, bot):
+        calls.append(user_id)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        return await real(user_id, now, bot)
+
+    with patch("app.scheduled.notify_user", flaky):
+        summary = _run_notify(_Bot())
+    assert (summary.notify_failures, summary.notify_sent, len(calls)) == (1, 1, 2)
+    with (
+        patch("app.scheduled.notify_user", AsyncMock(side_effect=RuntimeError("boom"))),
+        patch("app.telegram.get_bot", return_value=_Bot()),
+        patch("app.scheduled.datetime") as clock,
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("notify")) == 0
+
+
+def test_run_notify_logs_no_chat_id_text_or_token(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    bot = _Bot()
+    with caplog.at_level(logging.DEBUG):
+        summary = _run_notify(bot)
+    assert summary.notify_sent == 1
+    assert "1001" not in caplog.text and "MSFT" not in caplog.text
+    assert "Advisory only" not in caplog.text and "SECRET" not in caplog.text
+
+
+def test_run_notify_stops_starting_users_after_the_time_cap(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    bot = _Bot()
+    with (
+        patch("app.scheduled.NOTIFY_CUTOFF_SECONDS", 0),
+        patch("app.telegram.get_bot", return_value=bot),
+        caplog.at_level(logging.WARNING),
+    ):
+        summary = scheduled.Summary()
+        asyncio.run(scheduled.run_notify(summary, now=MONDAY, started=time.monotonic() - 5))
+    redis_client_module._redis = None
+    assert (bot.sent, summary.notify_skipped, summary.notify_sent) == ([], 2, 0)
+    assert caplog.text.count("2 users not reached") == 1
+
+
+def test_run_notify_cuts_off_a_slow_user_before_the_send_and_leaves_no_marker(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _holding(env, USER_ID, "AAPL")
+    bot = _Bot()
+
+    async def slow_quote(ticker):
+        await asyncio.sleep(5)
+        return {"price": 1.0, "closes": []}
+
+    with (
+        patch("app.scheduled.NOTIFY_USER_SECONDS", 0.05),
+        patch("app.notify.fetch_quote_and_history", slow_quote),
+        caplog.at_level(logging.WARNING),
+    ):
+        summary = _run_notify(bot)
+    assert (summary.notify_failures, summary.notify_sent, bot.sent) == (1, 0, [])
+    assert f"Notify failed for user {USER_ID}: TimeoutError" in caplog.text
+    assert _arun(get_redis().keys("telegram:sent:*")) == []
+
+
+def test_run_notify_keeps_the_marker_when_the_cut_off_hits_during_the_send(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+
+    class SlowBot:
+        async def send_message(self, chat_id, text):
+            await asyncio.sleep(5)
+
+    with patch("app.scheduled.NOTIFY_USER_SECONDS", 0.05):
+        summary = _run_notify(SlowBot())
+    assert summary.notify_failures == 1
+    assert len(_arun(get_redis().keys("telegram:sent:*"))) == 1
+
+
+def test_run_analysis_returns_false_only_when_another_run_holds_the_lock(env):
+    summary = scheduled.Summary()
+    assert _arun(scheduled.run_analysis(summary, now=SATURDAY)) is True  # weekend: normal no-op
+    assert _arun(scheduled.run_analysis(summary, now=MONDAY)) is True
+    _arun(get_redis().set(scheduled.ANALYSIS_LOCK_KEY, "someone-else"))
+    assert _arun(scheduled.run_analysis(summary, now=MONDAY)) is False
+
+
+def _run_daily(analysis_result):
+    with (
+        patch("app.scheduled.run_snapshots", AsyncMock()),
+        patch("app.scheduled.run_outcomes", AsyncMock()),
+        patch("app.scheduled.run_analysis", AsyncMock(return_value=analysis_result)),
+        patch("app.scheduled.run_notify", AsyncMock()) as notify,
+    ):
+        code = _arun(scheduled.run_command("daily"))
+    return code, notify
+
+
+def test_daily_skips_notify_when_the_analysis_ran_elsewhere(env, caplog):
+    with caplog.at_level(logging.WARNING):
+        code, notify = _run_daily(False)
+    assert code == 0
+    notify.assert_not_called()
+    assert "the analysis is still running elsewhere, skipping" in caplog.text
+
+
+def test_daily_runs_notify_after_an_analysis_that_ran(env):
+    code, notify = _run_daily(True)
+    assert code == 0
+    notify.assert_called_once()
+
+
+def test_the_standalone_notify_command_does_not_look_at_the_analysis(env):
+    with (
+        patch("app.scheduled.run_analysis", AsyncMock(return_value=False)) as analysis,
+        patch("app.scheduled.run_notify", AsyncMock()) as notify,
+    ):
+        assert _arun(scheduled.run_command("notify")) == 0
+    analysis.assert_not_called()
+    notify.assert_called_once()

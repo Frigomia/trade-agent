@@ -8,19 +8,19 @@ BACKEND = Path(__file__).resolve().parent.parent
 
 
 def _migration():
-    path = next((BACKEND / "migrations" / "versions").glob("*_add_auto_analysis_and_source.py"))
-    spec = importlib.util.spec_from_file_location("add_auto_analysis_and_source", path)
+    path = next((BACKEND / "migrations" / "versions").glob("*_add_telegram_links.py"))
+    spec = importlib.util.spec_from_file_location("add_telegram_links", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_the_migration_is_the_single_head_on_top_of_the_api_keys_revision():
+def test_the_migration_is_the_single_head_on_top_of_the_auto_analysis_revision():
     config = Config(str(BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND / "migrations"))
     heads = ScriptDirectory.from_config(config).get_heads()
 
     migration = _migration()
-    assert len(heads) == 1
-    assert migration.down_revision == "f4a1c8d27b90"
+    assert heads == [migration.revision]
+    assert migration.down_revision == "b3d9e5a17c42"

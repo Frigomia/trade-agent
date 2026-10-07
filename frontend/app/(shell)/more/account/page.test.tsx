@@ -14,6 +14,7 @@ vi.mock("@/components/account/ChangePasswordForm", () => ({ ChangePasswordForm: 
 vi.mock("@/components/account/DataActions", () => ({ DataActions: ({ email }: { email: string }) => `data-actions:${email}` }));
 
 vi.mock("@/components/account/ClaudeKeyPanel", () => ({ ClaudeKeyPanel: () => "claude-key-panel" }));
+vi.mock("@/components/account/TelegramPanel", () => ({ TelegramPanel: () => <div>telegram-panel</div> }));
 
 import AccountPage from "./page";
 
@@ -49,6 +50,7 @@ describe("AccountPage", () => {
     expect(screen.getByText("change-password")).toBeInTheDocument();
     expect(screen.getByText("data-actions:me@example.com")).toBeInTheDocument();
     expect(screen.getByText("claude-key-panel")).toBeInTheDocument();
+    expect(screen.getByText("telegram-panel")).toBeInTheDocument();
   });
 
   it("signs out and returns to login", async () => {

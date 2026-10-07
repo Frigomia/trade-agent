@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     supabase_secret_key: str | None = None  # backend-only secret for Supabase Auth admin calls
     key_encryption_secret: str | None = None  # base64 of 32 random bytes; encrypts Claude keys
     invite_redirect_url: str | None = None  # where the emailed invitation link lands (frontend)
+    telegram_bot_token: str | None = None  # BotFather token; empty = Telegram off
+    telegram_webhook_secret: str | None = None  # long random string Telegram sends back as a header
+    telegram_bot_username: str | None = None  # without the @, for the t.me link
+    app_url: str | None = None  # the frontend origin, for the link to Today in a message
     invite_link_hours: int = 24  # display hint only; Supabase enforces the real link expiry
     cors_allowed_origins: str = "http://localhost:3000"  # comma-separated frontend origin(s)
 

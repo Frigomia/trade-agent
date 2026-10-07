@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 
-from app import usage
+from app import telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
 from app.db import get_session_factory
@@ -14,6 +15,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     Trade,
     WatchlistItem,
 )
@@ -29,6 +31,7 @@ from app.schemas import (
     PortfolioSnapshotOut,
     PreferencesOut,
     RecommendationOut,
+    TelegramExportOut,
     TradeOut,
     UsageDetail,
     UsageOut,
@@ -87,6 +90,7 @@ def export_data(
 ) -> ExportOut:
     profile = db.get(AppUser, user.id)
     preferences = db.query(InvestmentPreferences).filter_by(user_id=user.id).one_or_none()
+    link = db.query(TelegramLink).filter_by(user_id=user.id).one_or_none()
     return ExportOut(
         profile=ExportProfileOut.model_validate(profile),
         holdings=[
@@ -116,14 +120,27 @@ def export_data(
             PortfolioSnapshotOut.model_validate(p)
             for p in db.query(PortfolioSnapshot).filter_by(user_id=user.id)
         ],
+        # The settings only: the chat id is never exported.
+        telegram=(
+            TelegramExportOut(
+                status=link.status,
+                digest_enabled=link.digest_enabled,
+                moves_enabled=link.moves_enabled,
+                move_threshold_pct=float(link.move_threshold_pct),
+            )
+            if link is not None
+            else None
+        ),
     )
 
 
 @active_router.delete("/data", status_code=204)
-def delete_my_data(
+async def delete_my_data(
     payload: DataDeleteIn,
     user: CurrentUser = Depends(get_current_user),
     factory: sessionmaker[Session] = Depends(get_session_factory),
 ) -> Response:
-    delete_user_data(factory, user.id)
+    chat_id = await run_in_threadpool(delete_user_data, factory, user.id)
+    # After the data is gone; a Redis failure here must not fail the deletion.
+    await telegram.forget_chat_quietly(chat_id)
     return Response(status_code=204)

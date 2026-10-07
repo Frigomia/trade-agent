@@ -1656,7 +1656,9 @@ The backend (Tasks 1-6) is complete and can be pushed on its own. No frontend co
 
 ---
 
-## Part 2 — Frontend (filled in after the design pick)
+## Part 2 — Frontend (design picked: direction C, settings beside a live preview)
+
+The user picked direction C on 2026-10-07 (after an alignment fix). The decision and the rules that come with it are in `docs/design/telegram/direction-approved.md`; the drafts to match are `docs/design/telegram/c-live-preview.html` (with `tg.js`, `tg.css`) and `shots/c-*`. Copy is verbatim from `tg.js` (NOTE, PITCH, BLOCKED and the panel texts).
 
 Each task follows the same rhythm (failing Vitest test, run, implement, run, `eslint` / `tsc` / full suite / build, commit) and uses the existing `useAction`, SWR, `apiFetch`, MUI components and design tokens. The Account page already mounts `ClaudeKeyPanel`; follow its structure and tests.
 
@@ -1664,13 +1666,17 @@ Each task follows the same rhythm (failing Vitest test, run, implement, run, `es
 
 **Files:** `frontend/lib/telegram.ts` (+ test).
 
+Types: `TelegramStatus { configured: boolean; linked: boolean; status: "ok" | "blocked" | null; digest_enabled: boolean; moves_enabled: boolean; move_threshold_pct: number; bot_username: string | null }` and `TelegramLink { url: string; expires_in: number }`.
+
 Behaviour to test: `useTelegram()` returns `{status, connect(), update(patch), disconnect(), isLoading, error}` from `GET /me/telegram`; `connect()` calls `POST /me/telegram/link` and returns `{url, expires_in}` without storing the code; `update` sends only the changed fields with `PATCH` and revalidates; `disconnect` sends `DELETE` and revalidates; while "waiting" (after `connect`, until `linked` or the code's lifetime has passed) the status is re-fetched every 3 seconds, and polling stops when linked, on unmount, or after `expires_in`.
 
 ### Task 9: The Telegram panel on Account
 
 **Files:** `frontend/components/account/TelegramPanel.tsx` (+ test), mounted in the Account page (and its page test).
 
-Behaviour to test (copy and structure from the chosen direction): not configured shows nothing or the "not available" line; not connected shows the note and "Connect Telegram", which opens the returned link in a new tab (`rel="noopener noreferrer"`) and shows the waiting state; connected shows the two switches and the threshold (bounds 1 to 50, one decimal, saved on change or blur as the design says) and "Disconnect" with a confirmation; `blocked` shows the reconnect message and the Connect button; a failed save shows the error and rolls the control back; nothing in the panel shows a chat id.
+Design C: two cards in one row on desktop (the settings card and the "What a message looks like" preview card, equal tops and heights), the preview first on a phone; the preview is static sample data and is hidden when Telegram is not configured. The settings change on toggle or on blur of the threshold field (no Save button); the threshold shows a % suffix and the hint "1 to 50".
+
+Behaviour to test (copy and structure from the chosen direction): not configured shows only the title and "Telegram is not available on this server." (no preview card); not connected shows the note and "Connect Telegram", which opens the returned link in a new tab (`rel="noopener noreferrer"`) and shows the waiting state; connected shows the two switches and the threshold (bounds 1 to 50, one decimal, saved on change or blur as the design says) and "Disconnect" with a confirmation; `blocked` shows the reconnect message and the Connect button; a failed save shows the error and rolls the control back; nothing in the panel shows a chat id.
 
 ---
 

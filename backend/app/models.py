@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
@@ -201,3 +202,27 @@ class AppSettings(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False, default=1)
     default_monthly_analysis_limit: Mapped[int | None] = mapped_column(nullable=True)
     default_monthly_chat_limit: Mapped[int | None] = mapped_column(nullable=True)
+
+
+class TelegramLink(Base):
+    """A person's connected Telegram chat and their notification settings. One row per user."""
+
+    __tablename__ = "telegram_links"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, unique=True, index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(10), default="ok", server_default="ok")  # ok|blocked
+    digest_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=expression.true()
+    )
+    moves_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=expression.true()
+    )
+    move_threshold_pct: Mapped[float] = mapped_column(
+        Numeric(4, 1), default=5.0, server_default="5.0"
+    )
+    linked_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
