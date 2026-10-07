@@ -172,6 +172,9 @@ describe("useTelegram", () => {
 
     it("stops on unmount", async () => {
       const { unmount } = await setup();
+      const connected = gets();
+      await act(() => vi.advanceTimersByTimeAsync(6000));
+      expect(gets()).toBeGreaterThan(connected);
       unmount();
       const after = gets();
       await vi.advanceTimersByTimeAsync(30000);
@@ -184,8 +187,19 @@ describe("useTelegram", () => {
       renderHook(() => useTelegram(), { wrapper });
       await vi.advanceTimersByTimeAsync(0);
       const after = gets();
-      await vi.advanceTimersByTimeAsync(30000);
+      expect(after).toBeGreaterThanOrEqual(1);
+      await vi.advanceTimersByTimeAsync(9000);
       expect(gets()).toBe(after);
+    });
+
+    it("keeps polling when the host re-renders every second", async () => {
+      const { rerender } = await setup();
+      const before = gets();
+      for (let i = 0; i < 9; i++) {
+        await act(() => vi.advanceTimersByTimeAsync(1000));
+        rerender();
+      }
+      expect(gets() - before).toBeGreaterThanOrEqual(2);
     });
   });
 });

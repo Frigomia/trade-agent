@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import { apiFetch } from "@/lib/api/client";
 
@@ -32,9 +32,12 @@ const POLL_MS = 3000;
 export function useTelegram() {
   // Seconds the code lives; a fresh object per connect() restarts the timer.
   const [wait, setWait] = useState<{ seconds: number } | null>(null);
-  const { data, error, isLoading, mutate } = useSWR<TelegramStatus>(PATH, apiFetch, {
-    refreshInterval: (latest) => (wait && !latest?.linked ? POLL_MS : 0),
-  });
+  // Stable between renders: SWR restarts its poll timer whenever this function changes.
+  const refreshInterval = useCallback(
+    (latest?: TelegramStatus) => (wait && !latest?.linked ? POLL_MS : 0),
+    [wait],
+  );
+  const { data, error, isLoading, mutate } = useSWR<TelegramStatus>(PATH, apiFetch, { refreshInterval });
   const isLinked = data?.linked === true;
 
   useEffect(() => {
