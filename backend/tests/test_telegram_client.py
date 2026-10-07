@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import uuid
 
@@ -57,7 +58,7 @@ def test_the_token_never_travels_in_an_error_even_when_httpx_raises(caplog):
         asyncio.run(_bot(handler).send_message(42, "hi"))
     assert TOKEN not in str(caught.value) and TOKEN not in repr(caught.value)
     assert TOKEN not in caplog.text
-    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert caught.value.__cause__ is None and caught.value.__context__ is None
 
 
 def test_get_bot_is_none_without_a_token(monkeypatch):
@@ -95,3 +96,81 @@ def test_chat_mapping_round_trip():
     assert _run(telegram.user_for_chat(555)) == user_id
     _run(telegram.forget_chat(555))
     assert _run(telegram.user_for_chat(555)) is None
+
+
+@pytest.mark.parametrize("status", [200, 500, 403])
+@pytest.mark.parametrize("httpx_level", [None, logging.INFO, logging.DEBUG])
+def test_the_token_is_not_logged_on_any_response(caplog, status, httpx_level):
+    import importlib
+
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(httpx_level or logging.WARNING)
+    if httpx_level is not None:
+        importlib.reload(telegram)  # the module-level setting is what must protect
+    handler = lambda request: httpx.Response(status, json={"ok": status == 200})  # noqa: E731
+    bot = telegram.TelegramBot(TOKEN, transport=httpx.MockTransport(handler))
+    with caplog.at_level(logging.DEBUG), contextlib.suppress(telegram.TelegramError):
+        asyncio.run(bot.send_message(42, "hi"))
+    assert TOKEN not in caplog.text
+
+
+def test_a_403_only_means_blocked_for_send_message():
+    bot = _bot(lambda request: httpx.Response(403, json={"description": "Forbidden"}))
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(bot.set_webhook("https://example.com/hook", "s"))
+    assert not isinstance(caught.value, telegram.TelegramBlocked)
+    bot = _bot(lambda request: httpx.Response(400, json={"description": "chat not found"}))
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(bot.set_webhook("https://example.com/hook", "s"))
+    assert not isinstance(caught.value, telegram.TelegramBlocked)
+
+
+def test_an_invalid_url_is_a_telegram_error_without_the_token():
+    bad = "1\x002:TOKEN"  # a control character makes httpx raise InvalidURL
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(telegram.TelegramBot(bad).send_message(42, "hi"))
+    assert "TOKEN" not in str(caught.value) and caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("body", [b"<html>nope</html>", b'["a", "list"]'])
+def test_an_unparseable_error_reply_is_a_plain_telegram_error(body):
+    bot = _bot(lambda request: httpx.Response(502, content=body))
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(bot.send_message(42, "hi"))
+    assert not isinstance(caught.value, telegram.TelegramBlocked)
+    assert str(caught.value) == "Telegram answered HTTP 502"
+
+
+def test_cli_without_settings_exits_1(monkeypatch, capsys):
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", None)
+    monkeypatch.setattr(telegram.settings, "telegram_webhook_secret", None)
+    assert telegram.main(["set-webhook", "https://example.com/hook"]) == 1
+    assert "must both be set" in capsys.readouterr().err
+
+
+def test_cli_failure_exits_1_and_prints_no_secret(monkeypatch, capsys):
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", TOKEN)
+    monkeypatch.setattr(telegram.settings, "telegram_webhook_secret", "the-webhook-secret")
+    monkeypatch.setattr(
+        telegram,
+        "get_bot",
+        lambda: _bot(lambda request: httpx.Response(401, json={"description": "Unauthorized"})),
+    )
+    assert telegram.main(["set-webhook", "https://example.com/hook"]) == 1
+    out = capsys.readouterr()
+    assert "set-webhook failed" in out.err
+    for text in (out.out, out.err):
+        assert TOKEN not in text and "the-webhook-secret" not in text
+
+
+def test_cli_success_prints_no_secret(monkeypatch, capsys):
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", TOKEN)
+    monkeypatch.setattr(telegram.settings, "telegram_webhook_secret", "the-webhook-secret")
+    monkeypatch.setattr(
+        telegram, "get_bot", lambda: _bot(lambda request: httpx.Response(200, json={"ok": True}))
+    )
+    assert telegram.main(["set-webhook", "https://example.com/hook"]) == 0
+    out = capsys.readouterr()
+    assert "Webhook registered" in out.out
+    for text in (out.out, out.err):
+        assert TOKEN not in text and "the-webhook-secret" not in text

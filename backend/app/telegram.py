@@ -20,6 +20,11 @@ from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
+# httpx logs "HTTP Request: POST <url>" at INFO after every response, and the URL carries the bot
+# token. Jobs call logging.basicConfig(level=INFO), so keep these two quiet from import time.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 REQUEST_TIMEOUT_SECONDS = 10.0
 LINK_CODE_SECONDS = 600
 
@@ -38,21 +43,27 @@ class TelegramBot:
         self._transport = transport
 
     async def _post(self, method: str, payload: dict[str, object]) -> None:
+        failure: str | None = None
         try:
             async with httpx.AsyncClient(
                 timeout=REQUEST_TIMEOUT_SECONDS, transport=self._transport
             ) as client:
                 response = await client.post(f"{self._base}/{method}", json=payload)
         except (httpx.HTTPError, httpx.InvalidURL) as exc:
-            logger.warning("Telegram %s failed: %s", method, type(exc).__name__)
-            raise TelegramError("Could not reach Telegram") from None
+            failure = type(exc).__name__
+        if failure is not None:
+            # Raised outside the except block so the httpx exception is not left in __context__.
+            logger.warning("Telegram %s failed: %s", method, failure)
+            raise TelegramError("Could not reach Telegram")
         if response.is_success:
             return
         description = ""
         # A reply that is not JSON (or not an object) just leaves the description empty.
         with contextlib.suppress(ValueError, AttributeError):
             description = str(response.json().get("description", "")).lower()
-        if response.status_code == 403 or "chat not found" in description:
+        # "Blocked" only means something for a message to a chat, not for setWebhook etc.
+        chat_gone = response.status_code == 403 or "chat not found" in description
+        if method == "sendMessage" and chat_gone:
             raise TelegramBlocked("The chat cannot receive messages")
         raise TelegramError(f"Telegram answered HTTP {response.status_code}")
 
