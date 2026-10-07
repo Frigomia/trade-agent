@@ -50,9 +50,34 @@ def test_other_failures_raise_telegram_error_not_blocked(status):
     assert not isinstance(caught.value, telegram.TelegramBlocked)
 
 
-def test_the_token_never_travels_in_an_error_even_when_httpx_raises(caplog):
+UNCERTAIN = [httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout, httpx.ReadError]
+UNCERTAIN += [httpx.WriteError, httpx.RemoteProtocolError]
+CERTAIN = [httpx.ConnectError, httpx.ConnectTimeout]
+
+
+@pytest.mark.parametrize("error", UNCERTAIN)
+def test_a_failure_after_the_request_may_have_left_is_uncertain(error):
     def handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("boom connecting to " + str(request.url))
+        raise error("boom " + str(request.url))
+
+    with pytest.raises(telegram.TelegramUncertain):
+        asyncio.run(_bot(handler).send_message(42, "hi"))
+
+
+@pytest.mark.parametrize("error", CERTAIN)
+def test_a_failure_before_anything_was_sent_is_a_plain_error(error):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error("boom " + str(request.url))
+
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(_bot(handler).send_message(42, "hi"))
+    assert not isinstance(caught.value, telegram.TelegramUncertain)
+
+
+@pytest.mark.parametrize("error", [*UNCERTAIN, *CERTAIN])
+def test_the_token_never_travels_in_an_error_even_when_httpx_raises(caplog, error):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error("boom connecting to " + str(request.url))
 
     with caplog.at_level(logging.DEBUG), pytest.raises(telegram.TelegramError) as caught:
         asyncio.run(_bot(handler).send_message(42, "hi"))

@@ -139,9 +139,12 @@ async def run_outcomes(summary: Summary) -> None:
 # still cut off at the end of it plus a grace period, so one stuck run cannot hold the command.
 MAX_ANALYSIS_SECONDS = 2400
 ANALYSIS_GRACE_SECONDS = 300
-# The command ends at most MAX_ANALYSIS_SECONDS + ANALYSIS_GRACE_SECONDS = 2700 s after it started
-# (snapshots and outcomes are inside the budget), well under LOCK_SECONDS = 3600.
+# The analysis step ends at most MAX_ANALYSIS_SECONDS + ANALYSIS_GRACE_SECONDS = 2700 s after the
+# command started (snapshots and outcomes are inside the budget). The notify step runs after it and
+# starts no new user later than NOTIFY_CUTOFF_SECONDS = LOCK_SECONDS - 300 = 3300 s after the start;
+# one user's message takes seconds, so the command ends well under LOCK_SECONDS = 3600.
 LOCK_SECONDS = 3600
+NOTIFY_CUTOFF_SECONDS = LOCK_SECONDS - 300
 ANALYSIS_LOCK_KEY = "scheduled:analysis-step"
 # A same-day marker outlives the UTC day (25 h) so a late retry cannot slip past it.
 RAN_MARKER_SECONDS = 90000
@@ -292,9 +295,12 @@ async def _analyze_all(summary: Summary, now: datetime, started: float) -> None:
         logger.warning("Analysis: %d users not reached, budget used up", not_reached)
 
 
-async def run_notify(summary: Summary, now: datetime | None = None) -> None:
+async def run_notify(
+    summary: Summary, now: datetime | None = None, started: float | None = None
+) -> None:
     """Weekday Telegram messages. Never raises and never changes the exit code: a Telegram problem
-    is counted and logged by user id and class name only."""
+    is counted and logged by user id and class name only. `started` is the command's start on the
+    monotonic clock; no new user is started after NOTIFY_CUTOFF_SECONDS from it."""
     now = now or datetime.now(UTC)
     if now.weekday() >= 5:
         logger.info("Notify: weekend, nothing to do")
@@ -303,7 +309,13 @@ async def run_notify(summary: Summary, now: datetime | None = None) -> None:
     if bot is None:
         logger.info("Notify: Telegram is not set up, nothing to do")
         return
+    started = time.monotonic() if started is None else started
+    not_reached = 0
     for user_id in active_user_ids():
+        if time.monotonic() - started > NOTIFY_CUTOFF_SECONDS:
+            summary.notify_skipped += 1
+            not_reached += 1
+            continue
         try:
             outcome = await notify_user(user_id, now, bot)
         except Exception as exc:
@@ -317,6 +329,8 @@ async def run_notify(summary: Summary, now: datetime | None = None) -> None:
         else:  # skipped, or blocked (the link is now marked and not retried)
             summary.notify_skipped += 1
         logger.info("Notify user %s: %s", user_id, outcome)
+    if not_reached:
+        logger.warning("Notify: %d users not reached, time budget used up", not_reached)
 
 
 COMMANDS = ("daily", "snapshots", "outcomes", "analysis", "notify")
@@ -345,7 +359,7 @@ async def run_command(command: str) -> int:
         if command in ("daily", "analysis"):
             await run_analysis(summary, started=started)
         if command in ("daily", "notify"):
-            await run_notify(summary)
+            await run_notify(summary, started=started)
         logger.info("Scheduled %s done: %s", command, summary.line())
     except Exception as exc:
         # class name only: exception text can carry connection strings

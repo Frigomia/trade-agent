@@ -2,13 +2,14 @@ import asyncio
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 import app.redis_client as redis_client_module
 from app import notify
 from app.models import Holding, Recommendation, TelegramLink, WatchlistItem
 from app.redis_client import get_redis
-from app.telegram import TelegramBlocked, TelegramError
+from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUncertain
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 MONDAY = datetime(2026, 10, 5, 6, 0, tzinfo=UTC)
@@ -269,3 +270,53 @@ def test_a_closed_position_is_not_checked(env):
     env.commit()
     outcome, _ = _notify(quotes=_quotes({"OLD": [100.0, 50.0]}))
     assert outcome == "skipped"
+
+
+def test_an_uncertain_send_keeps_the_marker_so_a_rerun_cannot_send_twice(env):
+    _user(env)
+    _seed_day(env)
+    outcome, _ = _notify(bot=FakeBot(TelegramUncertain("x")), quotes=_quotes(QUOTES))
+    assert outcome == "failed"
+    assert _arun(get_redis().exists(f"telegram:sent:{USER_ID}:2026-10-05")) == 1
+    again, bot = _notify(quotes=_quotes(QUOTES))
+    assert (again, bot.sent) == ("skipped", [])
+
+
+def _real_bot(handler):
+    return TelegramBot("123:tok", transport=httpx.MockTransport(handler))
+
+
+def test_a_read_timeout_from_the_transport_keeps_the_marker(env):
+    _user(env)
+    _seed_day(env)
+
+    def handler(request):
+        raise httpx.ReadTimeout("slow")
+
+    outcome, _ = _notify(bot=_real_bot(handler), quotes=_quotes(QUOTES))
+    assert outcome == "failed"
+    again, bot = _notify(quotes=_quotes(QUOTES))
+    assert (again, bot.sent) == ("skipped", [])
+
+
+@pytest.mark.parametrize("failure", [429, 500, "connect"])
+def test_a_definite_failure_clears_the_marker_so_a_retry_sends(env, failure):
+    _user(env)
+    _seed_day(env)
+
+    def handler(request):
+        if failure == "connect":
+            raise httpx.ConnectError("down")
+        return httpx.Response(failure, json={})
+
+    outcome, _ = _notify(bot=_real_bot(handler), quotes=_quotes(QUOTES))
+    assert outcome == "failed"
+    retry, bot = _notify(quotes=_quotes(QUOTES))
+    assert (retry, len(bot.sent)) == ("sent", 1)
+
+
+def test_a_move_of_exactly_the_threshold_is_included(env):
+    _user(env, move_threshold_pct=5.0)
+    _hold(env, USER_ID, "AAPL")
+    outcome, bot = _notify(quotes=_quotes({"AAPL": [110.0, 104.5]}))
+    assert (outcome, bot.sent) == ("sent", [(1001, f"Moved: AAPL -5.0%\n{FOOT}")])

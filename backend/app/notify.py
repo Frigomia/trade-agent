@@ -15,7 +15,7 @@ from app.agents.market_data import fetch_quote_and_history
 from app.config import settings
 from app.models import AppUser, Recommendation, TelegramLink
 from app.redis_client import get_redis
-from app.telegram import TelegramBlocked, TelegramBot, TelegramError
+from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUncertain
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,8 @@ async def _moves(tickers: list[str], threshold: float) -> list[tuple[str, float]
         if len(closes) < 2 or not closes[-2]:
             return None
         change = (closes[-1] - closes[-2]) / closes[-2] * 100
-        return (ticker, change) if abs(change) >= threshold else None
+        # rounded so a move of exactly the threshold is not lost to float error
+        return (ticker, change) if round(abs(change), 6) >= threshold else None
 
     # dict.fromkeys drops duplicate tickers but keeps the order
     found = await asyncio.gather(*(one(t) for t in dict.fromkeys(tickers)))
@@ -112,6 +113,10 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
             db.query(TelegramLink).filter_by(user_id=user_id).update({"status": "blocked"})
             db.commit()
         return "blocked"
+    except TelegramUncertain:
+        # A timeout or a dropped connection: Telegram may have delivered it. Keep the marker so a
+        # re-run the same day cannot send a second message.
+        return "failed"
     except TelegramError:
         await redis.delete(marker)  # nothing was delivered, so a retry may still send
         return "failed"

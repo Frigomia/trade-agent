@@ -1209,3 +1209,53 @@ def test_notify_does_nothing_without_a_bot(env):
         asyncio.run(scheduled.run_notify(summary, now=MONDAY))
     redis_client_module._redis = None
     assert (summary.notify_sent, summary.notify_failures, summary.notify_skipped) == (0, 0, 0)
+
+
+def test_run_notify_survives_one_user_raising_and_keeps_the_exit_code(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    real = scheduled.notify_user
+    calls = []
+
+    async def flaky(user_id, now, bot):
+        calls.append(user_id)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        return await real(user_id, now, bot)
+
+    with patch("app.scheduled.notify_user", flaky):
+        summary = _run_notify(_Bot())
+    assert (summary.notify_failures, summary.notify_sent, len(calls)) == (1, 1, 2)
+    with (
+        patch("app.scheduled.notify_user", AsyncMock(side_effect=RuntimeError("boom"))),
+        patch("app.telegram.get_bot", return_value=_Bot()),
+        patch("app.scheduled.datetime") as clock,
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("notify")) == 0
+
+
+def test_run_notify_logs_no_chat_id_text_or_token(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    bot = _Bot()
+    with caplog.at_level(logging.DEBUG):
+        summary = _run_notify(bot)
+    assert summary.notify_sent == 1
+    assert "1001" not in caplog.text and "MSFT" not in caplog.text
+    assert "Advisory only" not in caplog.text and "SECRET" not in caplog.text
+
+
+def test_run_notify_stops_starting_users_after_the_time_cap(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    bot = _Bot()
+    with (
+        patch("app.scheduled.NOTIFY_CUTOFF_SECONDS", 0),
+        patch("app.telegram.get_bot", return_value=bot),
+        caplog.at_level(logging.WARNING),
+    ):
+        summary = scheduled.Summary()
+        asyncio.run(scheduled.run_notify(summary, now=MONDAY, started=time.monotonic() - 5))
+    redis_client_module._redis = None
+    assert (bot.sent, summary.notify_skipped, summary.notify_sent) == ([], 2, 0)
+    assert caplog.text.count("2 users not reached") == 1

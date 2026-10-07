@@ -42,6 +42,20 @@ class TelegramBlocked(TelegramError):
     """The person blocked the bot, or the chat no longer exists: stop sending to it."""
 
 
+class TelegramUncertain(TelegramError):
+    """The request may have been delivered (a timeout or a dropped connection after sending):
+    a caller that must not send twice keeps its marker."""
+
+
+# Failures after which Telegram may already have the message.
+_MAYBE_DELIVERED = (
+    httpx.TimeoutException,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.RemoteProtocolError,
+)
+
+
 class TelegramBot:
     def __init__(self, token: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self._base = f"https://api.telegram.org/bot{token}"
@@ -49,6 +63,7 @@ class TelegramBot:
 
     async def _post(self, method: str, payload: dict[str, object]) -> None:
         failure: str | None = None
+        uncertain = False
         try:
             async with httpx.AsyncClient(
                 timeout=REQUEST_TIMEOUT_SECONDS, transport=self._transport
@@ -56,9 +71,16 @@ class TelegramBot:
                 response = await client.post(f"{self._base}/{method}", json=payload)
         except (httpx.HTTPError, httpx.InvalidURL) as exc:
             failure = type(exc).__name__
+            # The request may have reached Telegram before this failed; a connect timeout and a
+            # connect error mean it did not.
+            uncertain = isinstance(exc, _MAYBE_DELIVERED) and not isinstance(
+                exc, httpx.ConnectTimeout
+            )
         if failure is not None:
             # Raised outside the except block so the httpx exception is not left in __context__.
             logger.warning("Telegram %s failed: %s", method, failure)
+            if uncertain:
+                raise TelegramUncertain("Telegram may have received the request")
             raise TelegramError("Could not reach Telegram")
         if response.is_success:
             return
