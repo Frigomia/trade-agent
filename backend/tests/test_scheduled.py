@@ -16,10 +16,12 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     UserApiKey,
     WatchlistItem,
 )
 from app.redis_client import get_redis
+from app.telegram import TelegramError
 from app.usage import UsageLimitExceeded, _usage_key
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
@@ -244,10 +246,14 @@ def test_summary_line_lists_every_counter():
         analysis_runs=5,
         analysis_skipped=6,
         analysis_failures=7,
+        notify_sent=8,
+        notify_skipped=9,
+        notify_failures=10,
     ).line()
     assert line == (
         "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0 "
-        "analysis_runs=5 analysis_skipped=6 analysis_failures=7"
+        "analysis_runs=5 analysis_skipped=6 analysis_failures=7 "
+        "notify_sent=8 notify_skipped=9 notify_failures=10"
     )
 
 
@@ -412,22 +418,24 @@ def test_outcomes_still_run_after_a_snapshot_failure(env):
     assert env.query(Recommendation).one().outcome_evaluated_at is not None
 
 
-def test_daily_runs_snapshots_then_outcomes_then_analysis():
+def test_daily_runs_snapshots_then_outcomes_then_analysis_then_notify():
     parent = Mock()
     parent.attach_mock(AsyncMock(), "snapshots")
     parent.attach_mock(AsyncMock(), "outcomes")
     parent.attach_mock(AsyncMock(), "analysis")
+    parent.attach_mock(AsyncMock(), "notify")
     with (
         patch("app.scheduled.run_snapshots", parent.snapshots),
         patch("app.scheduled.run_outcomes", parent.outcomes),
-        # Unpatched, this step queries the database on weekdays (and does nothing on weekends), so
+        # Unpatched, these steps query the database on weekdays (and do nothing on weekends), so
         # the test would depend on the day it runs.
         patch("app.scheduled.run_analysis", parent.analysis),
+        patch("app.scheduled.run_notify", parent.notify),
     ):
         assert _arun(scheduled.run_command("daily")) == 0
 
     names = [c[0] for c in parent.mock_calls]
-    assert names == ["snapshots", "outcomes", "analysis"]
+    assert names == ["snapshots", "outcomes", "analysis", "notify"]
 
 
 def test_the_lock_has_a_ttl_while_the_run_is_in_progress():
@@ -849,7 +857,7 @@ def test_a_second_analysis_while_the_step_lock_is_held_does_nothing(env, caplog)
         summary, holder = _arun(go())
     graph.assert_not_awaited()
     assert holder == "someone-else"  # not ours to release
-    assert summary.line().endswith("analysis_runs=0 analysis_skipped=0 analysis_failures=0")
+    assert "analysis_runs=0 analysis_skipped=0 analysis_failures=0" in summary.line()
     assert "another analysis run is in progress" in caplog.text
     assert _usage(USER_ID) is None
 
@@ -1130,3 +1138,74 @@ def test_an_unhandled_ticker_error_is_logged_by_class_name_only(caplog):
     assert "Unhandled error in _process_ticker (RuntimeError)" in caplog.text
     assert "secret-key-material" not in caplog.text
     assert "Traceback" not in caplog.text
+
+
+SATURDAY = datetime(2026, 10, 10, 6, 0, tzinfo=UTC)
+
+
+class _Bot:
+    def __init__(self, fail_chats=()):
+        self.sent, self.fail_chats = [], set(fail_chats)
+
+    async def send_message(self, chat_id, text):
+        if chat_id in self.fail_chats:
+            raise TelegramError("x")
+        self.sent.append(chat_id)
+
+
+def _linked(db, user_id, chat_id, ticker):
+    add_app_user(db, user_id)
+    db.add(TelegramLink(user_id=user_id, chat_id=chat_id))
+    db.add(
+        Recommendation(
+            user_id=user_id,
+            ticker=ticker,
+            asset_type="STOCK",
+            action="ADD",
+            reasoning=["x"],
+            source="scheduled",
+            created_at=MONDAY.replace(tzinfo=None),
+        )
+    )
+    db.commit()
+
+
+def _run_notify(bot, now=MONDAY):
+    summary = scheduled.Summary()
+    with patch("app.telegram.get_bot", return_value=bot):
+        asyncio.run(scheduled.run_notify(summary, now=now))
+    redis_client_module._redis = None
+    return summary
+
+
+def test_run_notify_counts_sends_and_failures(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _linked(env, OTHER_USER_ID, 1002, "TSLA")
+    summary = _run_notify(_Bot(fail_chats={1002}))
+    assert (summary.notify_sent, summary.notify_failures, summary.notify_skipped) == (1, 1, 0)
+
+
+def test_notify_failures_never_change_the_exit_code(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    with (
+        patch("app.telegram.get_bot", return_value=_Bot(fail_chats={1001})),
+        patch("app.scheduled.datetime") as clock,
+    ):
+        clock.now.return_value = MONDAY
+        assert _arun(scheduled.run_command("notify")) == 0
+
+
+def test_notify_does_nothing_at_the_weekend(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    bot = _Bot()
+    summary = _run_notify(bot, now=SATURDAY)
+    assert (bot.sent, summary.notify_sent) == ([], 0)
+
+
+def test_notify_does_nothing_without_a_bot(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+    summary = scheduled.Summary()
+    with patch("app.telegram.get_bot", return_value=None):
+        asyncio.run(scheduled.run_notify(summary, now=MONDAY))
+    redis_client_module._redis = None
+    assert (summary.notify_sent, summary.notify_failures, summary.notify_skipped) == (0, 0, 0)

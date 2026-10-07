@@ -11,13 +11,14 @@ from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
-from app import claude_keys
+from app import claude_keys, telegram
 from app import db as app_db
 from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.memory.outcomes import evaluate_due_outcomes
 from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot
+from app.notify import notify_user
 from app.redis_client import get_redis
 from app.snapshots import record_snapshot
 from app.usage import (
@@ -43,6 +44,9 @@ class Summary:
     analysis_runs: int = 0
     analysis_skipped: int = 0
     analysis_failures: int = 0
+    notify_sent: int = 0
+    notify_skipped: int = 0
+    notify_failures: int = 0
 
     def line(self) -> str:
         return (
@@ -50,7 +54,8 @@ class Summary:
             f"snapshots_skipped={self.snapshots_skipped} "
             f"outcomes_evaluated={self.outcomes_evaluated} failures={self.failures} "
             f"analysis_runs={self.analysis_runs} analysis_skipped={self.analysis_skipped} "
-            f"analysis_failures={self.analysis_failures}"
+            f"analysis_failures={self.analysis_failures} notify_sent={self.notify_sent} "
+            f"notify_skipped={self.notify_skipped} notify_failures={self.notify_failures}"
         )
 
 
@@ -287,7 +292,34 @@ async def _analyze_all(summary: Summary, now: datetime, started: float) -> None:
         logger.warning("Analysis: %d users not reached, budget used up", not_reached)
 
 
-COMMANDS = ("daily", "snapshots", "outcomes", "analysis")
+async def run_notify(summary: Summary, now: datetime | None = None) -> None:
+    """Weekday Telegram messages. Never raises and never changes the exit code: a Telegram problem
+    is counted and logged by user id and class name only."""
+    now = now or datetime.now(UTC)
+    if now.weekday() >= 5:
+        logger.info("Notify: weekend, nothing to do")
+        return
+    bot = telegram.get_bot()
+    if bot is None:
+        logger.info("Notify: Telegram is not set up, nothing to do")
+        return
+    for user_id in active_user_ids():
+        try:
+            outcome = await notify_user(user_id, now, bot)
+        except Exception as exc:
+            summary.notify_failures += 1
+            logger.warning("Notify failed for user %s: %s", user_id, type(exc).__name__)
+            continue
+        if outcome == "sent":
+            summary.notify_sent += 1
+        elif outcome == "failed":
+            summary.notify_failures += 1
+        else:  # skipped, or blocked (the link is now marked and not retried)
+            summary.notify_skipped += 1
+        logger.info("Notify user %s: %s", user_id, outcome)
+
+
+COMMANDS = ("daily", "snapshots", "outcomes", "analysis", "notify")
 
 
 async def run_command(command: str) -> int:
@@ -312,6 +344,8 @@ async def run_command(command: str) -> int:
             await run_outcomes(summary)
         if command in ("daily", "analysis"):
             await run_analysis(summary, started=started)
+        if command in ("daily", "notify"):
+            await run_notify(summary)
         logger.info("Scheduled %s done: %s", command, summary.line())
     except Exception as exc:
         # class name only: exception text can carry connection strings
