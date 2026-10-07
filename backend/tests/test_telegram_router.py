@@ -106,3 +106,15 @@ def test_delete_forgets_the_chat_mapping(client, configured, db_session):
     redis_client_module._redis = None  # the request made a new one on the client's own loop
     assert asyncio.run(telegram.user_for_chat(5005)) is None
     redis_client_module._redis = None
+
+
+def test_a_linked_user_without_a_bot_username_can_still_see_and_remove_the_link(
+    client, db_session, monkeypatch
+):
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", "123:abc")
+    monkeypatch.setattr(telegram.settings, "telegram_bot_username", None)
+    _link(db_session)
+    body = client.get("/me/telegram").json()
+    assert (body["linked"], body["configured"]) == (True, False)
+    assert client.delete("/me/telegram").status_code == 204
+    assert client.get("/me/telegram").json()["linked"] is False

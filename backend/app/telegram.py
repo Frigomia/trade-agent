@@ -53,6 +53,7 @@ _MAYBE_DELIVERED = (
     httpx.ReadError,
     httpx.WriteError,
     httpx.RemoteProtocolError,
+    httpx.DecodingError,  # a response arrived but could not be read: Telegram did get the request
 )
 
 
@@ -71,10 +72,10 @@ class TelegramBot:
                 response = await client.post(f"{self._base}/{method}", json=payload)
         except (httpx.HTTPError, httpx.InvalidURL) as exc:
             failure = type(exc).__name__
-            # The request may have reached Telegram before this failed; a connect timeout and a
-            # connect error mean it did not.
+            # The request may have reached Telegram before this failed; a connect timeout, a pool
+            # timeout and a connect error mean it did not.
             uncertain = isinstance(exc, _MAYBE_DELIVERED) and not isinstance(
-                exc, httpx.ConnectTimeout
+                exc, (httpx.ConnectTimeout, httpx.PoolTimeout)
             )
         if failure is not None:
             # Raised outside the except block so the httpx exception is not left in __context__.
@@ -140,6 +141,17 @@ async def user_for_chat(chat_id: int) -> uuid.UUID | None:
 
 async def forget_chat(chat_id: int) -> None:
     await get_redis().delete(f"telegram:chat:{chat_id}")
+
+
+async def forget_chat_quietly(chat_id: int | None) -> None:
+    """Best-effort cleanup that must never fail its caller (a deletion, a relink): a Redis
+    problem is logged by class name only."""
+    if chat_id is None:
+        return
+    try:
+        await forget_chat(chat_id)
+    except Exception as exc:
+        logger.warning("Telegram: could not forget a chat mapping (%s)", type(exc).__name__)
 
 
 def main(argv: list[str] | None = None) -> int:

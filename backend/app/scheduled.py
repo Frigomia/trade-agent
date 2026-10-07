@@ -145,6 +145,10 @@ ANALYSIS_GRACE_SECONDS = 300
 # one user's message takes seconds, so the command ends well under LOCK_SECONDS = 3600.
 LOCK_SECONDS = 3600
 NOTIFY_CUTOFF_SECONDS = LOCK_SECONDS - 300
+# One person's message (quote lookups plus the send) may not take longer than this, so one stuck
+# person cannot hold the others. A cut-off before the send leaves no marker; during the send the
+# marker stays (the message may have gone out, so it is not retried today).
+NOTIFY_USER_SECONDS = 120
 ANALYSIS_LOCK_KEY = "scheduled:analysis-step"
 # A same-day marker outlives the UTC day (25 h) so a late retry cannot slip past it.
 RAN_MARKER_SECONDS = 90000
@@ -232,27 +236,29 @@ async def _analyze_user(
 
 async def run_analysis(
     summary: Summary, now: datetime | None = None, started: float | None = None
-) -> None:
+) -> bool:
     """Opt-in weekday analysis (Monday to Friday, UTC). A user's failure is counted and logged by
     id and class name; the others still run. `started` is the command's start on the monotonic
     clock (the time budget counts from there); it defaults to now.
 
     Takes its own lock, shared by `daily` and `analysis`, so two commands never analyze (and charge
-    people's keys) at the same time."""
+    people's keys) at the same time. Returns False only when another run holds that lock (this one
+    did not do its pass); True otherwise, a weekend included."""
     now = now or datetime.now(UTC)
     started = time.monotonic() if started is None else started
     if now.weekday() >= 5:
         logger.info("Analysis: weekend, nothing to do")
-        return
+        return True
     redis = get_redis()
     token = uuid.uuid4().hex
     if not await redis.set(ANALYSIS_LOCK_KEY, token, nx=True, ex=LOCK_SECONDS):
         logger.warning("Analysis: another analysis run is in progress, nothing to do")
-        return
+        return False
     try:
         await _analyze_all(summary, now, started)
     finally:
         await _release_lock(redis, ANALYSIS_LOCK_KEY, token, "Analysis")
+    return True
 
 
 async def _analyze_all(summary: Summary, now: datetime, started: float) -> None:
@@ -317,7 +323,8 @@ async def run_notify(
             not_reached += 1
             continue
         try:
-            outcome = await notify_user(user_id, now, bot)
+            async with asyncio.timeout(NOTIFY_USER_SECONDS):
+                outcome = await notify_user(user_id, now, bot)
         except Exception as exc:
             summary.notify_failures += 1
             logger.warning("Notify failed for user %s: %s", user_id, type(exc).__name__)
@@ -356,9 +363,15 @@ async def run_command(command: str) -> int:
             await run_snapshots(summary)
         if command in ("daily", "outcomes"):
             await run_outcomes(summary)
+        analysis_ran = True
         if command in ("daily", "analysis"):
-            await run_analysis(summary, started=started)
-        if command in ("daily", "notify"):
+            analysis_ran = await run_analysis(summary, started=started)
+        if command == "daily" and not analysis_ran:
+            logger.warning(
+                "Notify: the analysis is still running elsewhere, skipping so the digest is "
+                "not incomplete"
+            )
+        elif command in ("daily", "notify"):
             await run_notify(summary, started=started)
         logger.info("Scheduled %s done: %s", command, summary.line())
     except Exception as exc:

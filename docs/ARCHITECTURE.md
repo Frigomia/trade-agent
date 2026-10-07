@@ -305,7 +305,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
 | DELETE | `/me/claude-key` | — | Removes it (`204`, safe to repeat) |
-| GET | `/me/telegram` | — | `{configured, linked, bot_username, status?, digest_enabled?, moves_enabled?, move_threshold_pct?}`; never the chat id. `configured` is true only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` are set |
+| GET | `/me/telegram` | — | `{configured, linked, bot_username, status?, digest_enabled?, moves_enabled?, move_threshold_pct?}`; never the chat id. `configured` is true only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` are set; the notify step and the webhook need only the token, so a linked person can see `linked: true, configured: false` and the app still offers Disconnect |
 | POST | `/me/telegram/link` | — | Creates a one-time code (22 URL-safe characters, 128 bits, 10 minutes, stored in Redis as `telegram:link:<code>`) and returns `{url, expires_in}`, where `url` is `https://t.me/<bot>?start=<code>`. `503` when Telegram is not set up; 10 requests a minute per user |
 | PATCH | `/me/telegram` | `{digest_enabled?, moves_enabled?, move_threshold_pct?}` | Updates the settings that were sent (an explicit `null` is ignored); `move_threshold_pct` is 1 to 50; `404` when not connected |
 | DELETE | `/me/telegram` | — | Disconnects: deletes the row and the Redis chat mapping (`204`, safe to repeat) |
@@ -325,7 +325,7 @@ middleware); a larger one, declared by `Content-Length` or streamed, gets `413
 {"detail": "Request body too large."}` before it is buffered or parsed, and `GET`/`HEAD`
 are untouched. Responses under `/portfolio` and `GET /me/export` carry `Cache-Control: no-store`.
 
-Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
+Every route except `/health` and `POST /telegram/webhook` (public, checked by its secret header instead, see below) requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
 Admin routes return `403` to non-admins; `404` for an unknown user id; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for any address whose Supabase user is already confirmed is `409`, not `502` (most commonly an invitee who clicked the link but has not accepted the terms yet; on a fresh invite with no `app_users` row it means "already registered"). If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when no `app_users` row exists for that Supabase id or that address; otherwise it returns `409` and deletes nothing. If the insert fails for any other reason, the original error is re-raised (a `500`) after that compensation. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
 
@@ -623,7 +623,16 @@ default — same dialect and models as production, started with
   `parse_mode`, so nothing can be read as markup) and carries only tickers, actions and
   percentages: never amounts, share counts, portfolio values, reasoning or the person's notes.
   When both lines would be empty nothing is sent and the person is counted as skipped. Quotes are
-  fetched 5 at a time; a ticker whose quote fails only drops out of the message.
+  fetched 5 at a time; a ticker whose quote fails only drops out of the message. "Moved" compares
+  the last two closes the quote source returns, so on the day after a market holiday the same move
+  can be reported again, and if the job runs after the market has opened the last bar may be a
+  partial day. Fixing that needs dates from the quote source and is not done.
+  Each person's step is cut off after `NOTIFY_USER_SECONDS` = 120 (`asyncio.timeout`) and counted
+  as a notify failure, logged by user id and class name: a cut-off during the quote phase leaves no
+  marker, one during the send keeps it (the message may have gone out, so it is not retried today).
+  `daily` skips this whole step, with one warning, when the analysis step did not run because
+  another analysis holds `scheduled:analysis-step`, so the digest is never built from an incomplete
+  analysis; the standalone `notify` command is unaffected.
   A per-user per-day marker, the Redis key `telegram:sent:<user_id>:<YYYY-MM-DD>` (UTC, 25 h
   expiry, set with `NX` just before sending), makes a same-day re-run send nothing a second time.
   The rule when a send fails: a definite non-delivery (Telegram refused it, or the connection could
@@ -650,7 +659,14 @@ default — same dialect and models as production, started with
   `telegram_links` table returns zero rows, so the link cannot be looked up by `chat_id`. The
   mapping gives the user id; the webhook then opens that user's own `scoped_session` and deletes
   only the row that holds this chat id. A stale mapping (no matching row) is forgotten and answered
-  with "not connected".
+  with "not connected". When a person deletes their data or an admin removes them, the chat id is
+  read inside the deletion's own session and the mapping is forgotten afterwards, best effort: a
+  Redis failure is logged by class name and never fails the deletion. A link code is refused (the
+  same "expired" answer) when its account was removed or is not `active`. On a relink the new
+  mapping is written first and the old chat's is forgotten best effort. A blocked update names the
+  chat that failed, so a person who relinked meanwhile keeps the new link `ok`. The bot answers a
+  chat at most once every 2 seconds (`telegram:reply:<chat_id>`, `SET NX EX 2`); commands are still
+  processed, only the reply is skipped.
 
   Telegram security notes: the bot token is part of every Bot API URL and httpx logs request URLs
   at INFO, so `app/telegram.py` sets the `httpx` and `httpcore` loggers to WARNING when it is

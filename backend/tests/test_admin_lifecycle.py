@@ -1,11 +1,14 @@
+import asyncio
 import uuid
+from unittest.mock import patch
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
-from app import rls
+import app.redis_client as redis_client_module
+from app import rls, telegram
 from app.db import Base
-from app.models import AppUser
+from app.models import AppUser, TelegramLink
 from app.user_data import delete_user_data
 from tests.auth_support import (
     ADMIN_ID,
@@ -234,4 +237,60 @@ def test_remove_deletes_data_written_between_the_two_passes(
     assert _remove(admin_client, USER_ID, "target@example.com").status_code == 204
 
     assert _count(engine, "holdings", USER_ID) == 0
+    assert _row(db_session, USER_ID) is None
+
+
+def _redis_run(coro_fn):
+    # The cached Redis client is bound to one event loop: drop it before and after each run.
+    redis_client_module._redis = None
+    try:
+        return asyncio.run(coro_fn())
+    finally:
+        redis_client_module._redis = None
+
+
+def test_remove_forgets_the_targets_chat_mapping_only(admin_client, db_session, fake_supabase):
+    add_app_user(db_session, USER_ID, status="active", email="target@example.com")
+    add_app_user(db_session, OTHER_USER_ID, status="active")
+    db_session.add_all(
+        [
+            TelegramLink(user_id=USER_ID, chat_id=5005),
+            TelegramLink(user_id=OTHER_USER_ID, chat_id=6006),
+        ]
+    )
+    db_session.commit()
+    _redis_run(lambda: telegram.remember_chat(5005, USER_ID))
+    _redis_run(lambda: telegram.remember_chat(6006, OTHER_USER_ID))
+
+    assert _remove(admin_client, USER_ID, "target@example.com").status_code == 204
+
+    assert _redis_run(lambda: telegram.user_for_chat(5005)) is None
+    assert _redis_run(lambda: telegram.user_for_chat(6006)) == OTHER_USER_ID
+
+
+def test_a_failed_remove_still_forgets_the_chat_mapping(admin_client, db_session, fake_supabase):
+    add_app_user(db_session, USER_ID, status="active", email="target@example.com")
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=5005))
+    db_session.commit()
+    _redis_run(lambda: telegram.remember_chat(5005, USER_ID))
+    fake_supabase.fail_on.add("delete")
+
+    assert _remove(admin_client, USER_ID, "target@example.com").status_code == 502
+
+    # The link row is gone already, so a retry could not find the chat id again.
+    assert _redis_run(lambda: telegram.user_for_chat(5005)) is None
+
+
+def test_a_redis_failure_does_not_fail_remove(admin_client, db_session, fake_supabase):
+    add_app_user(db_session, USER_ID, status="active", email="target@example.com")
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=5005))
+    db_session.commit()
+
+    async def broken(chat_id):
+        raise ConnectionError("redis down")
+
+    with patch("app.telegram.forget_chat", broken):
+        response = _remove(admin_client, USER_ID, "target@example.com")
+
+    assert response.status_code == 204
     assert _row(db_session, USER_ID) is None

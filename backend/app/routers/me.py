@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.concurrency import run_in_threadpool
 
-from app import usage
+from app import telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
 from app.db import get_session_factory
@@ -134,10 +135,12 @@ def export_data(
 
 
 @active_router.delete("/data", status_code=204)
-def delete_my_data(
+async def delete_my_data(
     payload: DataDeleteIn,
     user: CurrentUser = Depends(get_current_user),
     factory: sessionmaker[Session] = Depends(get_session_factory),
 ) -> Response:
-    delete_user_data(factory, user.id)
+    chat_id = await run_in_threadpool(delete_user_data, factory, user.id)
+    # After the data is gone; a Redis failure here must not fail the deletion.
+    await telegram.forget_chat_quietly(chat_id)
     return Response(status_code=204)

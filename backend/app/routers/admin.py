@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from app import usage
+from app import telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_user_db, require_admin
 from app.auth.supabase_admin import SupabaseAdmin, get_supabase_admin
@@ -135,7 +135,7 @@ def write_limit_defaults(
 
 
 @router.delete("/users/{user_id}", status_code=204)
-def remove_user(
+async def remove_user(
     user_id: uuid.UUID,
     payload: RemoveIn,
     admin: CurrentUser = Depends(require_admin),
@@ -143,5 +143,21 @@ def remove_user(
     supabase: SupabaseAdmin = Depends(get_supabase_admin),
     factory: sessionmaker[Session] = Depends(get_session_factory),
 ) -> Response:
-    service.remove_user(db, supabase, factory, user_id, payload.confirm_email, admin.id)
+    chat_ids: list[int] = []
+    try:
+        await run_in_threadpool(
+            service.remove_user,
+            db,
+            supabase,
+            factory,
+            user_id,
+            payload.confirm_email,
+            admin.id,
+            chat_ids,
+        )
+    finally:
+        # Also when a later step failed: the link rows are already gone, so a retry would not
+        # find the chat id again.
+        for chat_id in chat_ids:
+            await telegram.forget_chat_quietly(chat_id)
     return Response(status_code=204)

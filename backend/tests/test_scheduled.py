@@ -422,7 +422,7 @@ def test_daily_runs_snapshots_then_outcomes_then_analysis_then_notify():
     parent = Mock()
     parent.attach_mock(AsyncMock(), "snapshots")
     parent.attach_mock(AsyncMock(), "outcomes")
-    parent.attach_mock(AsyncMock(), "analysis")
+    parent.attach_mock(AsyncMock(return_value=True), "analysis")
     parent.attach_mock(AsyncMock(), "notify")
     with (
         patch("app.scheduled.run_snapshots", parent.snapshots),
@@ -1259,3 +1259,79 @@ def test_run_notify_stops_starting_users_after_the_time_cap(env, caplog):
     redis_client_module._redis = None
     assert (bot.sent, summary.notify_skipped, summary.notify_sent) == ([], 2, 0)
     assert caplog.text.count("2 users not reached") == 1
+
+
+def test_run_notify_cuts_off_a_slow_user_before_the_send_and_leaves_no_marker(env, caplog):
+    _linked(env, USER_ID, 1001, "MSFT")
+    _holding(env, USER_ID, "AAPL")
+    bot = _Bot()
+
+    async def slow_quote(ticker):
+        await asyncio.sleep(5)
+        return {"price": 1.0, "closes": []}
+
+    with (
+        patch("app.scheduled.NOTIFY_USER_SECONDS", 0.05),
+        patch("app.notify.fetch_quote_and_history", slow_quote),
+        caplog.at_level(logging.WARNING),
+    ):
+        summary = _run_notify(bot)
+    assert (summary.notify_failures, summary.notify_sent, bot.sent) == (1, 0, [])
+    assert f"Notify failed for user {USER_ID}: TimeoutError" in caplog.text
+    assert _arun(get_redis().keys("telegram:sent:*")) == []
+
+
+def test_run_notify_keeps_the_marker_when_the_cut_off_hits_during_the_send(env):
+    _linked(env, USER_ID, 1001, "MSFT")
+
+    class SlowBot:
+        async def send_message(self, chat_id, text):
+            await asyncio.sleep(5)
+
+    with patch("app.scheduled.NOTIFY_USER_SECONDS", 0.05):
+        summary = _run_notify(SlowBot())
+    assert summary.notify_failures == 1
+    assert len(_arun(get_redis().keys("telegram:sent:*"))) == 1
+
+
+def test_run_analysis_returns_false_only_when_another_run_holds_the_lock(env):
+    summary = scheduled.Summary()
+    assert _arun(scheduled.run_analysis(summary, now=SATURDAY)) is True  # weekend: normal no-op
+    assert _arun(scheduled.run_analysis(summary, now=MONDAY)) is True
+    _arun(get_redis().set(scheduled.ANALYSIS_LOCK_KEY, "someone-else"))
+    assert _arun(scheduled.run_analysis(summary, now=MONDAY)) is False
+
+
+def _run_daily(analysis_result):
+    with (
+        patch("app.scheduled.run_snapshots", AsyncMock()),
+        patch("app.scheduled.run_outcomes", AsyncMock()),
+        patch("app.scheduled.run_analysis", AsyncMock(return_value=analysis_result)),
+        patch("app.scheduled.run_notify", AsyncMock()) as notify,
+    ):
+        code = _arun(scheduled.run_command("daily"))
+    return code, notify
+
+
+def test_daily_skips_notify_when_the_analysis_ran_elsewhere(env, caplog):
+    with caplog.at_level(logging.WARNING):
+        code, notify = _run_daily(False)
+    assert code == 0
+    notify.assert_not_called()
+    assert "the analysis is still running elsewhere, skipping" in caplog.text
+
+
+def test_daily_runs_notify_after_an_analysis_that_ran(env):
+    code, notify = _run_daily(True)
+    assert code == 0
+    notify.assert_called_once()
+
+
+def test_the_standalone_notify_command_does_not_look_at_the_analysis(env):
+    with (
+        patch("app.scheduled.run_analysis", AsyncMock(return_value=False)) as analysis,
+        patch("app.scheduled.run_notify", AsyncMock()) as notify,
+    ):
+        assert _arun(scheduled.run_command("notify")) == 0
+    analysis.assert_not_called()
+    notify.assert_called_once()

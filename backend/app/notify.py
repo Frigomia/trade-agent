@@ -110,7 +110,10 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
     except TelegramBlocked:
         await redis.delete(marker)
         with app_db.scoped_session(user_id) as db:
-            db.query(TelegramLink).filter_by(user_id=user_id).update({"status": "blocked"})
+            # Only the chat that failed: the person may have relinked to a new chat meanwhile.
+            db.query(TelegramLink).filter_by(user_id=user_id, chat_id=chat_id).update(
+                {"status": "blocked"}
+            )
             db.commit()
         return "blocked"
     except TelegramUncertain:

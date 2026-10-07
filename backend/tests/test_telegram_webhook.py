@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from unittest.mock import patch
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 import app.redis_client as redis_client_module
 from app import telegram
 from app.models import TelegramLink
+from app.redis_client import get_redis
 from app.routers import telegram as telegram_routes
 from app.routers.telegram import CONNECTED, EXPIRED, NOT_CONNECTED, STOPPED, TAKEN
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
@@ -23,6 +25,13 @@ def run(coro):
         return asyncio.run(coro)
     finally:
         redis_client_module._redis = None
+
+
+def redis_cmd(name, *args, **kwargs):
+    async def go():
+        return await getattr(get_redis(), name)(*args, **kwargs)
+
+    return run(go())
 
 
 def _update(text, chat_id=555, chat_type="private"):
@@ -197,6 +206,7 @@ def test_stop_from_an_old_chat_keeps_the_current_link(hook, db_session):
         )
     assert run(telegram.user_for_chat(111)) is None  # forgotten at the relink
     run(telegram.remember_chat(111, USER_ID))  # a leftover mapping, as after a failed cleanup
+    redis_cmd("delete", "telegram:reply:111")  # the reply limit would swallow the answer
     client.post("/telegram/webhook", json=_update("/stop", chat_id=111), headers=HEADERS)
     assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).one().chat_id == 222
     assert bot.sent[-1] == (111, NOT_CONNECTED)
@@ -256,3 +266,59 @@ def test_the_webhook_never_logs_the_secret_the_code_the_chat_or_the_text(hook, c
     assert "Telegram reply failed" in caplog.text
     for sensitive in (SECRET, code, "4242", "private words"):
         assert sensitive not in caplog.text
+
+
+def test_a_code_cannot_link_a_removed_a_disabled_or_an_invited_account(hook, db_session):
+    client, bot = hook
+    gone_id = uuid.uuid4()  # a user row that no longer exists
+    disabled_id, invited_id = uuid.uuid4(), uuid.uuid4()
+    add_app_user(db_session, disabled_id, status="disabled")
+    add_app_user(db_session, invited_id, status="invited")
+    for n, user_id in enumerate((gone_id, disabled_id, invited_id)):
+        code = run(telegram.create_link_code(user_id))
+        chat = 700 + n
+        client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=chat), headers=HEADERS
+        )
+        assert bot.sent[-1] == (chat, EXPIRED)
+        assert run(telegram.user_for_chat(chat)) is None
+    assert db_session.query(TelegramLink).count() == 0
+
+
+def test_a_failing_cleanup_of_the_old_chat_still_connects_the_new_one(hook, db_session):
+    client, bot = hook
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=111))
+    db_session.commit()
+    run(telegram.remember_chat(111, USER_ID))
+    code = run(telegram.create_link_code(USER_ID))
+
+    async def broken_forget(chat_id):
+        raise ConnectionError("redis down")
+
+    with patch("app.telegram.forget_chat", broken_forget):
+        client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=222), headers=HEADERS
+        )
+    assert bot.sent == [(222, CONNECTED)]
+    assert run(telegram.user_for_chat(222)) == USER_ID
+    db_session.expire_all()
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).one().chat_id == 222
+
+
+def test_the_bot_answers_a_chat_at_most_once_every_two_seconds(hook):
+    client, bot = hook
+    for _ in range(3):
+        client.post("/telegram/webhook", json=_update("hello", chat_id=500), headers=HEADERS)
+    client.post("/telegram/webhook", json=_update("hello", chat_id=501), headers=HEADERS)
+    assert [c for c, _ in bot.sent] == [500, 501]
+    assert 0 < redis_cmd("ttl", "telegram:reply:500") <= 2
+
+
+def test_a_link_code_still_links_when_the_reply_is_suppressed(hook, db_session):
+    client, bot = hook
+    redis_cmd("set", "telegram:reply:777", "1", ex=2)
+    code = run(telegram.create_link_code(USER_ID))
+    client.post("/telegram/webhook", json=_update(f"/start {code}", chat_id=777), headers=HEADERS)
+    assert bot.sent == []
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).one().chat_id == 777
+    assert run(telegram.user_for_chat(777)) == USER_ID

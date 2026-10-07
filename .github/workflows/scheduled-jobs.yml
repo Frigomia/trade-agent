@@ -2,7 +2,7 @@ name: Scheduled jobs
 
 on:
   schedule:
-    - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, outcome evaluation, then automatic analysis (weekdays only)
+    - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages
   workflow_dispatch:
 
 permissions:

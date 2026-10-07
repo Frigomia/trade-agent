@@ -320,3 +320,22 @@ def test_a_move_of_exactly_the_threshold_is_included(env):
     _hold(env, USER_ID, "AAPL")
     outcome, bot = _notify(quotes=_quotes({"AAPL": [110.0, 104.5]}))
     assert (outcome, bot.sent) == ("sent", [(1001, f"Moved: AAPL -5.0%\n{FOOT}")])
+
+
+def test_a_relink_during_the_send_keeps_the_new_chat_ok(env, session_local):
+    _user(env)
+    _seed_day(env)
+
+    class RelinkingBot:
+        async def send_message(self, chat_id, text):
+            # The person connects a new chat after the chat id was read and before the failure.
+            with session_local() as other:
+                other.query(TelegramLink).filter_by(user_id=USER_ID).update({"chat_id": 2002})
+                other.commit()
+            raise TelegramBlocked("x")
+
+    outcome, _ = _notify(bot=RelinkingBot(), quotes=_quotes(QUOTES))
+    assert outcome == "blocked"
+    env.expire_all()
+    link = env.query(TelegramLink).one()
+    assert (link.chat_id, link.status) == (2002, "ok")

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -5,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 import app.redis_client as redis_client_module
-from app import rls
+from app import rls, telegram
 from app.config import settings
 from app.db import Base
 from app.models import AppUser, InvestmentPreferences, TelegramLink
@@ -261,3 +262,50 @@ def test_export_is_not_cacheable(client):
     response = client.get("/me/export")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
+
+
+def _remember(chat_id, user_id):
+    # The cached Redis client is bound to one event loop: drop it before and after each run.
+    redis_client_module._redis = None
+    asyncio.run(telegram.remember_chat(chat_id, user_id))
+    redis_client_module._redis = None
+
+
+def _mapped(chat_id):
+    redis_client_module._redis = None
+    try:
+        return asyncio.run(telegram.user_for_chat(chat_id))
+    finally:
+        redis_client_module._redis = None
+
+
+def test_delete_my_data_forgets_the_chat_mapping_and_only_that_one(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    db_session.add_all(
+        [
+            TelegramLink(user_id=USER_ID, chat_id=5005),
+            TelegramLink(user_id=OTHER_USER_ID, chat_id=6006),
+        ]
+    )
+    db_session.commit()
+    _remember(5005, USER_ID)
+    _remember(6006, OTHER_USER_ID)
+
+    assert client.request("DELETE", "/me/data", json={"confirm": True}).status_code == 204
+
+    assert _mapped(5005) is None
+    assert _mapped(6006) == OTHER_USER_ID
+
+
+def test_a_redis_failure_does_not_fail_delete_my_data(client, db_session):
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=5005))
+    db_session.commit()
+
+    async def broken(chat_id):
+        raise ConnectionError("redis down")
+
+    with patch("app.telegram.forget_chat", broken):
+        response = client.request("DELETE", "/me/data", json={"confirm": True})
+
+    assert response.status_code == 204
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).count() == 0

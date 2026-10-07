@@ -224,8 +224,12 @@ texts, and never logs the content of a message. The notification message carries
 and percentages only, never amounts or share counts. A person's chat id is stored in
 `telegram_links` (owner-only row-level security), is not part of their data export (the export
 lists their notification settings), and is removed with the link when they disconnect or delete
-their data. Deleting data leaves the Redis chat mapping behind; it is harmless (a later `/stop`
-finds no row, forgets the mapping and answers "not connected").
+their data. The Redis mapping from the chat id to the person is removed at the same time, best
+effort: if Redis is unreachable at that moment the deletion still succeeds and the mapping stays
+until a later `/stop` from that chat finds no row, forgets it and answers "not connected". A link
+code belongs to whoever created it, so nobody should tap Start on a Connect link someone else sent
+them. Pressing Cancel in the app does not revoke an outstanding code; it expires by itself after 10
+minutes.
 
 ### Fly
 

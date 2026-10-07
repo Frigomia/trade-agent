@@ -222,6 +222,11 @@ def enable_user(db: Session, supabase: SupabaseAdmin, user_id: uuid.UUID) -> App
     return user
 
 
+def _collect(found: list[int], chat_id: int | None) -> None:
+    if chat_id is not None:
+        found.append(chat_id)
+
+
 def remove_user(
     db: Session,
     supabase: SupabaseAdmin,
@@ -229,9 +234,14 @@ def remove_user(
     user_id: uuid.UUID,
     confirm_email: str,
     acting_admin_id: uuid.UUID,
+    chat_ids: list[int] | None = None,
 ) -> None:
     """Permanent removal. Order: cut access, delete data, delete the Supabase user, delete the
-    row. A failure after the first step leaves the user disabled; the call can be repeated."""
+    row. A failure after the first step leaves the user disabled; the call can be repeated.
+
+    `chat_ids` is filled with the Telegram chat ids the user was linked to as soon as their rows are
+    deleted (so also when a later step fails), for the caller to forget in Redis."""
+    found = chat_ids if chat_ids is not None else []
     user = _get_user(db, user_id)
     _reject_self(user, acting_admin_id)
     if user.email != confirm_email:
@@ -242,10 +252,10 @@ def remove_user(
         user.status = "disabled"
         db.commit()
 
-    delete_user_data(factory, user.id)
+    _collect(found, delete_user_data(factory, user.id))
     _upstream("delete", lambda: supabase.delete(user.id))
     # A running job may have written rows since the first pass. This narrows the window; it does
     # not close it.
-    delete_user_data(factory, user.id)
+    _collect(found, delete_user_data(factory, user.id))
     db.delete(user)
     db.commit()

@@ -50,9 +50,10 @@ def test_other_failures_raise_telegram_error_not_blocked(status):
     assert not isinstance(caught.value, telegram.TelegramBlocked)
 
 
-UNCERTAIN = [httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout, httpx.ReadError]
+UNCERTAIN = [httpx.ReadTimeout, httpx.WriteTimeout, httpx.ReadError, httpx.DecodingError]
 UNCERTAIN += [httpx.WriteError, httpx.RemoteProtocolError]
-CERTAIN = [httpx.ConnectError, httpx.ConnectTimeout]
+# PoolTimeout: no connection was ever obtained, so the request never left.
+CERTAIN = [httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout]
 
 
 @pytest.mark.parametrize("error", UNCERTAIN)

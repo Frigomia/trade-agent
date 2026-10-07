@@ -4,6 +4,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
@@ -12,8 +13,9 @@ from app import db as app_db
 from app import telegram
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.config import settings
-from app.models import TelegramLink
+from app.models import AppUser, TelegramLink
 from app.rate_limit import rate_limiter
+from app.redis_client import get_redis
 from app.schemas import TelegramLinkOut, TelegramOut, TelegramSettingsIn
 
 logger = logging.getLogger(__name__)
@@ -126,6 +128,7 @@ NOT_CONNECTED = (
     "This chat is not connected. If you still get messages, disconnect in the app under Account."
 )
 UNKNOWN = "I only understand /start and /stop."
+REPLY_GAP_SECONDS = 2
 
 # Public: Telegram calls it, so there is no user login. The secret header is the only check.
 webhook_router = APIRouter(tags=["telegram"])
@@ -143,19 +146,31 @@ def _secret_ok(received: str | None) -> bool:
 
 
 async def _reply(chat_id: int, text: str) -> None:
+    """At most one reply per chat every REPLY_GAP_SECONDS, so a chat cannot make the bot flood.
+    Commands are still processed; only the answer is skipped."""
     bot = telegram.get_bot()
     if bot is None:
         return
     try:
+        if not await get_redis().set(
+            f"telegram:reply:{chat_id}", "1", nx=True, ex=REPLY_GAP_SECONDS
+        ):
+            return
         await bot.send_message(chat_id, text)
     except telegram.TelegramError as exc:
         logger.warning("Telegram reply failed (%s)", type(exc).__name__)
+    except RedisError as exc:
+        logger.warning("Telegram reply skipped, Redis failed (%s)", type(exc).__name__)
 
 
-def _link_chat(user_id: uuid.UUID, chat_id: int) -> tuple[bool, int | None]:
-    """(linked, previous chat id). Not linked when the chat belongs to another account."""
+def _link_chat(user_id: uuid.UUID, chat_id: int) -> tuple[str, int | None]:
+    """("linked" | "taken" | "gone", previous chat id). "taken": the chat belongs to another
+    account. "gone": the account was removed or is not active, so nothing is linked."""
     previous: int | None = None
     with app_db.scoped_session(user_id) as db:
+        owner = db.get(AppUser, user_id)
+        if owner is None or owner.status != "active":
+            return "gone", None
         link = db.query(TelegramLink).filter_by(user_id=user_id).one_or_none()
         if link is None:
             db.add(TelegramLink(user_id=user_id, chat_id=chat_id))
@@ -168,8 +183,8 @@ def _link_chat(user_id: uuid.UUID, chat_id: int) -> tuple[bool, int | None]:
             # A user_id collision (two chats linking one user at once) is answered with TAKEN too;
             # accepted, it needs two live codes.
             db.rollback()
-            return False, None
-    return True, previous
+            return "taken", None
+    return "linked", previous
 
 
 def _unlink(user_id: uuid.UUID, chat_id: int) -> bool:
@@ -201,13 +216,14 @@ async def _dispatch(chat_id: int, text: str) -> None:
         if user_id is None:
             await _reply(chat_id, EXPIRED)
             return
-        linked, previous = await run_in_threadpool(_link_chat, user_id, chat_id)
-        if not linked:
-            await _reply(chat_id, TAKEN)
+        outcome, previous = await run_in_threadpool(_link_chat, user_id, chat_id)
+        if outcome != "linked":
+            await _reply(chat_id, EXPIRED if outcome == "gone" else TAKEN)
             return
-        if previous is not None and previous != chat_id:
-            await telegram.forget_chat(previous)
+        # The new mapping first: if Redis fails half way, the person is never left unmapped.
         await telegram.remember_chat(chat_id, user_id)
+        if previous != chat_id:
+            await telegram.forget_chat_quietly(previous)
         await _reply(chat_id, CONNECTED)
     elif command == "/start":
         await _reply(chat_id, BARE_START)
@@ -238,6 +254,6 @@ async def telegram_webhook(
         return {"ok": True}
     try:
         await _dispatch(chat_id, text)
-    except Exception as exc:  # noqa: BLE001  Telegram retries non-2xx; log the class only
+    except Exception as exc:  # Telegram retries non-2xx; log the class only
         logger.warning("Telegram webhook failed (%s)", type(exc).__name__)
     return {"ok": True}
