@@ -31,6 +31,7 @@ from app.routers import (
     portfolio,
     preferences,
 )
+from app.routers import telegram as telegram_routes
 from app.snapshots import PriceUnavailable
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
@@ -69,6 +70,7 @@ app.include_router(memory.router)
 app.include_router(chat.router)
 app.include_router(preferences.router)
 app.include_router(claude_key.router)
+app.include_router(telegram_routes.router)
 app.include_router(me.router)
 app.include_router(me.active_router)
 app.include_router(admin.router)

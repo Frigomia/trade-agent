@@ -357,3 +357,24 @@ class AdminUserOut(BaseModel):
     monthly_analysis_used: int | None = None
     monthly_chat_limit: int | None = None
     monthly_chat_used: int | None = None
+
+
+class TelegramOut(BaseModel):
+    configured: bool
+    linked: bool
+    status: Literal["ok", "blocked"] | None = None
+    digest_enabled: bool = True
+    moves_enabled: bool = True
+    move_threshold_pct: float = 5.0
+    bot_username: str | None = None
+
+
+class TelegramLinkOut(BaseModel):
+    url: str
+    expires_in: int
+
+
+class TelegramSettingsIn(BaseModel):
+    digest_enabled: bool | None = None
+    moves_enabled: bool | None = None
+    move_threshold_pct: float | None = Field(default=None, ge=1, le=50)
