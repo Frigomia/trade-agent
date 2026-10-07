@@ -145,28 +145,76 @@ describe("TelegramPanel", () => {
     expect(document.body.innerHTML).not.toContain("CODE123");
   });
 
-  it("reconnecting from blocked shows the waiting card; Cancel or expiry returns to blocked; ok clears the link", async () => {
+  it("reconnecting from blocked: waiting card with the link; ok clears it; a new block shows the blocked card", async () => {
     hook.status = { ...connected, status: "blocked" };
     const { rerender } = render(<TelegramPanel />);
     await startWaiting(rerender);
     expect(screen.getByRole("status")).toHaveTextContent("Waiting for you to press Start in Telegram…");
-    expect(screen.getAllByRole("link", { name: /open telegram/i })).toHaveLength(1);
+    const links = screen.getAllByRole("link", { name: /open telegram/i });
+    expect(links).toHaveLength(1);
+    expect(links[0].getAttribute("href")).toContain("CODE123");
     expect(screen.queryByRole("button", { name: "Reconnect" })).not.toBeInTheDocument();
 
-    hook.waiting = false; // cancelled or expired
-    rerender(<TelegramPanel />);
-    expect(screen.getByText("Needs attention")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /open telegram/i })).not.toBeInTheDocument();
-
-    // blocked, waiting, then ok: the link is gone
-    hook.waiting = true;
-    rerender(<TelegramPanel />);
-    hook.status = connected;
+    hook.status = connected; // the hook clears the wait when the status turns ok
     hook.waiting = false;
     rerender(<TelegramPanel />);
     expect(screen.getByText("Connected")).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("CODE123");
+
+    hook.status = { ...connected, status: "blocked" };
+    rerender(<TelegramPanel />);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open telegram/i })).not.toBeInTheDocument();
+  });
+
+  it("cancel from the blocked reconnect returns to the blocked card", async () => {
+    hook.status = { ...connected, status: "blocked" };
+    const { rerender } = render(<TelegramPanel />);
+    await startWaiting(rerender);
+    hook.waiting = false;
+    rerender(<TelegramPanel />);
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open telegram/i })).not.toBeInTheDocument();
+  });
+
+  describe("focus after a state change", () => {
+    async function flip() {
+      const { rerender } = render(<TelegramPanel />);
+      await startWaiting(rerender);
+      return rerender;
+    }
+
+    it("is not stolen from a field outside the panel", async () => {
+      const outside = document.createElement("input");
+      document.body.appendChild(outside);
+      const rerender = await flip();
+      outside.focus();
+      hook.status = connected;
+      hook.waiting = false;
+      rerender(<TelegramPanel />);
+      expect(outside).toHaveFocus();
+      outside.remove();
+    });
+
+    it("moves into the panel when focus was inside it", async () => {
+      const rerender = await flip();
+      screen.getByRole("button", { name: "Cancel" }).focus();
+      hook.status = connected;
+      hook.waiting = false;
+      rerender(<TelegramPanel />);
+      expect(screen.getByRole("heading", { name: "Telegram" })).toHaveFocus();
+    });
+
+    it("moves into the panel when focus was on the body", async () => {
+      const rerender = await flip();
+      (document.activeElement as HTMLElement).blur();
+      hook.status = connected;
+      hook.waiting = false;
+      rerender(<TelegramPanel />);
+      expect(screen.getByRole("heading", { name: "Telegram" })).toHaveFocus();
+    });
   });
 
   it("shows a 503 detail inline", async () => {
@@ -254,7 +302,16 @@ describe("TelegramPanel", () => {
     expect(hook.update).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["0", "0.5", "51", "5.55", ""])("rejects %j: inline error, no save, saved value restored", async (v) => {
+  it("accepts a comma decimal separator", async () => {
+    hook.status = connected;
+    render(<TelegramPanel />);
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
+    fireEvent.change(field, { target: { value: "7,5" } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(hook.update).toHaveBeenCalledWith({ move_threshold_pct: 7.5 }));
+  });
+
+  it.each(["0", "0.5", "51", "5.55", "7,55", ""])("rejects %j: inline error, no save, saved value restored", async (v) => {
     hook.status = connected;
     render(<TelegramPanel />);
     const field = screen.getByRole("textbox", { name: "Move threshold" });

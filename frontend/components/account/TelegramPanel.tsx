@@ -33,8 +33,9 @@ const cardSx = { p: "18px 20px", display: "flex", flexDirection: "column", gap: 
 
 /** One decimal, 1 to 50: the same bounds the backend enforces. */
 function parseThreshold(raw: string): number | null {
-  if (!/^\d+(\.\d)?$/.test(raw.trim())) return null;
-  const n = Number(raw);
+  const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
+  if (!/^\d+(\.\d)?$/.test(text)) return null;
+  const n = Number(text);
   return n >= 1 && n <= 50 ? n : null;
 }
 

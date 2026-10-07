@@ -215,7 +215,7 @@ describe("useTelegram", () => {
         await act(async () => {
           await hook.result.current.connect();
         });
-        return { ...hook, recover: () => (state = linked) };
+        return { ...hook, recover: () => (state = linked), block: () => (state = { ...linked, status: "blocked" }) };
       }
 
       it("waits and polls while blocked, and stops once the status is ok", async () => {
@@ -228,6 +228,21 @@ describe("useTelegram", () => {
         recover();
         await act(() => vi.advanceTimersByTimeAsync(3000));
         expect(result.current.status?.status).toBe("ok");
+        expect(result.current.waiting).toBe(false);
+        const after = gets();
+        await act(() => vi.advanceTimersByTimeAsync(30000));
+        expect(gets()).toBe(after);
+      });
+
+      it("a block after the recovery is not a new wait", async () => {
+        const { result, recover, block } = await blockedSetup();
+        recover();
+        await act(() => vi.advanceTimersByTimeAsync(3000));
+        expect(result.current.waiting).toBe(false);
+        block();
+        await act(() => vi.advanceTimersByTimeAsync(3000));
+        await act(() => result.current.refresh());
+        expect(result.current.status?.status).toBe("blocked");
         expect(result.current.waiting).toBe(false);
         const after = gets();
         await act(() => vi.advanceTimersByTimeAsync(30000));

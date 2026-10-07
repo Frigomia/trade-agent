@@ -41,6 +41,9 @@ export function useTelegram() {
   // Linked and healthy ends the wait; a blocked user is linked but still waiting for the reconnect.
   const isDone = data?.linked === true && data.status !== "blocked";
 
+  // The wait is over once linked and healthy; a later block must not look like a fresh wait.
+  if (isDone && wait) setWait(null);
+
   useEffect(() => {
     if (!wait) return;
     const timer = setTimeout(() => setWait(null), wait.seconds * 1000);
