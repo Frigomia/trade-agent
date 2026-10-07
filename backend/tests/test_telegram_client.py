@@ -99,14 +99,12 @@ def test_chat_mapping_round_trip():
 
 
 @pytest.mark.parametrize("status", [200, 500, 403])
-@pytest.mark.parametrize("httpx_level", [None, logging.INFO, logging.DEBUG])
+@pytest.mark.parametrize("httpx_level", [logging.NOTSET, logging.INFO, logging.DEBUG])
 def test_the_token_is_not_logged_on_any_response(caplog, status, httpx_level):
-    import importlib
-
+    # Start from a logger level that would let httpx log the URL, then apply the module's setting.
     for name in ("httpx", "httpcore"):
-        logging.getLogger(name).setLevel(httpx_level or logging.WARNING)
-    if httpx_level is not None:
-        importlib.reload(telegram)  # the module-level setting is what must protect
+        logging.getLogger(name).setLevel(httpx_level)
+    telegram._quiet_http_loggers()
     handler = lambda request: httpx.Response(status, json={"ok": status == 200})  # noqa: E731
     bot = telegram.TelegramBot(TOKEN, transport=httpx.MockTransport(handler))
     with caplog.at_level(logging.DEBUG), contextlib.suppress(telegram.TelegramError):

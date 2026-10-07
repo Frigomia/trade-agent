@@ -20,10 +20,15 @@ from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
-# httpx logs "HTTP Request: POST <url>" at INFO after every response, and the URL carries the bot
-# token. Jobs call logging.basicConfig(level=INFO), so keep these two quiet from import time.
-for _noisy in ("httpx", "httpcore"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+def _quiet_http_loggers() -> None:
+    # httpx logs "HTTP Request: POST <url>" at INFO after every response, and the URL carries the
+    # bot token. Jobs call logging.basicConfig(level=INFO), so keep these two quiet.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+_quiet_http_loggers()
 
 REQUEST_TIMEOUT_SECONDS = 10.0
 LINK_CODE_SECONDS = 600
