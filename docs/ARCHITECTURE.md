@@ -34,8 +34,8 @@ trading-agent/                 (monorepo)
   frontend/                    Next.js dashboard
     CLAUDE.md                  TypeScript/Next.js-specific commands and conventions
   .github/workflows/
-    backend-ci.yml             triggered on paths: backend/**
-    frontend-ci.yml            triggered on paths: frontend/**
+    backend-ci.yml             every pull request; a `changes` job skips the jobs unless backend/** changed
+    frontend-ci.yml            every pull request; a `changes` job skips the jobs unless frontend/** changed
 
 trading-agent-skills/          separate repo — Claude Skill package,
                                 no dependency on the monorepo
@@ -60,8 +60,11 @@ Deployment is unaffected: both Vercel and Fly.io support a "root directory"
 setting, so `/frontend` and `/backend` still deploy independently from the
 same repo (see §13). Since this is a polyglot monorepo (Python + TypeScript,
 not two JS packages), there's no real benefit to Turborepo/Nx-style tooling
-— just two sibling toolchains and path-filtered CI so a frontend-only change
-doesn't trigger a backend build and vice versa.
+— just two sibling toolchains and path-aware CI so a frontend-only change
+doesn't trigger a backend build and vice versa. The workflows run on every pull request and a
+`changes` job skips the real jobs when nothing relevant changed: a workflow skipped by a `paths:`
+filter never reports its required checks, which would block a docs-only pull request forever,
+while a job skipped by `if` counts as passed.
 
 ---
 

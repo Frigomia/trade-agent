@@ -28,8 +28,11 @@ Before calling any change finished:
 ## Repository etiquette
 
 - Branch naming: `feature/...`, `fix/...`
-- Path-filtered CI: a frontend-only change shouldn't trigger a backend
-  build (`.github/workflows/*-ci.yml`, `paths:` filters)
+- Path-aware CI: a frontend-only change shouldn't trigger a backend build. The `*-ci.yml` workflows
+  run on every pull request (no `paths:` filter on `pull_request`: a workflow skipped by a path
+  filter never reports its required checks, so a docs-only PR would wait forever) and a `changes`
+  job skips the real jobs when nothing relevant changed; a job skipped by `if` counts as passed.
+  Pushes to master still use `paths:` filters.
 - Never commit `.env`, API keys, or connection strings, in any repo
 
 ## Extras already set up
