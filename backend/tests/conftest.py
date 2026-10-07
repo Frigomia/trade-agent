@@ -115,6 +115,8 @@ def _flush_rate_limit_keys() -> None:
             await redis.delete(key)
         async for key in redis.scan_iter("backtest_active:*"):
             await redis.delete(key)
+        async for key in redis.scan_iter("telegram:*"):
+            await redis.delete(key)
 
     asyncio.run(_flush())
     redis_client_module._redis = None

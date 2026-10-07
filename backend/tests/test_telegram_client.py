@@ -1,0 +1,97 @@
+import asyncio
+import logging
+import uuid
+
+import httpx
+import pytest
+
+from app import telegram
+from app.redis_client import get_redis
+
+TOKEN = "123456:SECRET-token-value"
+
+
+def _bot(handler):
+    return telegram.TelegramBot(TOKEN, transport=httpx.MockTransport(handler))
+
+
+def test_send_message_posts_plain_text_to_the_bot_api():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["json"] = request.read().decode()
+        return httpx.Response(200, json={"ok": True, "result": {}})
+
+    asyncio.run(_bot(handler).send_message(42, "hello"))
+    assert seen["url"] == f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    assert '"chat_id":42' in seen["json"].replace(" ", "") and "parse_mode" not in seen["json"]
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(
+            403, json={"ok": False, "description": "Forbidden: bot was blocked by the user"}
+        ),
+        httpx.Response(400, json={"ok": False, "description": "Bad Request: chat not found"}),
+    ],
+)
+def test_a_blocked_or_missing_chat_raises_telegram_blocked(response):
+    with pytest.raises(telegram.TelegramBlocked):
+        asyncio.run(_bot(lambda request: response).send_message(42, "hi"))
+
+
+@pytest.mark.parametrize("status", [429, 500, 502])
+def test_other_failures_raise_telegram_error_not_blocked(status):
+    with pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(_bot(lambda request: httpx.Response(status, json={})).send_message(42, "hi"))
+    assert not isinstance(caught.value, telegram.TelegramBlocked)
+
+
+def test_the_token_never_travels_in_an_error_even_when_httpx_raises(caplog):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("boom connecting to " + str(request.url))
+
+    with caplog.at_level(logging.DEBUG), pytest.raises(telegram.TelegramError) as caught:
+        asyncio.run(_bot(handler).send_message(42, "hi"))
+    assert TOKEN not in str(caught.value) and TOKEN not in repr(caught.value)
+    assert TOKEN not in caplog.text
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+
+
+def test_get_bot_is_none_without_a_token(monkeypatch):
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", None)
+    assert telegram.get_bot() is None
+    monkeypatch.setattr(telegram.settings, "telegram_bot_token", TOKEN)
+    assert telegram.get_bot() is not None
+
+
+def _run(coro):
+    # Each asyncio.run is its own event loop and the cached Redis client is bound to one.
+    import app.redis_client as redis_client_module
+
+    try:
+        return asyncio.run(coro)
+    finally:
+        redis_client_module._redis = None
+
+
+def test_a_link_code_works_once_and_expires():
+    user_id = uuid.uuid4()
+    code = _run(telegram.create_link_code(user_id))
+    assert len(code) == 22
+    assert _run(get_redis().ttl(f"telegram:link:{code}")) in range(
+        1, telegram.LINK_CODE_SECONDS + 1
+    )
+    assert _run(telegram.consume_link_code(code)) == user_id
+    assert _run(telegram.consume_link_code(code)) is None  # used once
+    assert _run(telegram.consume_link_code("nope-not-a-code-xx")) is None
+
+
+def test_chat_mapping_round_trip():
+    user_id = uuid.uuid4()
+    _run(telegram.remember_chat(555, user_id))
+    assert _run(telegram.user_for_chat(555)) == user_id
+    _run(telegram.forget_chat(555))
+    assert _run(telegram.user_for_chat(555)) is None
