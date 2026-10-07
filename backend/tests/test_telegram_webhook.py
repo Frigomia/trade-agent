@@ -173,9 +173,86 @@ def test_a_failing_reply_does_not_fail_the_webhook(hook):
     assert r.status_code == 200
 
 
-def test_the_webhook_never_logs_the_secret_or_the_code(hook, caplog):
+def test_a_non_ascii_secret_header_is_401_not_500(hook, caplog):
+    client, bot = hook
+    with caplog.at_level(logging.ERROR):
+        r = client.post(
+            "/telegram/webhook",
+            content=b"{}",
+            headers=[
+                (b"x-telegram-bot-api-secret-token", b"\xe9"),
+                (b"content-type", b"application/json"),
+            ],
+        )
+    assert r.status_code == 401
+    assert "ERROR" not in caplog.text and bot.sent == []
+
+
+def test_stop_from_an_old_chat_keeps_the_current_link(hook, db_session):
+    client, bot = hook
+    for chat in (111, 222):
+        code = run(telegram.create_link_code(USER_ID))
+        client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=chat), headers=HEADERS
+        )
+    assert run(telegram.user_for_chat(111)) is None  # forgotten at the relink
+    run(telegram.remember_chat(111, USER_ID))  # a leftover mapping, as after a failed cleanup
+    client.post("/telegram/webhook", json=_update("/stop", chat_id=111), headers=HEADERS)
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).one().chat_id == 222
+    assert bot.sent[-1] == (111, NOT_CONNECTED)
+    assert run(telegram.user_for_chat(111)) is None
+    assert run(telegram.user_for_chat(222)) == USER_ID
+
+
+def test_a_redis_failure_is_acknowledged_and_logs_no_content(hook, monkeypatch, caplog):
     client, _ = hook
     code = run(telegram.create_link_code(USER_ID))
+
+    async def boom(chat_id, user_id):
+        raise RuntimeError(f"detail {code}")
+
+    monkeypatch.setattr(telegram_routes.telegram, "remember_chat", boom)
     with caplog.at_level(logging.DEBUG):
-        client.post("/telegram/webhook", json=_update(f"/start {code}"), headers=HEADERS)
-    assert SECRET not in caplog.text and code not in caplog.text
+        r = client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=4242), headers=HEADERS
+        )
+    assert r.status_code == 200
+    assert "RuntimeError" in caplog.text
+    assert code not in caplog.text and "4242" not in caplog.text
+
+
+def test_a_database_failure_is_acknowledged_and_logs_no_content(hook, monkeypatch, caplog):
+    client, _ = hook
+    code = run(telegram.create_link_code(USER_ID))
+
+    def boom(user_id, chat_id):
+        raise RuntimeError(f"detail {code}")
+
+    monkeypatch.setattr(telegram_routes, "_link_chat", boom)
+    with caplog.at_level(logging.DEBUG):
+        r = client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=4242), headers=HEADERS
+        )
+    assert r.status_code == 200
+    assert "RuntimeError" in caplog.text
+    assert code not in caplog.text and "4242" not in caplog.text
+
+
+def test_the_webhook_never_logs_the_secret_the_code_the_chat_or_the_text(hook, caplog):
+    client, bot = hook
+
+    async def boom(chat_id, text):
+        raise telegram.TelegramError("x")
+
+    bot.send_message = boom  # so the reply-failed warning is in the log too
+    code = run(telegram.create_link_code(USER_ID))
+    with caplog.at_level(logging.DEBUG):
+        client.post(
+            "/telegram/webhook", json=_update(f"/start {code}", chat_id=4242), headers=HEADERS
+        )
+        client.post(
+            "/telegram/webhook", json=_update("private words", chat_id=4242), headers=HEADERS
+        )
+    assert "Telegram reply failed" in caplog.text
+    for sensitive in (SECRET, code, "4242", "private words"):
+        assert sensitive not in caplog.text

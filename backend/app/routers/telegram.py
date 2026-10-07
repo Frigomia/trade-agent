@@ -133,7 +133,13 @@ webhook_router = APIRouter(tags=["telegram"])
 
 def _secret_ok(received: str | None) -> bool:
     expected = settings.telegram_webhook_secret
-    return bool(expected and received and hmac.compare_digest(received, expected))
+    if not (expected and received):
+        return False
+    try:
+        # Bytes, because compare_digest raises TypeError on non-ASCII str (headers are latin-1).
+        return hmac.compare_digest(received.encode("utf-8"), expected.encode("utf-8"))
+    except UnicodeError:
+        return False
 
 
 async def _reply(chat_id: int, text: str) -> None:
@@ -146,40 +152,69 @@ async def _reply(chat_id: int, text: str) -> None:
         logger.warning("Telegram reply failed (%s)", type(exc).__name__)
 
 
-def _link_chat(user_id: uuid.UUID, chat_id: int) -> bool:
-    """False when the chat already belongs to another account (unique chat_id)."""
+def _link_chat(user_id: uuid.UUID, chat_id: int) -> tuple[bool, int | None]:
+    """(linked, previous chat id). Not linked when the chat belongs to another account."""
+    previous: int | None = None
     with app_db.scoped_session(user_id) as db:
         link = db.query(TelegramLink).filter_by(user_id=user_id).one_or_none()
         if link is None:
             db.add(TelegramLink(user_id=user_id, chat_id=chat_id))
         else:
+            previous = link.chat_id
             link.chat_id, link.status = chat_id, "ok"  # the settings are kept
         try:
             db.commit()
         except IntegrityError:
+            # A user_id collision (two chats linking one user at once) is answered with TAKEN too;
+            # accepted, it needs two live codes.
             db.rollback()
-            return False
-    return True
+            return False, None
+    return True, previous
 
 
-def _unlink(user_id: uuid.UUID) -> bool:
-    """True when a row was deleted; False when it was already gone."""
+def _unlink(user_id: uuid.UUID, chat_id: int) -> bool:
+    """True when this chat's row was deleted; False when there is none (e.g. an old chat)."""
     with app_db.scoped_session(user_id) as db:
-        deleted = db.query(TelegramLink).filter_by(user_id=user_id).delete()
+        deleted = db.query(TelegramLink).filter_by(user_id=user_id, chat_id=chat_id).delete()
         db.commit()
     return deleted > 0
 
 
 async def _stop(chat_id: int) -> None:
     user_id = await telegram.user_for_chat(chat_id)
-    # A mapping with no row behind it is stale (a failed cleanup): forget it, say not connected.
-    if user_id is not None and await run_in_threadpool(_unlink, user_id):
+    # No row for this chat means a stale mapping: forget it, say not connected.
+    if user_id is not None and await run_in_threadpool(_unlink, user_id, chat_id):
         await telegram.forget_chat(chat_id)
         await _reply(chat_id, STOPPED)
         return
     if user_id is not None:
         await telegram.forget_chat(chat_id)
     await _reply(chat_id, NOT_CONNECTED)
+
+
+async def _dispatch(chat_id: int, text: str) -> None:
+    command, _, argument = text.strip().partition(" ")
+    command = command.split("@")[0]  # "/start@botname" in some clients
+    code = argument.strip()
+    if command == "/start" and code:
+        user_id = await telegram.consume_link_code(code)
+        if user_id is None:
+            await _reply(chat_id, EXPIRED)
+            return
+        linked, previous = await run_in_threadpool(_link_chat, user_id, chat_id)
+        if not linked:
+            await _reply(chat_id, TAKEN)
+            return
+        if previous is not None and previous != chat_id:
+            await telegram.forget_chat(previous)
+        await telegram.remember_chat(chat_id, user_id)
+        await _reply(chat_id, CONNECTED)
+    elif command == "/start":
+        await _reply(chat_id, BARE_START)
+    elif command == "/stop":
+        await _stop(chat_id)
+    else:
+        await _reply(chat_id, UNKNOWN)
 
 
 @webhook_router.post("/telegram/webhook")
@@ -201,22 +236,8 @@ async def telegram_webhook(
     chat_id = chat.get("id")
     if not isinstance(chat_id, int) or isinstance(chat_id, bool):
         return {"ok": True}
-    command, _, argument = text.strip().partition(" ")
-    command = command.split("@")[0]  # "/start@botname" in some clients
-    code = argument.strip()
-    if command == "/start" and code:
-        user_id = await telegram.consume_link_code(code)
-        if user_id is None:
-            await _reply(chat_id, EXPIRED)
-        elif await run_in_threadpool(_link_chat, user_id, chat_id):
-            await telegram.remember_chat(chat_id, user_id)
-            await _reply(chat_id, CONNECTED)
-        else:
-            await _reply(chat_id, TAKEN)
-    elif command == "/start":
-        await _reply(chat_id, BARE_START)
-    elif command == "/stop":
-        await _stop(chat_id)
-    else:
-        await _reply(chat_id, UNKNOWN)
+    try:
+        await _dispatch(chat_id, text)
+    except Exception as exc:  # noqa: BLE001  Telegram retries non-2xx; log the class only
+        logger.warning("Telegram webhook failed (%s)", type(exc).__name__)
     return {"ok": True}
