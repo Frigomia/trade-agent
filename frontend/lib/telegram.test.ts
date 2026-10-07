@@ -64,6 +64,18 @@ describe("useTelegram", () => {
     expect(JSON.stringify(result.current.status)).not.toContain("CODE123");
   });
 
+  it("cancel stops waiting", async () => {
+    apiFetch.mockImplementation(async (path: string) => (path === "/me/telegram/link" ? link : unlinked));
+    const { result } = renderHook(() => useTelegram(), { wrapper });
+    await waitFor(() => expect(result.current.status).toEqual(unlinked));
+    await act(async () => {
+      await result.current.connect();
+    });
+    expect(result.current.waiting).toBe(true);
+    act(() => result.current.cancel());
+    expect(result.current.waiting).toBe(false);
+  });
+
   it("connect surfaces the backend error and does not start waiting", async () => {
     apiFetch.mockImplementation(async (path: string) => {
       if (path === "/me/telegram/link") throw new FakeApiError(503, "Telegram is not set up on this server.");

@@ -68,6 +68,7 @@ export function useTelegram() {
     isLoading,
     waiting: wait !== null && !isLinked,
     connect,
+    cancel: () => setWait(null),
     update,
     disconnect,
     refresh: mutate,
