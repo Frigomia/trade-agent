@@ -204,6 +204,55 @@ describe("useTelegram", () => {
       expect(gets()).toBe(after);
     });
 
+    describe("reconnecting from blocked", () => {
+      async function blockedSetup() {
+        vi.useFakeTimers();
+        let state: TelegramStatus = { ...linked, status: "blocked" };
+        apiFetch.mockImplementation(async (path: string) => (path === "/me/telegram/link" ? link : state));
+        const hook = renderHook(() => useTelegram(), { wrapper });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(hook.result.current.waiting).toBe(false);
+        await act(async () => {
+          await hook.result.current.connect();
+        });
+        return { ...hook, recover: () => (state = linked) };
+      }
+
+      it("waits and polls while blocked, and stops once the status is ok", async () => {
+        const { result, recover } = await blockedSetup();
+        expect(result.current.waiting).toBe(true);
+        const before = gets();
+        await act(() => vi.advanceTimersByTimeAsync(9000));
+        expect(gets() - before).toBeGreaterThanOrEqual(3);
+
+        recover();
+        await act(() => vi.advanceTimersByTimeAsync(3000));
+        expect(result.current.status?.status).toBe("ok");
+        expect(result.current.waiting).toBe(false);
+        const after = gets();
+        await act(() => vi.advanceTimersByTimeAsync(30000));
+        expect(gets()).toBe(after);
+      });
+
+      it("cancel stops the polling", async () => {
+        const { result } = await blockedSetup();
+        act(() => result.current.cancel());
+        expect(result.current.waiting).toBe(false);
+        const after = gets();
+        await act(() => vi.advanceTimersByTimeAsync(30000));
+        expect(gets()).toBe(after);
+      });
+
+      it("expiry stops the polling", async () => {
+        const { result } = await blockedSetup();
+        await act(() => vi.advanceTimersByTimeAsync(600_000 + 1));
+        expect(result.current.waiting).toBe(false);
+        const after = gets();
+        await act(() => vi.advanceTimersByTimeAsync(30000));
+        expect(gets()).toBe(after);
+      });
+    });
+
     it("keeps polling when the host re-renders every second", async () => {
       const { rerender } = await setup();
       const before = gets();

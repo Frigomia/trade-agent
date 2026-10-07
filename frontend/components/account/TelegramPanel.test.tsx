@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { ReactElement } from "react";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const { FakeApiError } = vi.hoisted(() => ({
@@ -50,7 +51,7 @@ beforeEach(() => {
   hook.cancel.mockReset();
   hook.update.mockReset().mockResolvedValue(undefined);
   hook.disconnect.mockReset().mockResolvedValue(undefined);
-  open = vi.fn().mockReturnValue({});
+  open = vi.fn().mockReturnValue(null); // like real noopener opens: null either way
   vi.stubGlobal("open", open);
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -103,52 +104,95 @@ describe("TelegramPanel", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("waiting: announced status, three dots, expiry note, Open Telegram again and Cancel", async () => {
-    const { rerender } = render(<TelegramPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
+  async function startWaiting(rerender: (ui: ReactElement) => void) {
+    fireEvent.click(screen.getByRole("button", { name: /^(Connect Telegram|Reconnect)$/ }));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
     hook.waiting = true;
     rerender(<TelegramPanel />);
+  }
+
+  it("waiting: announced status, one real link to open Telegram, and Cancel", async () => {
+    const { rerender } = render(<TelegramPanel />);
+    await startWaiting(rerender);
 
     expect(screen.getByRole("status")).toHaveTextContent("Waiting for you to press Start in Telegram…");
     expect(screen.getByText("The link works for 10 minutes.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Connect Telegram" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Telegram again" }));
-    expect(open).toHaveBeenCalledTimes(2);
-    expect(open).toHaveBeenLastCalledWith(URL_, "_blank", "noopener,noreferrer");
+    const links = screen.getAllByRole("link", { name: /open telegram/i });
+    expect(links).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /open telegram/i })).not.toBeInTheDocument();
+    expect(links[0]).toHaveAccessibleName("Open Telegram again");
+    expect(links[0]).toHaveAttribute("href", URL_);
+    expect(links[0]).toHaveAttribute("target", "_blank");
+    expect(links[0]).toHaveAttribute("rel", "noopener noreferrer");
+    expect(open).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(hook.cancel).toHaveBeenCalled();
   });
 
-  it("popup blocked: the waiting card offers the link to click", async () => {
-    open.mockReturnValue(null);
+  it("Cancel clears the link and returns to the connect card", async () => {
     const { rerender } = render(<TelegramPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
-    await waitFor(() => expect(open).toHaveBeenCalled());
-    hook.waiting = true;
-    rerender(<TelegramPanel />);
-    const link = await screen.findByRole("link", { name: "Open Telegram" });
-    expect(link).toHaveAttribute("href", URL_);
-    expect(link).toHaveAttribute("target", "_blank");
-    expect(link).toHaveAttribute("rel", "noopener noreferrer");
-  });
-
-  it("forgets the link once the wait is over", async () => {
-    open.mockReturnValue(null);
-    const { rerender } = render(<TelegramPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
-    await waitFor(() => expect(open).toHaveBeenCalled());
-    hook.waiting = true;
-    rerender(<TelegramPanel />);
-    await screen.findByRole("link", { name: "Open Telegram" });
+    await startWaiting(rerender);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     hook.waiting = false;
     rerender(<TelegramPanel />);
+    expect(screen.getByRole("button", { name: "Connect Telegram" })).toBeInTheDocument();
     hook.waiting = true; // a later wait must not resurrect the old link
     rerender(<TelegramPanel />);
-    expect(screen.queryByRole("link", { name: "Open Telegram" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open telegram/i })).not.toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("CODE123");
+  });
+
+  it("reconnecting from blocked shows the waiting card; Cancel or expiry returns to blocked; ok clears the link", async () => {
+    hook.status = { ...connected, status: "blocked" };
+    const { rerender } = render(<TelegramPanel />);
+    await startWaiting(rerender);
+    expect(screen.getByRole("status")).toHaveTextContent("Waiting for you to press Start in Telegram…");
+    expect(screen.getAllByRole("link", { name: /open telegram/i })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Reconnect" })).not.toBeInTheDocument();
+
+    hook.waiting = false; // cancelled or expired
+    rerender(<TelegramPanel />);
+    expect(screen.getByText("Needs attention")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /open telegram/i })).not.toBeInTheDocument();
+
+    // blocked, waiting, then ok: the link is gone
+    hook.waiting = true;
+    rerender(<TelegramPanel />);
+    hook.status = connected;
+    hook.waiting = false;
+    rerender(<TelegramPanel />);
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("CODE123");
+  });
+
+  it("shows a 503 detail inline", async () => {
+    hook.connect.mockRejectedValue(new FakeApiError(503, "Telegram is not set up on this server."));
+    render(<TelegramPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
+    expect(await screen.findByText("Telegram is not set up on this server.")).toBeInTheDocument();
+  });
+
+  it("the threshold error is tied to the field", async () => {
+    hook.status = connected;
+    render(<TelegramPanel />);
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
+    fireEvent.change(field, { target: { value: "99" } });
+    fireEvent.blur(field);
+    await screen.findByText(/one decimal at most/i);
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAccessibleDescription(/one decimal at most/i);
+  });
+
+  it("the threshold is disabled while a switch save is in flight", async () => {
+    hook.status = connected;
+    hook.update.mockReturnValue(new Promise(() => {}));
+    render(<TelegramPanel />);
+    fireEvent.click(screen.getByRole("switch", { name: "Price moves" }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Move threshold" })).toBeDisabled());
   });
 
   it("connected: chip, two labelled switches with hints, threshold with suffix, note, Disconnect", () => {
@@ -161,8 +205,8 @@ describe("TelegramPanel", () => {
     const moves = screen.getByRole("switch", { name: "Price moves" });
     expect(moves).not.toBeChecked();
     expect(moves).toHaveAccessibleDescription("Tickers that moved at least the threshold since the previous close.");
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
-    expect(field).toHaveValue(5);
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
+    expect(field).toHaveValue("5");
     expect(field).toHaveAccessibleDescription("1 to 50");
     expect(screen.getByText("%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
@@ -193,7 +237,7 @@ describe("TelegramPanel", () => {
   it("the threshold saves on blur when valid", async () => {
     hook.status = connected;
     render(<TelegramPanel />);
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
     fireEvent.change(field, { target: { value: "7.5" } });
     fireEvent.blur(field);
     await waitFor(() => expect(hook.update).toHaveBeenCalledWith({ move_threshold_pct: 7.5 }));
@@ -202,7 +246,7 @@ describe("TelegramPanel", () => {
   it("the threshold saves on Enter, once", async () => {
     hook.status = connected;
     render(<TelegramPanel />);
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
     field.focus();
     fireEvent.change(field, { target: { value: "10" } });
     fireEvent.keyDown(field, { key: "Enter" });
@@ -213,18 +257,18 @@ describe("TelegramPanel", () => {
   it.each(["0", "0.5", "51", "5.55", ""])("rejects %j: inline error, no save, saved value restored", async (v) => {
     hook.status = connected;
     render(<TelegramPanel />);
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
     fireEvent.change(field, { target: { value: v } });
     fireEvent.blur(field);
     expect(await screen.findByText(/1 to 50, one decimal at most/i)).toBeInTheDocument();
     expect(hook.update).not.toHaveBeenCalled();
-    expect(field).toHaveValue(5);
+    expect(field).toHaveValue("5");
   });
 
   it("leaves the threshold alone when nothing changed", () => {
     hook.status = connected;
     render(<TelegramPanel />);
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
     fireEvent.focus(field);
     fireEvent.blur(field);
     expect(hook.update).not.toHaveBeenCalled();
@@ -234,11 +278,11 @@ describe("TelegramPanel", () => {
     hook.status = connected;
     hook.update.mockRejectedValue(new FakeApiError(500, "Could not save."));
     render(<TelegramPanel />);
-    const field = screen.getByRole("spinbutton", { name: "Move threshold" });
+    const field = screen.getByRole("textbox", { name: "Move threshold" });
     fireEvent.change(field, { target: { value: "9" } });
     fireEvent.blur(field);
     expect(await screen.findByText("Could not save.")).toBeInTheDocument();
-    expect(field).toHaveValue(5);
+    expect(field).toHaveValue("5");
   });
 
   it("Disconnect asks first, then disconnects", async () => {

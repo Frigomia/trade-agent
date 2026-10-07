@@ -12,7 +12,6 @@ import {
   DialogContentText,
   DialogTitle,
   InputAdornment,
-  Link as MuiLink,
   Skeleton,
   Switch,
   TextField,
@@ -137,7 +136,6 @@ export function TelegramPanel() {
   const leave = useAction();
   // The one-time link lives only here, for "Open Telegram again"; never logged, stored or put in the address.
   const [url, setUrl] = useState<string | null>(null);
-  const [popupBlocked, setPopupBlocked] = useState(false);
   const [pending, setPending] = useState<TelegramPatch>({});
   const [draft, setDraft] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -145,17 +143,13 @@ export function TelegramPanel() {
 
   const linked = status?.linked === true;
   const blocked = linked && status?.status === "blocked";
-  const state = !status ? "loading" : !status.configured ? "unavailable" : blocked ? "blocked" : linked ? "connected" : waiting ? "waiting" : "off";
+  const state = !status ? "loading" : !status.configured ? "unavailable" : waiting ? "waiting" : blocked ? "blocked" : linked ? "connected" : "off";
 
   // Linked, cancelled or expired: forget the link (derived state, reset during render).
-  const active = waiting || blocked;
-  const [wasActive, setWasActive] = useState(active);
-  if (active !== wasActive) {
-    setWasActive(active);
-    if (!active) {
-      setUrl(null);
-      setPopupBlocked(false);
-    }
+  const [wasWaiting, setWasWaiting] = useState(waiting);
+  if (waiting !== wasWaiting) {
+    setWasWaiting(waiting);
+    if (!waiting) setUrl(null);
   }
 
   // Move focus to the new state's main element when the state changes (the old button unmounted).
@@ -164,21 +158,21 @@ export function TelegramPanel() {
     const was = previous.current;
     previous.current = state;
     if (was !== state && ["off", "waiting", "connected", "blocked"].includes(was)) {
-      panelRef.current?.querySelector<HTMLElement>("[data-focus]")?.focus();
+      // Only when focus was in the panel (or lost): a poll must not steal it from another field.
+      const at = document.activeElement;
+      if (!at || at === document.body || panelRef.current?.contains(at)) {
+        panelRef.current?.querySelector<HTMLElement>("[data-focus]")?.focus();
+      }
     }
   }, [state]);
-
-  function openLink(target: string) {
-    // With "noopener" browsers return null even when the tab opened; a blocked popup is also null.
-    const opened = window.open(target, "_blank", NEW_TAB);
-    setPopupBlocked(opened === null);
-  }
 
   function startConnect() {
     void link.run(async () => {
       const { url: next } = await connect();
       setUrl(next);
-      openLink(next);
+      // Best effort: browsers may block a tab opened after an await. The result is unknowable
+      // (noopener makes it null), so the waiting card always carries a real link too.
+      window.open(next, "_blank", NEW_TAB);
     });
   }
 
@@ -237,6 +231,7 @@ export function TelegramPanel() {
     );
   }
 
+  const thresholdInvalid = save.error === THRESHOLD_ERROR;
   const digestOn = pending.digest_enabled ?? status.digest_enabled;
   const movesOn = pending.moves_enabled ?? status.moves_enabled;
 
@@ -275,17 +270,14 @@ export function TelegramPanel() {
             </Box>
             <Typography sx={muted}>The link works for 10 minutes.</Typography>
             <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
-              <Button variant="outlined" size="small" disabled={!url} onClick={() => url && openLink(url)}>
-                Open Telegram again
-              </Button>
-              <Button variant="outlined" size="small" onClick={() => { cancel(); setUrl(null); setPopupBlocked(false); }}>
+              {url && (
+                <Button component="a" href={url} target="_blank" rel="noopener noreferrer" variant="outlined" size="small">
+                  Open Telegram again
+                </Button>
+              )}
+              <Button variant="outlined" size="small" onClick={() => { cancel(); setUrl(null); }}>
                 Cancel
               </Button>
-              {popupBlocked && url && (
-                <MuiLink href={url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: 13 }}>
-                  Open Telegram
-                </MuiLink>
-              )}
             </Box>
           </>
         )}
@@ -311,10 +303,11 @@ export function TelegramPanel() {
             <TextField
               id="tg-threshold"
               label="Move threshold"
-              type="number"
               size="small"
+              disabled={save.submitting}
+              error={thresholdInvalid}
               value={draft ?? String(status.move_threshold_pct)}
-              helperText="1 to 50"
+              helperText={thresholdInvalid ? THRESHOLD_ERROR : "1 to 50"}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={commitThreshold}
               onKeyDown={(e) => {
@@ -322,7 +315,7 @@ export function TelegramPanel() {
               }}
               slotProps={{
                 inputLabel: { shrink: true },
-                htmlInput: { min: 1, max: 50, step: 0.1 },
+                htmlInput: { inputMode: "decimal" },
                 input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
               }}
               sx={{ width: 140 }}
@@ -349,17 +342,12 @@ export function TelegramPanel() {
               <Button variant="outlined" size="small" onClick={() => setConfirming(true)}>
                 Disconnect
               </Button>
-              {popupBlocked && url && (
-                <MuiLink href={url} target="_blank" rel="noopener noreferrer" sx={{ fontSize: 13 }}>
-                  Open Telegram
-                </MuiLink>
-              )}
             </Box>
           </>
         )}
 
         {link.error && <Alert severity="error">{link.error}</Alert>}
-        {save.error && <Alert severity="error">{save.error}</Alert>}
+        {save.error && !thresholdInvalid && <Alert severity="error">{save.error}</Alert>}
       </Panel>
 
       <Box sx={{ order: { xs: 0, md: 1 }, display: "grid" }}>

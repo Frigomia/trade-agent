@@ -34,11 +34,12 @@ export function useTelegram() {
   const [wait, setWait] = useState<{ seconds: number } | null>(null);
   // Stable between renders: SWR restarts its poll timer whenever this function changes.
   const refreshInterval = useCallback(
-    (latest?: TelegramStatus) => (wait && !latest?.linked ? POLL_MS : 0),
+    (latest?: TelegramStatus) => (wait && (!latest?.linked || latest.status === "blocked") ? POLL_MS : 0),
     [wait],
   );
   const { data, error, isLoading, mutate } = useSWR<TelegramStatus>(PATH, apiFetch, { refreshInterval });
-  const isLinked = data?.linked === true;
+  // Linked and healthy ends the wait; a blocked user is linked but still waiting for the reconnect.
+  const isDone = data?.linked === true && data.status !== "blocked";
 
   useEffect(() => {
     if (!wait) return;
@@ -66,7 +67,7 @@ export function useTelegram() {
     status: data,
     error,
     isLoading,
-    waiting: wait !== null && !isLinked,
+    waiting: wait !== null && !isDone,
     connect,
     cancel: () => setWait(null),
     update,
