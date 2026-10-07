@@ -92,11 +92,9 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
                 .all()
             )
             new_recs = [(t, a) for t, a in rows]
-        tickers = (
-            [i["ticker"] for i in default_ticker_infos(db, user_id, open_only=True)]
-            if moves_on
-            else []
-        )
+        tickers: list[str] = []
+        if moves_on:
+            tickers = [i["ticker"] for i in default_ticker_infos(db, user_id, open_only=True)]
     moved = await _moves(tickers, threshold) if tickers else []
     text = build_message(new_recs, moved, settings.app_url)
     if text is None:

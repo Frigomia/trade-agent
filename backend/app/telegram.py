@@ -118,13 +118,17 @@ async def create_link_code(user_id: uuid.UUID) -> str:
     return code
 
 
-async def consume_link_code(code: str) -> uuid.UUID | None:
-    """Atomic get-and-delete, so a code links at most once."""
-    value = await get_redis().getdel(f"telegram:link:{code}")
+def _as_uuid(value: object) -> uuid.UUID | None:
+    """A stored user id, or None when the key is missing or holds something else."""
     try:
         return uuid.UUID(str(value)) if value else None
     except ValueError:
         return None
+
+
+async def consume_link_code(code: str) -> uuid.UUID | None:
+    """Atomic get-and-delete, so a code links at most once."""
+    return _as_uuid(await get_redis().getdel(f"telegram:link:{code}"))
 
 
 async def remember_chat(chat_id: int, user_id: uuid.UUID) -> None:
@@ -132,11 +136,7 @@ async def remember_chat(chat_id: int, user_id: uuid.UUID) -> None:
 
 
 async def user_for_chat(chat_id: int) -> uuid.UUID | None:
-    value = await get_redis().get(f"telegram:chat:{chat_id}")
-    try:
-        return uuid.UUID(str(value)) if value else None
-    except ValueError:
-        return None
+    return _as_uuid(await get_redis().get(f"telegram:chat:{chat_id}"))
 
 
 async def forget_chat(chat_id: int) -> None:
