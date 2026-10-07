@@ -189,6 +189,16 @@ UserApiKey
   -- encrypted at rest by the application with KEY_ENCRYPTION_SECRET, never returned or logged;
   -- owner-only row-level security; not included in GET /me/export. One key per user.
 
+TelegramLink
+  id, user_id (unique), chat_id (BigInteger, unique), status ("ok"|"blocked", default "ok"),
+  digest_enabled (bool, default true), moves_enabled (bool, default true),
+  move_threshold_pct (Numeric(4,1), default 5.0; the API accepts 1 to 50), linked_at, updated_at
+  -- one connected Telegram chat per person, plus their notification settings. Unique on both
+  -- user_id and chat_id, so a person has one chat and a chat belongs to one person. Owner-only
+  -- row-level security like the other user tables. Included in GET /me/export as settings only
+  -- (never the chat id) and removed by DELETE /me/data. `blocked` is set by the notify step when
+  -- Telegram says the chat cannot receive messages; connecting again resets it to `ok`.
+
 AppUser
   id (= Supabase auth uid), email (unique), role ("admin"|"user"), status ("invited"|"active"|"disabled"),
   created_at, invited_at, accepted_terms_at, last_seen_at,
@@ -295,6 +305,11 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
 | DELETE | `/me/claude-key` | — | Removes it (`204`, safe to repeat) |
+| GET | `/me/telegram` | — | `{configured, linked, bot_username, status?, digest_enabled?, moves_enabled?, move_threshold_pct?}`; never the chat id. `configured` is true only when both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME` are set |
+| POST | `/me/telegram/link` | — | Creates a one-time code (22 URL-safe characters, 128 bits, 10 minutes, stored in Redis as `telegram:link:<code>`) and returns `{url, expires_in}`, where `url` is `https://t.me/<bot>?start=<code>`. `503` when Telegram is not set up; 10 requests a minute per user |
+| PATCH | `/me/telegram` | `{digest_enabled?, moves_enabled?, move_threshold_pct?}` | Updates the settings that were sent (an explicit `null` is ignored); `move_threshold_pct` is 1 to 50; `404` when not connected |
+| DELETE | `/me/telegram` | — | Disconnects: deletes the row and the Redis chat mapping (`204`, safe to repeat) |
+| POST | `/telegram/webhook` | Telegram update | **Public** (Telegram calls it, there is no user login). Checked only by the `X-Telegram-Bot-Api-Secret-Token` header, compared in constant time with `TELEGRAM_WEBHOOK_SECRET`: `401` when it is wrong, missing, or the secret is not configured. After a matching secret the answer is always `200 {"ok": true}`, because Telegram retries any other status; a malformed body or an internal error is logged by class name and still answered `200`. Only a text message from a private chat is read: `/start <code>` links the chat to the person who made the code, a bare `/start` explains where to press Connect, `/stop` disconnects, anything else gets a one-line help reply. A chat already linked to another account is refused |
 | GET | `/admin/limit-defaults` | — | **Admin only.** The monthly limits users without a personal override get: `{analysis_limit, chat_limit}` (the stored defaults, else the environment values) |
 | PUT | `/admin/limit-defaults` | `{analysis_limit, chat_limit}` | **Admin only.** Sets both defaults (non-negative integers, both required). Everyone without a personal override follows them immediately; personal overrides are untouched |
 | PATCH | `/admin/users/{id}/limits` | `{analysis_limit?, chat_limit?}` | **Admin only.** Sets or clears (via explicit `null`) a per-user monthly override; an omitted field is left unchanged |
@@ -313,6 +328,8 @@ are untouched. Responses under `/portfolio` and `GET /me/export` carry `Cache-Co
 Every route except `/health` requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
 Admin routes return `403` to non-admins; `404` for an unknown user id; `409` for an invalid state or acting on yourself; `502` (generic message) when Supabase cannot be reached; `503` when `SUPABASE_URL` or `SUPABASE_SECRET_KEY` is unset. An invite or resend for any address whose Supabase user is already confirmed is `409`, not `502` (most commonly an invitee who clicked the link but has not accepted the terms yet; on a fresh invite with no `app_users` row it means "already registered"). If the database insert fails after Supabase created the user, the backend deletes that Supabase user only when no `app_users` row exists for that Supabase id or that address; otherwise it returns `409` and deletes nothing. If the insert fails for any other reason, the original error is re-raised (a `500`) after that compensation. There is deliberately no separate "last admin" check: an admin cannot disable or remove their own account and only an active admin can call these routes, so at least one active admin always remains. An invited user can call only `/me` and `/me/accept`; every other route stays `403` until they accept.
+
+Telegram routes: the four `/me/telegram` routes need the normal login. When the token (or the bot username) is not set, `GET /me/telegram` answers `configured: false` and `POST /me/telegram/link` answers `503`; the webhook answers `401` while `TELEGRAM_WEBHOOK_SECRET` is unset, so it does nothing without a secret. The webhook is the one route with no bearer token, so it cannot rely on a user-scoped request session: it opens a `scoped_session` for the person the code or the chat mapping names. The Redis keys and why `/stop` goes through the chat mapping are described under "Notifications" in section 12.
 
 `POST /analysis/run` and `POST /chat` return `429` with a calm, specific message when the caller's monthly cap is reached ("Monthly limit reached (N analysis runs this month). Resets next month, or ask your admin to raise it."), distinct from the generic `429` the per-minute burst limiter returns.
 
@@ -490,7 +507,16 @@ INVITE_REDIRECT_URL=                        # where the emailed link lands (the 
 INVITE_LINK_HOURS=24                        # display hint only; Supabase enforces the real expiry
 DEFAULT_MONTHLY_ANALYSIS_LIMIT=100          # system-wide default monthly cap on /analysis/run calls
 DEFAULT_MONTHLY_CHAT_LIMIT=500              # system-wide default monthly cap on /chat calls
+TELEGRAM_BOT_TOKEN=                         # from BotFather; empty turns every Telegram feature off
+TELEGRAM_WEBHOOK_SECRET=                    # long random string (openssl rand -hex 32); Telegram sends it back in a header on every webhook call
+TELEGRAM_BOT_USERNAME=                      # the bot's username without the @, used to build the t.me connect link
+APP_URL=                                    # the frontend origin; the message links to <APP_URL>/today (no link when unset)
 ```
+
+Without `TELEGRAM_BOT_TOKEN`, `POST /me/telegram/link` answers `503`, `GET /me/telegram` reports
+`configured: false` and the notify step logs "not set up" and does nothing. Nothing else in the app
+depends on Telegram. `python -m app.telegram set-webhook <url>` registers the webhook (it needs the
+token and the secret, and exits 1 with a plain message when either is missing).
 
 Plus the risk-profile thresholds in `backend/app/config.py`
 (`max_single_position_pct`, `rsi_oversold`, `fundamental_buy_threshold`,
@@ -539,10 +565,11 @@ default — same dialect and models as production, started with
 
 | Command | What it does |
 |---|---|
-| `daily` | Snapshots, outcome evaluation, then (weekdays only) automatic analysis, for every active user |
+| `daily` | Snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages, for every active user |
 | `snapshots` | Portfolio snapshots only |
 | `outcomes` | Recommendation outcome evaluation only |
 | `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |
+| `notify` | Telegram messages only (does nothing on Saturday and Sunday, UTC, or without `TELEGRAM_BOT_TOKEN`) |
 
 - **Runtime role:** same `DATABASE_URL` as the API; each user is processed in
   its own `scoped_session`, so RLS applies exactly as for a request.
@@ -582,16 +609,67 @@ default — same dialect and models as production, started with
   a Claude error, a key the provider rejected, an exception) is counted and logged by user id and
   exception class name only, and never stops the others. Because the run was already counted
   against the limit, a failed run is counted in both `analysis_runs` and `analysis_failures`.
+- **Notifications:** the last step, `app/scheduled.py::run_notify`, calls
+  `app/notify.py::notify_user` for each active user. It does nothing on Saturday and Sunday (UTC)
+  and does nothing, with one log line, when `TELEGRAM_BOT_TOKEN` is unset. Each user is handled
+  inside their own `scoped_session`, so row-level security applies as for a request. A person is
+  skipped when they have no connected chat, the link is `blocked`, or they are not active. The
+  message holds up to two lines: "N new: AAPL BUY, ..." for their PENDING recommendations with
+  `source = "scheduled"` created today (UTC), when `digest_enabled`; and "Moved: VWCE +6.2%, ..."
+  for open holdings and watchlist tickers whose last close moved at least `move_threshold_pct` from
+  the close before (largest move first), when `moves_enabled`. Each line lists at most 10 tickers
+  and then "+N more". After the lines come a link to `<APP_URL>/today` (when `APP_URL` is set) and
+  the footer "Advisory only. Nothing is sent to a broker." The message is plain text (no
+  `parse_mode`, so nothing can be read as markup) and carries only tickers, actions and
+  percentages: never amounts, share counts, portfolio values, reasoning or the person's notes.
+  When both lines would be empty nothing is sent and the person is counted as skipped. Quotes are
+  fetched 5 at a time; a ticker whose quote fails only drops out of the message.
+  A per-user per-day marker, the Redis key `telegram:sent:<user_id>:<YYYY-MM-DD>` (UTC, 25 h
+  expiry, set with `NX` just before sending), makes a same-day re-run send nothing a second time.
+  The rule when a send fails: a definite non-delivery (Telegram refused it, or the connection could
+  not be made) deletes the marker so a later run may try again; an ambiguous one (a timeout or a
+  dropped connection after the request left, so Telegram may already have it) keeps the marker, so
+  nothing is ever sent twice, at the price of possibly sending nothing that day. When Telegram says
+  the person blocked the bot or the chat is gone (HTTP 403 or "chat not found"), the marker is
+  cleared, the link's `status` becomes `blocked`, the step never tries that chat again, and the
+  person reconnects from Account (linking resets `status` to `ok`). A time cap,
+  `NOTIFY_CUTOFF_SECONDS` = `LOCK_SECONDS` - 300 = 3300, is measured from the start of the command:
+  no new user is started after it, and users not reached are counted as skipped and logged. The
+  analysis step ends by 2700 s at the latest and one message takes seconds, so the command ends
+  inside the 3600 s lock. Counters: `notify_sent` (messages sent), `notify_skipped` (nothing to
+  say, not connected, already sent today, blocked, or not reached in time) and `notify_failures`
+  (a send that failed, or an exception for that user; logged by user id and class name only).
+  Telegram problems never change the exit code: only `failures` and `analysis_failures` do, so a
+  run whose only problem is notify failures stays green.
+
+  Redis keys for Telegram: `telegram:link:<code>` (code to user id, 10 minutes, consumed with an
+  atomic get-and-delete so a code links once), `telegram:chat:<chat_id>` (chat to user id, no
+  expiry, written when a chat is linked and removed on `/stop` or a disconnect) and the
+  `telegram:sent:...` marker above. The chat mapping exists because of row-level security: the
+  webhook request for `/stop` carries only a chat id and no user, and without a user the
+  `telegram_links` table returns zero rows, so the link cannot be looked up by `chat_id`. The
+  mapping gives the user id; the webhook then opens that user's own `scoped_session` and deletes
+  only the row that holds this chat id. A stale mapping (no matching row) is forgotten and answered
+  with "not connected".
+
+  Telegram security notes: the bot token is part of every Bot API URL and httpx logs request URLs
+  at INFO, so `app/telegram.py` sets the `httpx` and `httpcore` loggers to WARNING when it is
+  imported (the jobs call `logging.basicConfig(level=INFO)`); every Telegram failure is raised as a
+  fixed-text `TelegramError` (`from None`, so the httpx exception, which carries the URL, is not
+  chained) and logs carry the exception class name only. The webhook secret is compared in constant
+  time, and the content of messages people send to the bot is never logged.
 - **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
   expiry and a random owner token (released only if it still holds that token). If it is held, the
   run logs it and exits 0 without doing any work. The analysis step also takes
   `scheduled:analysis-step` (same rules), so `daily` and `analysis` never overlap in it.
 - **Logging:** one info line per user per step, plus a final summary line:
   `users snapshots_recorded snapshots_skipped outcomes_evaluated failures analysis_runs
-  analysis_skipped analysis_failures`. Failures are logged by class name only.
+  analysis_skipped analysis_failures notify_sent notify_skipped notify_failures`. Failures are
+  logged by class name only.
 - **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
   user failed (a holding that cannot be priced counts as a failure for that
-  user; `failures` or `analysis_failures` above zero), or Redis unreachable;
+  user; `failures` or `analysis_failures` above zero; `notify_failures` never counts), or Redis
+  unreachable;
   `2` unknown command (argparse). One user's failure never stops the others.
 - **Cadence:** the GitHub Actions cron runs once a day at 05:30 UTC; the
   cron and Task Scheduler examples below use weekdays at 23:00 UTC, after the EU
@@ -846,8 +924,9 @@ just believed done.
 - [ ] `/analysis/run`, `/backtest/run` and `/memory/embed` stay manual by
       design (analysis costs Anthropic money: needs the cost/budget alert
       below first)
-- [ ] Notifications — nothing currently surfaces a new recommendation
-      outside the dashboard (no dashboard exists yet either)
+- [x] Notifications — an opt-in weekday Telegram message with new automatic
+      recommendations and big movers (`app/notify.py`, see §12). Still to do by hand
+      after deploy: create the bot and register the webhook (RUNBOOK, Telegram)
 - [ ] Cost/budget alert in the Anthropic console before anything runs
       unattended on a schedule
 - [x] Retry/backoff around `yfinance` calls — `market_data.py`'s
