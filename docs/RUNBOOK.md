@@ -296,6 +296,19 @@ GRANT USAGE ON SCHEMA public TO backup_reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup_reader;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup_reader;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABLES TO backup_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON SEQUENCES TO backup_reader;
+```
+
+The last line matters: every table with an `id` column also gets a sequence, and `pg_dump` reads each
+one (`SELECT last_value ... FROM <table>_id_seq`). A role set up without it can dump the tables that
+existed on the day of the one-time grants and then fails with `permission denied for sequence
+<table>_id_seq` the first time a migration adds a new table (this happened with `user_api_keys`). If
+you see that error, run these once as `postgres`; they are safe to repeat:
+
+```sql
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO backup_reader;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO backup_reader;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON SEQUENCES TO backup_reader;
 ```
 
 UNVERIFIED: whether Supabase lets `postgres` grant `BYPASSRLS` to a new role. If not, fall back to
