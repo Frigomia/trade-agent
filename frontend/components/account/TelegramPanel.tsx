@@ -144,7 +144,9 @@ export function TelegramPanel() {
 
   const linked = status?.linked === true;
   const blocked = linked && status?.status === "blocked";
-  const state = !status ? "loading" : !status.configured ? "unavailable" : waiting ? "waiting" : blocked ? "blocked" : linked ? "connected" : "off";
+  // A linked person keeps their settings and Disconnect even when the server lost its bot username.
+  const canConnect = status?.configured === true;
+  const state = !status ? "loading" : !canConnect && !linked ? "unavailable" : waiting ? "waiting" : blocked ? "blocked" : linked ? "connected" : "off";
 
   // Linked, cancelled or expired: forget the link (derived state, reset during render).
   const [wasWaiting, setWasWaiting] = useState(waiting);
@@ -223,7 +225,7 @@ export function TelegramPanel() {
     );
   }
 
-  if (!status.configured) {
+  if (state === "unavailable") {
     return (
       <Panel sx={cardSx}>
         <Title />
@@ -337,9 +339,11 @@ export function TelegramPanel() {
               <span>{BLOCKED}</span>
             </Box>
             <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
-              <Button variant="contained" size="small" disabled={link.submitting} onClick={startConnect}>
-                Reconnect
-              </Button>
+              {canConnect && (
+                <Button variant="contained" size="small" disabled={link.submitting} onClick={startConnect}>
+                  Reconnect
+                </Button>
+              )}
               <Button variant="outlined" size="small" onClick={() => setConfirming(true)}>
                 Disconnect
               </Button>

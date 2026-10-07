@@ -378,6 +378,24 @@ describe("TelegramPanel", () => {
     await waitFor(() => expect(open).toHaveBeenCalledWith(URL_, "_blank", "noopener,noreferrer"));
   });
 
+  it("linked but not configured: settings and Disconnect stay, no Connect or Reconnect", async () => {
+    hook.status = { ...connected, configured: false };
+    render(<TelegramPanel />);
+    expect(screen.queryByText("Telegram is not available on this server.")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("switch")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /connect telegram|reconnect/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Disconnect Telegram" }));
+    await waitFor(() => expect(hook.disconnect).toHaveBeenCalledTimes(1));
+  });
+
+  it("blocked and not configured: Disconnect only, no Reconnect", () => {
+    hook.status = { ...connected, configured: false, status: "blocked" };
+    render(<TelegramPanel />);
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reconnect" })).not.toBeInTheDocument();
+  });
+
   it("never shows a chat id", () => {
     hook.status = { ...connected, chat_id: 987654321 };
     render(<TelegramPanel />);
