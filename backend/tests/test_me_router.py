@@ -8,7 +8,7 @@ import app.redis_client as redis_client_module
 from app import rls
 from app.config import settings
 from app.db import Base
-from app.models import AppUser, InvestmentPreferences
+from app.models import AppUser, InvestmentPreferences, TelegramLink
 from tests.auth_support import OTHER_USER_ID, ROW_FACTORIES, USER_ID, add_app_user, auth_headers
 
 
@@ -195,6 +195,24 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
     assert body["investment_preferences"]["notes"] == "caller-notes"
 
 
+def test_the_export_lists_telegram_settings_but_not_the_chat_id(client, db_session):
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=987654321, moves_enabled=False))
+    db_session.commit()
+    body = client.get("/me/export").json()
+    assert body["telegram"] == {
+        "linked": True,
+        "status": "ok",
+        "digest_enabled": True,
+        "moves_enabled": False,
+        "move_threshold_pct": 5.0,
+    }
+    assert "987654321" not in client.get("/me/export").text
+
+
+def test_the_export_has_no_telegram_block_when_not_linked(client):
+    assert client.get("/me/export").json()["telegram"] is None
+
+
 def test_export_is_403_for_an_invited_user(client, db_session):
     add_app_user(db_session, OTHER_USER_ID, status="invited")
     response = client.get("/me/export", headers=auth_headers(OTHER_USER_ID))
@@ -221,6 +239,9 @@ def test_delete_my_data_wipes_only_the_callers_rows(client, db_session, engine):
     db_session.expire_all()
     assert db_session.get(AppUser, USER_ID).claude_key_state == "none"
     assert db_session.get(AppUser, OTHER_USER_ID).claude_key_state == "ok"
+    # The Telegram link goes with the rest of the caller's data; the other user's stays.
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).count() == 0
+    assert db_session.query(TelegramLink).filter_by(user_id=OTHER_USER_ID).count() == 1
 
 
 def test_delete_my_data_requires_confirm(client):

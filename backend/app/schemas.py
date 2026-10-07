@@ -279,6 +279,14 @@ class ExportProfileOut(BaseModel):
     last_seen_at: datetime | None
 
 
+class TelegramExportOut(BaseModel):
+    linked: bool = True
+    status: str
+    digest_enabled: bool
+    moves_enabled: bool
+    move_threshold_pct: float
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]
@@ -289,6 +297,7 @@ class ExportOut(BaseModel):
     backtest_results: list[BacktestResultOut]
     investment_preferences: PreferencesOut | None
     portfolio_snapshots: list[PortfolioSnapshotOut]
+    telegram: TelegramExportOut | None = None
 
 
 class UsageDetail(BaseModel):

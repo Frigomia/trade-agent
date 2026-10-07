@@ -1,0 +1,181 @@
+import asyncio
+import logging
+from unittest.mock import patch
+
+import pytest
+
+import app.redis_client as redis_client_module
+from app import telegram
+from app.models import TelegramLink
+from app.routers import telegram as telegram_routes
+from app.routers.telegram import CONNECTED, EXPIRED, NOT_CONNECTED, STOPPED, TAKEN
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
+
+SECRET = "s3cret-value"
+HEADERS = {"X-Telegram-Bot-Api-Secret-Token": SECRET}
+
+
+def run(coro):
+    # Each asyncio.run (and the TestClient's portal) has its own loop, so the cached Redis client
+    # must be dropped before and after.
+    redis_client_module._redis = None
+    try:
+        return asyncio.run(coro)
+    finally:
+        redis_client_module._redis = None
+
+
+def _update(text, chat_id=555, chat_type="private"):
+    return {"update_id": 1, "message": {"chat": {"id": chat_id, "type": chat_type}, "text": text}}
+
+
+class FakeBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, chat_id, text):
+        self.sent.append((chat_id, text))
+
+
+@pytest.fixture()
+def hook(anon_client, monkeypatch, app_session_local, db_session):
+    add_app_user(db_session, USER_ID)
+    add_app_user(db_session, OTHER_USER_ID)
+    bot = FakeBot()
+    monkeypatch.setattr(telegram_routes.settings, "telegram_webhook_secret", SECRET)
+    monkeypatch.setattr(telegram_routes.telegram, "get_bot", lambda: bot)
+    with patch("app.db.SessionLocal", app_session_local):
+        yield anon_client, bot
+
+
+def test_a_missing_or_wrong_secret_is_401(hook):
+    client, bot = hook
+    assert client.post("/telegram/webhook", json=_update("/start x")).status_code == 401
+    bad = {"X-Telegram-Bot-Api-Secret-Token": "wrong"}
+    assert (
+        client.post("/telegram/webhook", json=_update("/start x"), headers=bad).status_code == 401
+    )
+    assert bot.sent == []
+
+
+def test_an_unset_secret_rejects_everything(hook, monkeypatch):
+    client, _ = hook
+    monkeypatch.setattr(telegram_routes.settings, "telegram_webhook_secret", None)
+    assert (
+        client.post("/telegram/webhook", json=_update("/stop"), headers=HEADERS).status_code == 401
+    )
+
+
+def test_start_with_a_valid_code_links_the_chat(hook, db_session):
+    client, bot = hook
+    code = run(telegram.create_link_code(USER_ID))
+    r = client.post(
+        "/telegram/webhook", json=_update(f"/start {code}", chat_id=777), headers=HEADERS
+    )
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    link = db_session.query(TelegramLink).filter_by(user_id=USER_ID).one()
+    assert (link.chat_id, link.status) == (777, "ok")
+    assert bot.sent == [(777, CONNECTED)]
+    assert run(telegram.user_for_chat(777)) == USER_ID
+
+
+def test_a_code_works_only_once_and_an_unknown_one_not_at_all(hook, db_session):
+    client, bot = hook
+    code = run(telegram.create_link_code(USER_ID))
+    client.post("/telegram/webhook", json=_update(f"/start {code}", chat_id=777), headers=HEADERS)
+    client.post("/telegram/webhook", json=_update(f"/start {code}", chat_id=888), headers=HEADERS)
+    client.post(
+        "/telegram/webhook",
+        json=_update("/start nope-nope-nope-nope-x", chat_id=999),
+        headers=HEADERS,
+    )
+    assert db_session.query(TelegramLink).count() == 1
+    assert [t for _, t in bot.sent[1:]] == [EXPIRED, EXPIRED]
+
+
+def test_a_chat_already_linked_to_someone_else_is_refused_and_the_code_is_spent(hook, db_session):
+    client, bot = hook
+    db_session.add(TelegramLink(user_id=OTHER_USER_ID, chat_id=777))
+    db_session.commit()
+    code = run(telegram.create_link_code(USER_ID))
+    client.post("/telegram/webhook", json=_update(f"/start {code}", chat_id=777), headers=HEADERS)
+    assert bot.sent == [(777, TAKEN)]
+    assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).count() == 0
+    assert run(telegram.consume_link_code(code)) is None
+
+
+def test_start_again_from_a_new_chat_replaces_the_chat_and_clears_blocked(hook, db_session):
+    client, bot = hook
+    db_session.add(
+        TelegramLink(user_id=USER_ID, chat_id=111, status="blocked", digest_enabled=False)
+    )
+    db_session.commit()
+    code = run(telegram.create_link_code(USER_ID))
+    client.post("/telegram/webhook", json=_update(f"/start {code}", chat_id=222), headers=HEADERS)
+    db_session.expire_all()
+    link = db_session.query(TelegramLink).filter_by(user_id=USER_ID).one()
+    assert (link.chat_id, link.status, link.digest_enabled) == (222, "ok", False)  # settings kept
+
+
+def test_stop_unlinks_a_known_chat_and_answers_politely_to_an_unknown_one(hook, db_session):
+    client, bot = hook
+    db_session.add(TelegramLink(user_id=USER_ID, chat_id=777))
+    db_session.commit()
+    run(telegram.remember_chat(777, USER_ID))
+    client.post("/telegram/webhook", json=_update("/stop", chat_id=777), headers=HEADERS)
+    assert db_session.query(TelegramLink).count() == 0
+    client.post("/telegram/webhook", json=_update("/stop", chat_id=31337), headers=HEADERS)
+    assert [t for _, t in bot.sent] == [STOPPED, NOT_CONNECTED]
+    assert run(telegram.user_for_chat(777)) is None
+
+
+def test_stop_with_a_stale_mapping_forgets_it_and_says_not_connected(hook, db_session):
+    client, bot = hook
+    run(telegram.remember_chat(777, USER_ID))  # no row behind it
+    client.post("/telegram/webhook", json=_update("/stop", chat_id=777), headers=HEADERS)
+    assert [t for _, t in bot.sent] == [NOT_CONNECTED]
+    assert run(telegram.user_for_chat(777)) is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"update_id": 1},
+        {"message": {"chat": {"id": 1, "type": "group"}, "text": "/start x"}},
+        {"message": {"chat": {"id": 1, "type": "private"}}},
+        {"edited_message": {}},
+        ["not", "an", "object"],
+    ],
+)
+def test_other_updates_are_acknowledged_and_ignored(hook, body):
+    client, bot = hook
+    assert client.post("/telegram/webhook", json=body, headers=HEADERS).status_code == 200
+    assert bot.sent == []
+
+
+def test_not_json_is_acknowledged_without_crashing(hook):
+    client, _ = hook
+    r = client.post(
+        "/telegram/webhook", content=b"not json", headers={**HEADERS, "content-type": "text/plain"}
+    )
+    assert r.status_code == 200
+
+
+def test_a_failing_reply_does_not_fail_the_webhook(hook):
+    client, bot = hook
+
+    async def boom(chat_id, text):
+        raise telegram.TelegramError("x")
+
+    bot.send_message = boom
+    r = client.post("/telegram/webhook", json=_update("hello"), headers=HEADERS)
+    assert r.status_code == 200
+
+
+def test_the_webhook_never_logs_the_secret_or_the_code(hook, caplog):
+    client, _ = hook
+    code = run(telegram.create_link_code(USER_ID))
+    with caplog.at_level(logging.DEBUG):
+        client.post("/telegram/webhook", json=_update(f"/start {code}"), headers=HEADERS)
+    assert SECRET not in caplog.text and code not in caplog.text

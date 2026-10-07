@@ -5,8 +5,15 @@ from app.main import app
 from tests.auth_support import OTHER_USER_ID, add_app_user, auth_headers
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
-# The only routes an invited (not yet active) user may reach.
-INVITEE_ALLOWED = {("GET", "/me"), ("POST", "/me/accept"), ("GET", "/health"), ("POST", "/health")}
+# The only routes an invited (not yet active) user may reach. The Telegram webhook is not a user
+# route at all: it takes no login and answers 401 without its secret header.
+INVITEE_ALLOWED = {
+    ("GET", "/me"),
+    ("POST", "/me/accept"),
+    ("GET", "/health"),
+    ("POST", "/health"),
+    ("POST", "/telegram/webhook"),
+}
 
 
 def _operations():

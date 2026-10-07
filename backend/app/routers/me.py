@@ -14,6 +14,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    TelegramLink,
     Trade,
     WatchlistItem,
 )
@@ -29,6 +30,7 @@ from app.schemas import (
     PortfolioSnapshotOut,
     PreferencesOut,
     RecommendationOut,
+    TelegramExportOut,
     TradeOut,
     UsageDetail,
     UsageOut,
@@ -87,6 +89,7 @@ def export_data(
 ) -> ExportOut:
     profile = db.get(AppUser, user.id)
     preferences = db.query(InvestmentPreferences).filter_by(user_id=user.id).one_or_none()
+    link = db.query(TelegramLink).filter_by(user_id=user.id).one_or_none()
     return ExportOut(
         profile=ExportProfileOut.model_validate(profile),
         holdings=[
@@ -116,6 +119,17 @@ def export_data(
             PortfolioSnapshotOut.model_validate(p)
             for p in db.query(PortfolioSnapshot).filter_by(user_id=user.id)
         ],
+        # The settings only: the chat id is never exported.
+        telegram=(
+            TelegramExportOut(
+                status=link.status,
+                digest_enabled=link.digest_enabled,
+                moves_enabled=link.moves_enabled,
+                move_threshold_pct=float(link.move_threshold_pct),
+            )
+            if link is not None
+            else None
+        ),
     )
 
 
