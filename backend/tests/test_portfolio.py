@@ -770,3 +770,69 @@ def test_a_watchlist_item_can_carry_a_target_and_an_omitted_target_keeps_it(clie
 def test_a_watchlist_target_must_be_between_0_and_1(client, value):
     body = {"ticker": "NVDA", "asset_type": "STOCK", "target_weight": value}
     assert client.post("/portfolio/watchlist", json=body).status_code == 422
+
+
+def _hold_etf(client, ticker="EIMI.L"):
+    return client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": ticker,
+            "name": "iShares EM IMI",
+            "asset_type": "ETF",
+            "shares": 2,
+            "cost_basis": 10,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+
+def test_isin_is_set_on_the_holding_and_never_wiped_by_a_holding_upsert(client):
+    _hold_etf(client)
+    ok = client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": " ie00bkm4gz66 "})
+    assert ok.status_code == 200 and ok.json() == {"ticker": "EIMI.L", "isin": "IE00BKM4GZ66"}
+    _hold_etf(client)  # a full-replace upsert that omits the isin
+    assert [h["isin"] for h in client.get("/portfolio/holdings").json()] == ["IE00BKM4GZ66"]
+
+
+def test_isin_goes_to_the_watchlist_item_too_and_empty_clears(client):
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK"})
+    _hold_etf(client, "NVDA")
+    client.put("/portfolio/instruments/NVDA/isin", json={"isin": "US0378331005"})
+    assert client.get("/portfolio/watchlist").json()[0]["isin"] == "US0378331005"
+    assert client.get("/portfolio/holdings").json()[0]["isin"] == "US0378331005"
+    cleared = client.put("/portfolio/instruments/NVDA/isin", json={"isin": ""}).json()
+    assert cleared["isin"] is None
+    assert client.get("/portfolio/holdings").json()[0]["isin"] is None
+
+
+@pytest.mark.parametrize("bad", ["US0378331006", "IE00BKM4GZ6", "x" * 13, "ie00bkm4gz65"])
+def test_a_bad_isin_is_rejected_and_nothing_is_stored(client, bad):
+    _hold_etf(client)
+    assert client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": bad}).status_code == 422
+    assert client.get("/portfolio/holdings").json()[0]["isin"] is None
+
+
+def test_isin_for_an_unknown_ticker_is_404(client):
+    assert (
+        client.put("/portfolio/instruments/ZZZZ/isin", json={"isin": "US0378331005"}).status_code
+        == 404
+    )
+
+
+def test_isin_never_touches_another_persons_rows(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    db_session.add(
+        Holding(
+            user_id=OTHER_USER_ID,
+            ticker="EIMI.L",
+            name="x",
+            asset_type="ETF",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+    resp = client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": "IE00BKM4GZ66"})
+    assert resp.status_code == 404
+    assert db_session.query(Holding).filter_by(user_id=OTHER_USER_ID).one().isin is None

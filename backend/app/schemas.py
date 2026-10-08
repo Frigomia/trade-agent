@@ -11,7 +11,10 @@ from pydantic import (
     PositiveFloat,
     StringConstraints,
     computed_field,
+    field_validator,
 )
+
+from app.isin import is_valid_isin
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
 # Excludes path metacharacters (/, ?, #) and any ".." that yfinance interpolates
@@ -466,3 +469,26 @@ class TelegramSettingsIn(BaseModel):
     moves_enabled: bool | None = None
     plan_reminder_enabled: bool | None = None
     move_threshold_pct: float | None = Field(default=None, ge=1, le=50)
+
+
+class IsinIn(BaseModel):
+    isin: str | None = None
+
+    @field_validator("isin", mode="before")
+    @classmethod
+    def _normalise(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("isin must be text")
+        text = value.strip().upper()
+        if text == "":
+            return None
+        if not is_valid_isin(text):
+            raise ValueError("Not a valid ISIN: 12 characters with a correct check digit.")
+        return text
+
+
+class IsinOut(BaseModel):
+    ticker: str
+    isin: str | None

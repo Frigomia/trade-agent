@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import func, select
@@ -13,6 +13,7 @@ from app.models import (
     AppUser,
     ContributionPlan,
     ContributionPlanLine,
+    Holding,
     InvestmentPreferences,
     TelegramLink,
 )
@@ -349,3 +350,20 @@ def test_a_redis_failure_does_not_fail_delete_my_data(client, db_session):
 
     assert response.status_code == 204
     assert db_session.query(TelegramLink).filter_by(user_id=USER_ID).count() == 0
+
+
+def test_the_export_includes_the_holding_isin(client, db_session):
+    db_session.add(
+        Holding(
+            user_id=USER_ID,
+            ticker="EIMI.L",
+            name="x",
+            asset_type="ETF",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+            isin="IE00BKM4GZ66",
+        )
+    )
+    db_session.commit()
+    assert client.get("/me/export").json()["holdings"][0]["isin"] == "IE00BKM4GZ66"

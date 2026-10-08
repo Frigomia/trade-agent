@@ -15,6 +15,8 @@ from app.schemas import (
     HoldingIn,
     HoldingOut,
     HoldingSummaryOut,
+    IsinIn,
+    IsinOut,
     PortfolioSnapshotOut,
     PortfolioSummaryOut,
     TradeIn,
@@ -51,6 +53,31 @@ def list_holdings(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> list[Holding]:
     return db.query(Holding).filter_by(user_id=user.id).all()
+
+
+@router.put(
+    "/instruments/{ticker}/isin",
+    response_model=IsinOut,
+    dependencies=[Depends(rate_limiter("portfolio_isin", limit=WRITE_LIMIT_PER_MINUTE))],
+)
+def set_isin(
+    ticker: str,
+    payload: IsinIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> IsinOut:
+    """Sets (or clears) the ISIN on the person's holding and/or watchlist row for this ticker.
+    A dedicated route: the holdings upsert replaces the whole record and would wipe it."""
+    symbol = ticker.upper()
+    holding = db.query(Holding).filter_by(user_id=user.id, ticker=symbol).one_or_none()
+    item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=symbol).one_or_none()
+    if holding is None and item is None:
+        raise HTTPException(status_code=404, detail="No holding or watchlist item for that ticker")
+    for row in (holding, item):
+        if row is not None:
+            row.isin = payload.isin
+    db.commit()
+    return IsinOut(ticker=symbol, isin=payload.isin)
 
 
 @router.post(
