@@ -3,6 +3,7 @@ import logging
 import math
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
@@ -27,7 +28,7 @@ from app.schemas import (
     WatchlistSummaryOut,
 )
 from app.snapshots import record_snapshot
-from app.trades import TradeRefused, apply_trade
+from app.trades import TOO_LARGE, TradeRefused, apply_trade
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +88,11 @@ def upsert_holding(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> Holding:
+    # Lock first, before the lookup: a plan-line placement creating this same ticker takes the same
+    # lock, so it cannot insert between this lookup and the insert below (a unique-key error).
+    lock_user_for_insert(db, user.id)
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
-        lock_user_for_insert(db, user.id)
         if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
             raise HTTPException(status_code=409, detail=cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
@@ -185,9 +188,14 @@ def log_trade(
 
     try:
         trade = apply_trade(db, user.id, holding, payload)
+        db.commit()
     except TradeRefused as exc:
+        db.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    db.commit()
+    except DataError:
+        # A total past Numeric(18,6), such as the holding's share count: refused at the commit.
+        db.rollback()
+        raise HTTPException(status_code=422, detail=TOO_LARGE) from None
     db.refresh(trade)
     return trade
 

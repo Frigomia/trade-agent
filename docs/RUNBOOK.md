@@ -260,8 +260,11 @@ that the person placed the order: it creates the holding if the ticker is new, l
 shares and price the person typed (the fill price in the holding's own currency, never the plan's EUR
 price), and marks the line placed. It takes the same per-person lock as the trade log.
 
-There is no undo. To fix a mistaken "Placed" (wrong price or shares, or the order was never placed),
-log a SELL for the same shares in the trade log. The line stays marked placed. Deleting a plan keeps
+There is no undo. A SELL keeps the average cost as it is, so it only fixes a wrong share count: log a
+SELL of the extra shares. A wrong price, or an order that was never placed, is fixed by editing the
+holding's shares and average cost on the holdings page (the holding form replaces the whole record).
+For example, holding 10 at 100 and recording 1 at 1000 by mistake gives 11 at 181.82; a SELL of 1
+leaves 10 at 181.82, not 100. Either way the line stays marked placed. Deleting a plan keeps
 the trades its lines logged. The ISIN is set from the ticket's "Add ISIN" field, and a holding save
 never changes it.
 

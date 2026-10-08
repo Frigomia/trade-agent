@@ -8,7 +8,6 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeFloat,
-    PositiveFloat,
     StringConstraints,
     computed_field,
     field_validator,
@@ -71,18 +70,23 @@ class WatchlistItemOut(WatchlistItemIn):
     isin: str | None = None
 
 
+# A share count or price as a trade stores it (Numeric(18,6)): finite and at least the smallest
+# stored step, so a smaller value cannot store as 0 while the cost basis used the unrounded one.
+TradeNumber = Annotated[float, Field(ge=0.000001, allow_inf_nan=False)]
+
+
 class TradeIn(BaseModel):
     date: date
     ticker: Ticker
     action: Literal["BUY", "SELL"]
-    shares: PositiveFloat
-    price: PositiveFloat
+    shares: TradeNumber
+    price: TradeNumber
 
 
 class PlaceIn(BaseModel):
     date: date
-    shares: float = Field(gt=0, allow_inf_nan=False)
-    price: float = Field(gt=0, allow_inf_nan=False)
+    shares: TradeNumber
+    price: TradeNumber
     asset_type: AssetType | None = None  # needed only when the ticker is not a holding yet
 
 
@@ -317,7 +321,7 @@ class PlanIn(BaseModel):
 REASON_TEXT = {
     "new_position": "A new position that starts at 0 %",
     "underweight": "Below its target weight",
-    "favoured": "Below its target, and its newest call is ADD or BUY",
+    "favoured": "Below its target, and a pending call favours adding",
     "remainder": "Extra money shared by target weight",
 }
 

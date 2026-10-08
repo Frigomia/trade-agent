@@ -366,6 +366,17 @@ def test_the_holdings_isin_wins_over_the_watchlists(client, db_session):
     assert line["isin"] == "US0378331005"
 
 
+def test_a_holding_without_an_isin_falls_back_to_the_watchlists(client, db_session):
+    _seed_basic(db_session)
+    _watch(db_session, "AAPL", 0.1)
+    db_session.query(WatchlistItem).filter_by(ticker="AAPL").update({"isin": "US5949181045"})
+    db_session.commit()  # the AAPL holding keeps isin None
+    plan = _saved(client)
+    lines = client.get(f"/plans/{plan['id']}").json()["lines"]
+    line = next(ln for ln in lines if ln["ticker"] == "AAPL")
+    assert line["isin"] == "US5949181045"
+
+
 def test_an_isin_added_after_saving_shows_on_the_old_plan(client, db_session):
     _seed_basic(db_session)
     plan = _saved(client)
@@ -511,7 +522,16 @@ def test_a_line_id_from_another_plan_is_404(client, db_session):
 
 
 @pytest.mark.parametrize(
-    "body", [{"shares": 0}, {"shares": -1}, {"price": 0}, {"price": "x"}, {"date": "nope"}]
+    "body",
+    [
+        {"shares": 0},
+        {"shares": -1},
+        {"shares": 4e-7},
+        {"price": 0},
+        {"price": 4e-7},
+        {"price": "x"},
+        {"date": "nope"},
+    ],
 )
 def test_bad_shares_price_or_date_are_422(client, db_session, body):
     _seed_basic(db_session)

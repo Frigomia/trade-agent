@@ -143,8 +143,8 @@ WatchlistItem
 
 -- Holding and WatchlistItem also carry isin (varchar(12), nullable, a check that it is empty or matches
 -- ^[A-Z]{2}[A-Z0-9]{9}[0-9]$; the API also verifies the ISO 6166 check digit). It is set only by
--- PUT /portfolio/instruments/{ticker}/isin: the holdings and watchlist upserts are full replaces and
--- never touch it, so saving a holding cannot wipe it. It is entered by hand, never looked up (the price
+-- PUT /portfolio/instruments/{ticker}/isin: the upserts never touch it (the holdings upsert is a full
+-- replace), so saving a holding cannot wipe it. It is entered by hand, never looked up (the price
 -- source is unreliable for ISINs, and a wrong ISIN on an order is worse than none).
 
 Trade
@@ -313,7 +313,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | DELETE | `/portfolio/watchlist/{ticker}` | — | Removes the caller's watchlist item (`204`; `404` if it is not on the list); 60 requests a minute per user |
 | GET | `/market/search?q=` | — | Stocks and ETFs matching a name, ticker or ISIN (`yfinance` search): up to 8 of `{symbol, name, type, exchange}`; `q` is 2–60 characters; cached an hour; 30 requests a minute per user; an empty list when Yahoo fails. The ticker field in the holding and backtest forms uses it |
 | PUT | `/portfolio/instruments/{ticker}/isin` | `{isin: string \| null}` | Sets or clears the ISIN on whichever of the caller's holding and watchlist rows exist for the ticker (both when both exist). The text is trimmed and upper-cased; an empty string or `null` clears it; `422` for a wrong shape or check digit; `404` when neither row exists. The only way to set an ISIN; 60 requests a minute per user |
-| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis through the shared `app/trades.py`; takes the per-person lock `lock_user_for_insert`, so it serializes with placements; 60 requests a minute per user |
+| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis through the shared `app/trades.py`; takes the per-person lock `lock_user_for_insert`, so it serializes with placements; `shares` and `price` must be finite and at least 0.000001, and a number too large to store is a `422` with nothing written; 60 requests a minute per user |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
@@ -337,7 +337,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
 | GET | `/plans/drift` | — | Open holdings with a target weight whose weight is at least `drift_threshold_pct` points away from it, largest first: `{ticker, name, weight, target, points}` (fractions, `points` signed). An empty list when nothing drifts or nothing can be priced. Rate limited: 30/min per user |
 | GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's. Each line also carries `id`, `isin` (read now from the caller's holding, else the watchlist item, for that ticker; `null` when none), `placed_at` and `placed_trade_id` (`null` until placed), plus `placed_shares` and `placed_price`, read at request time from the logged trade (`null` when unplaced or the trade was deleted; never stored on the line) |
-| POST | `/plans/{plan_id}/lines/{line_id}/placed` | `{date, shares, price, asset_type?}` | Records that the person placed this line's order in their broker (see "Order tickets" below); returns the line. `shares` and `price` must be positive and finite (`422` for zero, negative, `NaN` or infinity). `404` for a missing line or one that is not the caller's; `409` when already placed, or when a new position would pass the 100-holding cap; `422` when `asset_type` is missing for a ticker that is not a holding yet, or when the numbers are too large to store. 60 requests a minute per user |
+| POST | `/plans/{plan_id}/lines/{line_id}/placed` | `{date, shares, price, asset_type?}` | Records that the person placed this line's order in their broker (see "Order tickets" below); returns the line. `shares` and `price` must be finite and at least 0.000001 (`422` for zero, negative, smaller, `NaN` or infinity). `404` for a missing line or one that is not the caller's; `409` when already placed, or when a new position would pass the 100-holding cap; `422` when `asset_type` is missing for a ticker that is not a holding yet, or when the numbers are too large to store. 60 requests a minute per user |
 | DELETE | `/plans/{id}` | — | Deletes the plan and its lines (`204`); `404` if it is not the caller's. Trades that placed lines logged stay in the trade log |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
@@ -445,7 +445,8 @@ holding without a target is outside the pool: it neither receives money nor coun
    buy one share is dropped with a note, and whatever no line uses is the leftover.
 8. `weight_before` is the item's value over `pool_before` (null when the pool is 0); `weight_after` is
    its value plus the line over `pool_before` plus what was spent. The reason is `remainder`,
-   `new_position` (not held), `favoured` (ADD or BUY) or `underweight`.
+   `new_position` (not held), `favoured` (ADD or BUY; shown as "Below its target, and a pending call
+   favours adding") or `underweight`.
 
 If a holding and a watchlist item share a ticker, the holding's target is used; when the holding has no target, the watchlist target applies to the held position (its real shares count, it is not a `new_position`, and it is not counted among the holdings without a target). A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
 priced (a note says no ticker with a target could be priced), every targeted ticker excluded. `POST /plans` returns the plan as read back from the
@@ -508,17 +509,26 @@ place a trade changes shares and average cost and writes the `trades` row. It do
 caller owns the transaction) and raises `TradeRefused` for what it cannot apply (selling more than is
 held); `POST /portfolio/trades` turns that into the same `422` messages as before and `place_line` into
 a `422` of its own. `POST /portfolio/trades` now takes the same per-person lock, so trades and
-placements serialize per person.
+placements serialize per person. Shares and price (in `TradeIn` and the placement body alike) must be
+finite and at least 0.000001, the smallest step the `Numeric(18,6)` columns store (`422` otherwise);
+`apply_trade` rounds both to 6 decimals (half-even) before the arithmetic, so the average cost and the
+stored row use the same numbers. A value or a resulting total too large for the column is a `422`
+"Those numbers are too large to store." on both routes, with nothing written.
 
 **No undo.** The trade log has no delete, so unmarking a line would leave its trade behind and the
-portfolio and the plan would disagree. A mistaken "Placed" is fixed with a SELL of the same shares in
-the trade log. Deleting a plan removes its lines but keeps the trades they logged.
+portfolio and the plan would disagree. A SELL leaves the average cost unchanged, so it only fixes a
+wrong share count: a SELL of the extra shares. A wrong price, or an order that was never placed, is
+fixed by editing the holding's shares and average cost on the holdings page (the holding form, a
+full-replace upsert); for example, holding 10 at 100 and recording 1 at 1000 by mistake gives 11 at
+181.82, and a SELL of 1 leaves 10 at 181.82, not 100. Either way the line stays marked placed.
+Deleting a plan removes its lines but keeps the trades they logged.
 
 **Privacy.** Plan data, tickets and ISINs are never logged and never sent to Telegram.
 
 **Future work.** An "Orders" tab next to This month and Saved plans, listing open (not yet placed)
 lines across all saved plans (a query over lines with no `placed_at`); a broker preference with
-broker-specific wording; undo, if the trade log ever gets a delete.
+broker-specific wording; undo, if the trade log ever gets a delete (until then a wrong price is
+corrected on the holding form, since a SELL does not restore the average cost).
 
 ---
 

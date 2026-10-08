@@ -57,3 +57,23 @@ def test_selling_more_than_held_is_refused_and_changes_nothing(db_session):
             TradeIn(date=date(2026, 10, 1), ticker="AAPL", action="SELL", shares=11, price=1),
         )
     assert float(h.shares) == 10.0
+
+
+def test_shares_and_price_are_rounded_to_the_stored_step_before_the_maths(db_session):
+    uid, h = _holding(db_session, 10, 100)
+    trade = apply_trade(
+        db_session,
+        uid,
+        h,
+        TradeIn(
+            date=date(2026, 10, 1), ticker="AAPL", action="BUY", shares=1.2345675, price=10.1234565
+        ),
+    )
+    # Half-even to 6 places: 1.2345675 -> 1.234568, 10.1234565 -> 10.123456.
+    assert (trade.shares, trade.price) == (1.234568, 10.123456)
+    expected = (10 * 100 + 1.234568 * 10.123456) / (10 + 1.234568)
+    assert float(h.shares) == 10 + 1.234568
+    assert float(h.cost_basis) == pytest.approx(expected, abs=1e-12)
+    db_session.flush()
+    db_session.refresh(trade)
+    assert (float(trade.shares), float(trade.price)) == (1.234568, 10.123456)

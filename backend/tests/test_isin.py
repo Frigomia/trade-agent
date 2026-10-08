@@ -24,3 +24,7 @@ def test_real_isins_pass(isin):
 )
 def test_bad_isins_fail(isin):
     assert not is_valid_isin(isin)
+
+
+def test_a_trailing_newline_is_rejected_not_raised():
+    assert not is_valid_isin("US0378331005\n")

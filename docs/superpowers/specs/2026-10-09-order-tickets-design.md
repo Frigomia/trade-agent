@@ -79,12 +79,16 @@ All routes require an active user and run through `get_user_db`.
 | PUT | `/portfolio/instruments/{ticker}/isin` | Body `{isin: string \| null}`. Sets or clears the ISIN on whichever of the person's holding and watchlist rows exist for the ticker; 404 when neither exists; 422 for a bad ISIN or check digit. A small dedicated route, because the holdings upsert replaces the whole record. |
 | POST | `/plans/{plan_id}/lines/{line_id}/placed` | Body `{date, shares, price, asset_type?}` (`asset_type` is required only when the ticker is not a holding yet; see Rulings). In one transaction: finds the line (404 for another person's or a missing line, 409 when already placed); creates the holding when none exists (name from the line, `asset_type` from the body, the 100-holding cap and the insert lock as in the holdings route); applies a BUY through the same code as `POST /portfolio/trades`; stamps `placed_at` and `placed_trade_id`; returns the line. Rate limited like the other writes. |
 
-Shares and price are validated like `TradeIn` (positive, finite). The trade-logging logic (update shares and
+Shares and price are validated like `TradeIn` (finite, at least 0.000001, rounded to 6 decimals before
+the arithmetic; a value too large to store is a 422). The trade-logging logic (update shares and
 average cost, write the `trades` row) is extracted from the route into one shared function, so the existing
 route and the new one use the same code and the cost basis is computed in one place.
 
-There is no undo: the trade log has no delete, so unmarking a line would leave its trade behind. A mistaken
-"Placed" is fixed with a SELL in the trade log, as today.
+There is no undo: the trade log has no delete, so unmarking a line would leave its trade behind. A SELL
+keeps the average cost unchanged, so it only fixes a wrong share count (a SELL of the difference). A wrong
+price, or an order that was never placed, is corrected by editing the holding's shares and average cost on
+the holdings page (the holding form, a full-replace upsert): holding 10 at 100 and recording 1 at 1000 by
+mistake gives 11 at 181.82, and a SELL of 1 leaves 10 at 181.82, not 100. The line stays marked placed.
 
 ## The screens
 
@@ -150,7 +154,8 @@ ticket and the currency rule), RUNBOOK (nothing to configure; what "Placed" does
   saved plans, so unfinished lines from earlier months stay visible. The data model already supports it (a
   query over lines with no `placed_at`).
 - A broker preference with broker-specific wording, if the neutral text proves confusing in one app.
-- Undo for a placed line, if the trade log ever gets a delete.
+- Undo for a placed line, if the trade log ever gets a delete. Until then a wrong price is corrected on the
+  holding form, because a SELL does not restore the earlier average cost.
 
 ## Open points to confirm during implementation
 

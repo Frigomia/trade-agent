@@ -2,11 +2,12 @@
 
 import re
 
-_SHAPE = re.compile(r"^[A-Z]{2}[A-Z0-9]{9}[0-9]$")
+_SHAPE = re.compile(r"[A-Z]{2}[A-Z0-9]{9}[0-9]")
 
 
 def is_valid_isin(value: str) -> bool:
-    if not _SHAPE.match(value):
+    # fullmatch, not match with ^...$: "$" also matches before a trailing newline.
+    if not _SHAPE.fullmatch(value):
         return False
     digits = "".join(str(int(char, 36)) for char in value)  # A=10 ... Z=35
     total = 0
