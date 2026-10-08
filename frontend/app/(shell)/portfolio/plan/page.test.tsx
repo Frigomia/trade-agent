@@ -68,7 +68,7 @@ const PLAN: Plan = {
       weight_before: 0.18,
       weight_after: 0.184,
       reason: "favoured",
-      reason_text: "Below its target, and its newest call is ADD or BUY",
+      reason_text: "Below its target, and a pending call favours adding",
     },
     {
       id: null,
@@ -216,7 +216,7 @@ describe("Plan page", () => {
     const msft = within(table).getAllByRole("row")[1];
     expect(within(msft).getByText("Add 312.04 EUR")).toBeInTheDocument();
     expect(within(msft).getByText("about 0.795 sh")).toBeInTheDocument();
-    expect(within(msft).getByText("Below its target, and its newest call is ADD or BUY")).toBeInTheDocument();
+    expect(within(msft).getByText("Below its target, and a pending call favours adding")).toBeInTheDocument();
     expect(msft).toHaveTextContent("Weight 18.0% to 18.4%");
     expect(msft).toHaveTextContent("392.18 EUR");
     expect(within(table).getByText("Leftover 0.00 EUR")).toBeInTheDocument();

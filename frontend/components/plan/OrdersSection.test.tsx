@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { SWRConfig } from "swr";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import useSWR, { SWRConfig } from "swr";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import type { Plan, PlanLine } from "@/lib/plans";
 
@@ -200,7 +200,12 @@ describe("Record placed order", () => {
       fireEvent.change(shares, { target: { value: bad } });
       expect(record(sheet)).toBeDisabled();
     }
-    expect(within(sheet).getByText("Use digits like 54.60")).toBeInTheDocument();
+    // The shares field's own example, never a price.
+    expect(within(sheet).getByText("Use digits like 1.69")).toBeInTheDocument();
+    expect(within(sheet).queryByText("Use digits like 54.60")).not.toBeInTheDocument();
+    fireEvent.change(shares, { target: { value: "1,000" } });
+    expect(within(sheet).getByText(/^Use a decimal point and no thousands separators/)).toBeInTheDocument();
+    expect(record(sheet)).toBeDisabled();
     fireEvent.change(shares, { target: { value: "0" } });
     expect(within(sheet).getByText("Enter a number of shares above 0.")).toBeInTheDocument();
     fireEvent.change(shares, { target: { value: "1,7" } });
@@ -211,10 +216,10 @@ describe("Record placed order", () => {
   });
 
   it.each([
-    ["1,000", "Use a decimal point and no thousands separators, for example 1000.50"],
-    ["1.000", "Use a decimal point and no thousands separators, for example 1000.50"],
-    ["1,000,000", "Use a decimal point and no thousands separators, for example 1000.50"],
-    ["1,000.5", "Use a decimal point and no thousands separators, for example 1000.50"],
+    ["1,000", "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050."],
+    ["1.000", "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050."],
+    ["1,000,000", "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050."],
+    ["1,000.5", "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050."],
     [".5", "Use digits like 54.60"],
     ["5.", "Use digits like 54.60"],
   ])("refuses the price %j with a reason, and sends nothing", async (raw, message) => {
@@ -266,17 +271,61 @@ describe("Record placed order", () => {
     expect(screen.getByText("EIMI.L recorded as placed. Next: IWDA.L, opened for you.")).toBeInTheDocument();
   });
 
-  it("does nothing when the answer lands after the section is gone", async () => {
+  it("only refreshes the portfolio reads when the answer lands after the section is gone", async () => {
     let resolve: (v: unknown) => void = () => {};
     place = () => new Promise((r) => (resolve = r));
-    const { sheet } = await openSheet("EIMI.L");
+    // Another screen that reads the summary stays mounted while the section goes away.
+    function Reader() {
+      useSWR("/portfolio/summary", apiFetch);
+      return null;
+    }
+    const tree = (section: boolean) => (
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <Reader />
+        {section && <OrdersSection plan={plan()} onChanged={onChanged} />}
+      </SWRConfig>
+    );
+    const { rerender } = render(tree(true));
+    await summaryLoaded();
+    fireEvent.click(card("EIMI.L"));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
     typePrice(sheet, "54.6");
     fireEvent.click(record(sheet));
     await waitFor(() => expect(placeCalls()).toHaveLength(1));
-    cleanup();
+    rerender(tree(false));
+    const summaryCalls = () => apiFetch.mock.calls.filter(([p]) => p === "/portfolio/summary").length;
+    const before = summaryCalls();
     resolve(line({ placed_at: "2026-10-08T10:00:00" }));
-    await act(() => new Promise((r) => setTimeout(r, 0)));
-    expect(onChanged).not.toHaveBeenCalled();
+    await waitFor(() => expect(summaryCalls()).toBeGreaterThan(before));
+    expect(onChanged).not.toHaveBeenCalled(); // no plan reload, no auto-advance
+  });
+
+  it("ends a request that times out with the network message, and the sheet can be closed", async () => {
+    place = () => Promise.reject(new DOMException("The operation timed out.", "TimeoutError"));
+    const { sheet } = await openSheet("EIMI.L");
+    typePrice(sheet, "54.6");
+    fireEvent.click(record(sheet));
+    expect(await within(sheet).findByText(/Could not reach the server/)).toBeInTheDocument();
+    expect(sheet).toHaveAttribute("aria-busy", "false");
+    expect(within(sheet).getByRole("button", { name: "Cancel" })).toBeEnabled();
+    fireEvent.keyDown(sheet, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("still asks for the asset type when the summary failed, without claiming the ticker is new", async () => {
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/portfolio/summary") return Promise.reject(new FakeApiError(502, "Bad Gateway"));
+      if (path.endsWith("/placed")) return place(path, JSON.parse(init!.body as string));
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+    const { sheet } = await openSheet("EIMI.L");
+    expect(within(sheet).getByRole("group", { name: "Asset type" })).toBeInTheDocument();
+    expect(within(sheet).queryByText(/is not a holding yet/)).not.toBeInTheDocument();
+    typePrice(sheet, "54.6");
+    fireEvent.click(record(sheet));
+    await waitFor(() => expect(placeCalls()).toHaveLength(1));
+    expect(sentBody().asset_type).toBe("ETF");
   });
 
   it("sends one request on a double click", async () => {

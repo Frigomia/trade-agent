@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import { Check, ChevronDown, ChevronUp, Circle, CircleCheck, Copy } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
@@ -66,6 +66,9 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const baseId = useId();
 
+  // A copy's "Copied" timer must not fire after the panel is gone.
+  useEffect(() => () => clearTimeout(timer.current), []);
+
   if (plan.lines.length === 0) return <PlanResult plan={plan} footer={footer} />;
 
   const open = openTicker !== undefined ? openTicker : ownOpen;
@@ -79,8 +82,12 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
     if (await writeClipboard(text)) {
       setFailed(null);
       setCopied(key);
-      setAnnounce(key === "*" ? "Copied all open lines" : `Copied the ${key} ticket`);
-      timer.current = setTimeout(() => setCopied(null), 2000);
+      setAnnounce(key === "*" ? "Copied all unplaced lines" : `Copied the ${key} ticket`);
+      // Clearing the announcement too lets a second copy of the same ticket be announced again.
+      timer.current = setTimeout(() => {
+        setCopied(null);
+        setAnnounce("");
+      }, 2000);
     } else {
       setCopied(null);
       setFailed(key);
@@ -131,7 +138,11 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
           {copied === "*" ? "Copied" : "Copy all lines"}
         </Button>
       </Box>
-      {failed === "*" && <Typography sx={{ fontSize: 13, color: "var(--down)" }}>{COPY_ALL_FAILED}</Typography>}
+      {failed === "*" && (
+        <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)" }}>
+          {COPY_ALL_FAILED}
+        </Typography>
+      )}
       {status !== undefined && (
         <Box
           role="status"
@@ -298,7 +309,11 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
                   </Button>
                 )}
               </Box>
-              {copyFailed && <Typography sx={{ fontSize: 13, color: "var(--down)" }}>{COPY_FAILED}</Typography>}
+              {copyFailed && (
+                <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)" }}>
+                  {COPY_FAILED}
+                </Typography>
+              )}
             </Box>
           )}
           <Box sx={{ gridColumn: { md: 1 }, gridRow: { md: placed ? "auto" : "1 / span 2" }, p: 1.75, borderRadius: "14px", border: "1px solid var(--line)", bgcolor: "var(--tab-bg)" }}>

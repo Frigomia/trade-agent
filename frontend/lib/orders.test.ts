@@ -101,10 +101,14 @@ describe("copyAllText", () => {
 });
 
 describe("placedFill", () => {
-  it("shows the logged shares (3 decimals at most) and price (2 decimals, no separators)", () => {
+  it("shows the logged shares (3 decimals at most) and price (2 to 4 decimals, no separators)", () => {
     expect(placedFill(line({ placed_shares: 1.69, placed_price: 54.6 }))).toBe("1.69 sh at 54.60");
-    expect(placedFill(line({ placed_shares: 2.77249, placed_price: 1234.567 }))).toBe("2.772 sh at 1234.57");
+    expect(placedFill(line({ placed_shares: 2.77249, placed_price: 1234.567 }))).toBe("2.772 sh at 1234.567");
     expect(placedFill(line({ placed_shares: 3, placed_price: 10 }))).toBe("3 sh at 10.00");
+    expect(placedFill(line({ placed_shares: 1, placed_price: 0.004 }))).toBe("1 sh at 0.004");
+    expect(placedFill(line({ placed_shares: 1, placed_price: 1.1234 }))).toBe("1 sh at 1.1234");
+    expect(placedFill(line({ placed_shares: 1, placed_price: 1.123456 }))).toBe("1 sh at 1.1235");
+    expect(placedFill(line({ placed_shares: 1, placed_price: 54.605 }))).toBe("1 sh at 54.605");
   });
   it("is null when the trade is not known", () => {
     expect(placedFill(line())).toBeNull();
@@ -154,14 +158,14 @@ describe("readPlacedNumber", () => {
     ["1.000.000", T],
     ["1,000.5", T],
     ["1.000,5", T],
-    [".5", DIGITS_ERROR],
-    ["5.", DIGITS_ERROR],
-    ["e", DIGITS_ERROR],
-    ["1e5", DIGITS_ERROR],
-    ["abc", DIGITS_ERROR],
-    ["1.2.3", DIGITS_ERROR],
-    ["Infinity", DIGITS_ERROR],
-    ["NaN", DIGITS_ERROR],
+    [".5", DIGITS_ERROR.price],
+    ["5.", DIGITS_ERROR.price],
+    ["e", DIGITS_ERROR.price],
+    ["1e5", DIGITS_ERROR.price],
+    ["abc", DIGITS_ERROR.price],
+    ["1.2.3", DIGITS_ERROR.price],
+    ["Infinity", DIGITS_ERROR.price],
+    ["NaN", DIGITS_ERROR.price],
     ["-1", "Enter a price above 0."],
     ["0", "Enter a price above 0."],
     ["0,0", "Enter a price above 0."],
@@ -176,6 +180,27 @@ describe("readPlacedNumber", () => {
     expect(readPlacedNumber("1,000.5", "shares").error).toBe(T);
     expect(readPlacedNumber("0", "shares").error).toBe("Enter a number of shares above 0.");
   });
+  it.each(["1,000", "1.000", "10.000", "999,000"])("refuses the share count %j as a thousands separator", (raw) => {
+    expect(readPlacedNumber(raw, "shares")).toEqual({ value: null, error: T });
+  });
+  it.each([
+    ["0.000", "Enter a number of shares above 0."],
+    ["1.0000", null],
+    ["1000", null],
+    ["2.500", null],
+  ])("still reads the share count %j", (raw, error) => {
+    expect(readPlacedNumber(raw, "shares").error).toBe(error);
+  });
+  it("gives each field its own digits example", () => {
+    expect(readPlacedNumber("abc", "shares").error).toBe("Use digits like 1.69");
+    expect(readPlacedNumber("abc", "price").error).toBe("Use digits like 54.60");
+  });
+  it("explains how to enter a real 3-decimal price", () => {
+    expect(readPlacedNumber("54.605", "price").error).toBe(
+      "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050.",
+    );
+    expect(readPlacedNumber("54.6050", "price")).toEqual({ value: 54.605, error: null });
+  });
 });
 
 describe("placeLine", () => {
@@ -187,6 +212,14 @@ describe("placeLine", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ date: "2026-10-08", shares: 1.69, price: 54.64 });
     expect(init.body).not.toContain("asset_type");
+  });
+  it("gives the request a timeout signal, so a hung request ends", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    apiFetch.mockResolvedValue(line());
+    await placeLine(4, 7, { date: "2026-10-08", shares: 1, price: 2 });
+    expect(timeout).toHaveBeenCalledWith(30_000);
+    expect(apiFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    timeout.mockRestore();
   });
   it("includes asset_type when given", async () => {
     apiFetch.mockResolvedValue(line());

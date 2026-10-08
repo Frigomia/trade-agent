@@ -139,11 +139,11 @@ describe("OrdersPanel", () => {
   it("shows the ticket without an ISIN and offers Add ISIN", () => {
     renderPanel();
     openCard("NVDA");
-    expect(screen.getByText("Order (amount): 100.00 EUR · NVIDIA <b>Corp</b> · about 0.86 shares at 116.31 EUR")).toBeInTheDocument();
+    const ticket = screen.getByText("Order (amount): 100.00 EUR · NVIDIA <b>Corp</b> · about 0.86 shares at 116.31 EUR");
     expect(screen.getByText("None saved")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add ISIN" })).toBeInTheDocument();
     // The name is text, never markup.
-    expect(document.querySelector("b")?.textContent).not.toBe("Corp");
+    expect(ticket.querySelector("b")).toBeNull();
   });
 
   it("copies the exact ticket, shows Copied for a moment and announces it", async () => {
@@ -160,6 +160,29 @@ describe("OrdersPanel", () => {
       await vi.advanceTimersByTimeAsync(2100);
     });
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("");
+    // A second copy of the same ticket is announced again.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Copied the EIMI.L ticket");
+  });
+
+  it("announces Copy all lines as the unplaced lines", async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Copy all lines" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Copied all unplaced lines"));
+  });
+
+  it("clears its Copied timer when it unmounts", async () => {
+    vi.useFakeTimers();
+    const { unmount } = renderPanel();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Copy all lines" }));
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("uses whole shares in the ticket of a whole-shares plan", async () => {
@@ -176,9 +199,9 @@ describe("OrdersPanel", () => {
     renderPanel();
     openCard("EIMI.L");
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
-    expect(await screen.findByText("Could not copy. Select the ticket text and copy it by hand.")).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not copy. Select the ticket text and copy it by hand.");
     fireEvent.click(screen.getByRole("button", { name: "Copy all lines" }));
-    expect(await screen.findByText("Could not copy. Open each line and copy its ticket by hand.")).toBeInTheDocument();
+    expect(await screen.findByText("Could not copy. Open each line and copy its ticket by hand.")).toHaveAttribute("role", "alert");
   });
 
   it("shows a readable message when there is no clipboard at all", async () => {
@@ -205,7 +228,8 @@ describe("OrdersPanel", () => {
     });
 
     it("shows the server's 422 for a wrong check digit", async () => {
-      setIsin.mockRejectedValue(new FakeApiError(422, "Value error, Not a valid ISIN: 12 characters with a correct check digit."));
+      // The client already dropped FastAPI's "Value error, " prefix (lib/api/client.ts).
+      setIsin.mockRejectedValue(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit."));
       fireEvent.change(screen.getByLabelText("ISIN for NVDA"), { target: { value: "US67066G1041" } });
       fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
       expect(await screen.findByText("Not a valid ISIN: 12 characters with a correct check digit.")).toBeInTheDocument();
@@ -222,9 +246,97 @@ describe("OrdersPanel", () => {
       await waitFor(() => expect(screen.queryByLabelText("ISIN for NVDA")).not.toBeInTheDocument());
     });
 
-    it("can be cancelled", () => {
+    it("can be cancelled, and the focus goes back to Add ISIN", () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(screen.getByRole("button", { name: "Add ISIN" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Add ISIN" })).toHaveFocus();
+      expect(setIsin).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("a saved ISIN", () => {
+    // Stands in for the parent: after onChanged the plan comes back with the new ISIN.
+    function renderWithReload(isin: string | null) {
+      const view = render(<OrdersPanel plan={plan([LINES[0]])} onChanged={onChanged} openTicker="EIMI.L" />);
+      onChanged.mockImplementation(async () => {
+        view.rerender(<OrdersPanel plan={plan([{ ...LINES[0], isin }])} onChanged={onChanged} openTicker="EIMI.L" />);
+      });
+      return view;
+    }
+
+    it("shows the ISIN with Change and Remove", () => {
+      renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
+      expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Change" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Remove" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Add ISIN" })).not.toBeInTheDocument();
+    });
+
+    it("changes it from a prefilled form, reloads, and focuses Change", async () => {
+      setIsin.mockResolvedValue({ ticker: "EIMI.L", isin: "IE00B4L5Y983" });
+      renderWithReload("IE00B4L5Y983");
+      fireEvent.click(screen.getByRole("button", { name: "Change" }));
+      const field = screen.getByLabelText("ISIN for EIMI.L");
+      expect(field).toHaveValue("IE00BKM4GZ66");
+      fireEvent.change(field, { target: { value: "ie00b4l5y983" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
+      await waitFor(() => expect(screen.getByText("IE00B4L5Y983")).toBeInTheDocument());
+      expect(setIsin).toHaveBeenCalledWith("EIMI.L", "IE00B4L5Y983");
+      expect(onChanged).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("ISIN saved")).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Change" })).toHaveFocus());
+    });
+
+    it("shows the server's 422 under the field when a change is refused", async () => {
+      setIsin.mockRejectedValue(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit."));
+      renderWithReload("IE00B4L5Y983");
+      fireEvent.click(screen.getByRole("button", { name: "Change" }));
+      fireEvent.change(screen.getByLabelText("ISIN for EIMI.L"), { target: { value: "IE00B4L5Y984" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
+      expect(await screen.findByText("Not a valid ISIN: 12 characters with a correct check digit.")).toBeInTheDocument();
+      expect(onChanged).not.toHaveBeenCalled();
+      expect(screen.getByLabelText("ISIN for EIMI.L")).toBeInTheDocument();
+    });
+
+    it("cancels a change without saving, and focuses Change", () => {
+      renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
+      fireEvent.click(screen.getByRole("button", { name: "Change" }));
+      fireEvent.change(screen.getByLabelText("ISIN for EIMI.L"), { target: { value: "IE00B4L5Y983" } });
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(setIsin).not.toHaveBeenCalled();
+      expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
+    });
+
+    it("removes it after a confirm step, reloads, and focuses Add ISIN", async () => {
+      setIsin.mockResolvedValue({ ticker: "EIMI.L", isin: null });
+      renderWithReload(null);
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      expect(screen.getByText("Remove ISIN?")).toBeInTheDocument();
+      expect(setIsin).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      await waitFor(() => expect(screen.getByText("None saved")).toBeInTheDocument());
+      expect(setIsin).toHaveBeenCalledWith("EIMI.L", null);
+      expect(onChanged).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.getByRole("button", { name: "Add ISIN" })).toHaveFocus());
+    });
+
+    it("keeps the ISIN when the confirm step is cancelled", () => {
+      renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(setIsin).not.toHaveBeenCalled();
+      expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
+    });
+
+    it("shows the error inline when removing fails, and stays on the confirm step", async () => {
+      setIsin.mockRejectedValue(new FakeApiError(404, "No holding or watchlist item for that ticker"));
+      renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("No holding or watchlist item for that ticker");
+      expect(screen.getByText("Remove ISIN?")).toBeInTheDocument();
+      expect(onChanged).not.toHaveBeenCalled();
     });
   });
 
@@ -288,8 +400,16 @@ describe("OrdersPanel", () => {
   });
 
   it("uses no Buy or Sell wording", () => {
-    renderPanel(plan(), { onPlace: vi.fn() });
-    LINES.forEach((l) => openCard(l.ticker));
+    const favoured = line({
+      id: 4,
+      ticker: "VWCE.DE",
+      name: "Vanguard FTSE All-World",
+      reason: "favoured",
+      reason_text: "Below its target, and a pending call favours adding",
+    });
+    renderPanel(plan([...LINES, favoured]), { onPlace: vi.fn() });
+    expect(card("VWCE.DE")).toHaveTextContent("Below its target, and a pending call favours adding");
+    [...LINES, favoured].forEach((l) => openCard(l.ticker));
     expect(document.body.textContent).not.toMatch(/\b(Buy|Sell|Deposit|Withdraw)\b/i);
   });
 });

@@ -23,10 +23,13 @@ export function unplacedLines(plan: Plan): PlanLine[] {
   return plan.lines.filter((l) => l.placed_at === null);
 }
 
+/** A price to at most 4 decimals, trailing zeros dropped down to 2: 54.60, 0.004, 1.1234. */
+export const fillPrice = (value: number) => value.toFixed(4).replace(/0{1,2}$/, "");
+
 /** "1.69 sh at 54.60" from the logged trade (holding currency, no separators); null when not known. */
 export function placedFill(line: PlanLine): string | null {
   if (line.placed_shares === null || line.placed_price === null) return null;
-  return `${trim(line.placed_shares)} sh at ${line.placed_price.toFixed(2)}`;
+  return `${trim(line.placed_shares)} sh at ${fillPrice(line.placed_price)}`;
 }
 
 /**
@@ -39,8 +42,10 @@ export function nextUnplaced(plan: Plan, ticker: string): PlanLine | null {
   return rest.find((l) => l.placed_at === null && l.ticker !== ticker) ?? null;
 }
 
-export const THOUSANDS_ERROR = "Use a decimal point and no thousands separators, for example 1000.50";
-export const DIGITS_ERROR = "Use digits like 54.60";
+export const THOUSANDS_ERROR =
+  "Use a decimal point and no thousands separators, for example 1000.50. For a price with three decimals, add a trailing 0: 54.6050.";
+/** Per field, so the shares field never shows a price as its example. */
+export const DIGITS_ERROR = { shares: "Use digits like 1.69", price: "Use digits like 54.60" } as const;
 
 export interface PlacedNumber {
   value: number | null; // null while empty or invalid
@@ -53,7 +58,7 @@ export interface PlacedNumber {
  * thousands separator is refused rather than guessed, since a guess can be 1000 times off:
  * "1,000,000", "1,000.5" and, for a price, "1,000" / "1.000" (but not "0.125"). A share count
  * keeps a single 3-decimal group ("2.772"): fractional shares look like that, and so does the
- * prefilled plan amount.
+ * prefilled plan amount; but not "1,000" / "1.000", a group of zeros the prefill never produces.
  */
 export function readPlacedNumber(raw: string, kind: "shares" | "price"): PlacedNumber {
   const text = raw.trim();
@@ -62,8 +67,9 @@ export function readPlacedNumber(raw: string, kind: "shares" | "price"): PlacedN
   const above = kind === "price" ? "Enter a price above 0." : "Enter a number of shares above 0.";
   if (/^\d+([.,]\d{3}){2,}$/.test(text) || (text.includes(",") && text.includes("."))) return fail(THOUSANDS_ERROR);
   if (kind === "price" && /^[1-9]\d{0,2}[.,]\d{3}$/.test(text)) return fail(THOUSANDS_ERROR);
+  if (kind === "shares" && /^[1-9]\d{0,2}[.,]000$/.test(text)) return fail(THOUSANDS_ERROR);
   if (/^-\d/.test(text)) return fail(above);
-  if (!/^\d+([.,]\d+)?$/.test(text)) return fail(DIGITS_ERROR);
+  if (!/^\d+([.,]\d+)?$/.test(text)) return fail(DIGITS_ERROR[kind]);
   if (/[.,]\d{7,}$/.test(text)) return fail("Use at most 6 decimals.");
   const value = parseDecimal(text, 6, 0.000001, 999_999_999_999);
   if (value !== null) return { value, error: null };
@@ -84,11 +90,18 @@ export interface PlaceBody {
   asset_type?: AssetType; // needed only when the ticker is not a holding yet
 }
 
-/** Records that the order was placed (logs the buy). Throws the ApiError. */
+export const PLACE_TIMEOUT_MS = 30_000;
+
+/**
+ * Records that the order was placed (logs the buy). Throws the ApiError, or fetch's own error when
+ * the server cannot be reached or does not answer within PLACE_TIMEOUT_MS.
+ */
 export function placeLine(planId: number, lineId: number, body: PlaceBody): Promise<PlanLine> {
   return apiFetch<PlanLine>(`/plans/${planId}/lines/${lineId}/placed`, {
     method: "POST",
     body: JSON.stringify(body),
+    // A hung request ends as an error, so the sheet shows its network message and can be closed.
+    signal: AbortSignal.timeout(PLACE_TIMEOUT_MS),
   });
 }
 

@@ -211,10 +211,13 @@ function PlacedForm({ line, lineId, planId, summary, titleId, onClose, onPlaced,
             <ToggleButton value="ETF">ETF</ToggleButton>
             <ToggleButton value="STOCK">Stock</ToggleButton>
           </ToggleButtonGroup>
-          <Typography sx={{ ...muted, mt: 0.75 }}>
-            {line.ticker} is not a holding yet. Recording this order adds it to your holdings.
-            {watched ? " Prefilled from your watchlist." : ""}
-          </Typography>
+          {/* Only claimed once the summary has loaded: without it, the ticker may well be held. */}
+          {summary && (
+            <Typography sx={{ ...muted, mt: 0.75 }}>
+              {line.ticker} is not a holding yet. Recording this order adds it to your holdings.
+              {watched ? " Prefilled from your watchlist." : ""}
+            </Typography>
+          )}
         </Box>
       )}
 

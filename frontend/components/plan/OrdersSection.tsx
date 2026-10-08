@@ -60,7 +60,14 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
   }
 
   function placed(line: PlanLine) {
-    if (!mounted.current || asked.current !== line.ticker) return;
+    // The new trade moved holdings and totals: refresh every portfolio read, even when this view has
+    // gone (the cache is global, so the next screen shows the new numbers).
+    const portfolio = mutate((key) => typeof key === "string" && key.startsWith("/portfolio"));
+    if (!mounted.current) return;
+    if (asked.current !== line.ticker) {
+      void Promise.allSettled([onChanged(), portfolio]); // another line is open now: no auto-advance
+      return;
+    }
     const next = nextUnplaced(plan, line.ticker);
     setSheetOpen(false);
     setOpenTicker(next?.ticker ?? null);
@@ -70,8 +77,7 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
         : `${line.ticker} recorded as placed. All lines placed.`,
     );
     setFocusTo({ ticker: next?.ticker ?? line.ticker });
-    // The plan (placed chip) and every portfolio read (the new trade moved holdings and totals).
-    void Promise.allSettled([onChanged(), mutate((key) => typeof key === "string" && key.startsWith("/portfolio"))]);
+    void Promise.allSettled([onChanged(), portfolio]); // the plan, for the placed chip
   }
 
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, TextField, Typography } from "@mui/material";
 import { Check } from "lucide-react";
 import { isinShape, setIsin } from "@/lib/orders";
@@ -10,21 +10,95 @@ import { useAction } from "@/lib/useAction";
 const SHAPE_ERROR = "An ISIN is 12 characters: two letters, nine letters or digits, then a digit.";
 const label = { fontSize: 12, color: "var(--muted)", minWidth: 40 } as const;
 const rowSx = { display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", minHeight: 36 } as const;
+const linkButton = { minHeight: 44, textDecoration: "underline" } as const;
+
+type Mode = "view" | "edit" | "remove";
 
 /**
- * The ISIN of an opened line, or "None saved" with Add ISIN. The field checks the shape here, the server
- * checks the check digit (its 422 shows under the field), and `onChanged` reloads the plan so the ticket
- * includes the ISIN.
+ * The ISIN of an opened line: "None saved" with Add ISIN, or the ISIN with Change and Remove. The field
+ * checks the shape here, the server checks the check digit (its 422 shows under the field), and
+ * `onChanged` reloads the plan so the ticket follows. Back in the row, the focus goes to its button.
  */
 export function IsinRow({ line, onChanged }: { line: PlanLine; onChanged: () => Promise<unknown> }) {
-  const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState<Mode>("view");
   const [value, setValue] = useState("");
   const [saved, setSaved] = useState(false);
   const action = useAction();
+  const rowRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
 
-  if (!editing) {
+  // After Save, Cancel or Remove the form is gone; put the focus back on the row (its Add ISIN or
+  // Change button, else the row itself) instead of letting it fall to the page.
+  useEffect(() => {
+    if (mode !== "view" || !refocus.current) return;
+    refocus.current = false;
+    (buttonRef.current ?? rowRef.current)?.focus();
+  }, [mode, line.isin]);
+
+  function backToRow() {
+    refocus.current = true;
+    setMode("view");
+    setValue("");
+    action.setError(null);
+  }
+
+  function startEdit() {
+    setSaved(false);
+    setValue(line.isin ?? "");
+    action.setError(null);
+    setMode("edit");
+  }
+
+  function submit() {
+    const isin = isinShape(value);
+    if (isin === null) {
+      action.setError(SHAPE_ERROR);
+      return;
+    }
+    void action.run(async () => {
+      await setIsin(line.ticker, isin);
+      await onChanged();
+      backToRow();
+      setSaved(true);
+    });
+  }
+
+  function remove() {
+    void action.run(async () => {
+      await setIsin(line.ticker, null);
+      await onChanged();
+      backToRow();
+      setSaved(false);
+    });
+  }
+
+  if (mode === "remove") {
     return (
-      <Box sx={rowSx}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Box sx={rowSx}>
+          <Box component="span" sx={{ fontWeight: 500 }}>
+            Remove ISIN?
+          </Box>
+          <Button variant="contained" size="small" onClick={remove} disabled={action.submitting} sx={{ minHeight: 44 }}>
+            Remove
+          </Button>
+          <Button variant="outlined" size="small" onClick={backToRow} disabled={action.submitting} sx={{ minHeight: 44 }}>
+            Cancel
+          </Button>
+        </Box>
+        {action.error && (
+          <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)" }}>
+            {action.error}
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  if (mode === "view") {
+    return (
+      <Box ref={rowRef} tabIndex={-1} sx={{ ...rowSx, "&:focus": { outline: "none" } }}>
         <Box component="span" sx={label}>
           ISIN
         </Box>
@@ -39,13 +113,28 @@ export function IsinRow({ line, onChanged }: { line: PlanLine; onChanged: () => 
                 ISIN saved
               </Box>
             )}
+            <Button ref={buttonRef} variant="text" size="small" onClick={startEdit} sx={linkButton}>
+              Change
+            </Button>
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => {
+                setSaved(false);
+                action.setError(null);
+                setMode("remove");
+              }}
+              sx={linkButton}
+            >
+              Remove
+            </Button>
           </>
         ) : (
           <>
             <Box component="span" sx={{ color: "var(--muted)" }}>
               None saved
             </Box>
-            <Button variant="text" size="small" onClick={() => setEditing(true)} sx={{ minHeight: 44, textDecoration: "underline" }}>
+            <Button ref={buttonRef} variant="text" size="small" onClick={startEdit} sx={linkButton}>
               Add ISIN
             </Button>
           </>
@@ -54,22 +143,7 @@ export function IsinRow({ line, onChanged }: { line: PlanLine; onChanged: () => 
     );
   }
 
-  function submit() {
-    const isin = isinShape(value);
-    if (isin === null) {
-      action.setError(SHAPE_ERROR);
-      return;
-    }
-    void action.run(async () => {
-      await setIsin(line.ticker, isin);
-      await onChanged();
-      setEditing(false);
-      setSaved(true);
-    });
-  }
-
-  // FastAPI prefixes a validator's message with "Value error, ".
-  const error = action.error?.replace(/^Value error, /, "") ?? null;
+  const error = action.error;
   const length = value.trim().length;
 
   return (
@@ -105,16 +179,7 @@ export function IsinRow({ line, onChanged }: { line: PlanLine; onChanged: () => 
         <Button type="submit" variant="contained" size="small" disabled={action.submitting} sx={{ minHeight: 44 }}>
           Save ISIN
         </Button>
-        <Button
-          variant="outlined"
-          size="small"
-          sx={{ minHeight: 44 }}
-          onClick={() => {
-            setEditing(false);
-            setValue("");
-            action.setError(null);
-          }}
-        >
+        <Button variant="outlined" size="small" sx={{ minHeight: 44 }} onClick={backToRow}>
           Cancel
         </Button>
       </Box>
