@@ -81,8 +81,8 @@ class TradeIn(BaseModel):
 
 class PlaceIn(BaseModel):
     date: date
-    shares: PositiveFloat
-    price: PositiveFloat
+    shares: float = Field(gt=0, allow_inf_nan=False)
+    price: float = Field(gt=0, allow_inf_nan=False)
     asset_type: AssetType | None = None  # needed only when the ticker is not a holding yet
 
 

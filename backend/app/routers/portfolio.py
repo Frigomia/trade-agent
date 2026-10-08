@@ -9,6 +9,7 @@ from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
 from app.http_headers import no_store
+from app.limits import MAX_HOLDINGS, cap_message
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import (
@@ -39,14 +40,9 @@ router = APIRouter(
 )
 
 # Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
-MAX_HOLDINGS = 100
 MAX_WATCHLIST = 100
 WRITE_LIMIT_PER_MINUTE = 60  # per user, per route: the holdings/watchlist upserts
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
-
-
-def _cap_message(what: str, cap: int) -> str:
-    return f"You can keep up to {cap} {what}. Remove one before adding another."
 
 
 @router.get("/holdings", response_model=list[HoldingOut])
@@ -95,7 +91,7 @@ def upsert_holding(
     if holding is None:
         lock_user_for_insert(db, user.id)
         if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
-            raise HTTPException(status_code=409, detail=_cap_message("holdings", MAX_HOLDINGS))
+            raise HTTPException(status_code=409, detail=cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
         db.add(holding)
     else:
@@ -139,7 +135,7 @@ def upsert_watchlist_item(
         lock_user_for_insert(db, user.id)
         if db.query(WatchlistItem).filter_by(user_id=user.id).count() >= MAX_WATCHLIST:
             raise HTTPException(
-                status_code=409, detail=_cap_message("watchlist items", MAX_WATCHLIST)
+                status_code=409, detail=cap_message("watchlist items", MAX_WATCHLIST)
             )
         item = WatchlistItem(user_id=user.id, **payload.model_dump())
         db.add(item)
@@ -178,6 +174,8 @@ def log_trade(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> Trade:
+    # Same per-person lock as placing a plan line, so two writes to one holding cannot interleave.
+    lock_user_for_insert(db, user.id)
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
         raise HTTPException(

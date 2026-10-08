@@ -460,6 +460,9 @@ def test_a_line_can_be_placed_once(client, db_session):
     assert _place(client, plan, line).status_code == 200
     assert _place(client, plan, line).status_code == 409
     assert db_session.query(Trade).count() == 1
+    holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="AAPL").one()
+    db_session.refresh(holding)
+    assert float(holding.shares) == 5.0 + 1.5  # the second click changed nothing
 
 
 def test_another_persons_line_is_404_and_changes_nothing(client, db_session):
@@ -527,6 +530,7 @@ def test_a_new_position_past_the_holding_cap_is_409_and_writes_nothing(client, d
     assert res.status_code == 409
     assert db_session.query(Trade).count() == 0
     assert db_session.get(ContributionPlanLine, line["id"]).placed_at is None
+    assert db_session.query(Holding).filter_by(user_id=USER_ID, ticker="NVDA").count() == 0
 
 
 def test_deleting_a_plan_keeps_the_trades_it_produced(client, db_session):
@@ -553,3 +557,43 @@ def test_placing_requires_authentication(anon_client):
         ).status_code
         == 401
     )
+
+
+def test_a_placement_then_a_manual_trade_accumulate_both_buys(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    assert _place(client, plan, _line(client, plan, "AAPL"), shares=2, price=250).status_code == 200
+    manual = {"date": "2026-10-10", "ticker": "AAPL", "action": "BUY", "shares": 3, "price": 100}
+    assert client.post("/portfolio/trades", json=manual).status_code == 200
+    holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="AAPL").one()
+    db_session.refresh(holding)
+    assert float(holding.shares) == 10.0
+    assert round(float(holding.cost_basis), 4) == round((5 * 10 + 2 * 250 + 3 * 100) / 10, 4)
+    assert db_session.query(Trade).count() == 2
+
+
+@pytest.mark.parametrize("literal", ['"Infinity"', "Infinity", "1e999"])
+def test_infinite_numbers_are_422(client, db_session, literal):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    raw = f'{{"date": "2026-10-09", "shares": {literal}, "price": 1}}'  # raw JSON text
+    res = client.post(
+        f"/plans/{plan['id']}/lines/{line['id']}/placed",
+        content=raw,
+        headers={"content-type": "application/json"},
+    )
+    assert res.status_code == 422
+    assert db_session.query(Trade).count() == 0
+
+
+def test_a_huge_finite_number_is_422_and_writes_nothing(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    assert _place(client, plan, line, shares=1e30).status_code == 422
+    assert db_session.query(Trade).count() == 0
+    assert db_session.get(ContributionPlanLine, line["id"]).placed_at is None
+    holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="AAPL").one()
+    db_session.refresh(holding)
+    assert float(holding.shares) == 5.0

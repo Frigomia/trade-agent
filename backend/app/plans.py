@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from app import planner
 from app.db import lock_user_for_insert
 from app.fx import eur_prices
+from app.limits import MAX_HOLDINGS, cap_message
 from app.models import (
     ContributionPlan,
     ContributionPlanLine,
@@ -35,7 +36,6 @@ from app.schemas import (
 from app.trades import TradeRefused, apply_trade
 
 MAX_PLANS = 120
-MAX_HOLDINGS = 100  # the same cap as the holdings route
 
 
 def _load(
@@ -358,15 +358,17 @@ def place_line(
             raise HTTPException(404, "Plan line not found")
         if line.placed_at is not None:
             raise HTTPException(409, "This line is already recorded as placed.")
-        holding = db.query(Holding).filter_by(user_id=user_id, ticker=line.ticker).one_or_none()
+        holding = (
+            db.query(Holding)
+            .filter_by(user_id=user_id, ticker=line.ticker)
+            .with_for_update()
+            .one_or_none()
+        )
         if holding is None:
             if payload.asset_type is None:
                 raise HTTPException(422, "asset_type is required for a new position.")
             if db.query(Holding).filter_by(user_id=user_id).count() >= MAX_HOLDINGS:
-                raise HTTPException(
-                    409,
-                    f"You can keep up to {MAX_HOLDINGS} holdings. Remove one first.",
-                )
+                raise HTTPException(409, cap_message("holdings", MAX_HOLDINGS))
             holding = Holding(
                 user_id=user_id,
                 ticker=line.ticker,
