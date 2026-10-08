@@ -231,6 +231,25 @@ code belongs to whoever created it, so nobody should tap Start on a Connect link
 them. Pressing Cancel in the app does not revoke an outstanding code; it expires by itself after 10
 minutes.
 
+### Contribution planner
+
+Nothing to set up: it has no secrets and no settings of its own, and it uses no Claude key. The plan
+screen needs quotes and exchange rates from the price source, the same one the rest of the app uses.
+A "left out" note on a plan (for example "AAPL is left out: no price available" or "its currency is
+unknown") means that lookup failed or the currency is not one of the supported ones (EUR, USD, GBP,
+GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN); the ticker is simply not in the plan, nothing is
+guessed. It is usually a passing price-source problem: make the plan again a few minutes later.
+
+The monthly reminder is one extra line in the first weekday's Telegram message ("Plan this month's
+contribution: <APP_URL>/portfolio/plan"), sent only to people with Telegram connected, at least one
+target weight set, and the third switch ("Monthly plan reminder") on in Account. It has no amounts.
+
+The line is added only on the first weekday of the month (UTC; the 1st, or the Monday of the 2nd or
+3rd). To check it by hand on such a day, with a connected chat (see the Telegram checks above) and a
+target set, run `python -m app.scheduled notify` through `fly ssh console`. The message arrives
+with the plan line. Remember the per-day marker: if that person already got today's message,
+nothing more is sent.
+
 ### Fly
 
 1. `fly apps create <app-name>`.

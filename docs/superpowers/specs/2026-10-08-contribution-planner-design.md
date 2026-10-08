@@ -17,7 +17,7 @@ A later feature, order tickets, turns saved plan lines into copy-ready text; it 
 | Currency | Converted at plan time, nothing stored: the plan fetches each ticker's trading currency and a current exchange rate and converts everything to the base currency (EUR) for that calculation only. A ticker whose currency or rate cannot be found is left out of the plan with a visible note, never guessed. |
 | How a line reads | A euro amount with the approximate share count at the current price ("150 EUR, about 0.83 shares"). A "Whole shares only" switch on the plan rounds each line down to whole shares and shows the leftover. |
 | Extras in version one | A saved monthly amount; saved plan history; a drift card on Today; a monthly Telegram reminder. |
-| The reminder | Sent at the start of each month, which is the first weekday of the month (UTC), because the notify step only runs on weekdays. The person does not choose a day. It is one line in that day's single Telegram message ("Plan this month's contribution: <app address>/plan"), with no amounts and no tickers, and has its own on/off switch next to the existing two. |
+| The reminder | Sent at the start of each month, which is the first weekday of the month (UTC), because the notify step only runs on weekdays. The person does not choose a day. It is one line in that day's single Telegram message ("Plan this month's contribution: <app address>/portfolio/plan"), with no amounts and no tickers, and has its own on/off switch next to the existing two. |
 
 Out of scope: order tickets and marking lines as bought (the order-ticket spec), selling or trimming to
 rebalance (the plan only decides where new money goes), tax, fees and spreads, dividends, cash tracking,
@@ -45,11 +45,13 @@ Inputs: the contribution `A` in EUR; the person's holdings (open positions, shar
 with their live prices and converted EUR values; each item's target weight; the newest PENDING recommendation
 per ticker; the whole-shares switch.
 
-1. **Value now and after.** `V` is the sum of the EUR market values of the priced holdings; `T = V + A`.
-2. **Targets.** Items with a target are the plan's universe (holdings and watchlist). Targets are
-   normalised if they do not add up to 1. A holding without a target keeps its current weight: it neither
-   receives money nor counts as a gap, but it stays in `V`. A watchlist item without a target is ignored.
-3. **Gaps.** For each item `gap = max(target * T - current_value, 0)`. An item with no shares yet has
+1. **The pool.** `A` is first floored to whole cents. Weights and gaps are computed on the pool of items
+   that have a target (holdings and watchlist): `pool_before` is the sum of their EUR values and
+   `pool = pool_before + A`.
+2. **Targets.** Targets are normalised if they do not add up to 1. A holding without a target is outside
+   the pool: it neither receives money nor counts in any weight (the plan notes how many such holdings it
+   left out). A watchlist item without a target is ignored.
+3. **Gaps.** For each item `gap = max(target * pool - current_value, 0)`. An item with no shares yet has
    current value 0, so a new position with a target is the furthest below it.
 4. **The analysis.** An item whose newest pending call is TRIM or SELL gets `gap = 0` (its money goes to the
    others). One whose newest pending call is ADD or BUY has `gap * 1.25` (constant `FAVOUR_FACTOR`).
@@ -58,11 +60,12 @@ per ticker; the whole-shares switch.
    receive money. If nothing may receive money (all excluded, or no targets at all), the plan says so and
    proposes nothing.
 6. **Minimum line.** Lines under `MIN_LINE_EUR` (25) are merged into the largest line so nobody is told to buy
-   3 EUR of a stock. Amounts are rounded to whole cents and the lines add up to `A` exactly (the rounding
-   difference goes to the largest line).
+   3 EUR of a stock. Amounts are rounded to whole cents by largest remainder (floor each amount to the
+   cent, then give the missing cents to the largest fractions; ties go to the larger amount, then the
+   ticker), so the lines add up to `A` exactly.
 7. **Shares.** `shares = amount / price_in_EUR` (shown to three decimals). With "Whole shares only" each line
    is `floor(amount / price)` shares, its amount becomes `shares * price`, and the plan shows the leftover.
-8. **Before and after weights** are computed for every line and for the universe, so the screen can show the
+8. **Before and after weights** are computed for every line within the pool, so the screen can show the
    movement.
 
 Currency handling: for each ticker the quote source gives a trading currency (UK listings that quote in pence,
@@ -81,7 +84,7 @@ All routes require an active user and run through `get_user_db`.
 | GET | `/plans` | The person's saved plans, newest first (id, date, amount, number of lines). |
 | GET | `/plans/{id}` | One saved plan with its lines. 404 for another person's id. |
 | DELETE | `/plans/{id}` | Deletes it. |
-| GET | `/plans/drift` | Items with a target whose current weight is at least the drift threshold away from it, for the Today card. |
+| GET | `/plans/drift` | Open holdings with a target whose weight (within the pool of such holdings) is at least the drift threshold away from it, for the Today card. Watchlist items are not included. |
 
 `amount` is a positive number up to a sane cap (1,000,000 EUR). A plan response carries the lines
 (ticker, name, amount in EUR, shares, price in EUR, currency, rate, weight before, weight after, reason code
@@ -99,12 +102,13 @@ Preferences gain `monthly_contribution` (nullable) and `drift_threshold_pct` (de
 - New tables `contribution_plans` (id, user_id, created_at, amount_eur, whole_shares, total_before_eur, leftover_eur,
   notes as JSON) and `contribution_plan_lines` (id, user_id, plan_id, ticker, name, amount_eur, shares, price_eur,
   currency, rate, weight_before, weight_after, reason). Both carry `user_id`, are in `USER_TABLES`
-  (forced owner-only row security, grants with their id sequences), cascade with the plan on delete, and are
-  included in the data export and cleared by data deletion. All of this is one hand-written migration.
+  (forced owner-only row security, grants with their id sequences), and are included in the data export and
+  cleared by data deletion. There is no foreign key from the lines to the plans, like every other user
+  table: the delete route and data deletion remove the lines explicitly. All of this is one hand-written migration.
 
 ## The screens
 
-- **Plan** (new page, reached from the portfolio screen and from the Today card and reminder): the amount field
+- **Plan** (new page at `/portfolio/plan`, reached from the portfolio screen and from the Today card and reminder): the amount field
   pre-filled with the saved monthly amount, a "Whole shares only" switch, and the lines as a list with euro
   amount, approximate shares, weight before and after; notes under it (skipped tickers and why); a "Save plan"
   button; "Advisory only. Nothing is sent to a broker." The saved monthly amount is edited here and in Preferences.
@@ -121,10 +125,10 @@ Preferences gain `monthly_contribution` (nullable) and `drift_threshold_pct` (de
 
 In the `notify` step, on the first weekday of the month (UTC) for a person with a linked, `ok` Telegram link and
 `plan_reminder_enabled`, who has at least one target weight set (otherwise there is no plan to make), the day's
-message gets one more line: "Plan this month's contribution: <app address>/plan". If nothing else would be sent
-that day, the line alone is the message. The existing once-a-day marker keeps it to one message; a second marker
-`telegram:plan:{user}:{YYYY-MM}` makes sure a month's reminder is not repeated on a later day if the first one
-failed after the day's message was sent. The line carries no amounts and no tickers.
+message gets one more line: "Plan this month's contribution: <app address>/portfolio/plan". If nothing else would
+be sent that day, the line alone is the message. The existing once-a-day marker keeps it to one message, and
+because the line is only added on the first weekday a month's reminder cannot repeat, so there is no second
+marker. The line carries no amounts and no tickers.
 
 ## Security and privacy review points
 
@@ -133,7 +137,8 @@ touch the caller's row (row-level security with the runtime role); the plan resp
 amounts, so they are never sent to Telegram or logged; the server computes lines itself and never trusts client
 lines; the amount and the exchange-rate and ticker inputs are validated (a symbol built for the rate lookup comes
 from a fixed currency list, never from user text); the preview route is rate limited because it triggers
-outbound price lookups, and the number of tickers is capped at the same 50 as an analysis run; a failing or
+outbound price lookups, and only items with a target are priced (never more than the 100 holdings and 100
+watchlist items a person can have), 8 lookups at a time; a failing or
 poisoned price source cannot produce a negative, infinite or NaN amount (such items are dropped with a note);
 the reminder line contains no financial data. The security reviewer runs on the full diff before the pull request.
 
@@ -147,16 +152,16 @@ the reminder line contains no financial data. The security reviewer runs on the 
   ticker out with a note, one rate lookup per currency.
 - API: preview versus save, the saved plan equals a fresh computation, another person's plan is invisible and
   undeletable, the amount bounds, the rate limit, history ordering, the export and data deletion.
-- Drift: threshold boundaries, items without targets ignored, holdings and watchlist.
+- Drift: threshold boundaries, holdings without targets and watchlist items ignored.
 - The reminder: first weekday logic including months starting on a weekend, a person without targets, the switch,
-  no repeat later in the month, combined with the daily message and alone, no amounts in the text.
+  the once-a-day marker keeping it to one message, combined with the daily message and alone, no amounts in the text.
 - Frontend: the amount field and saved default, the lines and notes, whole-shares switch, save and history, the
   Today card, the Telegram switch, targets on the watchlist form.
 
 ## Documentation
 
 ARCHITECTURE (data model, API, the calculation, the reminder and the drift card; remove the `rebalance.py`
-remark), RUNBOOK (the reminder line and its marker), PRODUCT (the planner is built; the currency gap is closed
+remark), RUNBOOK (the reminder line and its switch), PRODUCT (the planner is built; the currency gap is closed
 for the plan, still open for the portfolio totals).
 
 ## Open points to confirm during implementation

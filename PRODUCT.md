@@ -39,7 +39,8 @@ An advisory-only reasoning partner, not a trading app. It never places a trade a
 - Notifications are built: an opt-in weekday Telegram message (new automatic recommendations and tickers that moved a lot; tickers, actions and percentages only, never amounts), connected and managed from Account. Not yet built or decided: any other channel (email, push), any live/streaming price feed.
 - Legal and privacy position is open: with other people's financial data the GDPR household exemption no longer applies (privacy notice, data export and deletion are needed), and recommendations given to others may count as investment advice in some jurisdictions. Screens must carry a plain "advisory only, not investment advice" statement; the product must not claim more than the backend does.
 - Recommendation actions and statuses are fixed by the backend: actions BUY, ADD, HOLD, TRIM, SELL, WATCH; status PENDING, APPROVED, REJECTED.
-- Mixed currencies are a known open gap: there is no currency field anywhere in the data model yet, so totals across EUR and USD holdings are not currency-normalized.
+- The monthly contribution planner is built: the person enters an amount (or uses a saved one) and gets a plan of how much to put into each targeted holding or watchlist item, from their target weights and the analysis's pending calls, as advice on a screen, with an optional monthly Telegram reminder and a Today drift card. It is plain arithmetic: no Claude call, no cost.
+- Mixed currencies: closed for the plan, which converts each ticker to EUR at plan time (a fixed list of currencies; the rate used is stored only on a saved plan). Still an open gap for the portfolio totals: there is no currency field in the data model, so totals across EUR and USD holdings are not currency-normalized.
 
 ## Brand Commitments
 
