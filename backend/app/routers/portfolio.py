@@ -26,6 +26,7 @@ from app.schemas import (
     WatchlistSummaryOut,
 )
 from app.snapshots import record_snapshot
+from app.trades import TradeRefused, apply_trade
 
 logger = logging.getLogger(__name__)
 
@@ -184,24 +185,10 @@ def log_trade(
             detail=f"No holding for {payload.ticker}; add it via POST /portfolio/holdings first",
         )
 
-    if payload.action == "BUY":
-        prior_value = float(holding.shares) * float(holding.cost_basis)
-        added_value = payload.shares * payload.price
-        total_cost = prior_value + added_value
-        holding.shares = float(holding.shares) + payload.shares
-        holding.cost_basis = total_cost / float(holding.shares)
-    elif payload.action == "SELL":
-        if payload.shares > float(holding.shares):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Cannot sell {payload.shares}; holding has {float(holding.shares)}",
-            )
-        holding.shares = float(holding.shares) - payload.shares
-    else:
-        raise HTTPException(status_code=422, detail="action must be BUY or SELL")
-
-    trade = Trade(user_id=user.id, **payload.model_dump())
-    db.add(trade)
+    try:
+        trade = apply_trade(db, user.id, holding, payload)
+    except TradeRefused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     db.commit()
     db.refresh(trade)
     return trade
