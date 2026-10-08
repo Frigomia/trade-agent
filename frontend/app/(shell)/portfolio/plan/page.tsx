@@ -165,6 +165,8 @@ export default function PlanPage() {
   const { data: prefs, error: prefsError } = useSWR<Preferences>("/preferences", apiFetch);
   const { data: summary, error: summaryError, mutate: retrySummary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   // This month and Saved plans are one route; only ?tab changes, which Next does not remount.
+  // useSearchParams needs no Suspense boundary here because the (shell) routes are dynamic (the layout
+  // reads the session); if this page were ever prerendered statically, wrap it in <Suspense>.
   const saved = useSearchParams().get("tab") === "saved";
 
   // Preferences only prefill the amount: if they fail, the field starts empty.

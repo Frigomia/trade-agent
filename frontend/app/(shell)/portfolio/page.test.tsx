@@ -157,9 +157,9 @@ describe("PortfolioPage", () => {
     it("takes the watchlist target when the holding has none, and marks where it comes from", async () => {
       handlers["GET /portfolio/summary"] = withTargets(null, [{ ticker: "AAPL", target_weight: 0.5 }]);
       renderFresh();
-      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      const row = await screen.findByRole("button", { name: "Edit AAPL (target from watchlist)" });
       expect(row).toHaveTextContent("51.3% / 50%");
-      expect(row).toHaveTextContent("/ target 50%");
+      expect(row).toHaveTextContent("10 sh · 51.3% / target 50% (watchlist)");
       expect(within(row).getByLabelText("from watchlist")).toBeInTheDocument();
     });
 
@@ -179,6 +179,17 @@ describe("PortfolioPage", () => {
       renderFresh();
       const row = await screen.findByRole("button", { name: "Edit AAPL" });
       expect(row).toHaveTextContent("10 sh · — / target 20%");
+    });
+
+    it("rounds the phone line's shares to one decimal but keeps the full count in the Shares column", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], shares: 1.407274, target_weight: 0.51 }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("1.4 sh · 51.3% / target 51%");
+      expect(within(row).getByText("1.407274")).toBeInTheDocument();
     });
   });
 

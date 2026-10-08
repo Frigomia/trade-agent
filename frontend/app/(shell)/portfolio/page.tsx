@@ -39,9 +39,11 @@ import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
+import { AVG_COST_DISPLAY, HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
 
 const DASH = "—";
-const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr 1fr" };
+// A share count on the phone line, to one decimal at most ("1.4 sh"); a tiny one keeps its digits.
+const shortShares = (shares: number) => Math.round(shares * 10) / 10 || shares;
 // The watch icon sits outside the row's edit button (a button cannot hold a button), in its own
 // column; the header leaves the same room so the other columns stay lined up.
 const WATCH_COL = 44;
@@ -80,7 +82,7 @@ function SetTarget() {
 function WeightCell({ weight, target, scale }: { weight: number | null; target: Target; scale: number }) {
   const at = (fraction: number) => `${Math.min(100, (fraction / scale) * 100)}%`;
   return (
-    <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
+    <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", alignItems: "flex-end", gap: 0.75, minWidth: 0, textAlign: "right" }}>
       <Typography component="span" sx={{ fontSize: "inherit" }}>
         <b>{weight !== null ? pctText(weight) : DASH}</b>
         {target ? (
@@ -126,7 +128,8 @@ function HoldingRow({
   onEdit: () => void;
   onWatch: () => void;
 }) {
-  const cell = { display: { xs: "none", md: "block" }, textAlign: "right" as const };
+  // minWidth 0 lets a cell shrink with its minmax(0, fr) track; a long number then wraps, never overflows.
+  const cell = { display: { xs: "none", md: "block" }, textAlign: "right" as const, minWidth: 0, overflowWrap: "anywhere" as const };
   const value = holding.market_value !== null ? formatAmount(holding.market_value) : DASH;
   const pl =
     holding.unrealized_pl !== null && holding.unrealized_pl_pct !== null
@@ -135,12 +138,12 @@ function HoldingRow({
   return (
     <Box sx={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--line)" }}>
     <ButtonBase
-      aria-label={`Edit ${holding.ticker}`}
+      aria-label={`Edit ${holding.ticker}${target?.fromWatchlist ? " (target from watchlist)" : ""}`}
       onClick={onEdit}
       sx={{
         display: "grid",
-        gridTemplateColumns: COLUMNS,
-        gap: 2,
+        gridTemplateColumns: HOLDING_COLUMNS,
+        gap: HOLDING_GAP,
         flex: 1,
         minWidth: 0,
         textAlign: "left",
@@ -148,16 +151,20 @@ function HoldingRow({
         py: 1.5,
       }}
     >
-      <Box>
-        <Typography sx={{ fontWeight: 600 }}>{holding.ticker}</Typography>
-        <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{holding.name}</Typography>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{holding.ticker}</Typography>
+        <Typography sx={{ fontSize: 12, color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", display: { md: "none" } }}>
-          {holding.shares} sh · {holding.weight !== null ? pctText(holding.weight) : DASH}
-          {target ? ` / target ${targetText(target.target)}` : <> · <SetTarget /></>}
+          {shortShares(holding.shares)} sh · {holding.weight !== null ? pctText(holding.weight) : DASH}
+          {target ? (
+            ` / target ${targetText(target.target)}${target.fromWatchlist ? " (watchlist)" : ""}`
+          ) : (
+            <> · <SetTarget /></>
+          )}
         </Typography>
       </Box>
       <Typography sx={cell}>{holding.shares}</Typography>
-      <Typography sx={cell}>{formatAmount(holding.cost_basis)}</Typography>
+      <Typography sx={{ ...cell, display: AVG_COST_DISPLAY }}>{formatAmount(holding.cost_basis)}</Typography>
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
       </Typography>
@@ -336,7 +343,8 @@ export default function PortfolioPage() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { md: "minmax(0, 1fr) 320px" },
+          // The watchlist sits beside the table only from lg; below that the table needs the full width.
+          gridTemplateColumns: { lg: "minmax(0, 1fr) 320px" },
           gap: 2,
           mt: "20px",
           alignItems: "start",
@@ -348,8 +356,8 @@ export default function PortfolioPage() {
           <Box
             sx={{
               display: { xs: "none", md: "grid" },
-              gridTemplateColumns: COLUMNS,
-              gap: 2,
+              gridTemplateColumns: HOLDING_COLUMNS,
+              gap: HOLDING_GAP,
               pr: `${WATCH_COL}px`,
               py: 1,
               fontSize: 12,
@@ -360,7 +368,9 @@ export default function PortfolioPage() {
           >
             <span>Holding</span>
             <span>Shares</span>
-            <span>Avg cost</span>
+            <Box component="span" sx={{ display: AVG_COST_DISPLAY }}>
+              Avg cost
+            </Box>
             <span>Price</span>
             <span>Value</span>
             <span>P/L</span>

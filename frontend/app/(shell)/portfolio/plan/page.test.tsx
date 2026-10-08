@@ -161,7 +161,8 @@ describe("Plan page", () => {
     search = "tab=saved";
     renderFresh();
     expect(await screen.findByRole("table", { name: "Saved plans" })).toBeVisible();
-    expect(screen.queryByRole("link", { name: /Portfolio/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Saved plans" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
   });
 
   it("prefills the saved monthly amount and validates it", async () => {
