@@ -110,7 +110,7 @@ describe("PlanHistory", () => {
     const base = apiFetch.getMockImplementation()!;
     apiFetch.mockImplementation((path: string, init?: RequestInit) => {
       if (path === "/portfolio/instruments/KO/isin") {
-        isin = (JSON.parse(init!.body as string) as { isin: string }).isin;
+        isin = (JSON.parse(init!.body as string) as { isin: string }).isin.toUpperCase(); // the server upper-cases
         return Promise.resolve({ ticker: "KO", isin });
       }
       if (path === "/plans/5" && !init) return Promise.resolve({ ...SEPTEMBER, lines: SEPTEMBER.lines.map((l) => ({ ...l, isin })) });
@@ -123,7 +123,6 @@ describe("PlanHistory", () => {
     fireEvent.change(screen.getByLabelText("ISIN for KO"), { target: { value: "us1912161007" } });
     fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
     expect(await screen.findByText(/ISIN US1912161007 · 7 shares at 69.64 EUR/)).toBeInTheDocument();
-    expect(screen.getByText("ISIN saved")).toBeInTheDocument();
   });
 
   it("records a placed order through the shared sheet and reloads the plan", async () => {

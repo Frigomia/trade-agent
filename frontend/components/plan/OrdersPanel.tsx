@@ -50,6 +50,8 @@ export interface OrdersPanelProps {
    * string when there is nothing to say yet) to keep the live region mounted, so a change is announced.
    */
   status?: string;
+  /** The card whose button takes the focus (by ticker), e.g. the one that just opened after Placed. */
+  focusTicker?: string | null;
 }
 
 /**
@@ -58,7 +60,7 @@ export interface OrdersPanelProps {
  * card is a button that opens it to show Copy, Placed, the ticket text and the ISIN. A placed line has
  * no buttons but still opens to show its ticket. Previews never come here.
  */
-export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status }: OrdersPanelProps) {
+export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status, focusTicker }: OrdersPanelProps) {
   const [ownOpen, setOwnOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null); // a ticker, or "*" for Copy all lines
   const [failed, setFailed] = useState<string | null>(null);
@@ -182,6 +184,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
               onCopy={() => void copy(line.ticker, ticketText(line, plan.whole_shares))}
               onPlace={onPlace}
               onChanged={onChanged}
+              focus={focusTicker === line.ticker}
             />
           ))}
         </Box>
@@ -215,10 +218,17 @@ interface OrderCardProps {
   onCopy: () => void;
   onPlace?: (line: PlanLine) => void;
   onChanged: () => Promise<unknown>;
+  focus: boolean;
 }
 
-function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFailed, onCopy, onPlace, onChanged }: OrderCardProps) {
+function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFailed, onCopy, onPlace, onChanged, focus }: OrderCardProps) {
   const placed = line.placed_at !== null;
+  const button = useRef<HTMLButtonElement>(null);
+  // Focus again when the line flips to placed: the recorded card (nothing left to open) is focused
+  // before the reload, and the sheet's focus return can land after that.
+  useEffect(() => {
+    if (focus) button.current?.focus();
+  }, [focus, placed]);
   const status = line.placed_at !== null ? `placed ${placedDay(line.placed_at)}` : "not placed";
   const name = `${line.ticker}, ${formatAmount(line.amount_eur)} EUR, ${status}, press to ${open ? "close" : "open"}`;
   const fill = placedFill(line);
@@ -226,9 +236,10 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
-    <Box component="li" data-ticker={line.ticker} sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--up-bg)" : undefined }}>
+    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--up-bg)" : undefined }}>
       <Box
         component="button"
+        ref={button}
         type="button"
         aria-expanded={open}
         aria-controls={panelId}

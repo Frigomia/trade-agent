@@ -219,30 +219,28 @@ describe("OrdersPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add ISIN" }));
     });
 
-    it("checks the shape before saving", () => {
-      fireEvent.change(screen.getByLabelText("ISIN for NVDA"), { target: { value: "US67066G104" } });
-      expect(screen.getByText("11 of 12")).toBeInTheDocument();
+    it("asks for an ISIN when Save is pressed empty", () => {
       fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
-      expect(screen.getByText(/An ISIN is 12 characters/)).toBeInTheDocument();
+      expect(screen.getByText("Enter an ISIN")).toBeInTheDocument();
       expect(setIsin).not.toHaveBeenCalled();
     });
 
-    it("shows the server's 422 for a wrong check digit", async () => {
+    it("shows the server's 422 for a malformed ISIN or wrong check digit", async () => {
       // The client already dropped FastAPI's "Value error, " prefix (lib/api/client.ts).
       setIsin.mockRejectedValue(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit."));
-      fireEvent.change(screen.getByLabelText("ISIN for NVDA"), { target: { value: "US67066G1041" } });
+      fireEvent.change(screen.getByLabelText("ISIN for NVDA"), { target: { value: "US67066G104" } });
       fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
       expect(await screen.findByText("Not a valid ISIN: 12 characters with a correct check digit.")).toBeInTheDocument();
-      expect(setIsin).toHaveBeenCalledWith("NVDA", "US67066G1041");
+      expect(setIsin).toHaveBeenCalledWith("NVDA", "US67066G104");
       expect(onChanged).not.toHaveBeenCalled();
     });
 
-    it("saves the normalised ISIN and asks the parent to reload", async () => {
+    it("sends the trimmed ISIN and asks the parent to reload", async () => {
       setIsin.mockResolvedValue({ ticker: "NVDA", isin: "US67066G1040" });
       fireEvent.change(screen.getByLabelText("ISIN for NVDA"), { target: { value: " us67066g1040 " } });
       fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
       await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
-      expect(setIsin).toHaveBeenCalledWith("NVDA", "US67066G1040");
+      expect(setIsin).toHaveBeenCalledWith("NVDA", "us67066g1040");
       await waitFor(() => expect(screen.queryByLabelText("ISIN for NVDA")).not.toBeInTheDocument());
     });
 
@@ -280,9 +278,8 @@ describe("OrdersPanel", () => {
       fireEvent.change(field, { target: { value: "ie00b4l5y983" } });
       fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
       await waitFor(() => expect(screen.getByText("IE00B4L5Y983")).toBeInTheDocument());
-      expect(setIsin).toHaveBeenCalledWith("EIMI.L", "IE00B4L5Y983");
+      expect(setIsin).toHaveBeenCalledWith("EIMI.L", "ie00b4l5y983");
       expect(onChanged).toHaveBeenCalledTimes(1);
-      expect(screen.getByText("ISIN saved")).toBeInTheDocument();
       await waitFor(() => expect(screen.getByRole("button", { name: "Change" })).toHaveFocus());
     });
 
@@ -307,12 +304,9 @@ describe("OrdersPanel", () => {
       expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
     });
 
-    it("removes it after a confirm step, reloads, and focuses Add ISIN", async () => {
+    it("removes it with one click, reloads, and focuses Add ISIN", async () => {
       setIsin.mockResolvedValue({ ticker: "EIMI.L", isin: null });
       renderWithReload(null);
-      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-      expect(screen.getByText("Remove ISIN?")).toBeInTheDocument();
-      expect(setIsin).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Remove" }));
       await waitFor(() => expect(screen.getByText("None saved")).toBeInTheDocument());
       expect(setIsin).toHaveBeenCalledWith("EIMI.L", null);
@@ -320,22 +314,12 @@ describe("OrdersPanel", () => {
       await waitFor(() => expect(screen.getByRole("button", { name: "Add ISIN" })).toHaveFocus());
     });
 
-    it("keeps the ISIN when the confirm step is cancelled", () => {
-      renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
-      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(setIsin).not.toHaveBeenCalled();
-      expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Change" })).toHaveFocus();
-    });
-
-    it("shows the error inline when removing fails, and stays on the confirm step", async () => {
+    it("shows the error inline when removing fails, and keeps the ISIN", async () => {
       setIsin.mockRejectedValue(new FakeApiError(404, "No holding or watchlist item for that ticker"));
       renderPanel(plan([LINES[0]]), { openTicker: "EIMI.L" });
       fireEvent.click(screen.getByRole("button", { name: "Remove" }));
-      fireEvent.click(screen.getByRole("button", { name: "Remove" }));
       expect(await screen.findByRole("alert")).toHaveTextContent("No holding or watchlist item for that ticker");
-      expect(screen.getByText("Remove ISIN?")).toBeInTheDocument();
+      expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
       expect(onChanged).not.toHaveBeenCalled();
     });
   });

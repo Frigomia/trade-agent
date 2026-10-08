@@ -13,7 +13,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { copyAllText, isinShape, DIGITS_ERROR, nextUnplaced, placedFill, readPlacedNumber, THOUSANDS_ERROR, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
+import { copyAllText, DIGITS_ERROR, nextUnplaced, placedFill, readPlacedNumber, THOUSANDS_ERROR, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
 import type { Plan, PlanLine } from "./plans";
 
 const line = (o: Partial<PlanLine> = {}): PlanLine => ({
@@ -229,15 +229,6 @@ describe("placeLine", () => {
   it.each([404, 409, 422, 429])("propagates the %i detail", async (status: number) => {
     apiFetch.mockRejectedValue(new FakeApiError(status, "nope"));
     await expect(placeLine(1, 1, { date: "2026-10-08", shares: 1, price: 1 })).rejects.toHaveProperty("detail", "nope");
-  });
-});
-
-describe("isinShape", () => {
-  it("trims and upper-cases a well-shaped ISIN", () => {
-    expect(isinShape("  us67066g1040 ")).toBe("US67066G1040");
-  });
-  it.each(["", "US67066G104", "US67066G10401", "1S67066G1040", "US67066G104X", "US67066G10-0"])("rejects %j", (raw) => {
-    expect(isinShape(raw)).toBeNull();
   });
 });
 

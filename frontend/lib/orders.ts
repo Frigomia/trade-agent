@@ -66,8 +66,8 @@ export function readPlacedNumber(raw: string, kind: "shares" | "price"): PlacedN
   const fail = (error: string) => ({ value: null, error });
   const above = kind === "price" ? "Enter a price above 0." : "Enter a number of shares above 0.";
   if (/^\d+([.,]\d{3}){2,}$/.test(text) || (text.includes(",") && text.includes("."))) return fail(THOUSANDS_ERROR);
-  if (kind === "price" && /^[1-9]\d{0,2}[.,]\d{3}$/.test(text)) return fail(THOUSANDS_ERROR);
-  if (kind === "shares" && /^[1-9]\d{0,2}[.,]000$/.test(text)) return fail(THOUSANDS_ERROR);
+  const group = kind === "price" ? /^[1-9]\d{0,2}[.,]\d{3}$/ : /^[1-9]\d{0,2}[.,]000$/;
+  if (group.test(text)) return fail(THOUSANDS_ERROR);
   if (/^-\d/.test(text)) return fail(above);
   if (!/^\d+([.,]\d+)?$/.test(text)) return fail(DIGITS_ERROR[kind]);
   if (/[.,]\d{7,}$/.test(text)) return fail("Use at most 6 decimals.");
@@ -90,25 +90,17 @@ export interface PlaceBody {
   asset_type?: AssetType; // needed only when the ticker is not a holding yet
 }
 
-export const PLACE_TIMEOUT_MS = 30_000;
-
 /**
  * Records that the order was placed (logs the buy). Throws the ApiError, or fetch's own error when
- * the server cannot be reached or does not answer within PLACE_TIMEOUT_MS.
+ * the server cannot be reached or does not answer within 30 seconds.
  */
 export function placeLine(planId: number, lineId: number, body: PlaceBody): Promise<PlanLine> {
   return apiFetch<PlanLine>(`/plans/${planId}/lines/${lineId}/placed`, {
     method: "POST",
     body: JSON.stringify(body),
     // A hung request ends as an error, so the sheet shows its network message and can be closed.
-    signal: AbortSignal.timeout(PLACE_TIMEOUT_MS),
+    signal: AbortSignal.timeout(30_000),
   });
-}
-
-/** The ISIN, trimmed and upper-cased, when its shape fits (the server also checks the check digit); else null. */
-export function isinShape(raw: string): string | null {
-  const value = raw.trim().toUpperCase();
-  return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value) ? value : null;
 }
 
 /** An empty string clears the ISIN. Throws the ApiError (422 for a malformed ISIN). */
