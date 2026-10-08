@@ -50,6 +50,7 @@ class HoldingOut(HoldingIn):
 
     id: int
     user_id: UUID
+    isin: str | None = None
 
 
 class WatchlistItemIn(BaseModel):
@@ -64,6 +65,7 @@ class WatchlistItemOut(WatchlistItemIn):
 
     id: int
     user_id: UUID
+    isin: str | None = None
 
 
 class TradeIn(BaseModel):
@@ -313,6 +315,10 @@ REASON_TEXT = {
 class PlanLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: int | None = None
+    isin: str | None = None
+    placed_at: datetime | None = None
+    placed_trade_id: int | None = None
     ticker: str
     name: str
     amount_eur: float

@@ -208,3 +208,44 @@ def test_planner_columns_and_tables_have_the_documented_defaults(db_session):
     assert link.plan_reminder_enabled is True
     assert item.target_weight is None
     assert plan.created_at is not None and plan.notes == ["a note"]
+
+
+def test_isin_and_placed_columns_are_nullable_and_the_isin_check_rejects_junk(db_session):
+    uid = uuid.uuid4()
+    holding = Holding(
+        user_id=uid,
+        ticker="EIMI.L",
+        name="x",
+        asset_type="ETF",
+        shares=1,
+        cost_basis=1,
+        first_purchase_date=date(2024, 1, 1),
+    )
+    item = WatchlistItem(user_id=uid, ticker="NVDA", asset_type="STOCK")
+    plan = ContributionPlan(
+        user_id=uid, amount_eur=1, whole_shares=False, total_before_eur=0, leftover_eur=0, notes=[]
+    )
+    db_session.add_all([holding, item, plan])
+    db_session.commit()
+    line = ContributionPlanLine(
+        user_id=uid,
+        plan_id=plan.id,
+        ticker="EIMI.L",
+        name="x",
+        amount_eur=1,
+        shares=1,
+        price_eur=1,
+        currency="EUR",
+        rate=1,
+        reason="underweight",
+    )
+    db_session.add(line)
+    db_session.commit()
+    assert holding.isin is None and item.isin is None
+    assert line.placed_at is None and line.placed_trade_id is None
+    holding.isin = "IE00BKM4GZ66"
+    db_session.commit()
+    holding.isin = "not an isin"
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
