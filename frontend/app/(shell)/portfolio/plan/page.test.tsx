@@ -92,7 +92,10 @@ function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } 
     if (path === "/preferences") return Promise.resolve({ monthly_contribution: monthly });
     if (path === "/portfolio/summary") return Promise.resolve(summary);
     if (path === "/plans" && method === "GET") return Promise.resolve(plans);
-    if (path === "/plans/preview") return Promise.resolve(PLAN);
+    if (path === "/plans/preview") {
+      const req = JSON.parse(init!.body as string) as { amount: number; whole_shares: boolean };
+      return Promise.resolve({ ...PLAN, amount_eur: req.amount, whole_shares: req.whole_shares });
+    }
     if (path === "/plans" && method === "POST") {
       plans = [{ id: 7, created_at: SAVED.created_at!, amount_eur: 500, line_count: 2 }, ...plans];
       return Promise.resolve(SAVED);
@@ -244,5 +247,89 @@ describe("Plan page", () => {
     expect(screen.getByText(DISCLAIMER)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Saved plans" }));
     expect(screen.getByText(DISCLAIMER)).toBeVisible();
+  });
+
+  it("marks the preview stale when the amount changes and saves the displayed plan only", async () => {
+    await makePlan();
+    const field = screen.getByLabelText("Amount this month");
+    fireEvent.change(field, { target: { value: "600" } });
+    expect(screen.getByText("This plan is for 500.00 EUR. Press Make plan to update.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save plan" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Make plan" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save plan" })).toBeEnabled());
+    expect(screen.queryByText(/Press Make plan to update/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    await waitFor(() => expect(body("/plans")).toEqual([{ amount: 600, whole_shares: false }]));
+  });
+
+  it("keeps the switch on the shown plan when the amount is invalid", async () => {
+    await makePlan();
+    fireEvent.change(screen.getByLabelText("Amount this month"), { target: { value: "" } });
+    const sw = screen.getByRole("switch", { name: "Whole shares only" });
+    fireEvent.click(sw);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Enter an amount from 0.01 to 1,000,000/);
+    expect(sw).not.toBeChecked();
+    expect(body("/plans/preview")).toHaveLength(1);
+  });
+
+  it("rolls the switch back and shows the error when the re-request fails", async () => {
+    await makePlan();
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/plans/preview"
+        ? Promise.reject(new FakeApiError(429, "Too many plans in a minute. Try again shortly."))
+        : base(path, init),
+    );
+    const sw = screen.getByRole("switch", { name: "Whole shares only" });
+    fireEvent.click(sw);
+    expect(await screen.findByText("Too many plans in a minute. Try again shortly.")).toBeInTheDocument();
+    expect(sw).not.toBeChecked();
+    expect(screen.getByText("about 0.795 sh")).toBeInTheDocument();
+  });
+
+  it("shows a 422 from the preview and a 409 from saving", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    let previewFails = true;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/plans/preview" && previewFails) {
+        return Promise.reject(new FakeApiError(422, "Input should be less than or equal to 1000000"));
+      }
+      if (path === "/plans" && init?.method === "POST") {
+        return Promise.reject(new FakeApiError(409, "You can keep up to 24 saved plans. Delete one before saving another."));
+      }
+      return base(path, init);
+    });
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: "Make plan" }));
+    expect(await screen.findByText("Input should be less than or equal to 1000000")).toBeInTheDocument();
+
+    previewFails = false;
+    fireEvent.click(screen.getByRole("button", { name: "Make plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save plan" }));
+    expect(
+      await screen.findByText("You can keep up to 24 saved plans. Delete one before saving another."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Plan lines" })).toBeInTheDocument();
+  });
+
+  it("offers a retry when the portfolio cannot be loaded", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    let fail = true;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/portfolio/summary" && fail ? Promise.reject(new FakeApiError(500, "boom")) : base(path, init),
+    );
+    renderFresh();
+    expect(await screen.findByText("Could not load your portfolio.")).toBeInTheDocument();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("button", { name: "Make plan" })).toBeInTheDocument();
+    expect(screen.queryByText("Could not load your portfolio.")).not.toBeInTheDocument();
+  });
+
+  it("counts a target on a holding with no shares yet, as the backend does", async () => {
+    setup({ summary: { holdings: [{ ...HOLDING, shares: 0 }], watchlist: [] } });
+    renderFresh();
+    expect(await screen.findByRole("button", { name: "Make plan" })).toBeInTheDocument();
   });
 });

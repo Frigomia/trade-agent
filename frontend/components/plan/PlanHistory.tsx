@@ -38,6 +38,8 @@ export function PlanHistory() {
   const { plans, error, isLoading, load, remove } = usePlans();
   const [opened, setOpened] = useState<Plan | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Kept after the dialog closes so its text does not go blank while it fades out.
+  const [deleting, setDeleting] = useState<Plan | null>(null);
   const action = useAction();
 
   if (error) return <Alert severity="error">Could not load your saved plans.</Alert>;
@@ -62,7 +64,7 @@ export function PlanHistory() {
 
   async function confirmDelete() {
     setConfirmOpen(false);
-    const id = opened?.id;
+    const id = deleting?.id;
     if (id == null) return;
     await action.run(async () => {
       await remove(id);
@@ -130,7 +132,10 @@ export function PlanHistory() {
               size="small"
               startIcon={<Trash2 size={14} />}
               disabled={action.submitting}
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => {
+                setDeleting(opened);
+                setConfirmOpen(true);
+              }}
             >
               Delete plan
             </Button>
@@ -140,10 +145,10 @@ export function PlanHistory() {
       )}
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} aria-labelledby="plan-delete-title">
-        <DialogTitle id="plan-delete-title">Delete the {month} plan?</DialogTitle>
+        <DialogTitle id="plan-delete-title">Delete the {deleting?.created_at ? planMonth(deleting.created_at) : ""} plan?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            It is removed from your saved plans ({formatAmount(opened?.amount_eur ?? 0)} EUR, {opened?.lines.length ?? 0}{" "}
+            It is removed from your saved plans ({formatAmount(deleting?.amount_eur ?? 0)} EUR, {deleting?.lines.length ?? 0}{" "}
             lines). This cannot be undone.
           </DialogContentText>
         </DialogContent>

@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { apiFetch } from "@/lib/api/client";
+import { toTime } from "@/components/portfolio/PortfolioChart";
 
 export interface PlanRequest {
   amount: number;
@@ -50,6 +51,7 @@ export interface DriftItem {
 }
 
 export const DISCLAIMER = "Advisory only. Nothing is sent to a broker.";
+export const AMOUNT_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimals at most.";
 
 /** The backend's bounds: more than 0, at most 1,000,000, two decimals at most. null when invalid. */
 export function parseAmount(raw: string): number | null {
@@ -59,14 +61,15 @@ export function parseAmount(raw: string): number | null {
   return n > 0 && n <= 1_000_000 ? n : null;
 }
 
+// The backend stores naive UTC timestamps; toTime reads them as UTC, as the portfolio chart does.
 /** "October 2026", in the viewer's time zone. */
 export function planMonth(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+  return new Date(toTime(iso)).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
 
 /** "8 Oct 2026, 09:14", in the viewer's time zone. */
 export function planSavedAt(iso: string): string {
-  return new Date(iso).toLocaleString("en-GB", {
+  return new Date(toTime(iso)).toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

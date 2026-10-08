@@ -4,9 +4,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { Box, Button, InputAdornment, Link as MuiLink, Switch, TextField, Typography } from "@mui/material";
 import { Panel } from "@/components/ui/Panel";
-import { parseAmount } from "@/lib/plans";
-
-const AMOUNT_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimals at most.";
+import { AMOUNT_ERROR, parseAmount } from "@/lib/plans";
 
 /** The ledger's top bar: amount, "Whole shares only" and "Make plan". The caller owns the values. */
 export function PlanForm({

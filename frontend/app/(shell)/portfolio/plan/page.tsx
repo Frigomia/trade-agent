@@ -7,7 +7,8 @@ import { Alert, Box, Button, Link as MuiLink, Skeleton, Tab, Tabs, Typography } 
 import { ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
-import { DISCLAIMER, parseAmount, planSavedAt, previewPlan, usePlans, type Plan } from "@/lib/plans";
+import { formatAmount } from "@/lib/format";
+import { AMOUNT_ERROR, DISCLAIMER, parseAmount, planSavedAt, previewPlan, usePlans, type Plan } from "@/lib/plans";
 import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 import { PlanForm } from "@/components/plan/PlanForm";
@@ -24,7 +25,7 @@ const STEPS = [
 
 function hasTargets(summary: PortfolioSummary): boolean {
   return (
-    summary.holdings.some((h) => h.shares > 0 && (h.target_weight ?? 0) > 0) ||
+    summary.holdings.some((h) => (h.target_weight ?? 0) > 0) ||
     summary.watchlist.some((w) => (w.target_weight ?? 0) > 0)
   );
 }
@@ -62,16 +63,27 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
   const make = useAction();
   const saving = useAction();
 
+  // Once a plan is on screen the switch shows that plan's mode; a flip only sticks when the new plan arrives.
   function request(whole: boolean) {
     const value = parseAmount(amount);
-    if (value === null) return;
-    void make.run(async () => setPlan(await previewPlan({ amount: value, whole_shares: whole })));
+    if (value === null) {
+      make.setError(AMOUNT_ERROR);
+      return;
+    }
+    void make.run(async () => {
+      const next = await previewPlan({ amount: value, whole_shares: whole });
+      setPlan(next);
+      setWholeShares(next.whole_shares);
+    });
   }
 
   function toggleWhole(next: boolean) {
-    setWholeShares(next);
-    if (plan) request(next); // a plan on screen follows the switch
+    if (plan) request(next);
+    else setWholeShares(next);
   }
+
+  // The field changed since this plan was made: saving would store a plan for another amount.
+  const stale = plan !== null && plan.id === null && parseAmount(amount) !== plan.amount_eur;
 
   const footer =
     plan?.created_at ? (
@@ -81,7 +93,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
     ) : plan ? (
       <Button
         variant="contained"
-        disabled={saving.submitting || make.submitting}
+        disabled={stale || saving.submitting || make.submitting}
         onClick={() =>
           void saving.run(async () =>
             setPlan(await save({ amount: plan.amount_eur, whole_shares: plan.whole_shares })),
@@ -100,10 +112,15 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
         wholeShares={wholeShares}
         onWholeSharesChange={toggleWhole}
         onSubmit={() => request(wholeShares)}
-        pending={make.submitting}
+        pending={make.submitting || saving.submitting}
       />
       {make.error && <Alert severity="error">{make.error}</Alert>}
       {saving.error && <Alert severity="error">{saving.error}</Alert>}
+      {stale && (
+        <Typography role="status" sx={{ fontSize: 13, color: "var(--warn)" }}>
+          This plan is for {formatAmount(plan.amount_eur)} EUR. Press Make plan to update.
+        </Typography>
+      )}
       {plan && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
   );
@@ -111,7 +128,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
 
 export default function PlanPage() {
   const { data: prefs, error: prefsError } = useSWR<Preferences>("/preferences", apiFetch);
-  const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
+  const { data: summary, error: summaryError, mutate: retrySummary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const [tab, setTab] = useState(0);
 
   // Preferences only prefill the amount: if they fail, the field starts empty.
@@ -142,7 +159,19 @@ export default function PlanPage() {
 
       {/* Both panels stay mounted, so a preview survives a look at the saved plans. */}
       <Box role="tabpanel" id="plan-panel-0" aria-labelledby="plan-tab-0" hidden={tab !== 0}>
-        {summaryError && <Alert severity="error">Could not load your portfolio.</Alert>}
+        {/* A failed background revalidation keeps the data on screen; only a first load failure shows. */}
+        {summaryError && !summary && (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={() => void retrySummary()}>
+                Retry
+              </Button>
+            }
+          >
+            Could not load your portfolio.
+          </Alert>
+        )}
         {!summaryError && !ready && <Skeleton variant="rounded" height={72} />}
         {ready && !hasTargets(summary) && <NoTargets />}
         {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} />}
