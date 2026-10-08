@@ -5,6 +5,7 @@ nothing here talks to a broker."""
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import NamedTuple
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -12,7 +13,7 @@ from sqlalchemy.exc import DataError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import planner
+from app import planner, trades
 from app.db import lock_user_for_insert
 from app.fx import eur_prices
 from app.limits import MAX_HOLDINGS, cap_message
@@ -261,25 +262,29 @@ def _placed(
     return {trade_id: (float(shares), float(price)) for trade_id, shares, price in rows}
 
 
-def _line_out(
-    ln: ContributionPlanLine, isins: dict[str, str], placed: dict[int, tuple[float, float]]
-) -> PlanLineOut:
-    found = placed.get(ln.placed_trade_id) if ln.placed_trade_id is not None else None
+class _Extras(NamedTuple):
+    """What a plan line shows beyond its own columns."""
+
+    isins: dict[str, str]  # ticker -> ISIN
+    placed: dict[int, tuple[float, float]]  # trade id -> (shares, price)
+
+
+def _extras(db: Session, user_id: uuid.UUID, lines: list[ContributionPlanLine]) -> _Extras:
+    return _Extras(_isins(db, user_id), _placed(db, user_id, lines))
+
+
+def _line_out(ln: ContributionPlanLine, extras: _Extras) -> PlanLineOut:
+    found = extras.placed.get(ln.placed_trade_id) if ln.placed_trade_id is not None else None
     return PlanLineOut.model_validate(ln, from_attributes=True).model_copy(
         update={
-            "isin": isins.get(ln.ticker),
+            "isin": extras.isins.get(ln.ticker),
             "placed_shares": found[0] if found else None,
             "placed_price": found[1] if found else None,
         }
     )
 
 
-def _out(
-    row: ContributionPlan,
-    lines: list[ContributionPlanLine],
-    isins: dict[str, str],
-    placed: dict[int, tuple[float, float]],
-) -> PlanOut:
+def _out(row: ContributionPlan, lines: list[ContributionPlanLine], extras: _Extras) -> PlanOut:
     return PlanOut(
         id=row.id,
         created_at=row.created_at,
@@ -287,7 +292,7 @@ def _out(
         whole_shares=row.whole_shares,
         total_before_eur=float(row.total_before_eur),
         leftover_eur=float(row.leftover_eur),
-        lines=[_line_out(ln, isins, placed) for ln in lines],
+        lines=[_line_out(ln, extras) for ln in lines],
         notes=list(row.notes or []),
     )
 
@@ -302,7 +307,7 @@ def load(db: Session, user_id: uuid.UUID, plan_id: int) -> PlanOut | None:
         .order_by(ContributionPlanLine.id)
         .all()
     )
-    return _out(row, lines, _isins(db, user_id), _placed(db, user_id, lines))
+    return _out(row, lines, _extras(db, user_id, lines))
 
 
 def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
@@ -325,9 +330,8 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
     )
     for line in lines:
         by_plan.setdefault(line.plan_id, []).append(line)
-    isins = _isins(db, user_id)  # once, not per plan
-    placed = _placed(db, user_id, lines)  # once, not per plan
-    return [_out(r, by_plan.get(r.id, []), isins, placed) for r in rows]
+    extras = _extras(db, user_id, lines)  # once, not per plan
+    return [_out(r, by_plan.get(r.id, []), extras) for r in rows]
 
 
 def list_summaries(db: Session, user_id: uuid.UUID) -> list[PlanSummaryOut]:
@@ -422,14 +426,12 @@ def place_line(
         line.placed_at = datetime.now(UTC).replace(tzinfo=None)
         line.placed_trade_id = trade.id
         db.commit()
-    except TradeRefused as exc:
+    except (TradeRefused, DataError, SQLAlchemyError, HTTPException) as exc:
         db.rollback()
-        raise HTTPException(422, str(exc)) from None
-    except DataError:
-        db.rollback()
-        raise HTTPException(422, "Those numbers are too large to store.") from None
-    except (SQLAlchemyError, HTTPException):
-        db.rollback()
+        if isinstance(exc, TradeRefused):
+            raise HTTPException(422, str(exc)) from None
+        if isinstance(exc, DataError):
+            raise HTTPException(422, trades.TOO_LARGE) from None
         raise
     db.refresh(line)
-    return _line_out(line, _isins(db, user_id), _placed(db, user_id, [line]))
+    return _line_out(line, _extras(db, user_id, [line]))

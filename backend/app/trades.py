@@ -36,12 +36,10 @@ def apply_trade(db: Session, user_id: uuid.UUID, holding: Holding, payload: Trad
         total_cost = prior_value + added_value
         holding.shares = float(holding.shares) + shares
         holding.cost_basis = total_cost / float(holding.shares)
-    elif payload.action == "SELL":
+    else:  # SELL (TradeIn.action is BUY or SELL)
         if shares > float(holding.shares):
             raise TradeRefused(f"Cannot sell {shares}; holding has {float(holding.shares)}")
         holding.shares = float(holding.shares) - shares
-    else:
-        raise TradeRefused("action must be BUY or SELL")
     # model_copy(update=...) is a new TradeIn with the rounded numbers; the payload is unchanged.
     stored = payload.model_copy(update={"shares": shares, "price": price})
     trade = Trade(user_id=user_id, **stored.model_dump())
