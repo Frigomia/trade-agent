@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor, act } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import { createElement, type ReactNode } from "react";
@@ -43,6 +43,9 @@ const req = { amount: 500, whole_shares: true };
 const listCalls = () => apiFetch.mock.calls.filter(([p, init]) => p === "/plans" && !init).length;
 
 describe("plans", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   beforeEach(() => {
     apiFetch.mockReset();
   });
@@ -107,28 +110,41 @@ describe("plans", () => {
     });
     const { result } = renderHook(() => usePlans(), { wrapper });
     await waitFor(() => expect(result.current.plans).toEqual([]));
-    await expect(result.current.save(req)).rejects.toMatchObject({
-      status,
-      detail,
+    await act(async () => {
+      await expect(result.current.save(req)).rejects.toMatchObject({
+        status,
+        detail,
+      });
     });
   });
 
-  it("drift is fetched once, does not poll, and failure sets error without throwing", async () => {
+  it("drift is fetched once and does not poll or revalidate on focus or reconnect", async () => {
+    vi.useFakeTimers();
+    apiFetch.mockResolvedValue([]);
+    const { result } = renderHook(() => useDrift(), { wrapper });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.drift).toEqual([]);
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("online"));
+      document.dispatchEvent(new Event("visibilitychange"));
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch).toHaveBeenCalledWith("/plans/drift");
+  });
+
+  it("drift failure sets error without throwing and is not retried", async () => {
+    vi.useFakeTimers();
     apiFetch.mockImplementation(async () => {
       throw new FakeApiError(500, "boom");
     });
     const { result } = renderHook(() => useDrift(), { wrapper });
-    await waitFor(() => expect(result.current.error).toBeDefined());
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
     expect(result.current.error?.detail).toBe("boom");
     expect(result.current.drift).toBeUndefined();
-    vi.useFakeTimers();
-    try {
-      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
-    } finally {
-      vi.useRealTimers();
-    }
     expect(apiFetch).toHaveBeenCalledTimes(1);
-    expect(apiFetch).toHaveBeenCalledWith("/plans/drift");
   });
 
   it("drift returns items", async () => {

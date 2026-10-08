@@ -20,7 +20,9 @@ export interface TelegramLink {
   expires_in: number;
 }
 
-export type TelegramPatch = Partial<Pick<TelegramStatus, "digest_enabled" | "moves_enabled" | "plan_reminder_enabled" | "move_threshold_pct">>;
+export type TelegramPatch = Partial<
+  Pick<TelegramStatus, "digest_enabled" | "moves_enabled" | "plan_reminder_enabled" | "move_threshold_pct">
+>;
 
 const PATH = "/me/telegram";
 const POLL_MS = 3000;
