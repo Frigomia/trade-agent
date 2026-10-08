@@ -49,6 +49,32 @@ export interface DriftItem {
   points: number; // weight minus target, in percentage points
 }
 
+export const DISCLAIMER = "Advisory only. Nothing is sent to a broker.";
+
+/** The backend's bounds: more than 0, at most 1,000,000, two decimals at most. null when invalid. */
+export function parseAmount(raw: string): number | null {
+  const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
+  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
+  const n = Number(text);
+  return n > 0 && n <= 1_000_000 ? n : null;
+}
+
+/** "October 2026", in the viewer's time zone. */
+export function planMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+}
+
+/** "8 Oct 2026, 09:14", in the viewer's time zone. */
+export function planSavedAt(iso: string): string {
+  return new Date(iso).toLocaleString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const PATH = "/plans";
 const post = (path: string, req: PlanRequest) => apiFetch<Plan>(path, { method: "POST", body: JSON.stringify(req) });
 

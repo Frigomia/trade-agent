@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import NextLink from "next/link";
 import useSWR from "swr";
 import {
   Alert,
@@ -12,6 +13,7 @@ import {
   DialogContent,
   DialogContentText,
   IconButton,
+  Link as MuiLink,
   TextField,
   Tooltip,
   Typography,
@@ -188,6 +190,11 @@ export default function PortfolioPage() {
     <Box>
       <PageHeader
         title="Portfolio"
+        subtitle={
+          <MuiLink component={NextLink} href="/portfolio/plan">
+            Plan this month&apos;s contribution
+          </MuiLink>
+        }
         actions={
           <>
         <Button

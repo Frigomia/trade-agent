@@ -17,7 +17,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { usePlans, useDrift, previewPlan, type Plan } from "./plans";
+import { usePlans, useDrift, previewPlan, parseAmount, planMonth, type Plan } from "./plans";
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(SWRConfig, { value: { provider: () => new Map(), dedupingInterval: 0 } }, children);
@@ -158,5 +158,22 @@ describe("plans", () => {
     apiFetch.mockResolvedValue([item]);
     const { result } = renderHook(() => useDrift(), { wrapper });
     await waitFor(() => expect(result.current.drift).toEqual([item]));
+  });
+});
+
+describe("parseAmount", () => {
+  it("accepts more than 0 up to 1,000,000 with two decimals at most", () => {
+    expect(parseAmount("500")).toBe(500);
+    expect(parseAmount(" 235,29 ")).toBe(235.29);
+    expect(parseAmount("1000000")).toBe(1_000_000);
+    for (const bad of ["", "0", "0.00", "-5", "1000000.01", "1.234", "abc", "1e3"]) {
+      expect(parseAmount(bad)).toBeNull();
+    }
+  });
+});
+
+describe("planMonth", () => {
+  it("names the month and year", () => {
+    expect(planMonth("2026-09-15T12:00:00")).toBe("September 2026");
   });
 });
