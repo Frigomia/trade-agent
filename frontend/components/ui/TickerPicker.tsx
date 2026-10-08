@@ -94,6 +94,11 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
               {[option.name, option.exchange, option.type].filter(Boolean).join(" · ")}
             </Typography>
+            {isinQuery && option.group === SEARCH_GROUP && (
+              <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+                Saves ISIN {query.toUpperCase()} with it
+              </Typography>
+            )}
           </Box>
         </li>
       )}

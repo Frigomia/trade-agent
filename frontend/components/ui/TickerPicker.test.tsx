@@ -192,6 +192,25 @@ describe("TickerPicker", () => {
       expect(screen.getByText("ISIN IE00BKM4GZ66 will be saved with this ticker.")).toBeInTheDocument();
     });
 
+    it("repeats the cue in each search result row, only for an ISIN query", async () => {
+      render(<Harness />);
+      await type("vwce");
+      expect(screen.queryByText(/^Saves ISIN/)).not.toBeInTheDocument();
+
+      await type("ie00bkm4gz66");
+      expect(screen.getAllByText("Saves ISIN IE00BKM4GZ66 with it")).toHaveLength(2);
+    });
+
+    it("does not put the cue on a portfolio row", async () => {
+      apiFetch.mockResolvedValue([AAPL]);
+      render(<Harness suggestions={[{ ...OWNED, name: "IE00BKM4GZ66 fund" }]} />);
+
+      await type("IE00BKM4GZ66");
+
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+      expect(screen.getAllByText("Saves ISIN IE00BKM4GZ66 with it")).toHaveLength(1);
+    });
+
     it("shows no such line when the ISIN finds nothing", async () => {
       apiFetch.mockResolvedValue([]);
       render(<Harness />);
