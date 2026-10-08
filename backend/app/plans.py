@@ -224,7 +224,20 @@ def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
     return saved
 
 
-def _out(row: ContributionPlan, lines: list[ContributionPlanLine]) -> PlanOut:
+def _isins(db: Session, user_id: uuid.UUID) -> dict[str, str]:
+    """ticker -> ISIN, the holding's winning over the watchlist item's; only the person's rows."""
+    found: dict[str, str] = {}
+    for model in (WatchlistItem, Holding):  # holdings last, so they win
+        rows = db.query(model.ticker, model.isin).filter(
+            model.user_id == user_id, model.isin.isnot(None)
+        )
+        found.update({ticker: isin for ticker, isin in rows if isin is not None})
+    return found
+
+
+def _out(
+    row: ContributionPlan, lines: list[ContributionPlanLine], isins: dict[str, str]
+) -> PlanOut:
     return PlanOut(
         id=row.id,
         created_at=row.created_at,
@@ -232,7 +245,12 @@ def _out(row: ContributionPlan, lines: list[ContributionPlanLine]) -> PlanOut:
         whole_shares=row.whole_shares,
         total_before_eur=float(row.total_before_eur),
         leftover_eur=float(row.leftover_eur),
-        lines=[PlanLineOut.model_validate(ln, from_attributes=True) for ln in lines],
+        lines=[
+            PlanLineOut.model_validate(ln, from_attributes=True).model_copy(
+                update={"isin": isins.get(ln.ticker)}
+            )
+            for ln in lines
+        ],
         notes=list(row.notes or []),
     )
 
@@ -247,7 +265,7 @@ def load(db: Session, user_id: uuid.UUID, plan_id: int) -> PlanOut | None:
         .order_by(ContributionPlanLine.id)
         .all()
     )
-    return _out(row, lines)
+    return _out(row, lines, _isins(db, user_id))
 
 
 def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
@@ -270,7 +288,8 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
     )
     for line in lines:
         by_plan.setdefault(line.plan_id, []).append(line)
-    return [_out(r, by_plan.get(r.id, [])) for r in rows]
+    isins = _isins(db, user_id)  # once, not per plan
+    return [_out(r, by_plan.get(r.id, []), isins) for r in rows]
 
 
 def list_summaries(db: Session, user_id: uuid.UUID) -> list[PlanSummaryOut]:

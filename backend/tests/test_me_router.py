@@ -297,6 +297,7 @@ def test_the_export_lists_saved_plans_with_their_lines(client, db_session):
     body = client.get("/me/export").json()
     assert [p["amount_eur"] for p in body["contribution_plans"]] == [500.0]
     assert body["contribution_plans"][0]["lines"][0]["ticker"] == "AAPL"
+    assert {"id", "isin"} <= body["contribution_plans"][0]["lines"][0].keys()
 
 
 def test_export_is_not_cacheable(client):

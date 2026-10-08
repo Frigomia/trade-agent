@@ -331,3 +331,61 @@ def test_a_drift_holding_without_a_price_is_left_out(client, db_session):
     with _prices(AAPL=200, MSFT=400):
         body = client.get("/plans/drift").json()
     assert [i["ticker"] for i in body] == ["AAPL", "MSFT"]
+
+
+def _saved(client):
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        return client.post("/plans", json={"amount": 500}).json()
+
+
+def test_saved_lines_carry_their_id_and_the_isin_of_the_holding_or_the_watchlist_item(
+    client, db_session
+):
+    _seed_basic(db_session)
+    db_session.query(Holding).filter_by(ticker="AAPL").update({"isin": "US0378331005"})
+    db_session.query(WatchlistItem).filter_by(ticker="NVDA").update({"isin": "US5949181045"})
+    db_session.commit()
+    plan = _saved(client)
+    lines = {ln["ticker"]: ln for ln in client.get(f"/plans/{plan['id']}").json()["lines"]}
+    assert lines["AAPL"]["isin"] == "US0378331005"
+    assert lines["NVDA"]["isin"] == "US5949181045"
+    assert all(isinstance(ln["id"], int) for ln in lines.values())
+    assert all(ln["placed_at"] is None and ln["placed_trade_id"] is None for ln in lines.values())
+
+
+def test_the_holdings_isin_wins_over_the_watchlists(client, db_session):
+    _seed_basic(db_session)
+    _watch(db_session, "AAPL", 0.1)
+    db_session.query(Holding).filter_by(ticker="AAPL").update({"isin": "US0378331005"})
+    db_session.query(WatchlistItem).filter_by(ticker="AAPL").update({"isin": "US5949181045"})
+    db_session.commit()
+    plan = _saved(client)
+    lines = client.get(f"/plans/{plan['id']}").json()["lines"]
+    line = next(ln for ln in lines if ln["ticker"] == "AAPL")
+    assert line["isin"] == "US0378331005"
+
+
+def test_an_isin_added_after_saving_shows_on_the_old_plan(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    assert all(ln["isin"] is None for ln in client.get(f"/plans/{plan['id']}").json()["lines"])
+    client.put("/portfolio/instruments/AAPL/isin", json={"isin": "US0378331005"})
+    lines = client.get(f"/plans/{plan['id']}").json()["lines"]
+    line = next(ln for ln in lines if ln["ticker"] == "AAPL")
+    assert line["isin"] == "US0378331005"
+
+
+def test_a_preview_has_no_line_ids(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert all(ln["id"] is None and ln["isin"] is None for ln in body["lines"])
+
+
+def test_another_persons_isin_never_leaks_onto_my_lines(client, db_session):
+    _seed_basic(db_session)
+    _holding(db_session, "AAPL", 1, 0.1, user_id=OTHER_USER_ID)
+    db_session.query(Holding).filter_by(user_id=OTHER_USER_ID).update({"isin": "US0378331005"})
+    db_session.commit()
+    plan = _saved(client)
+    assert all(ln["isin"] is None for ln in client.get(f"/plans/{plan['id']}").json()["lines"])
