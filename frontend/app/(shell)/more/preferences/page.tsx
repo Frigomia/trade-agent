@@ -2,14 +2,18 @@
 
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
-import { Alert, Box, Button, Chip, SvgIcon, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, InputAdornment, SvgIcon, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
 import { AutoAnalysisSwitch } from "@/components/settings/AutoAnalysisSwitch";
 import {
   addSector,
+  CONTRIBUTION_ERROR,
+  DRIFT_ERROR,
   MAX_SECTORS,
   NOTES_MAX,
+  parseContribution,
+  parseDrift,
   SECTOR_MAX_LENGTH,
   type Preferences,
   type RiskTolerance,
@@ -20,6 +24,8 @@ import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 
 const RISKS: RiskTolerance[] = ["conservative", "moderate", "aggressive"];
+
+const amountText = (p: Preferences) => (p.monthly_contribution === null ? "" : String(p.monthly_contribution));
 
 export default function PreferencesPage() {
   const { data, error, mutate } = useSWR<Preferences>("/preferences", apiFetch);
@@ -33,10 +39,22 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   const [sectors, setSectors] = useState<string[]>(initial.sector_avoid_list);
   const [sectorInput, setSectorInput] = useState("");
   const [notes, setNotes] = useState(initial.notes ?? "");
+  const [amount, setAmount] = useState(amountText(initial));
+  const [drift, setDrift] = useState(String(initial.drift_threshold_pct));
+  const [amountError, setAmountError] = useState(false);
+  const [driftError, setDriftError] = useState(false);
   const [saved, setSaved] = useState(false);
   const { run, submitting, error } = useAction();
 
+  // Compared as numbers so "1200.50" is not a change from a saved 1200.5.
+  const amountValue = parseContribution(amount);
+  const driftValue = parseDrift(drift);
+  const amountChanged = amountValue !== initial.monthly_contribution;
+  const driftChanged = driftValue !== initial.drift_threshold_pct;
+
   const dirty =
+    amountChanged ||
+    driftChanged ||
     risk !== initial.risk_tolerance ||
     notes !== (initial.notes ?? "") ||
     sectors.join() !== initial.sector_avoid_list.join();
@@ -46,16 +64,25 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
     setSectors(initial.sector_avoid_list);
     setNotes(initial.notes ?? "");
     setSectorInput("");
+    setAmount(amountText(initial));
+    setDrift(String(initial.drift_threshold_pct));
+    setAmountError(false);
+    setDriftError(false);
     setSaved(false);
   }
 
   function save() {
     setSaved(false);
+    setAmountError(amountValue === "invalid");
+    setDriftError(driftValue === "invalid");
+    if (amountValue === "invalid" || driftValue === "invalid") return;
+    // The server applies only the fields sent: the plan fields go out only when they changed.
+    // An empty amount is an explicit null (clear); the threshold is never null.
+    const body: Record<string, unknown> = { risk_tolerance: risk, sector_avoid_list: sectors, notes: notes || null };
+    if (amountChanged) body.monthly_contribution = amountValue;
+    if (driftChanged) body.drift_threshold_pct = driftValue;
     return run(async () => {
-      await apiFetch("/preferences", {
-        method: "POST",
-        body: JSON.stringify({ risk_tolerance: risk, sector_avoid_list: sectors, notes: notes || null }),
-      });
+      await apiFetch("/preferences", { method: "POST", body: JSON.stringify(body) });
       onSaved();
       setSaved(true);
     });
@@ -129,6 +156,48 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
             helperText={`${notes.length} / ${NOTES_MAX}`}
             slotProps={{ htmlInput: { maxLength: NOTES_MAX, "aria-label": "Notes" } }}
           />
+        </Section>
+
+        <Section
+          title="Contribution plan"
+          hint="Your monthly amount prefills the Plan page. Drift is how far a holding may sit from its target weight before Today flags it."
+        >
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+            <TextField
+              label="Monthly contribution"
+              size="small"
+              value={amount}
+              error={amountError}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setAmountError(false);
+              }}
+              helperText={amountError ? CONTRIBUTION_ERROR : "EUR, 1 to 1,000,000. Leave empty for none."}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { inputMode: "decimal" },
+                input: { endAdornment: <InputAdornment position="end">EUR</InputAdornment> },
+              }}
+              sx={{ width: 260 }}
+            />
+            <TextField
+              label="Drift threshold"
+              size="small"
+              value={drift}
+              error={driftError}
+              onChange={(e) => {
+                setDrift(e.target.value);
+                setDriftError(false);
+              }}
+              helperText={driftError ? DRIFT_ERROR : "Percentage points, 1 to 50. Default 5."}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { inputMode: "decimal" },
+                input: { endAdornment: <InputAdornment position="end">pp</InputAdornment> },
+              }}
+              sx={{ width: 260 }}
+            />
+          </Box>
         </Section>
 
         <Section title="Appearance">

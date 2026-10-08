@@ -283,6 +283,50 @@ describe("TelegramPanel", () => {
     expect(screen.getByRole("switch", { name: "Price moves" })).not.toBeChecked();
   });
 
+  describe("monthly plan reminder", () => {
+    const line = /Plan this month's contribution:/;
+
+    it("is a third switch, on by default, with the schedule hint", () => {
+      hook.status = connected;
+      render(<TelegramPanel />);
+      const sw = screen.getByRole("switch", { name: "Monthly plan reminder" });
+      expect(sw).toBeChecked();
+      expect(sw).toHaveAccessibleDescription(
+        "Sent on the first weekday of the month, only if at least one holding or watchlist item has a target weight.",
+      );
+    });
+
+    it("toggling posts only plan_reminder_enabled and updates at once", () => {
+      hook.status = connected;
+      hook.update.mockReturnValue(new Promise(() => {}));
+      render(<TelegramPanel />);
+      fireEvent.click(screen.getByRole("switch", { name: "Monthly plan reminder" }));
+      expect(hook.update).toHaveBeenCalledWith({ plan_reminder_enabled: false });
+      expect(screen.getByRole("switch", { name: "Monthly plan reminder" })).not.toBeChecked();
+    });
+
+    it("rolls back and shows the error when the save fails", async () => {
+      hook.status = connected;
+      hook.update.mockRejectedValue(new FakeApiError(500, "Could not save."));
+      render(<TelegramPanel />);
+      fireEvent.click(screen.getByRole("switch", { name: "Monthly plan reminder" }));
+      expect(await screen.findByText("Could not save.")).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: "Monthly plan reminder" })).toBeChecked();
+    });
+
+    it("the preview shows the reminder line only while on, with no digits beyond the address", () => {
+      hook.status = connected;
+      const { rerender } = render(<TelegramPanel />);
+      const reminder = screen.getByText(line);
+      expect(reminder).toHaveTextContent("Plan this month's contribution: https://app.example.com/portfolio/plan");
+      expect(reminder.textContent?.replace("https://app.example.com/portfolio/plan", "")).not.toMatch(/\d/);
+      hook.status = { ...connected, plan_reminder_enabled: false };
+      rerender(<TelegramPanel />);
+      expect(screen.queryByText(line)).not.toBeInTheDocument();
+      expect(screen.queryByText(/portfolio\/plan/)).not.toBeInTheDocument();
+    });
+  });
+
   it("the threshold saves on blur when valid", async () => {
     hook.status = connected;
     render(<TelegramPanel />);
@@ -383,7 +427,7 @@ describe("TelegramPanel", () => {
     hook.status = { ...connected, configured: false };
     render(<TelegramPanel />);
     expect(screen.queryByText("Telegram is not available on this server.")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("switch")).toHaveLength(2);
+    expect(screen.getAllByRole("switch")).toHaveLength(3);
     expect(screen.queryByRole("button", { name: /connect telegram|reconnect/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Disconnect Telegram" }));
