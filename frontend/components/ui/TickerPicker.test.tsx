@@ -160,4 +160,46 @@ describe("TickerPicker", () => {
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
     expect(screen.queryByText("VWCE.DE")).not.toBeInTheDocument();
   });
+
+  describe("ISIN search", () => {
+    it("passes the typed ISIN, upper-cased, with the pick", async () => {
+      const onPick = vi.fn();
+      render(<Harness onPick={onPick} />);
+      await type("ie00bkm4gz66");
+
+      fireEvent.click(await screen.findByText("VWCE.DE"));
+
+      expect(onPick).toHaveBeenCalledWith({ ...VWCE, isin: "IE00BKM4GZ66" });
+    });
+
+    it("passes no isin for a name or ticker query", async () => {
+      const onPick = vi.fn();
+      render(<Harness onPick={onPick} />);
+      await type("vwce");
+
+      fireEvent.click(await screen.findByText("VWCE.DE"));
+
+      expect(onPick).toHaveBeenCalledWith(VWCE);
+      expect(onPick.mock.calls[0][0]).not.toHaveProperty("isin");
+    });
+
+    it("says the ISIN will be saved, only for an ISIN query with results", async () => {
+      render(<Harness />);
+      await type("vwce");
+      expect(screen.queryByText(/will be saved with this ticker/i)).not.toBeInTheDocument();
+
+      await type("IE00BKM4GZ66");
+      expect(screen.getByText("ISIN IE00BKM4GZ66 will be saved with this ticker.")).toBeInTheDocument();
+    });
+
+    it("shows no such line when the ISIN finds nothing", async () => {
+      apiFetch.mockResolvedValue([]);
+      render(<Harness />);
+
+      await type("IE00BKM4GZ66");
+
+      expect(screen.queryByText(/will be saved with this ticker/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/no match/i)).toBeInTheDocument();
+    });
+  });
 });

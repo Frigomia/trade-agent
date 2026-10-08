@@ -36,7 +36,9 @@ import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
 import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
+import { IsinNote } from "@/components/ui/IsinNote";
 import { TickerPicker } from "@/components/ui/TickerPicker";
+import { saveIsinAfterAdd } from "@/lib/orders";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { AVG_COST_DISPLAY, HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
@@ -213,6 +215,9 @@ export default function PortfolioPage() {
   const [watchType, setWatchType] = useState<AssetType>("STOCK");
   const [watchTarget, setWatchTarget] = useState("");
   const [editingTarget, setEditingTarget] = useState<WatchlistSummary | null>(null);
+  const [isinNote, setIsinNote] = useState<string | null>(null);
+  // The ISIN typed to find the picked watchlist symbol; it only counts while the ticker still is that symbol.
+  const [watchIsin, setWatchIsin] = useState<{ symbol: string; isin: string } | null>(null);
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
@@ -250,7 +255,7 @@ export default function PortfolioPage() {
   const alreadyWatched = watched.has(typedTicker);
 
   // target_weight is sent only when one was typed: omitting it keeps a saved target (null would clear it).
-  function addToWatchlist(ticker: string, assetType: AssetType, targetText = "") {
+  function addToWatchlist(ticker: string, assetType: AssetType, targetText = "", isin: string | null = null) {
     if (!ticker) return;
     const target = percentTextToFraction(targetText);
     if (target === undefined) {
@@ -264,6 +269,10 @@ export default function PortfolioPage() {
       });
       setWatchTicker("");
       setWatchTarget("");
+      setWatchIsin(null);
+      // The ISIN has its own route; a failure there does not undo the add.
+      const note = await saveIsinAfterAdd(ticker, isin);
+      if (note) setIsinNote(note);
       mutateSummary();
     });
   }
@@ -350,7 +359,8 @@ export default function PortfolioPage() {
           alignItems: "start",
         }}
       >
-      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} />}
+      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} onNote={setIsinNote} />}
+      <IsinNote note={isinNote} onClose={() => setIsinNote(null)} />
       {open.length > 0 && (
         <Panel sx={{ p: "8px 18px" }}>
           <Box
@@ -457,7 +467,10 @@ export default function PortfolioPage() {
               label="Watchlist ticker"
               value={watchTicker}
               onChange={setWatchTicker}
-              onPick={(match) => setWatchType(match.type)}
+              onPick={(match) => {
+                setWatchType(match.type);
+                setWatchIsin(match.isin ? { symbol: match.symbol.toUpperCase(), isin: match.isin } : null);
+              }}
             />
           </Box>
           <TextField
@@ -478,7 +491,9 @@ export default function PortfolioPage() {
           <Button
             variant="outlined"
             disabled={alreadyWatched || watch.submitting}
-            onClick={() => void addToWatchlist(typedTicker, watchType, watchTarget)}
+            onClick={() =>
+              void addToWatchlist(typedTicker, watchType, watchTarget, watchIsin?.symbol === typedTicker ? watchIsin.isin : null)
+            }
             sx={{ whiteSpace: "nowrap" }}
           >
             Add to watchlist

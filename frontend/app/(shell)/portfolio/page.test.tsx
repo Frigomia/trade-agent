@@ -88,6 +88,7 @@ const SUMMARY: PortfolioSummary = {
 };
 
 const SNAPSHOTS: Snapshot[] = [];
+const EIMI = { symbol: "EIMI.L", name: "iShares Core MSCI EM IMI", type: "ETF", exchange: "LSE" };
 
 let handlers: Record<string, () => unknown>;
 
@@ -336,6 +337,34 @@ describe("PortfolioPage", () => {
       await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "STOCK" }));
     });
 
+    it("saves the ISIN from an ISIN search after the watchlist add, but not once the ticker was edited", async () => {
+      handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "EIMI.L" });
+      handlers["PUT /portfolio/instruments/EIMI.L/isin"] = () => ({ ticker: "EIMI.L", isin: "IE00BKM4GZ66" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "IE00BKM4GZ66" } });
+      fireEvent.click(await screen.findByText("EIMI.L"));
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "EIMI.L", asset_type: "ETF" }));
+      await waitFor(() => expect(count("PUT /portfolio/instruments/EIMI.L/isin")).toBe(1));
+      const put = apiFetch.mock.calls.find((c) => c[1]?.method === "PUT")!;
+      expect(JSON.parse(put[1].body)).toEqual({ isin: "IE00BKM4GZ66" });
+
+      apiFetch.mockClear();
+      handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "IE00BKM4GZ66" } });
+      fireEvent.click(await screen.findByText("EIMI.L"));
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "NVDA" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "ETF" }));
+      expect(count("PUT /portfolio/instruments/EIMI.L/isin")).toBe(0);
+      expect(apiFetch.mock.calls.some((c) => c[1]?.method === "PUT")).toBe(false);
+    });
+
     it("sends a typed target as a fraction, and refuses one above 100", async () => {
       handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NVDA" });
       renderFresh();
@@ -493,6 +522,32 @@ describe("PortfolioPage", () => {
         target_weight: null,
       });
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    });
+
+    it("saves the ISIN from an ISIN search after the first holding, and says so when that fails", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
+      handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+      handlers["PUT /portfolio/instruments/EIMI.L/isin"] = () => {
+        throw new FakeApiError(422, "ISIN check digit is wrong");
+      };
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "IE00BKM4GZ66" } });
+      fireEvent.click(await screen.findByText("EIMI.L"));
+      fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "3" } });
+      fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: "30" } });
+      fireEvent.click(addHoldingButton());
+
+      await waitFor(() => expect(count("PUT /portfolio/instruments/EIMI.L/isin")).toBe(1));
+      const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+      expect(JSON.parse(post[1].body)).not.toHaveProperty("isin");
+      const put = apiFetch.mock.calls.find((c) => c[1]?.method === "PUT")!;
+      expect(JSON.parse(put[1].body)).toEqual({ isin: "IE00BKM4GZ66" });
+      expect(
+        await screen.findByText("Saved. The ISIN could not be saved: ISIN check digit is wrong. Add it on a plan."),
+      ).toBeInTheDocument();
     });
 
     it("sends the optional name, type and date when they are filled in", async () => {

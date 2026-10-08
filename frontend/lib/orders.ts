@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch } from "@/lib/api/client";
 import type { AssetType } from "@/lib/api/portfolio-types";
 import { parseDecimal } from "@/lib/format";
 import type { Plan, PlanLine } from "@/lib/plans";
@@ -109,4 +109,20 @@ export function setIsin(ticker: string, isin: string | null): Promise<{ ticker: 
     method: "PUT",
     body: JSON.stringify({ isin }),
   });
+}
+
+/**
+ * Saves an ISIN found by searching for it, after the holding or watchlist row it belongs to was
+ * saved. Never throws: returns a note when it failed (the add itself still counts as saved), else
+ * null. The ISIN is not logged.
+ */
+export async function saveIsinAfterAdd(ticker: string, isin: string | null): Promise<string | null> {
+  if (!isin) return null;
+  try {
+    await setIsin(ticker, isin);
+    return null;
+  } catch (err) {
+    const detail = err instanceof ApiError ? err.detail : "the request failed";
+    return `Saved. The ISIN could not be saved: ${detail}. Add it on a plan.`;
+  }
 }
