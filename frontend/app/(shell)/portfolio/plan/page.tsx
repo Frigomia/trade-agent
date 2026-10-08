@@ -108,9 +108,12 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
     });
   }
 
-  // The saved plan again, e.g. after an ISIN was added, so its tickets carry it.
+  // The saved plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer for a
+  // plan no longer shown (a new preview, another save) is dropped.
   async function reload() {
-    if (plan?.id != null) setPlan(await load(plan.id));
+    if (plan?.id == null) return;
+    const fresh = await load(plan.id);
+    setPlan((current) => (current?.id === fresh.id ? fresh : current));
   }
 
   function toggleWhole(next: boolean) {

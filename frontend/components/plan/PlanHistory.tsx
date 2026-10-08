@@ -62,9 +62,12 @@ export function PlanHistory() {
       setOpened(await load(summary.id));
     });
 
-  // The opened plan again, e.g. after an ISIN was added, so its tickets carry it.
+  // The opened plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer is
+  // dropped when another plan was opened (or this one deleted) meanwhile.
   async function reload() {
-    if (opened?.id != null) setOpened(await load(opened.id));
+    if (opened?.id == null) return;
+    const fresh = await load(opened.id);
+    setOpened((current) => (current?.id === fresh.id ? fresh : current));
   }
 
   async function confirmDelete() {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { Plan, PlanSummary } from "@/lib/plans";
 
@@ -153,6 +153,71 @@ describe("PlanHistory", () => {
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ shares: 7, price: 75.1, asset_type: "ETF" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(await screen.findByText("Placed 8 Oct · 7 sh at 75.10")).toBeInTheDocument();
+  });
+
+  describe("late answers after another plan was opened", () => {
+    const OCTOBER: Plan = { ...SEPTEMBER, id: 9, created_at: "2026-10-15T12:00:00", lines: [{ ...SEPTEMBER.lines[0], id: 21, ticker: "PEP", name: "PepsiCo" }] };
+    let placedAnswer: (v: unknown) => void;
+    let reloadAnswer: ((v: unknown) => void) | null;
+    let reloads: number;
+
+    beforeEach(() => {
+      reloadAnswer = null;
+      reloads = 0;
+      let firstLoad = true;
+      const base = apiFetch.getMockImplementation()!;
+      apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+        if (path === "/portfolio/summary") return Promise.resolve({ holdings: [], watchlist: [] });
+        if (path === "/plans/5/lines/11/placed") return new Promise((r) => (placedAnswer = r));
+        if (path === "/plans/9" && !init) return Promise.resolve(OCTOBER);
+        if (path === "/plans/5" && !init) {
+          const plan = { ...SEPTEMBER, lines: [{ ...SEPTEMBER.lines[0], id: 11 }] };
+          if (firstLoad) {
+            firstLoad = false;
+            return Promise.resolve(plan);
+          }
+          reloads += 1;
+          return new Promise((r) => (reloadAnswer = () => r({ ...plan, lines: [{ ...plan.lines[0], placed_at: "2026-10-08T10:00:00" }] })));
+        }
+        return base(path, init);
+      });
+    });
+
+    async function recordKo() {
+      renderFresh();
+      fireEvent.click(await screen.findByRole("button", { name: "Open the September 2026 plan" }));
+      fireEvent.click(await screen.findByRole("button", { name: /^KO, 487.50 EUR, not placed, press to open$/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+      const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+      fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "75.10" } });
+      fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+      await waitFor(() => expect(apiFetch.mock.calls.some(([p]) => p === "/plans/5/lines/11/placed")).toBe(true));
+    }
+
+    it("keeps the other plan when the record answer lands after it was opened", async () => {
+      await recordKo();
+      fireEvent.click(screen.getByRole("button", { name: "Open the October 2026 plan", hidden: true }));
+      expect(await screen.findByRole("heading", { name: "October 2026, as saved", hidden: true })).toBeInTheDocument();
+      placedAnswer({});
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(reloads).toBe(0);
+      expect(screen.getByRole("heading", { name: "October 2026, as saved" })).toBeInTheDocument();
+      expect(screen.queryByText(/recorded as placed/)).not.toBeInTheDocument();
+    });
+
+    it("drops a plan reload that lands after another plan was opened", async () => {
+      await recordKo();
+      placedAnswer({});
+      expect(await screen.findByText("KO recorded as placed. All lines placed.")).toBeInTheDocument();
+      await waitFor(() => expect(reloads).toBe(1));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Open the October 2026 plan" }));
+      expect(await screen.findByRole("heading", { name: "October 2026, as saved" })).toBeInTheDocument();
+      reloadAnswer!(undefined);
+      await act(() => new Promise((r) => setTimeout(r, 0)));
+      expect(screen.getByRole("heading", { name: "October 2026, as saved" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "September 2026, as saved" })).not.toBeInTheDocument();
+    });
   });
 
   it("says when nothing is saved yet", async () => {

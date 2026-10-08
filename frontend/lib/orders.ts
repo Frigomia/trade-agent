@@ -39,12 +39,35 @@ export function nextUnplaced(plan: Plan, ticker: string): PlanLine | null {
   return rest.find((l) => l.placed_at === null && l.ticker !== ticker) ?? null;
 }
 
+export const THOUSANDS_ERROR = "Use a decimal point and no thousands separators, for example 1000.50";
+export const DIGITS_ERROR = "Use digits like 54.60";
+
+export interface PlacedNumber {
+  value: number | null; // null while empty or invalid
+  error: string | null; // null while empty or valid
+}
+
 /**
- * Shares or price as typed: plain decimal text (a comma works), above zero, within what the
- * backend's Numeric(18, 6) columns hold. null for "", "1e5", "-1", "0", "abc" and the like.
+ * Shares or price as typed: digits with one decimal point or comma ("5,5" is 5.5), above zero, at
+ * most 6 decimals, within what the backend's Numeric(18, 6) columns hold. Text that reads as a
+ * thousands separator is refused rather than guessed, since a guess can be 1000 times off:
+ * "1,000,000", "1,000.5" and, for a price, "1,000" / "1.000" (but not "0.125"). A share count
+ * keeps a single 3-decimal group ("2.772"): fractional shares look like that, and so does the
+ * prefilled plan amount.
  */
-export function parsePlacedNumber(raw: string): number | null {
-  return parseDecimal(raw, 6, 0.000001, 999_999_999_999);
+export function readPlacedNumber(raw: string, kind: "shares" | "price"): PlacedNumber {
+  const text = raw.trim();
+  if (text === "") return { value: null, error: null };
+  const fail = (error: string) => ({ value: null, error });
+  const above = kind === "price" ? "Enter a price above 0." : "Enter a number of shares above 0.";
+  if (/^\d+([.,]\d{3}){2,}$/.test(text) || (text.includes(",") && text.includes("."))) return fail(THOUSANDS_ERROR);
+  if (kind === "price" && /^[1-9]\d{0,2}[.,]\d{3}$/.test(text)) return fail(THOUSANDS_ERROR);
+  if (/^-\d/.test(text)) return fail(above);
+  if (!/^\d+([.,]\d+)?$/.test(text)) return fail(DIGITS_ERROR);
+  if (/[.,]\d{7,}$/.test(text)) return fail("Use at most 6 decimals.");
+  const value = parseDecimal(text, 6, 0.000001, 999_999_999_999);
+  if (value !== null) return { value, error: null };
+  return fail(Number(text.replace(",", ".")) > 0 ? "That number is too large." : above);
 }
 
 /** One ticket per line still to place; "" when every line is placed. */

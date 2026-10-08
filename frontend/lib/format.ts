@@ -19,6 +19,13 @@ export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Today in the viewer's own time zone as YYYY-MM-DD: the calendar day a person means by "today". */
+export function localTodayIso(): string {
+  const d = new Date();
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}
+
 export function formatSigned(value: number): string {
   return `${round(value, 2) >= 0 ? "+" : ""}${formatAmount(value)}`;
 }

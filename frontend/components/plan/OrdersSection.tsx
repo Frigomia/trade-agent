@@ -33,6 +33,17 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
   const [status, setStatus] = useState("");
   const [focusTo, setFocusTo] = useState<{ ticker: string } | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // A late answer must not act on a view that moved on. Both parents key this component by plan id,
+  // so another plan means a fresh instance and this one unmounted; the sheet's line is checked too.
+  const mounted = useRef(true);
+  const asked = useRef<string | null>(null);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // After a recorded line, focus the card that opened (or the recorded one when none is left). The
   // sheet's own focus return lands on the Placed button, which is gone by then.
@@ -43,11 +54,13 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
   }, [focusTo]);
 
   function place(line: PlanLine) {
+    asked.current = line.ticker;
     setSheetLine(line);
     setSheetOpen(true);
   }
 
   function placed(line: PlanLine) {
+    if (!mounted.current || asked.current !== line.ticker) return;
     const next = nextUnplaced(plan, line.ticker);
     setSheetOpen(false);
     setOpenTicker(next?.ticker ?? null);
@@ -79,7 +92,7 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
         summary={summary}
         onClose={() => setSheetOpen(false)}
         onPlaced={placed}
-        onChanged={onChanged}
+        onChanged={() => (mounted.current ? onChanged() : Promise.resolve())}
       />
     </Box>
   );

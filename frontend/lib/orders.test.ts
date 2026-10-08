@@ -13,7 +13,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { copyAllText, isinShape, nextUnplaced, parsePlacedNumber, placedFill, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
+import { copyAllText, isinShape, DIGITS_ERROR, nextUnplaced, placedFill, readPlacedNumber, THOUSANDS_ERROR, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
 import type { Plan, PlanLine } from "./plans";
 
 const line = (o: Partial<PlanLine> = {}): PlanLine => ({
@@ -131,17 +131,50 @@ describe("nextUnplaced", () => {
   });
 });
 
-describe("parsePlacedNumber", () => {
+describe("readPlacedNumber", () => {
+  const T = THOUSANDS_ERROR;
   it.each([
     ["1.69", 1.69],
-    ["54,6", 54.6],
+    ["5,5", 5.5],
+    ["54,60", 54.6],
     [" 2 ", 2],
     ["0.000001", 0.000001],
-  ])("accepts %j", (raw, n) => {
-    expect(parsePlacedNumber(raw)).toBe(n);
+    ["0.125", 0.125],
+    ["1000.50", 1000.5],
+  ])("accepts the price %j", (raw, n) => {
+    expect(readPlacedNumber(raw, "price")).toEqual({ value: n, error: null });
   });
-  it.each(["", "e", "1e5", "-1", "0", "0.0", "abc", "1.2.3", "Infinity", "NaN", "1.0000001", "1000000000000"])("rejects %j", (raw) => {
-    expect(parsePlacedNumber(raw)).toBeNull();
+  it("is quiet while empty", () => {
+    expect(readPlacedNumber("  ", "price")).toEqual({ value: null, error: null });
+  });
+  it.each([
+    ["1,000", T],
+    ["1.000", T],
+    ["1,000,000", T],
+    ["1.000.000", T],
+    ["1,000.5", T],
+    ["1.000,5", T],
+    [".5", DIGITS_ERROR],
+    ["5.", DIGITS_ERROR],
+    ["e", DIGITS_ERROR],
+    ["1e5", DIGITS_ERROR],
+    ["abc", DIGITS_ERROR],
+    ["1.2.3", DIGITS_ERROR],
+    ["Infinity", DIGITS_ERROR],
+    ["NaN", DIGITS_ERROR],
+    ["-1", "Enter a price above 0."],
+    ["0", "Enter a price above 0."],
+    ["0,0", "Enter a price above 0."],
+    ["1.0000001", "Use at most 6 decimals."],
+    ["1000000000000", "That number is too large."],
+  ])("refuses the price %j", (raw, error) => {
+    expect(readPlacedNumber(raw, "price")).toEqual({ value: null, error });
+  });
+  it("keeps a 3-decimal share count, which fractional shares and the prefill look like", () => {
+    expect(readPlacedNumber("2.772", "shares").value).toBe(2.772);
+    expect(readPlacedNumber("1,000,000", "shares").error).toBe(T);
+    expect(readPlacedNumber("1,000.5", "shares").error).toBe(T);
+    expect(readPlacedNumber("0", "shares").error).toBe("Enter a number of shares above 0.");
   });
 });
 

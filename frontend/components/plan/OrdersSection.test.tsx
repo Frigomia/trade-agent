@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import type { Plan, PlanLine } from "@/lib/plans";
@@ -16,7 +16,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
   return { apiFetch: vi.fn(), FakeApiError };
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args), ApiError: FakeApiError }));
-vi.mock("@/lib/format", async (orig) => ({ ...(await orig<typeof import("@/lib/format")>()), todayIso: () => "2026-10-08" }));
+vi.mock("@/lib/format", async (orig) => ({ ...(await orig<typeof import("@/lib/format")>()), localTodayIso: () => "2026-10-08" }));
 
 import { OrdersSection } from "./OrdersSection";
 
@@ -200,12 +200,83 @@ describe("Record placed order", () => {
       fireEvent.change(shares, { target: { value: bad } });
       expect(record(sheet)).toBeDisabled();
     }
+    expect(within(sheet).getByText("Use digits like 54.60")).toBeInTheDocument();
+    fireEvent.change(shares, { target: { value: "0" } });
     expect(within(sheet).getByText("Enter a number of shares above 0.")).toBeInTheDocument();
     fireEvent.change(shares, { target: { value: "1,7" } });
     expect(record(sheet)).toBeEnabled();
     fireEvent.click(record(sheet));
     await waitFor(() => expect(placeCalls()).toHaveLength(1));
     expect(sentBody()).toEqual({ date: "2026-10-08", shares: 1.7, price: 54.6 });
+  });
+
+  it.each([
+    ["1,000", "Use a decimal point and no thousands separators, for example 1000.50"],
+    ["1.000", "Use a decimal point and no thousands separators, for example 1000.50"],
+    ["1,000,000", "Use a decimal point and no thousands separators, for example 1000.50"],
+    ["1,000.5", "Use a decimal point and no thousands separators, for example 1000.50"],
+    [".5", "Use digits like 54.60"],
+    ["5.", "Use digits like 54.60"],
+  ])("refuses the price %j with a reason, and sends nothing", async (raw, message) => {
+    const { sheet } = await openSheet("EIMI.L");
+    typePrice(sheet, raw);
+    expect(within(sheet).getByText(message)).toBeInTheDocument();
+    expect(within(sheet).queryByText("Price in the currency of this holding")).not.toBeInTheDocument();
+    expect(record(sheet)).toBeDisabled();
+    expect(screen.queryByTestId("sanity")).not.toBeInTheDocument();
+    fireEvent.submit(record(sheet).closest("form")!);
+    expect(placeCalls()).toHaveLength(0);
+  });
+
+  it("accepts a comma decimal and shows shares times price before recording", async () => {
+    const { sheet } = await openSheet("EIMI.L");
+    expect(screen.queryByTestId("sanity")).not.toBeInTheDocument();
+    typePrice(sheet, "5,4");
+    expect(within(sheet).getByTestId("sanity")).toHaveTextContent(/^Shares × price = 9.13$/); // 1.69 × 5.4 = 9.126
+    typePrice(sheet, "1000.5");
+    expect(within(sheet).getByTestId("sanity")).toHaveTextContent(/^Shares × price = 1690.85$/); // no separators, no currency
+    typePrice(sheet, "54.6");
+    expect(within(sheet).getByTestId("sanity")).toHaveTextContent("Shares × price = 92.27");
+    fireEvent.click(record(sheet));
+    await waitFor(() => expect(placeCalls()).toHaveLength(1));
+    expect(sentBody()).toEqual({ date: "2026-10-08", shares: 1.69, price: 54.6 });
+  });
+
+  it("closes on Escape when nothing is in flight", async () => {
+    const { sheet } = await openSheet("EIMI.L");
+    fireEvent.keyDown(sheet, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("cannot be closed while the request is in flight, then completes normally", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    place = () => new Promise((r) => (resolve = r));
+    const { sheet } = await openSheet("EIMI.L");
+    typePrice(sheet, "54.6");
+    fireEvent.click(record(sheet));
+    await waitFor(() => expect(within(sheet).getByRole("button", { name: "Cancel" })).toBeDisabled());
+    expect(within(sheet).getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(sheet).toHaveAttribute("aria-busy", "true");
+    fireEvent.keyDown(sheet, { key: "Escape" });
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    expect(screen.getByRole("dialog", { name: "Record placed order" })).toBeInTheDocument();
+    resolve(line({ placed_at: "2026-10-08T10:00:00" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("EIMI.L recorded as placed. Next: IWDA.L, opened for you.")).toBeInTheDocument();
+  });
+
+  it("does nothing when the answer lands after the section is gone", async () => {
+    let resolve: (v: unknown) => void = () => {};
+    place = () => new Promise((r) => (resolve = r));
+    const { sheet } = await openSheet("EIMI.L");
+    typePrice(sheet, "54.6");
+    fireEvent.click(record(sheet));
+    await waitFor(() => expect(placeCalls()).toHaveLength(1));
+    cleanup();
+    resolve(line({ placed_at: "2026-10-08T10:00:00" }));
+    await act(() => new Promise((r) => setTimeout(r, 0)));
+    expect(onChanged).not.toHaveBeenCalled();
   });
 
   it("sends one request on a double click", async () => {
