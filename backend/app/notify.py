@@ -7,13 +7,13 @@ percentages. A per-person per-day marker keeps a re-run from sending a second me
 import asyncio
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from app import db as app_db
 from app.agents.jobs import default_ticker_infos
 from app.agents.market_data import fetch_quote_and_history
 from app.config import settings
-from app.models import AppUser, Recommendation, TelegramLink
+from app.models import AppUser, Holding, Recommendation, TelegramLink, WatchlistItem
 from app.redis_client import get_redis
 from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUncertain
 
@@ -30,8 +30,17 @@ def _listed(items: list[str]) -> str:
     return shown + (f", +{len(items) - MAX_LISTED} more" if len(items) > MAX_LISTED else "")
 
 
+def is_first_weekday(day: date) -> bool:
+    """The first Monday-to-Friday day of its month: the 1st, or the Monday of the 2nd or 3rd when
+    the month starts on a weekend."""
+    return day.weekday() < 5 and (day.day == 1 or (day.weekday() == 0 and day.day <= 3))
+
+
 def build_message(
-    new_recs: list[tuple[str, str]], moves: list[tuple[str, float]], app_url: str | None
+    new_recs: list[tuple[str, str]],
+    moves: list[tuple[str, float]],
+    app_url: str | None,
+    reminder: bool = False,
 ) -> str | None:
     lines: list[str] = []
     if new_recs:
@@ -39,6 +48,12 @@ def build_message(
     if moves:
         ordered = sorted(moves, key=lambda m: abs(m[1]), reverse=True)
         lines.append("Moved: " + _listed([f"{t} {c:+.1f}%" for t, c in ordered]))
+    if reminder:  # no amounts or tickers: just a nudge
+        lines.append(
+            f"Plan this month's contribution: {app_url.rstrip('/')}/portfolio/plan"
+            if app_url
+            else "Plan this month's contribution in the app."
+        )
     if not lines:
         return None
     if app_url:
@@ -95,8 +110,22 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
         tickers: list[str] = []
         if moves_on:
             tickers = [i["ticker"] for i in default_ticker_infos(db, user_id, open_only=True)]
+        remind = False
+        if link.plan_reminder_enabled and is_first_weekday(now.date()):
+            # only worth a nudge when some holding or watchlist item has a target weight
+            for model in (Holding, WatchlistItem):
+                has_target = (
+                    db.query(model.id)
+                    .filter(
+                        model.user_id == user_id,
+                        model.target_weight.isnot(None),
+                        model.target_weight > 0,
+                    )
+                    .first()
+                )
+                remind = remind or has_target is not None
     moved = await _moves(tickers, threshold) if tickers else []
-    text = build_message(new_recs, moved, settings.app_url)
+    text = build_message(new_recs, moved, settings.app_url, reminder=remind)
     if text is None:
         return "skipped"
     marker = f"telegram:sent:{user_id}:{now.strftime('%Y-%m-%d')}"
