@@ -318,7 +318,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes `auto_analysis` and `auto_analysis_paused` (`null` when not paused or when the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
-| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is above 0 and at most 1,000,000; `drift_threshold_pct` is 1 to 50; an explicit `null` for either leaves the stored value as it is. The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is above 0 and at most 1,000,000; `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
 | POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is above 0 and at most 1,000,000 EUR. Returns the lines, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
 | POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
@@ -387,14 +387,13 @@ plan response and screen carries "Advisory only. Nothing is sent to a broker."
 
 **What is priced.** Only the person's open holdings and watchlist items that have a target weight
 above 0 (a holding with a target of 0 counts as having none). That is never more than the 100 holdings
-and 100 watchlist items a person can have; there is no further ticker cap. Quotes and currencies are
-fetched 8 at a time and cached by the quote source; there is one exchange-rate lookup per currency.
+and 100 watchlist items a person can have; there is no further ticker cap. The per-ticker quote and currency lookups run 8 at a time (quotes are cached by the quote source, currencies for 24 hours in Redis); the exchange-rate lookups, one per currency (at most 13), run together afterwards.
 
 **Currency.** The quote source tells each ticker's currency. The supported list is fixed: EUR, USD,
 GBP, GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN. A rate comes from a fixed table of Yahoo
 symbols (`EURUSD=X` and so on), never from user text; `GBp` and `GBX` are pence, converted through GBP
 at one hundredth. Nothing is stored for this: the price in EUR, the currency and the rate are
-returned on each line (and kept on a saved plan). A ticker is left out, with a note, when its price
+returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, with a note, when its price
 is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
 lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-6 to
 1e9 (those bounds keep every figure inside its column). Nothing negative, infinite or NaN ever
@@ -429,10 +428,10 @@ holding without a target is outside the pool: it neither receives money nor coun
    its value plus the line over `pool_before` plus what was spent. The reason is `remainder`,
    `new_position` (not held), `favoured` (ADD or BUY) or `underweight`.
 
-Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
+If a holding and a watchlist item share a ticker, the holding's target is used. A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
 priced, every targeted ticker excluded. `POST /plans` returns the plan as read back from the
 database, so a saved plan shows exactly the rounded figures it stored. A person keeps at most
-`MAX_PLANS` = 120 saved plans (`409` beyond that).
+`MAX_PLANS` = 120 saved plans (`409` beyond that). Preview and save have separate rate-limit buckets (10 a minute each); `GET` and `DELETE` of plans have no extra limit.
 
 **Drift (`GET /plans/drift`).** Only open holdings with a target weight, priced in EUR. Weights and
 targets are taken within the pool of those holdings (targets re-normalised to add up to 1), so a

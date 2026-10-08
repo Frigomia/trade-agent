@@ -37,7 +37,7 @@ a base currency other than EUR, per-line manual edits of a plan, and any broker 
   step builds one message per person with a per-day marker.
 - Every user table has a `user_id`, forced owner-only row-level security, and an entry in `app/rls.py`
   `USER_TABLES`; deleting data and the data export cover every such table.
-- `docs/ARCHITECTURE.md` mentions a `rebalance.py` that was never built; this feature replaces that note.
+- `docs/ARCHITECTURE.md` used to mention a `rebalance.py` that was never built; that remark has been removed.
 
 ## The calculation
 
@@ -90,7 +90,7 @@ All routes require an active user and run through `get_user_db`.
 (ticker, name, amount in EUR, shares, price in EUR, currency, rate, weight before, weight after, reason code
 and text: `underweight`, `favoured`, `new position`, `remainder`), the notes (skipped tickers with the
 reason: no price, no currency, no rate, excluded by a TRIM or SELL call, no target), the total, the leftover and
-the "Advisory only" line. The watchlist `PATCH` (a new route) and holdings routes accept `target_weight`.
+the "Advisory only" line. The holdings and watchlist `POST` routes accept `target_weight` (omitted keeps the saved value, an explicit `null` clears it).
 Preferences gain `monthly_contribution` (nullable) and `drift_threshold_pct` (default 5, range 1 to 50).
 
 ## Data change
