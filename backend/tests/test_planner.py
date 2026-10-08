@@ -164,3 +164,22 @@ def test_a_converted_price_is_used_for_the_shares():
     cands = [cand("US", 0, 1, price="80", currency="USD", rate="0.8")]
     line = build_plan(cands, D("160")).lines[0]
     assert (line.shares, line.currency, line.rate) == (D("2.000"), "USD", D("0.8"))
+
+
+@pytest.mark.parametrize("amount", ["0.004", "0.015", "100.005"])
+def test_a_sub_cent_amount_is_floored_to_whole_cents(amount):
+    cands = [cand("A", 0, 1), cand("B", 0, 1), cand("C", 0, 1)]
+    plan = build_plan(cands, D(amount))
+    floored = D(amount).quantize(D("0.01"), rounding="ROUND_FLOOR")
+    assert all(ln.amount_eur > 0 for ln in plan.lines)
+    assert plan.leftover >= 0
+    assert sum(ln.amount_eur for ln in plan.lines) + plan.leftover == floored
+
+
+@pytest.mark.parametrize("price", [0, -5])
+def test_an_unusable_price_is_skipped_with_a_note(price):
+    cands = [cand("BAD", 0, 0.5, price=price), cand("OK", 0, 0.5)]
+    plan = build_plan(cands, D("100"))
+    assert amounts(plan) == {"OK": D("100.00")}
+    assert all(ln.shares > 0 for ln in plan.lines)
+    assert any("BAD" in n and "price" in n for n in plan.notes)

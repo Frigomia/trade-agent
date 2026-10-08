@@ -72,7 +72,7 @@ def _round_to_total(raw: dict[str, Decimal], total: Decimal) -> dict[str, Decima
     order = sorted(raw, key=lambda k: (raw[k] * 100 - floors[k], raw[k], k), reverse=True)
     for ticker in order[: max(missing, 0)]:
         floors[ticker] += 1
-    return {k: Decimal(c) / 100 for k, c in floors.items()}
+    return {k: (Decimal(c) / 100).quantize(CENT) for k, c in floors.items()}
 
 
 def _merge_small(raw: dict[str, Decimal]) -> dict[str, Decimal]:
@@ -90,6 +90,7 @@ def _merge_small(raw: dict[str, Decimal]) -> dict[str, Decimal]:
 
 
 def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bool = False) -> Plan:
+    amount = amount.quantize(CENT, ROUND_FLOOR)  # whole cents only, so the lines can add up exactly
     targeted = _targeted(candidates)
     pool_before = sum((c.current_value for c in targeted), ZERO)
     if amount <= ZERO:
@@ -106,7 +107,9 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
 
     eligible = []
     for c in sorted(targeted, key=lambda c: c.ticker):
-        if c.call in EXCLUDING_CALLS:
+        if not c.price_eur.is_finite() or c.price_eur <= ZERO:
+            notes.append(f"{c.ticker} gets no money: its price is not usable.")
+        elif c.call in EXCLUDING_CALLS:
             notes.append(f"{c.ticker} gets no money: its newest pending call is {c.call}.")
         else:
             eligible.append(c)
