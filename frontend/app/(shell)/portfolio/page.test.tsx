@@ -79,7 +79,7 @@ const SUMMARY: PortfolioSummary = {
       weight: null,
     },
   ],
-  watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, current_price: 702.4 }],
+  watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, target_weight: null, current_price: 702.4 }],
   total_market_value: 3900,
   total_cost_basis: 3500,
   total_pl: 400,
@@ -125,6 +125,88 @@ describe("PortfolioPage", () => {
     expect(screen.getByText(/mixed currencies are not converted/i)).toBeInTheDocument();
     expect(screen.getByText("Microsoft")).toBeInTheDocument();
     expect(screen.queryByText("Sold Out Co")).not.toBeInTheDocument();
+  });
+
+  it("shows the view strip with Holdings current, and no separate plan link", async () => {
+    renderFresh();
+    await screen.findByText("Apple Inc.");
+    expect(screen.getByRole("heading", { level: 1, name: "Portfolio" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Portfolio views" });
+    expect(within(nav).getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "This month" })).toHaveAttribute("href", "/portfolio/plan");
+    expect(screen.queryByText(/plan this month's contribution/i)).not.toBeInTheDocument();
+  });
+
+  describe("weight and target", () => {
+    const withTargets = (aapl: number | null, watch: { ticker: string; target_weight: number | null }[]) => () => ({
+      ...SUMMARY,
+      holdings: [{ ...SUMMARY.holdings[0], target_weight: aapl }, SUMMARY.holdings[1]],
+      watchlist: watch.map((w) => ({ ...w, asset_type: "STOCK", note: null, current_price: 1 })),
+    });
+
+    it("shows the holding's own target next to its weight, on desktop and on the phone line", async () => {
+      handlers["GET /portfolio/summary"] = withTargets(0.51, []);
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("10 sh · 51.3% / target 51%");
+      expect(row).toHaveTextContent("51.3% / 51%");
+      expect(within(row).queryByLabelText("from watchlist")).not.toBeInTheDocument();
+      expect(screen.getByText("Weight / Target")).toBeInTheDocument();
+    });
+
+    it("takes the watchlist target when the holding has none, and marks where it comes from", async () => {
+      handlers["GET /portfolio/summary"] = withTargets(null, [{ ticker: "AAPL", target_weight: 0.5 }]);
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL (target from watchlist)" });
+      expect(row).toHaveTextContent("51.3% / 50%");
+      expect(row).toHaveTextContent("10 sh · 51.3% / target 50% (watchlist)");
+      expect(within(row).getByLabelText("from watchlist")).toBeInTheDocument();
+    });
+
+    it("offers Set target when there is no target, which opens the holding form", async () => {
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit MSFT" });
+      expect(row).toHaveTextContent("5 sh · 48.7% · Set target");
+      fireEvent.click(within(row).getAllByText("Set target")[0]);
+      expect(await screen.findByRole("button", { name: /save holding/i })).toBeInTheDocument();
+    });
+
+    it("shows the dash for a holding without a weight", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], weight: null, target_weight: 0.2 }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("10 sh · — / target 20%");
+    });
+
+    it("rounds the phone line's shares to one decimal but keeps the full count in the Shares column", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], shares: 1.407274, target_weight: 0.51 }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("1.4 sh · 51.3% / target 51%");
+      expect(within(row).getByText("1.407274")).toBeInTheDocument();
+    });
+  });
+
+  it("says an owned watchlist ticker keeps its target on the holding, with no target edit", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      watchlist: [
+        { ticker: "AAPL", asset_type: "STOCK", note: null, target_weight: 0.3, current_price: 200 },
+        { ticker: "ASML", asset_type: "STOCK", note: null, target_weight: 0.05, current_price: 702.4 },
+      ],
+    });
+    renderFresh();
+    expect(await screen.findByText("Owned · target on the holding")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit target for aapl/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove aapl from watchlist/i })).toBeInTheDocument();
+    expect(screen.getByText("Watching · target 5%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
   });
 
   it("shows an em dash for an unpriced holding and says it isn't in the totals", async () => {
@@ -241,6 +323,50 @@ describe("PortfolioPage", () => {
 
       await waitFor(() => expect(postedWatch()).toEqual({ ticker: "AAPL", asset_type: "STOCK" }));
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    });
+
+    it("does not send target_weight from the add-ticker row unless one was typed", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NVDA" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "nvda" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "STOCK" }));
+    });
+
+    it("sends a typed target as a fraction, and refuses one above 100", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NVDA" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "nvda" } });
+
+      fireEvent.change(screen.getByLabelText("Target weight (%)"), { target: { value: "150" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+      expect(postedWatch()).toBeNull();
+
+      fireEvent.change(screen.getByLabelText("Target weight (%)"), { target: { value: "12.5" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "STOCK", target_weight: 0.125 }));
+    });
+
+    it("edits a saved target from the watchlist row", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, target_weight: 0.05, current_price: 702.4 }],
+      });
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "ASML" });
+      renderFresh();
+      expect(await screen.findByText(/target 5%/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /edit target for asml/i }));
+      const field = within(screen.getByRole("dialog")).getByLabelText("Target weight (%)") as HTMLInputElement;
+      expect(field.value).toBe("5");
+      fireEvent.change(field, { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: /save target/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "ASML", asset_type: "STOCK", target_weight: null }));
     });
 
     it("explains the icon with a tooltip", async () => {

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from app import telegram, usage
+from app import plans, telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
 from app.db import get_session_factory
@@ -120,12 +120,14 @@ def export_data(
             PortfolioSnapshotOut.model_validate(p)
             for p in db.query(PortfolioSnapshot).filter_by(user_id=user.id)
         ],
+        contribution_plans=plans.load_all(db, user.id),
         # The settings only: the chat id is never exported.
         telegram=(
             TelegramExportOut(
                 status=link.status,
                 digest_enabled=link.digest_enabled,
                 moves_enabled=link.moves_enabled,
+                plan_reminder_enabled=link.plan_reminder_enabled,
                 move_threshold_pct=float(link.move_threshold_pct),
             )
             if link is not None

@@ -1,4 +1,6 @@
 import asyncio
+import calendar
+import re
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -13,6 +15,8 @@ from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUn
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 MONDAY = datetime(2026, 10, 5, 6, 0, tzinfo=UTC)
+TUESDAY_FIRST = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # 1 September 2026 is a Tuesday
+MONDAY_THIRD = datetime(2026, 8, 3, 6, 0, tzinfo=UTC)  # 1 and 2 August 2026 are a weekend
 FOOT = "Advisory only. Nothing is sent to a broker."
 
 
@@ -339,3 +343,96 @@ def test_a_relink_during_the_send_keeps_the_new_chat_ok(env, session_local):
     env.expire_all()
     link = env.query(TelegramLink).one()
     assert (link.chat_id, link.status) == (2002, "ok")
+
+
+def test_is_first_weekday_picks_exactly_one_day_each_month():
+    for year in (2026, 2027, 2028):
+        for month in range(1, 13):
+            days = [
+                d
+                for d in range(1, calendar.monthrange(year, month)[1] + 1)
+                if notify.is_first_weekday(date(year, month, d))
+            ]
+            first = next(d for d in range(1, 8) if date(year, month, d).weekday() < 5)
+            assert days == [first], (year, month)
+
+
+def test_build_message_with_the_reminder():
+    text = notify.build_message([], [], "https://app.example.com", reminder=True)
+    assert text == (
+        "Plan this month's contribution: https://app.example.com/portfolio/plan\n"
+        "Open Today: https://app.example.com/today\n" + FOOT
+    )
+    assert notify.build_message([], [], None, reminder=True) == (
+        "Plan this month's contribution in the app.\n" + FOOT
+    )
+    assert notify.build_message([], [], "https://x", reminder=False) is None
+
+
+def _with_target(db):
+    _hold(db, USER_ID, "AAPL")
+    db.query(Holding).update({"target_weight": 0.5})
+    db.commit()
+
+
+def test_the_reminder_alone_is_sent_on_the_first_weekday_to_someone_with_a_target(env):
+    _user(env)
+    _with_target(env)
+    outcome, bot = _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))
+    assert outcome == "sent"
+    text = bot.sent[0][1]
+    assert text.startswith("Plan this month's contribution")
+    # no financial data: no digit outside a URL, no currency, no ticker
+    assert not re.search(r"\d", re.sub(r"https?://\S+", "", text))
+    assert "EUR" not in text and "AAPL" not in text
+
+
+def test_the_reminder_joins_the_days_message_instead_of_a_second_one(env):
+    _user(env)
+    _with_target(env)
+    _rec(env, USER_ID, "MSFT", days_old=34)  # a new scheduled recommendation on 1 September
+    _, bot = _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))
+    assert len(bot.sent) == 1
+    assert "1 new: MSFT ADD" in bot.sent[0][1] and "Plan this month" in bot.sent[0][1]
+
+
+def test_a_month_starting_on_a_weekend_reminds_on_the_following_monday(env):
+    _user(env)
+    _with_target(env)
+    assert _notify(now=MONDAY_THIRD, quotes=_quotes({"AAPL": [100.0, 100.0]}))[0] == "sent"
+
+
+def test_no_reminder_on_other_days(env):
+    _user(env)
+    _with_target(env)
+    outcome, bot = _notify(now=MONDAY, quotes=_quotes({"AAPL": [100.0, 100.0]}))
+    assert (outcome, bot.sent) == ("skipped", [])
+
+
+def test_no_reminder_without_a_target_or_with_the_switch_off(env):
+    _user(env)
+    _hold(env, USER_ID, "AAPL")  # no target
+    assert _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))[0] == "skipped"
+    env.query(Holding).update({"target_weight": 0.5})
+    env.query(TelegramLink).update({"plan_reminder_enabled": False})
+    env.commit()
+    assert _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))[0] == "skipped"
+
+
+def test_a_watchlist_target_also_counts(env):
+    _user(env)
+    env.add(WatchlistItem(user_id=USER_ID, ticker="NVDA", asset_type="STOCK", target_weight=0.2))
+    env.commit()
+    assert _notify(now=TUESDAY_FIRST, quotes=_quotes({}))[0] == "sent"
+
+
+def test_the_reminder_respects_the_once_a_day_marker_and_a_blocked_link(env):
+    _user(env)
+    _with_target(env)
+    quotes = {"AAPL": [100.0, 100.0]}
+    first, bot = _notify(now=TUESDAY_FIRST, quotes=_quotes(quotes))
+    second, _ = _notify(bot=bot, now=TUESDAY_FIRST, quotes=_quotes(quotes))
+    assert (first, second, len(bot.sent)) == ("sent", "skipped", 1)
+    env.query(TelegramLink).update({"status": "blocked"})
+    env.commit()
+    assert _notify(bot=bot, now=MONDAY_THIRD, quotes=_quotes(quotes))[0] == "skipped"

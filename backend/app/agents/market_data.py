@@ -131,3 +131,24 @@ async def search_symbols(query: str) -> list[dict[str, str]]:
     result = await _retry_fetch(_fetch)
     await redis.set(cache_key, json.dumps(result), ex=SEARCH_CACHE_TTL)
     return result
+
+
+CURRENCY_CACHE_TTL = 86400
+
+
+async def fetch_currency(ticker: str) -> str | None:
+    """The currency a ticker is quoted in (for example "EUR", "USD", "GBp"), or None if unknown."""
+    redis = get_redis()
+    cache_key = f"currency:{ticker}"
+    cached = await redis.get(cache_key)
+    if cached:
+        return str(cached)
+
+    def _fetch() -> str | None:
+        value = yf.Ticker(ticker).fast_info["currency"]
+        return str(value) if value else None
+
+    currency = await _retry_fetch(_fetch)
+    if currency:
+        await redis.set(cache_key, currency, ex=CURRENCY_CACHE_TTL)
+    return currency

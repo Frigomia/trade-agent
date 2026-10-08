@@ -48,6 +48,7 @@ class WatchlistItem(Base):
     ticker: Mapped[str] = mapped_column(String(20))
     asset_type: Mapped[str] = mapped_column(String(10))
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    target_weight: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
 
 
 class Trade(Base):
@@ -128,6 +129,10 @@ class InvestmentPreferences(Base):
     # Opt-in weekday analysis (see app/scheduled.py); off until the user turns it on.
     auto_analysis: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=expression.false()
+    )
+    monthly_contribution: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    drift_threshold_pct: Mapped[float] = mapped_column(
+        Numeric(4, 1), default=5.0, server_default="5.0"
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
@@ -219,6 +224,9 @@ class TelegramLink(Base):
     moves_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=expression.true()
     )
+    plan_reminder_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=expression.true()
+    )
     move_threshold_pct: Mapped[float] = mapped_column(
         Numeric(4, 1), default=5.0, server_default="5.0"
     )
@@ -226,3 +234,38 @@ class TelegramLink(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class ContributionPlan(Base):
+    """A saved contribution plan (advice on a screen, never an order)."""
+
+    __tablename__ = "contribution_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    amount_eur: Mapped[float] = mapped_column(Numeric(12, 2))
+    whole_shares: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=expression.false()
+    )
+    total_before_eur: Mapped[float] = mapped_column(Numeric(16, 2))
+    leftover_eur: Mapped[float] = mapped_column(Numeric(12, 2))
+    notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+
+
+class ContributionPlanLine(Base):
+    __tablename__ = "contribution_plan_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    plan_id: Mapped[int] = mapped_column(index=True)
+    ticker: Mapped[str] = mapped_column(String(20))
+    name: Mapped[str] = mapped_column(String(200))
+    amount_eur: Mapped[float] = mapped_column(Numeric(12, 2))
+    shares: Mapped[float] = mapped_column(Numeric(18, 6))
+    price_eur: Mapped[float] = mapped_column(Numeric(18, 6))
+    currency: Mapped[str] = mapped_column(String(8))
+    rate: Mapped[float] = mapped_column(Numeric(18, 8))
+    weight_before: Mapped[float | None] = mapped_column(Numeric(7, 6), nullable=True)
+    weight_after: Mapped[float | None] = mapped_column(Numeric(7, 6), nullable=True)
+    reason: Mapped[str] = mapped_column(String(20))

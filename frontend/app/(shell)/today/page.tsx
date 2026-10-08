@@ -9,7 +9,8 @@ import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-type
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import { TodayEmpty } from "@/components/recommendations/TodayEmpty";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
-import { toTime } from "@/components/portfolio/PortfolioChart";
+import { toTime } from "@/lib/format";
+import { DriftCard } from "@/components/plan/DriftCard";
 import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -144,6 +145,7 @@ export default function TodayPage() {
         {isDesktop && <CostBasisTile />}
         <AwaitingTile recommendations={pending} />
       </Box>
+      <DriftCard />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -9,6 +10,7 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     StringConstraints,
+    computed_field,
 )
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
@@ -54,6 +56,7 @@ class WatchlistItemIn(BaseModel):
     ticker: Ticker
     asset_type: AssetType
     note: str | None = Field(default=None, max_length=500)  # matches WatchlistItem.note String(500)
+    target_weight: float | None = Field(default=None, ge=0, le=1)
 
 
 class WatchlistItemOut(WatchlistItemIn):
@@ -190,6 +193,10 @@ class PreferencesIn(BaseModel):
     sector_avoid_list: list[SectorName] = Field(default_factory=list, max_length=MAX_AVOID_SECTORS)
     notes: str | None = Field(default=None, max_length=2000)
     auto_analysis: bool | None = None  # None: leave as it is
+    monthly_contribution: Decimal | None = Field(
+        default=None, ge=Decimal("0.01"), le=1_000_000, decimal_places=2
+    )
+    drift_threshold_pct: float | None = Field(default=None, ge=1, le=50)  # None: leave as it is
 
 
 class PreferencesOut(BaseModel):
@@ -202,6 +209,8 @@ class PreferencesOut(BaseModel):
     sector_avoid_list: list[str] = Field(default_factory=list)
     notes: str | None = None
     auto_analysis: bool = False
+    monthly_contribution: float | None = None
+    drift_threshold_pct: float = 5.0
     # Only filled when auto_analysis is on
     auto_analysis_paused: AutoAnalysisPaused | None = None
 
@@ -284,7 +293,68 @@ class TelegramExportOut(BaseModel):
     status: str
     digest_enabled: bool
     moves_enabled: bool
+    plan_reminder_enabled: bool
     move_threshold_pct: float
+
+
+class PlanIn(BaseModel):
+    amount: Decimal = Field(ge=Decimal("0.01"), le=1_000_000, decimal_places=2)
+    whole_shares: bool = False
+
+
+REASON_TEXT = {
+    "new_position": "A new position that starts at 0 %",
+    "underweight": "Below its target weight",
+    "favoured": "Below its target, and its newest call is ADD or BUY",
+    "remainder": "Extra money shared by target weight",
+}
+
+
+class PlanLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ticker: str
+    name: str
+    amount_eur: float
+    shares: float
+    price_eur: float
+    currency: str
+    rate: float
+    weight_before: float | None
+    weight_after: float | None
+    reason: str
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def reason_text(self) -> str:
+        return REASON_TEXT.get(self.reason, "")
+
+
+class PlanOut(BaseModel):
+    id: int | None = None
+    created_at: datetime | None = None
+    amount_eur: float
+    whole_shares: bool
+    total_before_eur: float
+    leftover_eur: float
+    lines: list[PlanLineOut]
+    notes: list[str]
+    disclaimer: str = "Advisory only. Nothing is sent to a broker."
+
+
+class PlanSummaryOut(BaseModel):
+    id: int
+    created_at: datetime
+    amount_eur: float
+    line_count: int
+
+
+class DriftItemOut(BaseModel):
+    ticker: str
+    name: str
+    weight: float  # fractions of the targeted open holdings
+    target: float
+    points: float  # weight minus target, in percentage points
 
 
 class ExportOut(BaseModel):
@@ -298,6 +368,7 @@ class ExportOut(BaseModel):
     investment_preferences: PreferencesOut | None
     portfolio_snapshots: list[PortfolioSnapshotOut]
     telegram: TelegramExportOut | None = None
+    contribution_plans: list[PlanOut] = Field(default_factory=list)
 
 
 class UsageDetail(BaseModel):
@@ -375,6 +446,7 @@ class TelegramOut(BaseModel):
     digest_enabled: bool = True
     moves_enabled: bool = True
     move_threshold_pct: float = 5.0
+    plan_reminder_enabled: bool = True
     bot_username: str | None = None
 
 
@@ -386,4 +458,5 @@ class TelegramLinkOut(BaseModel):
 class TelegramSettingsIn(BaseModel):
     digest_enabled: bool | None = None
     moves_enabled: bool | None = None
+    plan_reminder_enabled: bool | None = None
     move_threshold_pct: float | None = Field(default=None, ge=1, le=50)

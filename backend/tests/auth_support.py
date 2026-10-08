@@ -16,6 +16,8 @@ from app.models import (
     AppUser,
     BacktestResult,
     ChatMessage,
+    ContributionPlan,
+    ContributionPlanLine,
     Holding,
     InvestmentPreferences,
     PortfolioSnapshot,
@@ -133,6 +135,26 @@ ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
         user_id=uid, total_market_value=1, total_cost_basis=1
     ),
     "telegram_links": lambda uid: TelegramLink(user_id=uid, chat_id=uid.int % 10**12 + 1),
+    "contribution_plans": lambda uid: ContributionPlan(
+        user_id=uid,
+        amount_eur=500,
+        whole_shares=False,
+        total_before_eur=0,
+        leftover_eur=0,
+        notes=[],
+    ),
+    "contribution_plan_lines": lambda uid: ContributionPlanLine(
+        user_id=uid,
+        plan_id=1,
+        ticker="AAPL",
+        name="Apple",
+        amount_eur=100,
+        shares=1,
+        price_eur=100,
+        currency="EUR",
+        rate=1,
+        reason="underweight",
+    ),
     "user_api_keys": lambda uid: UserApiKey(
         user_id=uid, ciphertext=b"x" * 40, key_version=1, last4="abcd", status="ok"
     ),

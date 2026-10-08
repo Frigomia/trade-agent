@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 import app.redis_client as redis_client_module
@@ -23,6 +24,8 @@ def test_get_preferences_returns_defaults_when_none_exist(client):
         "notes": None,
         "auto_analysis": False,
         "auto_analysis_paused": None,
+        "monthly_contribution": None,
+        "drift_threshold_pct": 5.0,
     }
 
 
@@ -232,3 +235,34 @@ def test_preferences_still_load_and_save_when_redis_is_down(client, caplog):
     assert saved.json()["notes"] == "still saved"
     assert "ConnectionError" in caplog.text
     assert "secret-host" not in caplog.text
+
+
+def test_planner_settings_default_and_round_trip(client):
+    body = client.get("/preferences").json()
+    assert body["monthly_contribution"] is None and body["drift_threshold_pct"] == 5.0
+    saved = client.post(
+        "/preferences", json={"monthly_contribution": 500, "drift_threshold_pct": 7.5}
+    ).json()
+    assert (saved["monthly_contribution"], saved["drift_threshold_pct"]) == (500.0, 7.5)
+    # a save that does not mention them leaves them alone
+    other = client.post("/preferences", json={"risk_tolerance": "moderate"}).json()
+    assert (other["monthly_contribution"], other["drift_threshold_pct"]) == (500.0, 7.5)
+    # an explicit null clears the amount but cannot null the threshold
+    cleared = client.post(
+        "/preferences", json={"monthly_contribution": None, "drift_threshold_pct": None}
+    ).json()
+    assert cleared["monthly_contribution"] is None and cleared["drift_threshold_pct"] == 7.5
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"monthly_contribution": 0},
+        {"monthly_contribution": -5},
+        {"monthly_contribution": 1_000_001},
+        {"drift_threshold_pct": 0.5},
+        {"drift_threshold_pct": 51},
+    ],
+)
+def test_planner_settings_are_bounded(client, body):
+    assert client.post("/preferences", json=body).status_code == 422

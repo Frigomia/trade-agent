@@ -1,14 +1,13 @@
 import asyncio
 import logging
 import math
-import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
+from app.db import lock_user_for_insert
 from app.http_headers import no_store
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.rate_limit import rate_limiter
@@ -54,13 +53,6 @@ def list_holdings(
     return db.query(Holding).filter_by(user_id=user.id).all()
 
 
-def _lock_user_for_insert(db: Session, user_id: uuid.UUID) -> None:
-    """Serialise one user's count-then-insert so two parallel requests cannot both pass the cap.
-    The lock is held until the transaction ends (the commit) and is Postgres-only; the tests and
-    the app both run on Postgres."""
-    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": str(user_id)})
-
-
 @router.post(
     "/holdings",
     response_model=HoldingOut,
@@ -73,7 +65,7 @@ def upsert_holding(
 ) -> Holding:
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
-        _lock_user_for_insert(db, user.id)
+        lock_user_for_insert(db, user.id)
         if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
             raise HTTPException(status_code=409, detail=_cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
@@ -116,7 +108,7 @@ def upsert_watchlist_item(
 ) -> WatchlistItem:
     item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if item is None:
-        _lock_user_for_insert(db, user.id)
+        lock_user_for_insert(db, user.id)
         if db.query(WatchlistItem).filter_by(user_id=user.id).count() >= MAX_WATCHLIST:
             raise HTTPException(
                 status_code=409, detail=_cap_message("watchlist items", MAX_WATCHLIST)

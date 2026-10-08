@@ -44,6 +44,7 @@ def _out(link: TelegramLink | None) -> TelegramOut:
         digest_enabled=link.digest_enabled,
         moves_enabled=link.moves_enabled,
         move_threshold_pct=float(link.move_threshold_pct),  # a Numeric column gives a Decimal
+        plan_reminder_enabled=link.plan_reminder_enabled,
         bot_username=username,
     )
 

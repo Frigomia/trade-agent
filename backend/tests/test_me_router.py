@@ -9,7 +9,13 @@ import app.redis_client as redis_client_module
 from app import rls, telegram
 from app.config import settings
 from app.db import Base
-from app.models import AppUser, InvestmentPreferences, TelegramLink
+from app.models import (
+    AppUser,
+    ContributionPlan,
+    ContributionPlanLine,
+    InvestmentPreferences,
+    TelegramLink,
+)
 from tests.auth_support import OTHER_USER_ID, ROW_FACTORIES, USER_ID, add_app_user, auth_headers
 
 
@@ -183,6 +189,8 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
         "portfolio_snapshots",
         "user_api_keys",
         "telegram_links",
+        "contribution_plans",
+        "contribution_plan_lines",
     }
     for table_name in rows_with_user_id:
         rows = body[table_name]
@@ -205,6 +213,7 @@ def test_the_export_lists_telegram_settings_but_not_the_chat_id(client, db_sessi
         "status": "ok",
         "digest_enabled": True,
         "moves_enabled": False,
+        "plan_reminder_enabled": True,
         "move_threshold_pct": 5.0,
     }
     assert "987654321" not in client.get("/me/export").text
@@ -256,6 +265,37 @@ def test_delete_my_data_is_403_for_an_invited_user(client, db_session):
         "DELETE", "/me/data", json={"confirm": True}, headers=auth_headers(OTHER_USER_ID)
     )
     assert response.status_code == 403
+
+
+def test_the_export_lists_saved_plans_with_their_lines(client, db_session):
+    plan = ContributionPlan(
+        user_id=USER_ID,
+        amount_eur=500,
+        whole_shares=False,
+        total_before_eur=4000,
+        leftover_eur=0,
+        notes=["n"],
+    )
+    db_session.add(plan)
+    db_session.commit()
+    db_session.add(
+        ContributionPlanLine(
+            user_id=USER_ID,
+            plan_id=plan.id,
+            ticker="AAPL",
+            name="Apple",
+            amount_eur=500,
+            shares=2,
+            price_eur=250,
+            currency="EUR",
+            rate=1,
+            reason="underweight",
+        )
+    )
+    db_session.commit()
+    body = client.get("/me/export").json()
+    assert [p["amount_eur"] for p in body["contribution_plans"]] == [500.0]
+    assert body["contribution_plans"][0]["lines"][0]["ticker"] == "AAPL"
 
 
 def test_export_is_not_cacheable(client):

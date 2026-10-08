@@ -7,6 +7,8 @@ import { apiFetch } from "@/lib/api/client";
 import type { AssetType, HoldingSummary } from "@/lib/api/portfolio-types";
 import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
+import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
+import { fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
@@ -42,6 +44,7 @@ function HoldingFormBody({
   const [shares, setShares] = useState(holding ? String(holding.shares) : "");
   const [costBasis, setCostBasis] = useState(holding ? String(holding.cost_basis) : "");
   const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? todayIso());
+  const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
   const { run, submitting, error, setError } = useAction();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
@@ -72,6 +75,11 @@ function HoldingFormBody({
       setError("Enter a ticker, a name, shares, an average cost and a date.");
       return;
     }
+    const targetWeight = percentTextToFraction(target);
+    if (targetWeight === undefined) {
+      setError(TARGET_ERROR);
+      return;
+    }
     await run(async () => {
       await apiFetch("/portfolio/holdings", {
         method: "POST",
@@ -82,9 +90,9 @@ function HoldingFormBody({
           shares: sharesNum,
           cost_basis: costNum,
           first_purchase_date: firstPurchase,
-          // The endpoint is a full replace: pass these through or an edit would wipe them.
+          // The endpoint is a full replace: always send the sector and target or a save would wipe them.
           sector: holding?.sector ?? null,
-          target_weight: holding?.target_weight ?? null,
+          target_weight: targetWeight,
         }),
       });
       onSaved();
@@ -165,6 +173,7 @@ function HoldingFormBody({
         fullWidth
         margin="normal"
       />
+      <TargetWeightField value={target} onChange={setTarget} fullWidth margin="normal" />
       {error && (
         <Alert severity="error" sx={{ mt: 1 }}>
           {error}

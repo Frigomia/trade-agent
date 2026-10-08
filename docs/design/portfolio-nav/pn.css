@@ -1,0 +1,68 @@
+/* Portfolio with Plan as a view. On top of ../contribution-planner/base.css and cp.css. */
+.side .sec{font-size:11px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:14px 12px 4px}
+.nav.parent{color:var(--text2)}
+.nav.sub{margin-left:22px;padding:7px 12px;gap:10px;font-size:12.5px;position:relative}
+.nav.sub svg.i{width:15px;height:15px}
+.nav.sub:before{content:"";position:absolute;left:-9px;top:4px;bottom:4px;width:1px;background:var(--line2)}
+
+/* the view strip: same look as the approved Plan tabs */
+.pseg{display:flex;max-width:480px;border:1px solid var(--line2);border-radius:12px;padding:3px;margin-bottom:18px}
+.pseg span{flex:1;text-align:center;padding:8px;border-radius:9px;font-size:13px;color:var(--muted);white-space:nowrap}
+.pseg span.on{background:var(--up-bg);color:var(--accent);font-weight:650}
+
+.head .actions{gap:8px}
+.stats{display:flex;gap:32px;align-items:flex-end;flex-wrap:wrap;margin-bottom:4px}
+.stats .l{font-size:13px;color:var(--muted)}
+.stats .v{font-weight:650;font-size:16px}
+.stats .bigv{font-size:38px;letter-spacing:-.03em;line-height:1.2}
+.up{color:var(--up)}
+
+.pgrid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:20px;align-items:start}
+.hold{padding:8px 16px}
+.hr2{display:grid;grid-template-columns:minmax(0,1fr) 66px 62px 62px 66px 116px 96px 28px;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.hr2:last-child{border-bottom:0}
+.hr2.h{font-size:12px;color:var(--muted);padding:8px 0}
+.hr2>*:not(:first-child){text-align:right}
+.hr2 .nm{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hr2 .val{font-weight:650}
+.hr2 .wc{display:flex;flex-direction:column;gap:5px;align-items:stretch}
+.hr2 .wc .wb{min-width:0;height:6px}
+.hr2 .wc .wb .tg{top:-3px;bottom:-3px}
+.hr2 .watch{color:var(--up);display:grid;place-items:center}
+.hr2 .watch svg.i{width:16px;height:16px}
+.settg{color:var(--muted);font-size:12.5px;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.hr2 .ph{display:none}
+
+.wl{padding:16px 18px}
+.wl h3{margin-bottom:6px}
+.wr{display:flex;align-items:center;gap:6px;padding:9px 0;border-bottom:1px solid var(--line)}
+.wr .grow .hint{font-size:12px}
+.wr .ib{width:28px;height:28px;display:grid;place-items:center;color:var(--muted);flex:none}
+.wr .ib svg.i{width:15px;height:15px}
+.wform{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:flex-end}
+.wform .input{height:38px;font-size:13px;border-radius:12px}
+.wform .field>label{font-size:11.5px}
+
+.variant{width:1280px}
+.variant .hold{max-width:740px}
+
+/* phone */
+.phone .head{display:block}
+.phone .head .top{display:flex;justify-content:space-between;align-items:center}
+.phone .actions3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px}
+.phone .actions3 .btn{padding:9px 6px;font-size:12.5px;border-radius:10px}
+.phone .pseg{max-width:none;margin-bottom:16px}
+.phone .stats{gap:6px 24px}
+.phone .stats .bigv{font-size:34px}
+.phone .stats>div:first-child{flex:1 1 100%}
+.phone .pgrid{grid-template-columns:1fr;margin-top:16px}
+.phone .hold{padding:4px 14px}
+.phone .hr2{grid-template-columns:minmax(0,1fr) auto;gap:2px 12px}
+.phone .hr2.h,.phone .hr2 .dk{display:none}
+.phone .hr2 .ph{display:block;text-align:right}
+.phone .hr2 .meta{font-size:12px;color:var(--muted)}
+.phone .variant{width:auto}
+.phone .variant .tag{width:auto;padding:0}
+.phone .wl{padding:14px 16px}
+.pm{display:none}
+.phone .pm{display:block}

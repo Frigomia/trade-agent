@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  CalendarCheck,
   ChartPie,
   Gauge,
   History,
@@ -19,6 +20,8 @@ export interface NavItem {
   adminOnly?: boolean;
   /** Match only this exact path, not its sub-pages (/admin vs /admin/usage). */
   exact?: boolean;
+  /** A smaller, indented child of the item above it in the sidebar. */
+  sub?: boolean;
   /** A small heading drawn above this item in the sidebar. */
   section?: string;
 }
@@ -35,7 +38,9 @@ export const PHONE_TABS: NavItem[] = [
 
 export const DESKTOP_SECTIONS: NavItem[] = [
   { label: "Today", href: "/today", icon: SquareCheckBig },
-  { label: "Portfolio", href: "/portfolio", icon: ChartPie },
+  // Exact, so on the plan views only Plan is lit and Portfolio stays as its unlit parent.
+  { label: "Portfolio", href: "/portfolio", icon: ChartPie, exact: true },
+  { label: "Plan", href: "/portfolio/plan", icon: CalendarCheck, sub: true },
   { label: "Chat", href: "/chat", icon: MessageSquare },
   { label: "Track record", href: "/more/track-record", icon: ListChecks },
   { label: "Backtests", href: "/more/backtests", icon: History },

@@ -53,7 +53,7 @@ function Title({ focusable }: { focusable?: boolean }) {
 }
 
 /** Static sample of what a Telegram message looks like. No user data: nothing here is read from the API. */
-function PreviewCard() {
+function PreviewCard({ reminder }: { reminder: boolean }) {
   return (
     <Panel sx={cardSx}>
       <Typography
@@ -84,6 +84,14 @@ function PreviewCard() {
               https://app.example.com/today
             </Box>
           </span>
+          {reminder && (
+            <span>
+              Plan this month&apos;s contribution:{" "}
+              <Box component="span" sx={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" }}>
+                https://app.example.com/portfolio/plan
+              </Box>
+            </span>
+          )}
           <Box component="span" sx={{ color: "var(--muted)", fontSize: 12 }}>
             Advisory only. Nothing is sent to a broker.
           </Box>
@@ -189,7 +197,7 @@ export function TelegramPanel() {
     });
   }
 
-  function toggle(key: "digest_enabled" | "moves_enabled", next: boolean) {
+  function toggle(key: "digest_enabled" | "moves_enabled" | "plan_reminder_enabled", next: boolean) {
     setPending((p) => ({ ...p, [key]: next }));
     void patch({ [key]: next }, () => setPending((p) => ({ ...p, [key]: undefined })));
   }
@@ -237,6 +245,7 @@ export function TelegramPanel() {
   const thresholdInvalid = save.error === THRESHOLD_ERROR;
   const digestOn = pending.digest_enabled ?? status.digest_enabled;
   const movesOn = pending.moves_enabled ?? status.moves_enabled;
+  const planOn = pending.plan_reminder_enabled ?? status.plan_reminder_enabled;
 
   return (
     <Box
@@ -303,6 +312,14 @@ export function TelegramPanel() {
               disabled={save.submitting}
               onChange={(next) => toggle("moves_enabled", next)}
             />
+            <SwitchRow
+              id="tg-plan"
+              label="Monthly plan reminder"
+              hint="Sent on the first weekday of the month, only if at least one holding or watchlist item has a target weight."
+              checked={planOn}
+              disabled={save.submitting}
+              onChange={(next) => toggle("plan_reminder_enabled", next)}
+            />
             <TextField
               id="tg-threshold"
               label="Move threshold"
@@ -356,7 +373,7 @@ export function TelegramPanel() {
       </Panel>
 
       <Box sx={{ order: { xs: 0, md: 1 }, display: "grid" }}>
-        <PreviewCard />
+        <PreviewCard reminder={planOn} />
       </Box>
 
       <Dialog

@@ -24,13 +24,13 @@ import PreferencesPage from "./page";
 
 function renderFresh() {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
       <PreferencesPage />
     </SWRConfig>,
   );
 }
 
-const LOADED = { risk_tolerance: "moderate", sector_avoid_list: ["Energy"], notes: "long term" };
+const LOADED = { risk_tolerance: "moderate", sector_avoid_list: ["Energy"], notes: "long term", monthly_contribution: null, drift_threshold_pct: 5 };
 
 describe("PreferencesPage", () => {
   beforeEach(() => {
@@ -234,6 +234,243 @@ describe("PreferencesPage", () => {
         "href",
         "/more/connect-claude",
       );
+    });
+  });
+
+  describe("contribution plan fields", () => {
+    const posts = () => apiFetch.mock.calls.filter((c) => c[1]?.method === "POST");
+    const body = () => JSON.parse(posts()[0][1].body);
+    const save = () => fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
+    const amount = () => screen.findByRole("textbox", { name: "Monthly contribution" });
+    const drift = () => screen.findByRole("textbox", { name: "Drift threshold" });
+
+    it("shows the saved values", async () => {
+      apiFetch.mockImplementation(async () => ({ ...LOADED, monthly_contribution: 500, drift_threshold_pct: 7.5 }));
+      renderFresh();
+      expect(await amount()).toHaveValue("500");
+      expect(await drift()).toHaveValue("7.5");
+    });
+
+    it("sends only the changed plan field, with the page's own fields", async () => {
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "1200.50" } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(body()).toEqual({
+        risk_tolerance: "moderate",
+        sector_avoid_list: ["Energy"],
+        notes: "long term",
+        monthly_contribution: 1200.5,
+      });
+      expect(await screen.findByText(/saved/i)).toBeInTheDocument();
+    });
+
+    it("sends only the threshold when only it changed", async () => {
+      renderFresh();
+      fireEvent.change(await drift(), { target: { value: "7,5" } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(body()).toMatchObject({ drift_threshold_pct: 7.5 });
+      expect("monthly_contribution" in body()).toBe(false);
+    });
+
+    it("sends neither plan field when untouched", async () => {
+      renderFresh();
+      fireEvent.change(await screen.findByLabelText(/notes/i), { target: { value: "n" } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect("monthly_contribution" in body()).toBe(false);
+      expect("drift_threshold_pct" in body()).toBe(false);
+    });
+
+    it("an emptied amount clears it with an explicit null", async () => {
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) =>
+        init?.method === "POST" ? {} : { ...LOADED, monthly_contribution: 500 },
+      );
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "  " } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(body().monthly_contribution).toBeNull();
+      expect("drift_threshold_pct" in body()).toBe(false);
+    });
+
+    it.each(["0", "0.001", "0.005", "1000000.01", "12.345", "abc", "-5"])("rejects the amount %j with no request", async (v) => {
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: v } });
+      save();
+      expect(await screen.findByText(/0.01 to 1,000,000/)).toBeInTheDocument();
+      expect(posts()).toHaveLength(0);
+    });
+
+    it.each([
+      ["0.01", 0.01],
+      ["1", 1],
+      ["1000000", 1000000],
+    ])("accepts the amount %j", async (v, num) => {
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: v } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(body().monthly_contribution).toBe(num);
+    });
+
+    it.each(["0", "0.9", "51", "5.55", "", "x"])("rejects the threshold %j: never null, no request", async (v) => {
+      renderFresh();
+      fireEvent.change(await drift(), { target: { value: v } });
+      save();
+      expect(await screen.findByText(/1 to 50, one decimal at most/)).toBeInTheDocument();
+      expect(posts()).toHaveLength(0);
+    });
+
+    it("accepts the threshold bounds 1 and 50", async () => {
+      renderFresh();
+      fireEvent.change(await drift(), { target: { value: "50" } });
+      save();
+      await waitFor(() => expect(posts()).toHaveLength(1));
+      expect(body().drift_threshold_pct).toBe(50);
+    });
+
+    it("shows the API detail when saving a plan field fails", async () => {
+      renderFresh();
+      const field = await amount();
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") throw new FakeApiError(422, "Amount rejected");
+        return LOADED;
+      });
+      fireEvent.change(field, { target: { value: "100" } });
+      save();
+      expect(await screen.findByText("Amount rejected")).toBeInTheDocument();
+    });
+
+    it.each([
+      ["500,5", 500.5],
+      ["1e3", "bad"],
+      ["500.555", "bad"],
+    ])("amount %j", async (v, want) => {
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: v } });
+      save();
+      if (want === "bad") {
+        expect(await screen.findByText(/0.01 to 1,000,000/)).toBeInTheDocument();
+        expect(posts()).toHaveLength(0);
+      } else {
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body().monthly_contribution).toBe(want);
+      }
+    });
+
+    it("describes the field by its helper and announces the error", async () => {
+      renderFresh();
+      const field = await amount();
+      expect(field).toHaveAccessibleDescription(/EUR, 0.01 to 1,000,000/);
+      fireEvent.change(field, { target: { value: "0" } });
+      save();
+      expect(await screen.findByRole("alert")).toHaveTextContent(/0.01 to 1,000,000/);
+      expect(field).toHaveAccessibleDescription(/two decimals at most/);
+      expect(field).toHaveAttribute("aria-invalid", "true");
+      const d = await drift();
+      fireEvent.change(d, { target: { value: "99" } });
+      save();
+      await waitFor(() => expect(d).toHaveAccessibleDescription(/1 to 50, one decimal at most/));
+    });
+
+    describe("baseline", () => {
+      let server: Record<string, unknown>;
+      beforeEach(() => {
+        server = { ...LOADED };
+        apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+          if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
+          return server;
+        });
+      });
+      const revalidate = async (change: Record<string, unknown>) => {
+        server = { ...server, ...change };
+        fireEvent.focus(window);
+        await waitFor(() => expect(apiFetch.mock.calls.filter((c) => !c[1]).length).toBeGreaterThan(1));
+      };
+
+      it("an untouched plan field is not sent after the server value changed elsewhere", async () => {
+        renderFresh();
+        await screen.findByLabelText(/notes/i);
+        await revalidate({ monthly_contribution: 800, drift_threshold_pct: 9 });
+        fireEvent.click(screen.getByRole("button", { name: /^aggressive$/i }));
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body()).toMatchObject({ risk_tolerance: "aggressive" });
+        expect("monthly_contribution" in body()).toBe(false);
+        expect("drift_threshold_pct" in body()).toBe(false);
+      });
+
+      it("a touched amount is still sent after such a change", async () => {
+        renderFresh();
+        const field = await amount();
+        await revalidate({ monthly_contribution: 800 });
+        fireEvent.change(field, { target: { value: "300" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body().monthly_contribution).toBe(300);
+      });
+
+      it("after a save the baseline is what was saved", async () => {
+        renderFresh();
+        fireEvent.change(await amount(), { target: { value: "300" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        await screen.findByText(/^saved$/i);
+        fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: "again" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(2));
+        expect("monthly_contribution" in JSON.parse(posts()[1][1].body)).toBe(false);
+      });
+    });
+
+    it("stays dirty when the save fails", async () => {
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") throw new FakeApiError(500, "boom");
+        return LOADED;
+      });
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "300" } });
+      save();
+      expect(await screen.findByText("boom")).toBeInTheDocument();
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
+    });
+
+    it("is not dirty after an edit is reverted", async () => {
+      renderFresh();
+      const field = await amount();
+      fireEvent.change(field, { target: { value: "300" } });
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      fireEvent.change(field, { target: { value: "" } });
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+    });
+
+    it("stays clean after a save when the page revalidates", async () => {
+      let server: Record<string, unknown> = { ...LOADED };
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
+        return server;
+      });
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "300" } });
+      save();
+      await screen.findByText(/^saved$/i);
+      fireEvent.focus(window);
+      await waitFor(() => expect(apiFetch.mock.calls.filter((c) => !c[1]).length).toBeGreaterThan(1));
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+      expect(await amount()).toHaveValue("300");
+    });
+
+    it("Discard restores both fields", async () => {
+      renderFresh();
+      const field = await amount();
+      fireEvent.change(field, { target: { value: "9" } });
+      fireEvent.change(await drift(), { target: { value: "9" } });
+      fireEvent.click(screen.getByRole("button", { name: /discard/i }));
+      expect(field).toHaveValue("");
+      expect(await drift()).toHaveValue("5");
     });
   });
 
