@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -191,7 +192,9 @@ class PreferencesIn(BaseModel):
     sector_avoid_list: list[SectorName] = Field(default_factory=list, max_length=MAX_AVOID_SECTORS)
     notes: str | None = Field(default=None, max_length=2000)
     auto_analysis: bool | None = None  # None: leave as it is
-    monthly_contribution: float | None = Field(default=None, gt=0, le=1_000_000)
+    monthly_contribution: Decimal | None = Field(
+        default=None, ge=Decimal("0.01"), le=1_000_000, decimal_places=2
+    )
     drift_threshold_pct: float | None = Field(default=None, ge=1, le=50)  # None: leave as it is
 
 
@@ -289,11 +292,12 @@ class TelegramExportOut(BaseModel):
     status: str
     digest_enabled: bool
     moves_enabled: bool
+    plan_reminder_enabled: bool
     move_threshold_pct: float
 
 
 class PlanIn(BaseModel):
-    amount: float = Field(gt=0, le=1_000_000)
+    amount: Decimal = Field(ge=Decimal("0.01"), le=1_000_000, decimal_places=2)
     whole_shares: bool = False
 
 

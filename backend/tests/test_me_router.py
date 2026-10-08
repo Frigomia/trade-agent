@@ -213,6 +213,7 @@ def test_the_export_lists_telegram_settings_but_not_the_chat_id(client, db_sessi
         "status": "ok",
         "digest_enabled": True,
         "moves_enabled": False,
+        "plan_reminder_enabled": True,
         "move_threshold_pct": 5.0,
     }
     assert "987654321" not in client.get("/me/export").text

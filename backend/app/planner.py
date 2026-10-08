@@ -114,7 +114,7 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
         else:
             eligible.append(c)
     if not eligible:
-        notes.append("Every ticker with a target has a TRIM or SELL call, so nothing is proposed.")
+        notes.append("Every ticker with a target is excluded or unpriced, so nothing is proposed.")
         return Plan([], notes, pool_before, amount)
 
     gap: dict[str, Decimal] = {}

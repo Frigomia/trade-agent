@@ -218,7 +218,7 @@ ContributionPlanLine
   (Numeric(18,6)), currency (the quote currency), rate (Numeric(18,8): EUR per 1 unit of it),
   weight_before and weight_after (Numeric(7,6), nullable), reason ("new_position"|"favoured"|
   "underweight"|"remainder")
-  -- A saved plan is a record of what was shown that day: it stores the prices and rates used and is
+  -- A saved plan is a record of the plan as computed when saved (prices can move between the preview and the save): it stores the prices and rates used and is
   -- never recomputed. Both tables carry user_id with owner-only row-level security, are in
   -- GET /me/export (lines nested under their plan) and are removed by DELETE /me/data. There is
   -- deliberately no foreign key from plan_id to contribution_plans, like every other user table:
@@ -294,7 +294,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 |---|---|---|---|
 | GET | `/health` | — | Liveness check |
 | GET | `/portfolio/holdings` | — | List all holdings |
-| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker; at most 100 holdings per user (`409` beyond that) |
+| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker (a full replace: an omitted `target_weight` resets it to `null`); at most 100 holdings per user (`409` beyond that) |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that). Accepts `target_weight` (0 to 1) |
@@ -318,9 +318,9 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes `auto_analysis` and `auto_analysis_paused` (`null` when not paused or when the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
-| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is above 0 and at most 1,000,000; `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
-| POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is above 0 and at most 1,000,000 EUR. Returns the lines, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
-| POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is 0.01 to 1,000,000 with two decimals at most (`422` otherwise); `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
+| POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is 0.01 to 1,000,000 EUR with two decimals at most (`422` otherwise). Returns the lines, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
+| POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `422` "This plan is too large to store." when a figure overflows its column. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
 | GET | `/plans/drift` | — | Open holdings with a target weight whose weight is at least `drift_threshold_pct` points away from it, largest first: `{ticker, name, weight, target, points}` (fractions, `points` signed). An empty list when nothing drifts or nothing can be priced. Rate limited: 30/min per user |
 | GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's |
@@ -331,7 +331,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
 | POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
-| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`) |
+| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list; the `telegram` block includes `plan_reminder_enabled`) |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
@@ -398,7 +398,7 @@ symbols (`EURUSD=X` and so on), never from user text; `GBp` and `GBX` are pence,
 at one hundredth. Nothing is stored for this: the price in EUR, the currency and the rate are
 returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, with a note, when its price
 is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
-lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-6 to
+lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-4 to
 1e9 (those bounds keep every figure inside its column). Nothing negative, infinite or NaN ever
 reaches an amount. This conversion is not yet applied to `/portfolio/summary`, so portfolio totals
 still add mixed currencies as if they were one.
@@ -431,8 +431,8 @@ holding without a target is outside the pool: it neither receives money nor coun
    its value plus the line over `pool_before` plus what was spent. The reason is `remainder`,
    `new_position` (not held), `favoured` (ADD or BUY) or `underweight`.
 
-If a holding and a watchlist item share a ticker, the holding's target is used. A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
-priced, every targeted ticker excluded. `POST /plans` returns the plan as read back from the
+If a holding and a watchlist item share a ticker, the holding's target is used; when the holding has no target, the watchlist target applies to the held position (its real shares count, it is not a `new_position`, and it is not counted among the holdings without a target). A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
+priced (a note says no ticker with a target could be priced), every targeted ticker excluded. `POST /plans` returns the plan as read back from the
 database, so a saved plan shows exactly the rounded figures it stored. A person keeps at most
 `MAX_PLANS` = 120 saved plans (`409` beyond that). Preview and save have separate rate-limit buckets (10 a minute each); `GET` and `DELETE` of plans have no extra limit.
 

@@ -135,3 +135,13 @@ def test_a_non_dict_quote_leaves_the_ticker_out():
     ):
         prices, skipped = run(fx.eur_prices({"AAPL"}))
     assert prices == {} and "AAPL" in skipped["AAPL"]
+
+
+def test_the_unsupported_currency_text_is_truncated():
+    (_, skipped), _ = run_prices(["AAPL"], {"AAPL": 10.0}, {"AAPL": "X" * 50})
+    assert "X" * 8 in skipped["AAPL"] and "X" * 9 not in skipped["AAPL"]
+
+
+def test_a_price_under_a_hundredth_of_a_cent_is_dropped():
+    (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 0.00009}, {"AAPL": "EUR"})
+    assert prices == {} and "AAPL" in skipped["AAPL"]

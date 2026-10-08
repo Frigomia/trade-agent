@@ -98,3 +98,10 @@ def check_runtime_role(conn: Connection) -> None:
 def get_session_factory() -> sessionmaker[Session]:
     """FastAPI dependency so tests can swap in a factory bound to the restricted test role."""
     return SessionLocal
+
+
+def lock_user_for_insert(db: Session, user_id: uuid.UUID) -> None:
+    """Serialise one user's count-then-insert so two parallel requests cannot both pass the cap.
+    The lock is held until the transaction ends (the commit) and is Postgres-only; the tests and
+    the app both run on Postgres."""
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": str(user_id)})

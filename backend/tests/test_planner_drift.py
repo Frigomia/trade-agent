@@ -35,3 +35,9 @@ def test_a_single_targeted_holding_never_drifts():
 def test_the_boundary_counts():
     cands = [cand("AAPL", 55, 0.5), cand("MSFT", 45, 0.5)]  # exactly 5 points either way
     assert len(drift_items(cands, D("5"))) == 2
+
+
+def test_points_exactly_at_the_threshold_are_included():
+    cands = [cand("AAPL", 55, 0.5), cand("MSFT", 45, 0.5)]
+    assert len(drift_items(cands, D("5"))) == 2
+    assert drift_items(cands, D("5.01")) == []

@@ -32,7 +32,7 @@ SUBUNITS = {"GBp": ("GBP", Decimal("0.01")), "GBX": ("GBP", Decimal("0.01"))}
 SUPPORTED = frozenset({"EUR", *RATE_SYMBOLS, *SUBUNITS})
 LOOKUP_CONCURRENCY = 8
 # Bounds that keep amounts inside the plan columns (Numeric 18,6 for prices and 18,8 for rates)
-MIN_PRICE_EUR = Decimal("0.000001")
+MIN_PRICE_EUR = Decimal("0.0001")
 MAX_PRICE_EUR = Decimal("1000000000")
 MIN_RATE = Decimal("0.00000001")
 MAX_RATE = Decimal("100000000")
@@ -96,7 +96,7 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
         if not currency:
             return ticker, None, None, f"{ticker} is left out: its currency is unknown."
         if currency not in SUPPORTED:
-            note = f"{ticker} is left out: currency {currency} is not supported."
+            note = f"{ticker} is left out: currency {currency[:8]} is not supported."
             return ticker, None, None, note
         return ticker, price, currency, None
 

@@ -7,11 +7,12 @@ from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DataError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import planner
+from app.db import lock_user_for_insert
 from app.fx import eur_prices
 from app.models import (
     ContributionPlan,
@@ -77,14 +78,18 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
     notes: list[str] = []
     targets: dict[str, tuple[str, Decimal, Decimal]] = {}  # ticker -> (name, shares, target)
     untargeted = 0
+    held_rows = {ticker: (name, shares) for ticker, name, shares, _target in holdings}
     for ticker, name, shares, held_target in holdings:
         if held_target and held_target > 0:
             targets[ticker] = (name, shares, Decimal(str(held_target)))
-        elif shares > 0:
-            untargeted += 1
     for ticker, watch_target in watch:
         if watch_target and watch_target > 0 and ticker not in targets:
-            targets[ticker] = (ticker, Decimal(0), Decimal(str(watch_target)))
+            # A holding without a target takes the watchlist target; its real shares count.
+            name, shares = held_rows.get(ticker, (ticker, Decimal(0)))
+            targets[ticker] = (name, shares, Decimal(str(watch_target)))
+    for ticker, _name, shares, _target in holdings:
+        if shares > 0 and ticker not in targets:
+            untargeted += 1
     if untargeted:
         one = untargeted == 1
         notes.append(
@@ -113,11 +118,15 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
                 call=calls.get(ticker),
             )
         )
-    result = planner.build_plan(
-        candidates, Decimal(str(payload.amount)), whole_shares=payload.whole_shares
-    )
+    if targets and not candidates:  # an outage: say so rather than "no target yet"
+        notes.append(
+            "No ticker with a target could be priced right now. Try again in a few minutes."
+        )
+        result = planner.Plan([], [], Decimal(0), payload.amount)
+    else:
+        result = planner.build_plan(candidates, payload.amount, whole_shares=payload.whole_shares)
     return PlanOut(
-        amount_eur=payload.amount,
+        amount_eur=float(payload.amount),
         whole_shares=payload.whole_shares,
         total_before_eur=float(result.total_before),
         leftover_eur=float(result.leftover),
@@ -185,6 +194,7 @@ async def drift(db: Session, user_id: uuid.UUID) -> list[DriftItemOut]:
 def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
     """Stores a plan the server just computed, with its lines, in one transaction."""
     try:
+        lock_user_for_insert(db, user_id)  # two parallel saves cannot both pass the cap
         count = db.query(func.count(ContributionPlan.id)).filter_by(user_id=user_id).scalar()
         if (count or 0) >= MAX_PLANS:
             raise HTTPException(
@@ -219,12 +229,16 @@ def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
             for line in plan.lines
         )
         db.commit()
+    except DataError:  # a number too large for its column (an absurd holding size or price)
+        db.rollback()
+        raise HTTPException(422, "This plan is too large to store.") from None
     except (SQLAlchemyError, HTTPException):
         db.rollback()
         raise
     # Read it back so the answer shows exactly what was stored (the columns round the numbers).
     saved = load(db, user_id, row.id)
-    assert saved is not None
+    if saved is None:
+        raise RuntimeError("A plan that was just saved could not be read back.")
     return saved
 
 
@@ -275,7 +289,6 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
         db.query(ContributionPlan)
         .filter_by(user_id=user_id)
         .order_by(ContributionPlan.id.desc())
-        .limit(MAX_PLANS)
         .all()
     )
     by_plan: dict[int, list[ContributionPlanLine]] = {}

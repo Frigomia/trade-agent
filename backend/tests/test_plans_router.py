@@ -253,3 +253,81 @@ def test_drift_ignores_other_users(client, db_session):
     _holding(db_session, "GOOG", 1, 0.5, user_id=OTHER_USER_ID)
     with _prices(TSLA=50, GOOG=100):
         assert client.get("/plans/drift").json() == []
+
+
+def test_a_held_ticker_without_a_target_takes_the_watchlist_target(client, db_session):
+    _holding(db_session, "NVDA", 10, None)  # 10 x 100 = 1000, no target of its own
+    _holding(db_session, "AAPL", 5, 0.5)  # 1000
+    _watch(db_session, "NVDA", 0.2)
+    with _prices(NVDA=100, AAPL=200):
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert body["total_before_eur"] == 2000  # NVDA counts at its real value, not 0
+    assert all(ln["reason"] != "new_position" for ln in body["lines"])
+    assert not any("no target" in n for n in body["notes"])
+
+
+def test_every_targeted_ticker_unpriced_says_so(client, db_session):
+    _seed_basic(db_session)
+    with _prices():
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert body["lines"] == [] and body["leftover_eur"] == 500
+    assert (
+        "No ticker with a target could be priced right now. Try again in a few minutes."
+        in (body["notes"])
+    )
+    assert not any("has a target weight yet" in n for n in body["notes"])
+
+
+@pytest.mark.parametrize("amount", [100.009, 0.004, 0.001])
+def test_the_amount_must_be_whole_cents(client, amount):
+    assert client.post("/plans/preview", json={"amount": amount}).status_code == 422
+
+
+def test_whole_and_cent_amounts_are_accepted(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        for amount in (500, 500.5, 0.01):
+            body = client.post("/plans/preview", json={"amount": amount})
+            assert body.status_code == 200 and body.json()["amount_eur"] == amount
+
+
+def test_an_overflowing_plan_is_422_on_save_and_still_previews(client, db_session):
+    _holding(db_session, "AAA", 1e11, 0.5)
+    _holding(db_session, "BBB", 1, 0.5)
+    with _prices(AAA=1e9, BBB=100):
+        assert client.post("/plans/preview", json={"amount": 500}).status_code == 200
+        saved = client.post("/plans", json={"amount": 500})
+    assert saved.status_code == 422 and saved.json()["detail"] == "This plan is too large to store."
+    assert db_session.query(ContributionPlan).count() == 0
+
+
+def test_saving_is_rate_limited(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        statuses = [client.post("/plans", json={"amount": 500}).status_code for _ in range(11)]
+    assert statuses[:10] == [201] * 10 and statuses[10] == 429
+
+
+def test_the_export_includes_every_plan(client, db_session):
+    for _ in range(121):
+        db_session.add(
+            ContributionPlan(
+                user_id=USER_ID,
+                amount_eur=1,
+                whole_shares=False,
+                total_before_eur=0,
+                leftover_eur=0,
+                notes=[],
+            )
+        )
+    db_session.commit()
+    assert len(client.get("/me/export").json()["contribution_plans"]) == 121
+
+
+def test_a_drift_holding_without_a_price_is_left_out(client, db_session):
+    _holding(db_session, "AAPL", 5, 0.4)
+    _holding(db_session, "MSFT", 7.5, 0.4)
+    _holding(db_session, "ODD", 1, 0.2)  # no price: not part of the pool
+    with _prices(AAPL=200, MSFT=400):
+        body = client.get("/plans/drift").json()
+    assert [i["ticker"] for i in body] == ["AAPL", "MSFT"]

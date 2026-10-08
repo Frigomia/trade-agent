@@ -183,3 +183,12 @@ def test_an_unusable_price_is_skipped_with_a_note(price):
     assert amounts(plan) == {"OK": D("100.00")}
     assert all(ln.shares > 0 for ln in plan.lines)
     assert any("BAD" in n and "price" in n for n in plan.notes)
+
+
+def test_all_unusable_prices_give_clean_wording():
+    plan = build_plan([cand("BAD", 0, 0.5, price=0), cand("WORSE", 0, 0.5, price=-1)], D("100"))
+    assert plan.lines == [] and plan.leftover == D("100.00")
+    assert plan.notes[-1] == (
+        "Every ticker with a target is excluded or unpriced, so nothing is proposed."
+    )
+    assert not any("TRIM or SELL" in n for n in plan.notes)

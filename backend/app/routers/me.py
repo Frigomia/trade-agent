@@ -127,6 +127,7 @@ def export_data(
                 status=link.status,
                 digest_enabled=link.digest_enabled,
                 moves_enabled=link.moves_enabled,
+                plan_reminder_enabled=link.plan_reminder_enabled,
                 move_threshold_pct=float(link.move_threshold_pct),
             )
             if link is not None
