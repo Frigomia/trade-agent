@@ -77,7 +77,7 @@ All routes require an active user and run through `get_user_db`.
 | --- | --- | --- |
 | GET | `/plans/{id}` | Lines gain `id`, `isin`, `placed_at`, `placed_trade_id`. |
 | PUT | `/portfolio/instruments/{ticker}/isin` | Body `{isin: string \| null}`. Sets or clears the ISIN on whichever of the person's holding and watchlist rows exist for the ticker; 404 when neither exists; 422 for a bad ISIN or check digit. A small dedicated route, because the holdings upsert replaces the whole record. |
-| POST | `/plans/{plan_id}/lines/{line_id}/placed` | Body `{date, shares, price, asset_type}`. In one transaction: finds the line (404 for another person's or a missing line, 409 when already placed); creates the holding when none exists (name from the line, `asset_type` from the body, the 100-holding cap and the insert lock as in the holdings route); applies a BUY through the same code as `POST /portfolio/trades`; stamps `placed_at` and `placed_trade_id`; returns the line. Rate limited like the other writes. |
+| POST | `/plans/{plan_id}/lines/{line_id}/placed` | Body `{date, shares, price, asset_type?}` (`asset_type` is required only when the ticker is not a holding yet; see Rulings). In one transaction: finds the line (404 for another person's or a missing line, 409 when already placed); creates the holding when none exists (name from the line, `asset_type` from the body, the 100-holding cap and the insert lock as in the holdings route); applies a BUY through the same code as `POST /portfolio/trades`; stamps `placed_at` and `placed_trade_id`; returns the line. Rate limited like the other writes. |
 
 Shares and price are validated like `TradeIn` (positive, finite). The trade-logging logic (update shares and
 average cost, write the `trades` row) is extracted from the route into one shared function, so the existing
@@ -124,6 +124,19 @@ runs on the full diff before the pull request.
 - Frontend: the ticket text with and without an ISIN, Copy and Copy all (placed lines omitted), the sheet
   (shares prefilled, price empty, new-position asset type), the status chip after placing, error display
   (409, 422, 429), Add ISIN save and clear, no Buy or Sell wording.
+
+## Rulings
+
+Settled during implementation; they refine the text above.
+
+1. The placed body's `asset_type` is optional: it is required (422) only when the holding does not exist
+   yet. The UI sends it only for a new position.
+2. `GET /plans/{id}` and the export resolve each line's ISIN at read time from the holding (which wins) or
+   the watchlist item for the same ticker; nothing is copied onto the line.
+3. The trade logic lives in `app/trades.py` as `apply_trade(db, user_id, holding, payload) -> Trade`,
+   raising the domain exception `TradeRefused`; it does not commit. `POST /portfolio/trades` converts
+   `TradeRefused` to the same 422 messages as before.
+4. Trades and placements both take the per-person lock (`lock_user_for_insert`), so they serialize.
 
 ## Documentation
 

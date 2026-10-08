@@ -250,6 +250,21 @@ target set, run `python -m app.scheduled notify` through `fly ssh console`. The 
 with the plan line. Remember the per-day marker: if that person already got today's message,
 nothing more is sent.
 
+### Order tickets
+
+Nothing to set up: no secrets, no settings and no Claude key. The migration `e7b2c4d91a35` adds the
+ISIN columns and the placed fields; it runs with the usual release command.
+
+Tickets are text the person copies into their broker. "Placed" does not contact a broker. It records
+that the person placed the order: it creates the holding if the ticker is new, logs a BUY for the
+shares and price the person typed (the fill price in the holding's own currency, never the plan's EUR
+price), and marks the line placed. It takes the same per-person lock as the trade log.
+
+There is no undo. To fix a mistaken "Placed" (wrong price or shares, or the order was never placed),
+log a SELL for the same shares in the trade log. The line stays marked placed. Deleting a plan keeps
+the trades its lines logged. The ISIN is set from the ticket's "Add ISIN" field, and a holding save
+never changes it.
+
 ### Fly
 
 1. `fly apps create <app-name>`.
