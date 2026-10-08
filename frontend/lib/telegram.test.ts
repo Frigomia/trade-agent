@@ -28,6 +28,7 @@ const unlinked: TelegramStatus = {
   status: null,
   digest_enabled: true,
   moves_enabled: true,
+  plan_reminder_enabled: true,
   move_threshold_pct: 5,
   bot_username: "trade_bot",
 };

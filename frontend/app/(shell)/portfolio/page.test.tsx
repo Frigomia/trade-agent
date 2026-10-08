@@ -79,7 +79,7 @@ const SUMMARY: PortfolioSummary = {
       weight: null,
     },
   ],
-  watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, current_price: 702.4 }],
+  watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, target_weight: null, current_price: 702.4 }],
   total_market_value: 3900,
   total_cost_basis: 3500,
   total_pl: 400,

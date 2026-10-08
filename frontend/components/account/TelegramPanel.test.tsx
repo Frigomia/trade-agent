@@ -37,6 +37,7 @@ const base: TelegramStatus = {
   status: null,
   digest_enabled: true,
   moves_enabled: false,
+  plan_reminder_enabled: true,
   move_threshold_pct: 5,
   bot_username: "trade_bot",
 };

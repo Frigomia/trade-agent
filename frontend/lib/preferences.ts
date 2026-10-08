@@ -11,6 +11,8 @@ export interface Preferences {
   sector_avoid_list: string[];
   notes: string | null;
   auto_analysis: boolean;
+  monthly_contribution: number | null; // send null to clear
+  drift_threshold_pct: number;
   auto_analysis_paused: AutoAnalysisPaused | null; // only set while auto_analysis is on
 }
 

@@ -21,6 +21,7 @@ export interface WatchlistSummary {
   ticker: string;
   asset_type: AssetType;
   note: string | null;
+  target_weight: number | null; // fraction 0..1
   current_price: number | null;
 }
 
