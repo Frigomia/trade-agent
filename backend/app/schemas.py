@@ -292,6 +292,46 @@ class TelegramExportOut(BaseModel):
     move_threshold_pct: float
 
 
+class PlanIn(BaseModel):
+    amount: float = Field(gt=0, le=1_000_000)
+    whole_shares: bool = False
+
+
+class PlanLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ticker: str
+    name: str
+    amount_eur: float
+    shares: float
+    price_eur: float
+    currency: str
+    rate: float
+    weight_before: float | None
+    weight_after: float | None
+    reason: str
+    reason_text: str = ""
+
+
+class PlanOut(BaseModel):
+    id: int | None = None
+    created_at: datetime | None = None
+    amount_eur: float
+    whole_shares: bool
+    total_before_eur: float
+    leftover_eur: float
+    lines: list[PlanLineOut]
+    notes: list[str]
+    disclaimer: str = "Advisory only. Nothing is sent to a broker."
+
+
+class PlanSummaryOut(BaseModel):
+    id: int
+    created_at: datetime
+    amount_eur: float
+    line_count: int
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]
@@ -303,6 +343,7 @@ class ExportOut(BaseModel):
     investment_preferences: PreferencesOut | None
     portfolio_snapshots: list[PortfolioSnapshotOut]
     telegram: TelegramExportOut | None = None
+    contribution_plans: list[PlanOut] = Field(default_factory=list)
 
 
 class UsageDetail(BaseModel):

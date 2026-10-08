@@ -28,6 +28,7 @@ from app.routers import (
     market,
     me,
     memory,
+    plans,
     portfolio,
     preferences,
 )
@@ -68,6 +69,7 @@ app.include_router(analysis.router)
 app.include_router(backtest.router)
 app.include_router(memory.router)
 app.include_router(chat.router)
+app.include_router(plans.router)
 app.include_router(preferences.router)
 app.include_router(claude_key.router)
 app.include_router(telegram_routes.router)
