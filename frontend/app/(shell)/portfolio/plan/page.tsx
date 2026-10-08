@@ -23,6 +23,50 @@ const STEPS = [
   "Come back here and press Make plan.",
 ];
 
+// The approved design's segmented control: a bordered pill track, the chosen tab filled with the accent tint.
+const SEGMENTED = {
+  mb: 1.75,
+  maxWidth: 360,
+  minHeight: 0,
+  p: "3px",
+  border: "1px solid var(--line2)",
+  borderRadius: "12px",
+  "& .MuiTabs-flexContainer": { gap: 0 },
+  "& .MuiTab-root": {
+    minHeight: 0,
+    py: 1,
+    px: 1.5,
+    borderRadius: "9px",
+    fontSize: 13,
+    fontWeight: 500,
+    textTransform: "none",
+    color: "var(--muted)",
+    "&.Mui-selected": { bgcolor: "var(--up-bg)", color: "var(--accent)", fontWeight: 650 },
+    "&.Mui-focusVisible": { outline: "2px solid var(--accent)", outlineOffset: 1 },
+  },
+} as const;
+
+const stepBadge = {
+  display: "flex",
+  gap: 1.5,
+  alignItems: "flex-start",
+  fontSize: 14,
+  "&::before": {
+    counterIncrement: "step",
+    content: "counter(step)",
+    flex: "none",
+    width: 24,
+    height: 24,
+    borderRadius: "50%",
+    display: "grid",
+    placeItems: "center",
+    fontSize: 12,
+    fontWeight: 650,
+    bgcolor: "var(--up-bg)",
+    color: "var(--accent)",
+  },
+} as const;
+
 function hasTargets(summary: PortfolioSummary): boolean {
   return (
     summary.holdings.some((h) => (h.target_weight ?? 0) > 0) ||
@@ -40,9 +84,14 @@ function NoTargets() {
         The plan shares your money out by the weight you want each holding or watchlist ticker to have. Nothing has a
         target yet.
       </Typography>
-      <Box component="ol" sx={{ m: 0, pl: 3, display: "flex", flexDirection: "column", gap: 1, color: "var(--text2)" }}>
+      <Box
+        component="ol"
+        sx={{ m: 0, p: 0, listStyle: "none", counterReset: "step", display: "flex", flexDirection: "column", gap: 1, color: "var(--text2)" }}
+      >
         {STEPS.map((step) => (
-          <li key={step}>{step}</li>
+          <Box component="li" key={step} sx={stepBadge}>
+            {step}
+          </Box>
         ))}
       </Box>
       <Box>
@@ -157,8 +206,9 @@ export default function PlanPage() {
       <Tabs
         value={tab}
         onChange={(_, next: number) => setTab(next)}
-        sx={{ mb: 1.75, maxWidth: 360 }}
+        sx={SEGMENTED}
         variant="fullWidth"
+        slotProps={{ indicator: { sx: { display: "none" } } }}
       >
         <Tab label="This month" id="plan-tab-0" aria-controls="plan-panel-0" />
         <Tab label="Saved plans" id="plan-tab-1" aria-controls="plan-panel-1" />
