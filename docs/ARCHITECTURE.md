@@ -387,7 +387,10 @@ plan response and screen carries "Advisory only. Nothing is sent to a broker."
 
 **What is priced.** Only the person's open holdings and watchlist items that have a target weight
 above 0 (a holding with a target of 0 counts as having none). That is never more than the 100 holdings
-and 100 watchlist items a person can have; there is no further ticker cap. The per-ticker quote and currency lookups run 8 at a time (quotes are cached by the quote source, currencies for 24 hours in Redis); the exchange-rate lookups, one per currency (at most 13), run together afterwards.
+and 100 watchlist items a person can have; there is no further ticker cap.
+The per-ticker quote and currency lookups run 8 at a time (quotes are cached by the quote source,
+currencies for 24 hours in Redis); the exchange-rate lookups, one per currency (at most 13), run
+together afterwards.
 
 **Currency.** The quote source tells each ticker's currency. The supported list is fixed: EUR, USD,
 GBP, GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN. A rate comes from a fixed table of Yahoo

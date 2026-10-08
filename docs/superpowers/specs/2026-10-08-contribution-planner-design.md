@@ -90,7 +90,7 @@ All routes require an active user and run through `get_user_db`.
 (ticker, name, amount in EUR, shares, price in EUR, currency, rate, weight before, weight after, reason code
 and text: `underweight`, `favoured`, `new position`, `remainder`), the notes (skipped tickers with the
 reason: no price, no currency, no rate, excluded by a TRIM or SELL call, no target), the total, the leftover and
-the "Advisory only" line. The holdings and watchlist `POST` routes accept `target_weight` (omitted keeps the saved value, an explicit `null` clears it).
+the "Advisory only" line. The holdings and watchlist `POST` routes accept `target_weight`. On the watchlist upsert an omitted value keeps the saved one and an explicit `null` clears it; the holdings upsert replaces the whole record, so an omitted `target_weight` resets it to null (the holding form always sends the full record).
 Preferences gain `monthly_contribution` (nullable) and `drift_threshold_pct` (default 5, range 1 to 50).
 
 ## Data change

@@ -114,7 +114,7 @@ human Python reviewer here, so these three commands are the review.
 
 ## Testing
 
-- Unit test `analysis/fundamental.py`, `technical.py`, `planner.py`,
+- Unit test `analysis/fundamental.py`, `technical.py`, `app/planner.py`,
   `recommend.py` — pure functions, no mocking, highest-value tests here
 - Mock the Anthropic client and `yfinance` in any test touching `agents/`
   or `market_data.py` — never call real external APIs in tests
