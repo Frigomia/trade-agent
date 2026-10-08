@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { apiFetch } from "@/lib/api/client";
-import { toTime } from "@/components/portfolio/PortfolioChart";
+import { toTime } from "@/lib/format";
 
 export interface PlanRequest {
   amount: number;
@@ -53,12 +53,29 @@ export interface DriftItem {
 export const DISCLAIMER = "Advisory only. Nothing is sent to a broker.";
 export const AMOUNT_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimals at most.";
 
-/** The backend's bounds: more than 0, at most 1,000,000, two decimals at most. null when invalid. */
+/** The backend's bounds: at least 0.01, at most 1,000,000, two decimals at most. null when invalid. */
 export function parseAmount(raw: string): number | null {
   const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
   if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
   const n = Number(text);
-  return n > 0 && n <= 1_000_000 ? n : null;
+  return n >= 0.01 && n <= 1_000_000 ? n : null;
+}
+
+/** "1 USD = 0.9259 EUR" (four significant digits); pence are "1 penny = 0.0118 EUR". */
+export function formatRate(currency: string, rate: number): string {
+  const value = rate.toLocaleString("en-US", { maximumSignificantDigits: 4, maximumFractionDigits: 20 });
+  const unit = currency === "GBp" || currency === "GBX" ? "penny" : currency;
+  return `1 ${unit} = ${value} EUR`;
+}
+
+/** True when the saved plan has other tickers or other amounts than the one that was previewed. */
+export function plansDiffer(a: Plan, b: Plan): boolean {
+  const key = (p: Plan) =>
+    p.lines
+      .map((l) => `${l.ticker}:${l.amount_eur}`)
+      .sort()
+      .join("|");
+  return key(a) !== key(b);
 }
 
 // The backend stores naive UTC timestamps; toTime reads them as UTC, as the portfolio chart does.

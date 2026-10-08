@@ -17,7 +17,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { usePlans, useDrift, previewPlan, parseAmount, planMonth, type Plan } from "./plans";
+import { usePlans, useDrift, previewPlan, parseAmount, planMonth, formatRate, type Plan } from "./plans";
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(SWRConfig, { value: { provider: () => new Map(), dedupingInterval: 0 } }, children);
@@ -166,9 +166,19 @@ describe("parseAmount", () => {
     expect(parseAmount("500")).toBe(500);
     expect(parseAmount(" 235,29 ")).toBe(235.29);
     expect(parseAmount("1000000")).toBe(1_000_000);
-    for (const bad of ["", "0", "0.00", "-5", "1000000.01", "1.234", "abc", "1e3"]) {
+    expect(parseAmount("0.01")).toBe(0.01);
+    for (const bad of ["", "0", "0.00", "0.001", "-5", "1000000.01", "1.234", "abc", "1e3"]) {
       expect(parseAmount(bad)).toBeNull();
     }
+  });
+});
+
+describe("formatRate", () => {
+  it("uses four significant digits and no raw floats", () => {
+    expect(formatRate("USD", 0.9259259259259259)).toBe("1 USD = 0.9259 EUR");
+    expect(formatRate("GBp", 0.011764705882352941)).toBe("1 penny = 0.01176 EUR");
+    expect(formatRate("GBX", 0.0118)).toBe("1 penny = 0.0118 EUR");
+    expect(formatRate("JPY", 0.00601)).toBe("1 JPY = 0.00601 EUR");
   });
 });
 

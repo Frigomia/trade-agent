@@ -3,7 +3,7 @@ import { Box, Typography } from "@mui/material";
 import { AlertTriangle } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
-import type { Plan, PlanLine } from "@/lib/plans";
+import { formatRate, type Plan, type PlanLine } from "@/lib/plans";
 
 const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
@@ -72,7 +72,7 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
         {line.currency !== "EUR" && (
           <>
             <br />
-            {line.currency} at {line.rate}
+            {formatRate(line.currency, line.rate)}
           </>
         )}
       </Box>
@@ -103,14 +103,17 @@ export function PlanNotes({ notes }: { notes: string[] }) {
 }
 
 function NothingToFund({ plan }: { plan: Plan }) {
+  const wholeSharesTooSmall = plan.whole_shares && plan.notes.some((n) => n.includes("less than one share"));
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
       <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650 }}>
         Nothing to fund this month
       </Typography>
       <Typography sx={{ color: "var(--text2)" }}>
-        Every ticker with a target is left out, so the plan proposes nothing. Your{" "}
-        {formatAmount(plan.amount_eur)} EUR stays with you.
+        {wholeSharesTooSmall
+          ? "This amount is not enough for one whole share of the tickers with a target. Turn off Whole shares only or raise the amount."
+          : "Every ticker with a target is left out, so the plan proposes nothing."}{" "}
+        Your {formatAmount(plan.amount_eur)} EUR stays with you.
       </Typography>
       <PlanNotes notes={plan.notes} />
       <Typography sx={muted}>

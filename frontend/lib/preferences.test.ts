@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { addSector, MAX_SECTORS, SECTOR_MAX_LENGTH } from "./preferences";
+import { addSector, parseContribution, MAX_SECTORS, SECTOR_MAX_LENGTH } from "./preferences";
+
+describe("parseContribution", () => {
+  it("accepts 0.01 to 1,000,000 with two decimals, empty clears", () => {
+    expect(parseContribution("0.01")).toBe(0.01);
+    expect(parseContribution("1,000,000")).toBe("invalid");
+    expect(parseContribution("1000000")).toBe(1_000_000);
+    expect(parseContribution("  ")).toBeNull();
+    for (const bad of ["0", "0.001", "0.005", "1000000.01", "x"]) expect(parseContribution(bad)).toBe("invalid");
+  });
+});
 
 describe("addSector", () => {
   it("trims and appends", () => {

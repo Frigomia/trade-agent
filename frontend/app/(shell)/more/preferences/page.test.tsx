@@ -295,15 +295,16 @@ describe("PreferencesPage", () => {
       expect("drift_threshold_pct" in body()).toBe(false);
     });
 
-    it.each(["0", "0.5", "0.01", "1000000.01", "12.345", "abc", "-5"])("rejects the amount %j with no request", async (v) => {
+    it.each(["0", "0.001", "0.005", "1000000.01", "12.345", "abc", "-5"])("rejects the amount %j with no request", async (v) => {
       renderFresh();
       fireEvent.change(await amount(), { target: { value: v } });
       save();
-      expect(await screen.findByText(/1 to 1,000,000/)).toBeInTheDocument();
+      expect(await screen.findByText(/0.01 to 1,000,000/)).toBeInTheDocument();
       expect(posts()).toHaveLength(0);
     });
 
     it.each([
+      ["0.01", 0.01],
       ["1", 1],
       ["1000000", 1000000],
     ])("accepts the amount %j", async (v, num) => {
@@ -351,7 +352,7 @@ describe("PreferencesPage", () => {
       fireEvent.change(await amount(), { target: { value: v } });
       save();
       if (want === "bad") {
-        expect(await screen.findByText(/1 to 1,000,000/)).toBeInTheDocument();
+        expect(await screen.findByText(/0.01 to 1,000,000/)).toBeInTheDocument();
         expect(posts()).toHaveLength(0);
       } else {
         await waitFor(() => expect(posts()).toHaveLength(1));
@@ -362,10 +363,10 @@ describe("PreferencesPage", () => {
     it("describes the field by its helper and announces the error", async () => {
       renderFresh();
       const field = await amount();
-      expect(field).toHaveAccessibleDescription(/EUR, 1 to 1,000,000/);
+      expect(field).toHaveAccessibleDescription(/EUR, 0.01 to 1,000,000/);
       fireEvent.change(field, { target: { value: "0" } });
       save();
-      expect(await screen.findByRole("alert")).toHaveTextContent(/1 to 1,000,000/);
+      expect(await screen.findByRole("alert")).toHaveTextContent(/0.01 to 1,000,000/);
       expect(field).toHaveAccessibleDescription(/two decimals at most/);
       expect(field).toHaveAttribute("aria-invalid", "true");
       const d = await drift();
@@ -422,6 +423,44 @@ describe("PreferencesPage", () => {
         await waitFor(() => expect(posts()).toHaveLength(2));
         expect("monthly_contribution" in JSON.parse(posts()[1][1].body)).toBe(false);
       });
+    });
+
+    it("stays dirty when the save fails", async () => {
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") throw new FakeApiError(500, "boom");
+        return LOADED;
+      });
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "300" } });
+      save();
+      expect(await screen.findByText("boom")).toBeInTheDocument();
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
+    });
+
+    it("is not dirty after an edit is reverted", async () => {
+      renderFresh();
+      const field = await amount();
+      fireEvent.change(field, { target: { value: "300" } });
+      expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+      fireEvent.change(field, { target: { value: "" } });
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+    });
+
+    it("stays clean after a save when the page revalidates", async () => {
+      let server: Record<string, unknown> = { ...LOADED };
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
+        return server;
+      });
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: "300" } });
+      save();
+      await screen.findByText(/^saved$/i);
+      fireEvent.focus(window);
+      await waitFor(() => expect(apiFetch.mock.calls.filter((c) => !c[1]).length).toBeGreaterThan(1));
+      expect(screen.queryByText("Unsaved changes")).not.toBeInTheDocument();
+      expect(await amount()).toHaveValue("300");
     });
 
     it("Discard restores both fields", async () => {

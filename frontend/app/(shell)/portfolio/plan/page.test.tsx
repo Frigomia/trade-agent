@@ -219,6 +219,42 @@ describe("Plan page", () => {
     expect(screen.getByText("Add 312.04 EUR")).toBeVisible();
   });
 
+  it("shows the exchange rate with four significant digits", async () => {
+    await makePlan();
+    expect(screen.getByText(/1 USD = 0\.9226 EUR/)).toBeInTheDocument();
+  });
+
+  it("says when the saved plan differs from the preview because prices were refreshed", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/plans" && init?.method === "POST"
+        ? Promise.resolve({ ...SAVED, lines: SAVED.lines.map((l) => ({ ...l, amount_eur: l.amount_eur + 1 })) })
+        : base(path, init),
+    );
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    expect(await screen.findByText("Prices were refreshed when saving; this is the plan that was saved.")).toBeInTheDocument();
+  });
+
+  it("says nothing extra when the saved plan matches the preview", async () => {
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    await screen.findByText(/Saved 8 Oct 2026/);
+    expect(screen.queryByText(/Prices were refreshed/)).not.toBeInTheDocument();
+  });
+
+  it("explains that the amount is too small for one whole share", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/plans/preview"
+        ? Promise.resolve({ ...PLAN, whole_shares: true, lines: [], leftover_eur: 500, notes: ["MSFT: 40.00 EUR is less than one share (392.18 EUR)."] })
+        : base(path, init),
+    );
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: "Make plan" }));
+    expect(await screen.findByText(/not enough for one whole share of the tickers with a target/)).toBeInTheDocument();
+  });
+
   it("shows how to set targets when nothing has one", async () => {
     setup({ summary: { holdings: [{ ...HOLDING, target_weight: null }], watchlist: [] } });
     renderFresh();

@@ -13,6 +13,14 @@ describe("target weight conversion", () => {
     expect(percentTextToFraction("0")).toBe(0);
     expect(percentTextToFraction("  ")).toBeNull();
   });
+  it("converts without float noise", () => {
+    expect(percentTextToFraction("7")).toBe(0.07);
+    expect(percentTextToFraction("29")).toBe(0.29);
+    expect(percentTextToFraction("33.33")).toBe(0.3333);
+    expect(fractionToPercentText(0.07)).toBe("7");
+    expect(fractionToPercentText(0.29)).toBe("29");
+    expect(fractionToPercentText(0.3333)).toBe("33.33");
+  });
   it("rejects out of range and too many decimals", () => {
     for (const bad of ["100.01", "-1", "abc", "1.234"]) expect(percentTextToFraction(bad)).toBeUndefined();
   });

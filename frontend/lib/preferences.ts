@@ -38,7 +38,7 @@ export function addSector(list: string[], raw: string): string[] {
   return [...list, sector];
 }
 
-export const CONTRIBUTION_ERROR = "Enter an amount from 1 to 1,000,000, two decimals at most, or leave it empty.";
+export const CONTRIBUTION_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimals at most, or leave it empty.";
 export const DRIFT_ERROR = "Enter a number from 1 to 50, one decimal at most.";
 
 function parseBounded(raw: string, decimals: number, min: number, max: number): number | null {
@@ -48,10 +48,10 @@ function parseBounded(raw: string, decimals: number, min: number, max: number): 
   return n >= min && n <= max ? n : null;
 }
 
-/** Empty clears the saved amount (null); "invalid" is anything outside 1 to 1,000,000 with two decimals. */
+/** Empty clears the saved amount (null); "invalid" is anything outside 0.01 to 1,000,000 with two decimals. */
 export function parseContribution(raw: string): number | null | "invalid" {
   if (raw.trim() === "") return null;
-  return parseBounded(raw, 2, 1, 1_000_000) ?? "invalid";
+  return parseBounded(raw, 2, 0.01, 1_000_000) ?? "invalid";
 }
 
 /** The drift threshold has no "clear": null would be ignored by the backend, so it is invalid here. */

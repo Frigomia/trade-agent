@@ -177,7 +177,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
                 setAmount(e.target.value);
                 setAmountError(false);
               }}
-              helperText={amountError ? CONTRIBUTION_ERROR : "EUR, 1 to 1,000,000. Leave empty for none."}
+              helperText={amountError ? CONTRIBUTION_ERROR : "EUR, 0.01 to 1,000,000. Leave empty for none."}
               slotProps={{
                 inputLabel: { shrink: true },
                 formHelperText: { role: amountError ? "alert" : undefined },

@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import { Box, Chip, Typography } from "@mui/material";
 import type { Snapshot } from "@/lib/api/portfolio-types";
+import { toTime } from "@/lib/format";
 
 const RANGES = [
   { label: "1W", days: 7 },
@@ -13,10 +14,7 @@ const RANGES = [
 ] as const;
 type RangeLabel = (typeof RANGES)[number]["label"];
 
-// The API returns naive UTC timestamps; Date.parse would otherwise read them as local time.
-export function toTime(iso: string): number {
-  return Date.parse(/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : `${iso}Z`);
-}
+export { toTime };
 
 // One point per UTC day (the day's last snapshot), oldest first.
 export function collapseByDay(snapshots: Snapshot[]): Snapshot[] {

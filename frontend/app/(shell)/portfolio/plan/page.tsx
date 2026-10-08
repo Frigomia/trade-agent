@@ -8,7 +8,7 @@ import { ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import { formatAmount } from "@/lib/format";
-import { AMOUNT_ERROR, DISCLAIMER, parseAmount, planSavedAt, previewPlan, usePlans, type Plan } from "@/lib/plans";
+import { AMOUNT_ERROR, DISCLAIMER, parseAmount, planSavedAt, plansDiffer, previewPlan, usePlans, type Plan } from "@/lib/plans";
 import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 import { PlanForm } from "@/components/plan/PlanForm";
@@ -60,6 +60,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
   const [amount, setAmount] = useState(initialAmount !== null ? initialAmount.toFixed(2) : "");
   const [wholeShares, setWholeShares] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [refreshed, setRefreshed] = useState(false);
   const make = useAction();
   const saving = useAction();
 
@@ -73,6 +74,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
     void make.run(async () => {
       const next = await previewPlan({ amount: value, whole_shares: whole });
       setPlan(next);
+      setRefreshed(false);
       setWholeShares(next.whole_shares);
     });
   }
@@ -95,9 +97,11 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
         variant="contained"
         disabled={stale || saving.submitting || make.submitting}
         onClick={() =>
-          void saving.run(async () =>
-            setPlan(await save({ amount: plan.amount_eur, whole_shares: plan.whole_shares })),
-          )
+          void saving.run(async () => {
+            const stored = await save({ amount: plan.amount_eur, whole_shares: plan.whole_shares });
+            setRefreshed(plansDiffer(plan, stored));
+            setPlan(stored);
+          })
         }
       >
         Save plan
@@ -120,6 +124,9 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
         <Typography role="status" sx={{ fontSize: 13, color: "var(--warn)" }}>
           This plan is for {formatAmount(plan.amount_eur)} EUR. Press Make plan to update.
         </Typography>
+      )}
+      {refreshed && plan?.created_at && (
+        <Alert severity="info">Prices were refreshed when saving; this is the plan that was saved.</Alert>
       )}
       {plan && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
