@@ -39,13 +39,7 @@ export function Sidebar({ role }: { role: Role }) {
       {items.map((item) => {
         const Icon = item.icon;
         const on = isActive(pathname, item.href, item.exact);
-        return (
-          <Fragment key={item.href}>
-            {item.section && (
-              <Typography sx={{ fontSize: 12, color: "var(--muted)", px: 1.5, pt: 2, pb: 0.5 }}>
-                {item.section}
-              </Typography>
-            )}
+        const link = (
           <Link
             href={item.href}
             aria-current={on ? "page" : undefined}
@@ -53,18 +47,32 @@ export function Sidebar({ role }: { role: Role }) {
               display: "flex",
               alignItems: "center",
               gap: 10,
-              padding: "10px 12px",
+              padding: item.sub ? "7px 12px" : "10px 12px",
               borderRadius: 12,
-              fontSize: 14,
+              fontSize: item.sub ? 12.5 : 14,
               fontWeight: on ? 600 : 400,
               textDecoration: "none",
               color: on ? "var(--accent)" : "var(--muted)",
               background: on ? "var(--up-bg)" : "transparent",
             }}
           >
-            <Icon size={18} strokeWidth={1.75} />
+            <Icon size={item.sub ? 15 : 18} strokeWidth={1.75} />
             {item.label}
           </Link>
+        );
+        return (
+          <Fragment key={item.href}>
+            {item.section && (
+              <Typography sx={{ fontSize: 12, color: "var(--muted)", px: 1.5, pt: 2, pb: 0.5 }}>
+                {item.section}
+              </Typography>
+            )}
+            {item.sub ? (
+              // Indented under its parent, joined to it by a hairline on the left.
+              <Box sx={{ ml: "13px", pl: "8px", borderLeft: "1px solid var(--line2)" }}>{link}</Box>
+            ) : (
+              link
+            )}
           </Fragment>
         );
       })}

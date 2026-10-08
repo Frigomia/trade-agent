@@ -20,6 +20,10 @@ vi.mock("@/lib/api/client", () => ({
   ApiError: FakeApiError,
 }));
 
+// The view comes from ?tab; a test switches it with view() and a rerender, as a link click would.
+let search = "";
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(search) }));
+
 import PlanPage from "./page";
 
 const DISCLAIMER = "Advisory only. Nothing is sent to a broker.";
@@ -109,12 +113,22 @@ function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } 
   });
 }
 
+let rerenderPage = () => {};
+
 function renderFresh() {
-  return render(
+  const tree = () => (
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
       <PlanPage />
-    </SWRConfig>,
+    </SWRConfig>
   );
+  const result = render(tree());
+  rerenderPage = () => result.rerender(tree());
+  return result;
+}
+
+function view(tab: "month" | "saved") {
+  search = tab === "saved" ? "tab=saved" : "";
+  rerenderPage();
 }
 
 const body = (path: string) =>
@@ -129,7 +143,25 @@ async function makePlan() {
 describe("Plan page", () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    search = "";
     setup();
+  });
+
+  it("titles the page Portfolio and marks the view from ?tab in the strip", async () => {
+    renderFresh();
+    expect(screen.getByRole("heading", { level: 1, name: "Portfolio" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "This month" })).toHaveAttribute("aria-current", "page");
+    view("saved");
+    expect(screen.getByRole("link", { name: "Saved plans" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
+    expect(await screen.findByRole("table", { name: "Saved plans" })).toBeVisible();
+  });
+
+  it("opens straight on Saved plans from a deep link", async () => {
+    search = "tab=saved";
+    renderFresh();
+    expect(await screen.findByRole("table", { name: "Saved plans" })).toBeVisible();
+    expect(screen.queryByRole("link", { name: /Portfolio/ })).not.toBeInTheDocument();
   });
 
   it("prefills the saved monthly amount and validates it", async () => {
@@ -212,10 +244,10 @@ describe("Plan page", () => {
     expect(screen.queryByRole("button", { name: "Save plan" })).not.toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Plan lines" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Saved plans" }));
+    view("saved");
     const history = await screen.findByRole("table", { name: "Saved plans" });
     await waitFor(() => expect(within(history).getAllByRole("row")).toHaveLength(4));
-    fireEvent.click(screen.getByRole("tab", { name: "This month" }));
+    view("month");
     expect(screen.getByText("Add 312.04 EUR")).toBeVisible();
   });
 
@@ -281,7 +313,7 @@ describe("Plan page", () => {
   it("always shows the disclaimer", async () => {
     renderFresh();
     expect(screen.getByText(DISCLAIMER)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Saved plans" }));
+    view("saved");
     expect(screen.getByText(DISCLAIMER)).toBeVisible();
   });
 

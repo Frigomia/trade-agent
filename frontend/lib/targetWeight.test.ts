@@ -1,5 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { fractionToPercentText, percentTextToFraction } from "./targetWeight";
+import { effectiveTarget, fractionToPercentText, percentTextToFraction } from "./targetWeight";
+
+describe("effectiveTarget", () => {
+  const watch = [
+    { ticker: "AAPL", target_weight: 0.05 },
+    { ticker: "MSFT", target_weight: null },
+  ];
+  it("prefers the holding's own target", () => {
+    expect(effectiveTarget({ ticker: "AAPL", target_weight: 0.2 }, watch)).toEqual({ target: 0.2, fromWatchlist: false });
+  });
+  it("falls back to the watchlist target for the same ticker, as the backend does", () => {
+    expect(effectiveTarget({ ticker: "aapl", target_weight: null }, watch)).toEqual({ target: 0.05, fromWatchlist: true });
+    expect(effectiveTarget({ ticker: "AAPL", target_weight: 0 }, watch)).toEqual({ target: 0.05, fromWatchlist: true });
+  });
+  it("is null when neither has a target above 0", () => {
+    expect(effectiveTarget({ ticker: "MSFT", target_weight: null }, watch)).toBeNull();
+    expect(effectiveTarget({ ticker: "KO", target_weight: 0 }, [])).toBeNull();
+  });
+});
 
 describe("target weight conversion", () => {
   it("shows a saved fraction as a percentage", () => {

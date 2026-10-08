@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+
+let pathname = "/today";
+vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
+
 import { TabBar } from "./TabBar";
 
 describe("TabBar", () => {
@@ -19,6 +23,14 @@ describe("TabBar", () => {
   it("shows the Admin tab for an admin role", () => {
     render(<TabBar role="admin" />);
     expect(screen.getByRole("link", { name: /admin/i })).toBeInTheDocument();
+  });
+
+  // The phone bar has no Plan slot: Portfolio stays lit on the plan views.
+  it("keeps Portfolio lit on the plan views", () => {
+    pathname = "/portfolio/plan";
+    render(<TabBar role="user" />);
+    expect(screen.getByRole("link", { name: /portfolio/i })).toHaveAttribute("aria-current", "page");
+    pathname = "/today";
   });
 
   describe("--tabbar-h", () => {

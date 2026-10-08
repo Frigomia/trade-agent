@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Alert, Box, Button, Link as MuiLink, Skeleton, Tab, Tabs, Typography } from "@mui/material";
+import { useSearchParams } from "next/navigation";
+import { Alert, Box, Button, Skeleton, Typography } from "@mui/material";
 import { ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
@@ -15,6 +16,7 @@ import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
 import { PlanHistory } from "@/components/plan/PlanHistory";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { Panel } from "@/components/ui/Panel";
 
 const STEPS = [
@@ -22,29 +24,6 @@ const STEPS = [
   "Fill in Target weight, for example 20% for a fund you want to be a fifth of the portfolio.",
   "Come back here and press Make plan.",
 ];
-
-// The approved design's segmented control: a bordered pill track, the chosen tab filled with the accent tint.
-const SEGMENTED = {
-  mb: 1.75,
-  maxWidth: 360,
-  minHeight: 0,
-  p: "3px",
-  border: "1px solid var(--line2)",
-  borderRadius: "12px",
-  "& .MuiTabs-flexContainer": { gap: 0 },
-  "& .MuiTab-root": {
-    minHeight: 0,
-    py: 1,
-    px: 1.5,
-    borderRadius: "9px",
-    fontSize: 13,
-    fontWeight: 500,
-    textTransform: "none",
-    color: "var(--muted)",
-    "&.Mui-selected": { bgcolor: "var(--up-bg)", color: "var(--accent)", fontWeight: 650 },
-    "&.Mui-focusVisible": { outline: "2px solid var(--accent)", outlineOffset: 1 },
-  },
-} as const;
 
 const stepBadge = {
   display: "flex",
@@ -185,37 +164,19 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
 export default function PlanPage() {
   const { data: prefs, error: prefsError } = useSWR<Preferences>("/preferences", apiFetch);
   const { data: summary, error: summaryError, mutate: retrySummary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
-  const [tab, setTab] = useState(0);
+  // This month and Saved plans are one route; only ?tab changes, which Next does not remount.
+  const saved = useSearchParams().get("tab") === "saved";
 
   // Preferences only prefill the amount: if they fail, the field starts empty.
   const ready = summary !== undefined && (prefs !== undefined || prefsError);
 
   return (
     <Box>
-      <PageHeader
-        title="Plan"
-        subtitle={
-          <>
-            <MuiLink component={Link} href="/portfolio">
-              Portfolio
-            </MuiLink>{" "}
-            / Plan
-          </>
-        }
-      />
-      <Tabs
-        value={tab}
-        onChange={(_, next: number) => setTab(next)}
-        sx={SEGMENTED}
-        variant="fullWidth"
-        slotProps={{ indicator: { sx: { display: "none" } } }}
-      >
-        <Tab label="This month" id="plan-tab-0" aria-controls="plan-panel-0" />
-        <Tab label="Saved plans" id="plan-tab-1" aria-controls="plan-panel-1" />
-      </Tabs>
+      <PageHeader title="Portfolio" />
+      <PortfolioTabs current={saved ? "saved" : "month"} />
 
       {/* Both panels stay mounted, so a preview survives a look at the saved plans. */}
-      <Box role="tabpanel" id="plan-panel-0" aria-labelledby="plan-tab-0" hidden={tab !== 0}>
+      <Box hidden={saved}>
         {/* A failed background revalidation keeps the data on screen; only a first load failure shows. */}
         {summaryError && !summary && (
           <Alert
@@ -233,7 +194,7 @@ export default function PlanPage() {
         {ready && !hasTargets(summary) && <NoTargets />}
         {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} />}
       </Box>
-      <Box role="tabpanel" id="plan-panel-1" aria-labelledby="plan-tab-1" hidden={tab !== 1}>
+      <Box hidden={!saved}>
         <PlanHistory />
       </Box>
 

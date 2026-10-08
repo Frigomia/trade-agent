@@ -127,6 +127,77 @@ describe("PortfolioPage", () => {
     expect(screen.queryByText("Sold Out Co")).not.toBeInTheDocument();
   });
 
+  it("shows the view strip with Holdings current, and no separate plan link", async () => {
+    renderFresh();
+    await screen.findByText("Apple Inc.");
+    expect(screen.getByRole("heading", { level: 1, name: "Portfolio" })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Portfolio views" });
+    expect(within(nav).getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: "This month" })).toHaveAttribute("href", "/portfolio/plan");
+    expect(screen.queryByText(/plan this month's contribution/i)).not.toBeInTheDocument();
+  });
+
+  describe("weight and target", () => {
+    const withTargets = (aapl: number | null, watch: { ticker: string; target_weight: number | null }[]) => () => ({
+      ...SUMMARY,
+      holdings: [{ ...SUMMARY.holdings[0], target_weight: aapl }, SUMMARY.holdings[1]],
+      watchlist: watch.map((w) => ({ ...w, asset_type: "STOCK", note: null, current_price: 1 })),
+    });
+
+    it("shows the holding's own target next to its weight, on desktop and on the phone line", async () => {
+      handlers["GET /portfolio/summary"] = withTargets(0.51, []);
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("10 sh · 51.3% / target 51%");
+      expect(row).toHaveTextContent("51.3% / 51%");
+      expect(within(row).queryByLabelText("from watchlist")).not.toBeInTheDocument();
+      expect(screen.getByText("Weight / Target")).toBeInTheDocument();
+    });
+
+    it("takes the watchlist target when the holding has none, and marks where it comes from", async () => {
+      handlers["GET /portfolio/summary"] = withTargets(null, [{ ticker: "AAPL", target_weight: 0.5 }]);
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("51.3% / 50%");
+      expect(row).toHaveTextContent("/ target 50%");
+      expect(within(row).getByLabelText("from watchlist")).toBeInTheDocument();
+    });
+
+    it("offers Set target when there is no target, which opens the holding form", async () => {
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit MSFT" });
+      expect(row).toHaveTextContent("5 sh · 48.7% · Set target");
+      fireEvent.click(within(row).getAllByText("Set target")[0]);
+      expect(await screen.findByRole("button", { name: /save holding/i })).toBeInTheDocument();
+    });
+
+    it("shows the dash for a holding without a weight", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], weight: null, target_weight: 0.2 }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(row).toHaveTextContent("10 sh · — / target 20%");
+    });
+  });
+
+  it("says an owned watchlist ticker keeps its target on the holding, with no target edit", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      watchlist: [
+        { ticker: "AAPL", asset_type: "STOCK", note: null, target_weight: 0.3, current_price: 200 },
+        { ticker: "ASML", asset_type: "STOCK", note: null, target_weight: 0.05, current_price: 702.4 },
+      ],
+    });
+    renderFresh();
+    expect(await screen.findByText("Owned · target on the holding")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit target for aapl/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove aapl from watchlist/i })).toBeInTheDocument();
+    expect(screen.getByText("Watching · target 5%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
+  });
+
   it("shows an em dash for an unpriced holding and says it isn't in the totals", async () => {
     handlers["GET /portfolio/summary"] = () => ({
       ...SUMMARY,

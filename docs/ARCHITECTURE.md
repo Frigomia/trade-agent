@@ -381,7 +381,9 @@ tickers between holdings and watchlist.
 
 `app/planner.py` (pure arithmetic: `Decimal`, no I/O), `app/fx.py` (currency and EUR conversion),
 `app/plans.py` (loads the rows, prices them, saves and reads plans) and `app/routers/plans.py`. It
-uses no Claude call and needs no key. The page is `/portfolio/plan`. Like everything else it is
+uses no Claude call and needs no key. The page is `/portfolio/plan` ("This month"; `?tab=saved` shows
+Saved plans), reached from the Portfolio view strip (Holdings | This month | Saved plans) and the
+desktop sidebar's Plan sub-item under Portfolio. Like everything else it is
 advice: a plan line says where this month's money could go; nothing is sent to a broker, and every
 plan response and screen carries "Advisory only. Nothing is sent to a broker."
 

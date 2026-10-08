@@ -108,11 +108,13 @@ Preferences gain `monthly_contribution` (nullable) and `drift_threshold_pct` (de
 
 ## The screens
 
-- **Plan** (new page at `/portfolio/plan`, reached from the portfolio screen and from the Today card and reminder): the amount field
+- **Plan** (new page at `/portfolio/plan`, reached from the Portfolio view strip "Holdings | This month | Saved plans",
+  from the desktop sidebar's Plan sub-item under Portfolio, and from the Today card and reminder; the title stays
+  "Portfolio" and the phone tab bar keeps Portfolio lit): the amount field
   pre-filled with the saved monthly amount, a "Whole shares only" switch, and the lines as a list with euro
   amount, approximate shares, weight before and after; notes under it (skipped tickers and why); a "Save plan"
   button; "Advisory only. Nothing is sent to a broker." The saved monthly amount is edited in Preferences, which the Plan page links to.
-- **History** (a tab or section on the Plan page): saved plans by month with their lines; opening one shows it as
+- **History** (the "Saved plans" view, `/portfolio/plan?tab=saved`; the This month preview survives switching): saved plans by month with their lines; opening one shows it as
   saved, with the prices and rates of that day.
 - **Today drift card:** shown only when `GET /plans/drift` returns something: "AAPL is 7.2 points above its
   target, NVDA 6.1 below" with a link to the Plan page.

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import NextLink from "next/link";
 import useSWR from "swr";
 import {
   Alert,
@@ -13,7 +12,6 @@ import {
   DialogContent,
   DialogContentText,
   IconButton,
-  Link as MuiLink,
   TextField,
   Tooltip,
   Typography,
@@ -35,14 +33,15 @@ import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
 import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
-import { fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
+import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 
 const DASH = "—";
-const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr" };
+const COLUMNS = { xs: "1fr auto", md: "1.6fr .6fr .8fr .8fr .9fr 1fr 1fr" };
 // The watch icon sits outside the row's edit button (a button cannot hold a button), in its own
 // column; the header leaves the same room so the other columns stay lined up.
 const WATCH_COL = 44;
@@ -60,13 +59,69 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+type Target = ReturnType<typeof effectiveTarget>;
+
+const pctText = (fraction: number) => `${(fraction * 100).toFixed(1)}%`;
+const targetText = (fraction: number) => `${fractionToPercentText(fraction)}%`;
+
+// Inside the row's edit button, so it is text, not a second button: a tap opens the same holding form.
+function SetTarget() {
+  return (
+    <Box
+      component="span"
+      sx={{ color: "var(--muted)", textDecoration: "underline dotted", textUnderlineOffset: "3px" }}
+    >
+      Set target
+    </Box>
+  );
+}
+
+/** "51.7% / 51%" over a slim bar with a tick at the target; `scale` is the table's largest weight or target. */
+function WeightCell({ weight, target, scale }: { weight: number | null; target: Target; scale: number }) {
+  const at = (fraction: number) => `${Math.min(100, (fraction / scale) * 100)}%`;
+  return (
+    <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
+      <Typography component="span" sx={{ fontSize: "inherit" }}>
+        <b>{weight !== null ? pctText(weight) : DASH}</b>
+        {target ? (
+          <Box
+            component="span"
+            title={target.fromWatchlist ? "Target from the watchlist" : undefined}
+            sx={{ color: "var(--muted)" }}
+          >
+            {" / "}
+            {targetText(target.target)}
+            {target.fromWatchlist && (
+              <Eye size={11} role="img" aria-label="from watchlist" style={{ marginLeft: 3, verticalAlign: "-1px" }} />
+            )}
+          </Box>
+        ) : (
+          <Box component="span" sx={{ display: "block", fontSize: 12.5 }}>
+            <SetTarget />
+          </Box>
+        )}
+      </Typography>
+      {target && weight !== null && (
+        <Box aria-hidden sx={{ position: "relative", width: "100%", height: 6, borderRadius: 999, bgcolor: "var(--track)" }}>
+          <Box sx={{ width: at(weight), height: "100%", borderRadius: 999, bgcolor: "var(--accent-solid)" }} />
+          <Box sx={{ position: "absolute", left: at(target.target), top: -3, bottom: -3, width: 2, ml: "-1px", bgcolor: "var(--text)" }} />
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 function HoldingRow({
   holding,
+  target,
+  scale,
   watched,
   onEdit,
   onWatch,
 }: {
   holding: HoldingSummary;
+  target: Target;
+  scale: number;
   watched: boolean;
   onEdit: () => void;
   onWatch: () => void;
@@ -97,8 +152,8 @@ function HoldingRow({
         <Typography sx={{ fontWeight: 600 }}>{holding.ticker}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{holding.name}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", display: { md: "none" } }}>
-          {holding.shares} sh
-          {holding.weight !== null ? ` · ${(holding.weight * 100).toFixed(1)}%` : ""}
+          {holding.shares} sh · {holding.weight !== null ? pctText(holding.weight) : DASH}
+          {target ? ` / target ${targetText(target.target)}` : <> · <SetTarget /></>}
         </Typography>
       </Box>
       <Typography sx={cell}>{holding.shares}</Typography>
@@ -112,6 +167,7 @@ function HoldingRow({
       </Box>
       <Typography sx={{ ...cell, fontWeight: 600 }}>{value}</Typography>
       <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
+      <WeightCell weight={holding.weight} target={target} scale={scale} />
     </ButtonBase>
     <Tooltip title={watched ? "On your watchlist" : "Add to watchlist"}>
       {/* A span, so the tooltip still shows on the disabled button. */}
@@ -155,6 +211,12 @@ export default function PortfolioPage() {
   const open = holdings.filter((h) => h.shares > 0);
   // Nothing owned and nothing watched yet: the watchlist panel is the "or" next to the first-holding form.
   const justWatching = summary !== undefined && open.length === 0 && summary.watchlist.length === 0;
+  const watchlist = summary?.watchlist ?? [];
+  const targets = new Map(open.map((h) => [h.ticker, effectiveTarget(h, watchlist)]));
+  // The weight bars share one scale, the largest weight or target in the table, so they compare.
+  const scale = Math.max(0.01, ...open.map((h) => Math.max(h.weight ?? 0, targets.get(h.ticker)?.target ?? 0)));
+  // A ticker you own keeps its target on the holding, so its watchlist row offers no target edit.
+  const owned = new Set(open.map((h) => h.ticker.toUpperCase()));
 
   const recordSnapshot = () =>
     snapshot.run(async () => {
@@ -203,11 +265,6 @@ export default function PortfolioPage() {
     <Box>
       <PageHeader
         title="Portfolio"
-        subtitle={
-          <MuiLink component={NextLink} href="/portfolio/plan">
-            Plan this month&apos;s contribution
-          </MuiLink>
-        }
         actions={
           <>
         <Button
@@ -235,6 +292,7 @@ export default function PortfolioPage() {
           </>
         }
       />
+      <PortfolioTabs current="holdings" />
 
       {summaryError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -306,11 +364,14 @@ export default function PortfolioPage() {
             <span>Price</span>
             <span>Value</span>
             <span>P/L</span>
+            <span>Weight / Target</span>
           </Box>
           {open.map((holding) => (
             <HoldingRow
               key={holding.ticker}
               holding={holding}
+              target={targets.get(holding.ticker) ?? null}
+              scale={scale}
               watched={watched.has(holding.ticker.toUpperCase())}
               onEdit={() => setHoldingForm({ open: true, holding })}
               onWatch={() => void addToWatchlist(holding.ticker, holding.asset_type)}
@@ -328,7 +389,9 @@ export default function PortfolioPage() {
             Follow a stock or ETF you don&apos;t own yet.
           </Typography>
         )}
-        {(summary?.watchlist ?? []).map((item) => (
+        {watchlist.map((item) => {
+          const isOwned = owned.has(item.ticker.toUpperCase());
+          return (
           <Box
             key={item.ticker}
             sx={{ display: "flex", alignItems: "center", py: 1, borderBottom: "1px solid var(--line)" }}
@@ -336,21 +399,32 @@ export default function PortfolioPage() {
             <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontWeight: 600 }}>{item.ticker}</Typography>
               <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
-                {item.note ?? "Watching"}
-                {item.target_weight != null && ` · target ${fractionToPercentText(item.target_weight)}%`}
+                {isOwned ? (
+                  "Owned · target on the holding"
+                ) : (
+                  <>
+                    {item.note ?? "Watching"}
+                    {item.target_weight != null && ` · target ${targetText(item.target_weight)}`}
+                  </>
+                )}
               </Typography>
             </Box>
             <Typography>
               {item.current_price !== null ? formatAmount(item.current_price) : DASH}
             </Typography>
-            <IconButton
-              size="small"
-              aria-label={`Edit target for ${item.ticker}`}
-              onClick={() => setEditingTarget(item)}
-              sx={{ ml: 0.5, color: "var(--muted)" }}
-            >
-              <Pencil size={15} />
-            </IconButton>
+            {isOwned ? (
+              // Keeps the price lined up with the rows that have a pencil.
+              <Box sx={{ ml: 0.5, width: 25, flex: "none" }} />
+            ) : (
+              <IconButton
+                size="small"
+                aria-label={`Edit target for ${item.ticker}`}
+                onClick={() => setEditingTarget(item)}
+                sx={{ ml: 0.5, color: "var(--muted)" }}
+              >
+                <Pencil size={15} />
+              </IconButton>
+            )}
             <IconButton
               size="small"
               aria-label={`Remove ${item.ticker} from watchlist`}
@@ -364,7 +438,8 @@ export default function PortfolioPage() {
               <X size={16} />
             </IconButton>
           </Box>
-        ))}
+          );
+        })}
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: 1, mt: 1.5 }}>
           <Box sx={{ flex: "1 1 120px", minWidth: 0 }}>
             <TickerPicker
