@@ -56,6 +56,8 @@ const PLAN: Plan = {
       isin: null,
       placed_at: null,
       placed_trade_id: null,
+      placed_shares: null,
+      placed_price: null,
       ticker: "MSFT",
       name: "Microsoft",
       amount_eur: 312.04,
@@ -73,6 +75,8 @@ const PLAN: Plan = {
       isin: null,
       placed_at: null,
       placed_trade_id: null,
+      placed_shares: null,
+      placed_price: null,
       ticker: "SAP",
       name: "SAP SE",
       amount_eur: 187.96,
@@ -291,6 +295,31 @@ describe("Plan page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
     expect(await screen.findByText(/SAP SE · ISIN DE0007164600 · about 0.817 shares/)).toBeInTheDocument();
     expect(screen.getByText(/Saved 8 Oct 2026/)).toBeInTheDocument();
+  });
+
+  it("records a placed order on the saved plan through the shared sheet and opens the next line", async () => {
+    const stored = { ...SAVED, lines: SAVED.lines.map((l, i) => ({ ...l, id: 70 + i })) };
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/plans" && init?.method === "POST") return Promise.resolve(stored);
+      if (path === "/plans/7/lines/70/placed") return Promise.resolve({});
+      if (path === "/plans/7" && !init) return Promise.resolve(stored);
+      return base(path, init);
+    });
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+    // MSFT is a holding in the summary the page loaded: no asset type.
+    expect(within(sheet).queryByText("Asset type")).not.toBeInTheDocument();
+    expect(within(sheet).getByLabelText("Price per share")).toHaveValue("");
+    fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "425.5" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+    expect(await screen.findByText("MSFT recorded as placed. Next: SAP, opened for you.")).toBeInTheDocument();
+    expect(body("/plans/7/lines/70/placed")).toEqual([{ date: expect.any(String), shares: 0.795, price: 425.5 }]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "SAP, 187.96 EUR, not placed, press to close" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("shows the exchange rate with four significant digits", async () => {

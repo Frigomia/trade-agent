@@ -14,7 +14,7 @@ import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
-import { OrdersPanel } from "@/components/plan/OrdersPanel";
+import { OrdersSection } from "@/components/plan/OrdersSection";
 import { PlanHistory } from "@/components/plan/PlanHistory";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
@@ -162,7 +162,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
       {refreshed && plan?.created_at && (
         <Alert severity="info">Prices were refreshed when saving; this is the plan that was saved.</Alert>
       )}
-      {plan && plan.id !== null && <OrdersPanel plan={plan} footer={footer} onChanged={reload} />}
+      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} />}
       {plan && plan.id === null && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
   );

@@ -24,6 +24,8 @@ const SEPTEMBER: Plan = {
       isin: null,
       placed_at: null,
       placed_trade_id: null,
+      placed_shares: null,
+      placed_price: null,
       ticker: "KO",
       name: "Coca-Cola",
       amount_eur: 487.5,
@@ -122,6 +124,35 @@ describe("PlanHistory", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
     expect(await screen.findByText(/ISIN US1912161007 · 7 shares at 69.64 EUR/)).toBeInTheDocument();
     expect(screen.getByText("ISIN saved")).toBeInTheDocument();
+  });
+
+  it("records a placed order through the shared sheet and reloads the plan", async () => {
+    let placed = false;
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/portfolio/summary") return Promise.resolve({ holdings: [], watchlist: [] });
+      if (path === "/plans/5/lines/11/placed") {
+        placed = true;
+        return Promise.resolve({});
+      }
+      if (path === "/plans/5" && !init) {
+        const l = { ...SEPTEMBER.lines[0], id: 11 };
+        return Promise.resolve({ ...SEPTEMBER, lines: [placed ? { ...l, placed_at: "2026-10-08T10:00:00", placed_shares: 7, placed_price: 75.1 } : l] });
+      }
+      return base(path, init);
+    });
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: "Open the September 2026 plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^KO, 487.50 EUR, not placed, press to open$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+    fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "75.10" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+    expect(await screen.findByText("KO recorded as placed. All lines placed.")).toBeInTheDocument();
+    const [, init] = apiFetch.mock.calls.find(([p]) => p === "/plans/5/lines/11/placed")!;
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ shares: 7, price: 75.1, asset_type: "ETF" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(await screen.findByText("Placed 8 Oct · 7 sh at 75.10")).toBeInTheDocument();
   });
 
   it("says when nothing is saved yet", async () => {

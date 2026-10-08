@@ -13,7 +13,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { copyAllText, isinShape, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
+import { copyAllText, isinShape, nextUnplaced, parsePlacedNumber, placedFill, placeLine, setIsin, ticketText, unplacedLines } from "./orders";
 import type { Plan, PlanLine } from "./plans";
 
 const line = (o: Partial<PlanLine> = {}): PlanLine => ({
@@ -21,6 +21,8 @@ const line = (o: Partial<PlanLine> = {}): PlanLine => ({
   isin: "IE00B4L5Y983",
   placed_at: null,
   placed_trade_id: null,
+  placed_shares: null,
+  placed_price: null,
   ticker: "IWDA",
   name: "iShares Core MSCI World",
   amount_eur: 92.3,
@@ -95,6 +97,51 @@ describe("copyAllText", () => {
   });
   it("uses the plan's whole_shares", () => {
     expect(copyAllText(plan([line({ shares: 1 })], true))).toContain("1 share at");
+  });
+});
+
+describe("placedFill", () => {
+  it("shows the logged shares (3 decimals at most) and price (2 decimals, no separators)", () => {
+    expect(placedFill(line({ placed_shares: 1.69, placed_price: 54.6 }))).toBe("1.69 sh at 54.60");
+    expect(placedFill(line({ placed_shares: 2.77249, placed_price: 1234.567 }))).toBe("2.772 sh at 1234.57");
+    expect(placedFill(line({ placed_shares: 3, placed_price: 10 }))).toBe("3 sh at 10.00");
+  });
+  it("is null when the trade is not known", () => {
+    expect(placedFill(line())).toBeNull();
+    expect(placedFill(line({ placed_shares: 1 }))).toBeNull();
+  });
+});
+
+describe("nextUnplaced", () => {
+  const p = plan([
+    line({ ticker: "A" }),
+    line({ ticker: "B", placed_at: "2026-10-08T10:00:00" }),
+    line({ ticker: "C" }),
+    line({ ticker: "D" }),
+  ]);
+  it("takes the next unplaced line after the placed one", () => {
+    expect(nextUnplaced(p, "A")?.ticker).toBe("C");
+    expect(nextUnplaced(p, "C")?.ticker).toBe("D");
+  });
+  it("wraps to an earlier unplaced line", () => {
+    expect(nextUnplaced(p, "D")?.ticker).toBe("A");
+  });
+  it("is null when the placed line was the last one", () => {
+    expect(nextUnplaced(plan([line({ ticker: "A" }), line({ ticker: "B", placed_at: "x" })]), "A")).toBeNull();
+  });
+});
+
+describe("parsePlacedNumber", () => {
+  it.each([
+    ["1.69", 1.69],
+    ["54,6", 54.6],
+    [" 2 ", 2],
+    ["0.000001", 0.000001],
+  ])("accepts %j", (raw, n) => {
+    expect(parsePlacedNumber(raw)).toBe(n);
+  });
+  it.each(["", "e", "1e5", "-1", "0", "0.0", "abc", "1.2.3", "Infinity", "NaN", "1.0000001", "1000000000000"])("rejects %j", (raw) => {
+    expect(parsePlacedNumber(raw)).toBeNull();
   });
 });
 

@@ -18,7 +18,7 @@ import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
 import { planMonth, planSavedAt, usePlans, type Plan, type PlanSummary } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
-import { OrdersPanel } from "./OrdersPanel";
+import { OrdersSection } from "./OrdersSection";
 
 const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "180px minmax(0, 1fr) 140px 80px 120px" };
@@ -145,7 +145,7 @@ export function PlanHistory() {
               Delete plan
             </Button>
           </Box>
-          <OrdersPanel key={opened.id} plan={opened} onChanged={reload} />
+          <OrdersSection key={opened.id} plan={opened} onChanged={reload} />
         </>
       )}
 

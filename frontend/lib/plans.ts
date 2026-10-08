@@ -14,6 +14,8 @@ export interface PlanLine {
   isin: string | null;
   placed_at: string | null;
   placed_trade_id: number | null;
+  placed_shares: number | null; // read from the logged trade, in the holding's currency
+  placed_price: number | null;
   ticker: string;
   name: string;
   amount_eur: number;

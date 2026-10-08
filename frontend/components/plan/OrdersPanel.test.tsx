@@ -24,6 +24,8 @@ const line = (o: Partial<PlanLine>): PlanLine => ({
   isin: "IE00BKM4GZ66",
   placed_at: null,
   placed_trade_id: null,
+  placed_shares: null,
+  placed_price: null,
   ticker: "EIMI.L",
   name: "iShares Core MSCI EM IMI UCITS ETF USD (Acc)",
   amount_eur: 92.3,
@@ -240,6 +242,27 @@ describe("OrdersPanel", () => {
     expect(screen.getByText("IE00BKM4GZ66")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Placed" })).not.toBeInTheDocument();
+  });
+
+  it("shows the logged shares and price on the placed chip when known", () => {
+    const p = plan([
+      { ...LINES[0], placed_at: "2026-10-08T10:00:00", placed_shares: 1.69, placed_price: 54.6 },
+      { ...LINES[1], placed_at: "2026-10-08T10:00:00", placed_shares: 2.77249, placed_price: 1147.2 },
+      { ...LINES[2], placed_at: "2026-10-08T10:00:00" },
+    ]);
+    renderPanel(p);
+    expect(card("EIMI.L")).toHaveTextContent("Placed 8 Oct · 1.69 sh at 54.60");
+    expect(card("IWDA.L")).toHaveTextContent("Placed 8 Oct · 2.772 sh at 1147.20");
+    expect(card("NVDA")).toHaveTextContent("Placed 8 Oct");
+    expect(card("NVDA")).not.toHaveTextContent("·");
+  });
+
+  it("shows the status line it is given under the header", () => {
+    const { rerender } = renderPanel(plan(), { status: "" });
+    const region = screen.getAllByRole("status").find((s) => s.getAttribute("aria-live") === "polite" && s.textContent === "")!;
+    expect(region).toBeInTheDocument();
+    rerender(<OrdersPanel plan={plan()} onChanged={onChanged} status="EIMI.L recorded as placed. Next: IWDA.L, opened for you." />);
+    expect(region).toHaveTextContent("EIMI.L recorded as placed. Next: IWDA.L, opened for you.");
   });
 
   it("offers Placed only for a stored line, and hands the line to onPlace", () => {

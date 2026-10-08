@@ -5,7 +5,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { Check, ChevronDown, ChevronUp, Circle, CircleCheck, Copy } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount, toTime } from "@/lib/format";
-import { copyAllText, ticketText, unplacedLines } from "@/lib/orders";
+import { copyAllText, placedFill, ticketText, unplacedLines } from "@/lib/orders";
 import type { Plan, PlanLine } from "@/lib/plans";
 import { IsinRow } from "./IsinRow";
 import { LineWeight, PlanNotes, PlanResult, muted, shares, weightScale } from "./PlanResult";
@@ -45,6 +45,11 @@ export interface OrdersPanelProps {
   onOpenTickerChange?: (ticker: string | null) => void;
   /** Under the lines, beside nothing else: the "Saved ..." note on This month. */
   footer?: ReactNode;
+  /**
+   * A polite status line under the header ("EIMI.L recorded as placed. Next: ..."). Pass it (an empty
+   * string when there is nothing to say yet) to keep the live region mounted, so a change is announced.
+   */
+  status?: string;
 }
 
 /**
@@ -53,7 +58,7 @@ export interface OrdersPanelProps {
  * card is a button that opens it to show Copy, Placed, the ticket text and the ISIN. A placed line has
  * no buttons but still opens to show its ticket. Previews never come here.
  */
-export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer }: OrdersPanelProps) {
+export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status }: OrdersPanelProps) {
   const [ownOpen, setOwnOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null); // a ticker, or "*" for Copy all lines
   const [failed, setFailed] = useState<string | null>(null);
@@ -127,6 +132,20 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
         </Button>
       </Box>
       {failed === "*" && <Typography sx={{ fontSize: 13, color: "var(--down)" }}>{COPY_ALL_FAILED}</Typography>}
+      {status !== undefined && (
+        <Box
+          role="status"
+          aria-live="polite"
+          sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: 14, color: "var(--text2)" } : hidden}
+        >
+          {status && (
+            <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--up)", pt: "2px" }}>
+              <Check size={16} />
+            </Box>
+          )}
+          {status}
+        </Box>
+      )}
 
       <Panel sx={{ pt: { md: 0.75 }, overflow: "hidden" }}>
         <Box aria-hidden sx={{ ...gridSx, display: { xs: "none", md: "grid" }, py: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
@@ -191,11 +210,12 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
   const placed = line.placed_at !== null;
   const status = line.placed_at !== null ? `placed ${placedDay(line.placed_at)}` : "not placed";
   const name = `${line.ticker}, ${formatAmount(line.amount_eur)} EUR, ${status}, press to ${open ? "close" : "open"}`;
+  const fill = placedFill(line);
   const quiet = placed ? "var(--text2)" : "var(--text)";
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
-    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--up-bg)" : undefined }}>
+    <Box component="li" data-ticker={line.ticker} sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--up-bg)" : undefined }}>
       <Box
         component="button"
         type="button"
@@ -232,6 +252,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
           {line.placed_at !== null ? (
             <Box component="span" sx={muted}>
               Placed {placedDay(line.placed_at)}
+              {fill && ` · ${fill}`}
             </Box>
           ) : (
             <LineWeight line={line} scale={scale} />
