@@ -251,13 +251,46 @@ describe("Plan page", () => {
     expect(await screen.findByText(/Saved 8 Oct 2026/)).toBeInTheDocument();
     expect(body("/plans")).toEqual([{ amount: 500, whole_shares: false }]);
     expect(screen.queryByRole("button", { name: "Save plan" })).not.toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Plan lines" })).toBeInTheDocument();
+    // The saved plan shows its orders instead of the ledger.
+    expect(screen.queryByRole("table", { name: "Plan lines" })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Orders" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 2 placed")).toBeInTheDocument();
 
     view("saved");
     const history = await screen.findByRole("table", { name: "Saved plans" });
     await waitFor(() => expect(within(history).getAllByRole("row")).toHaveLength(4));
     view("month");
-    expect(screen.getByText("Add 312.04 EUR")).toBeVisible();
+    expect(screen.getByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" })).toBeVisible();
+  });
+
+  it("shows no orders on a preview", async () => {
+    await makePlan();
+    expect(screen.queryByRole("list", { name: "Orders" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/placed/i)).not.toBeInTheDocument();
+  });
+
+  it("reloads the saved plan after an ISIN is saved, so the ticket carries it", async () => {
+    let isin: string | null = null;
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/portfolio/instruments/SAP/isin") {
+        isin = (JSON.parse(init!.body as string) as { isin: string }).isin;
+        return Promise.resolve({ ticker: "SAP", isin });
+      }
+      if (path === "/plans/7" && !init) {
+        return Promise.resolve({ ...SAVED, lines: SAVED.lines.map((l) => (l.ticker === "SAP" ? { ...l, isin } : l)) });
+      }
+      return base(path, init);
+    });
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "SAP, 187.96 EUR, not placed, press to open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add ISIN" }));
+    fireEvent.change(screen.getByLabelText("ISIN for SAP"), { target: { value: "DE0007164600" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
+    expect(await screen.findByText(/SAP SE · ISIN DE0007164600 · about 0.817 shares/)).toBeInTheDocument();
+    expect(screen.getByText(/Saved 8 Oct 2026/)).toBeInTheDocument();
   });
 
   it("shows the exchange rate with four significant digits", async () => {

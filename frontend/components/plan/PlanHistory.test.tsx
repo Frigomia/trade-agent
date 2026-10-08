@@ -83,9 +83,11 @@ describe("PlanHistory", () => {
     renderFresh();
     fireEvent.click(await screen.findByRole("button", { name: "Open the September 2026 plan" }));
     expect(await screen.findByRole("heading", { name: "September 2026, as saved" })).toBeInTheDocument();
-    expect(screen.getByText("Add 487.50 EUR")).toBeInTheDocument();
-    expect(screen.getByText("7 sh")).toBeInTheDocument();
+    const orders = screen.getByRole("list", { name: "Orders" });
+    expect(within(orders).getByText("487.50 EUR")).toBeInTheDocument();
+    expect(within(orders).getByText("7 sh")).toBeInTheDocument();
     expect(screen.getByText("Leftover 12.50 EUR")).toBeInTheDocument();
+    expect(screen.getByText("0 of 1 placed")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Delete plan" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete the September 2026 plan?" });
@@ -99,6 +101,27 @@ describe("PlanHistory", () => {
       expect(screen.queryByRole("heading", { name: "September 2026, as saved" })).not.toBeInTheDocument(),
     );
     await waitFor(() => expect(screen.queryByRole("button", { name: "Open the September 2026 plan" })).not.toBeInTheDocument());
+  });
+
+  it("reloads the opened plan after an ISIN is saved, so the ticket carries it", async () => {
+    let isin: string | null = null;
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/portfolio/instruments/KO/isin") {
+        isin = (JSON.parse(init!.body as string) as { isin: string }).isin;
+        return Promise.resolve({ ticker: "KO", isin });
+      }
+      if (path === "/plans/5" && !init) return Promise.resolve({ ...SEPTEMBER, lines: SEPTEMBER.lines.map((l) => ({ ...l, isin })) });
+      return base(path, init);
+    });
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: "Open the September 2026 plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^KO, 487.50 EUR, not placed, press to open$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add ISIN" }));
+    fireEvent.change(screen.getByLabelText("ISIN for KO"), { target: { value: "us1912161007" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
+    expect(await screen.findByText(/ISIN US1912161007 · 7 shares at 69.64 EUR/)).toBeInTheDocument();
+    expect(screen.getByText("ISIN saved")).toBeInTheDocument();
   });
 
   it("says when nothing is saved yet", async () => {

@@ -18,7 +18,7 @@ import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
 import { planMonth, planSavedAt, usePlans, type Plan, type PlanSummary } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
-import { PlanResult } from "./PlanResult";
+import { OrdersPanel } from "./OrdersPanel";
 
 const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "180px minmax(0, 1fr) 140px 80px 120px" };
@@ -61,6 +61,11 @@ export function PlanHistory() {
     action.run(async () => {
       setOpened(await load(summary.id));
     });
+
+  // The opened plan again, e.g. after an ISIN was added, so its tickets carry it.
+  async function reload() {
+    if (opened?.id != null) setOpened(await load(opened.id));
+  }
 
   async function confirmDelete() {
     setConfirmOpen(false);
@@ -140,7 +145,7 @@ export function PlanHistory() {
               Delete plan
             </Button>
           </Box>
-          <PlanResult plan={opened} />
+          <OrdersPanel key={opened.id} plan={opened} onChanged={reload} />
         </>
       )}
 

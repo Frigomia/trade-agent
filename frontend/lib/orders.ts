@@ -43,6 +43,12 @@ export function placeLine(planId: number, lineId: number, body: PlaceBody): Prom
   });
 }
 
+/** The ISIN, trimmed and upper-cased, when its shape fits (the server also checks the check digit); else null. */
+export function isinShape(raw: string): string | null {
+  const value = raw.trim().toUpperCase();
+  return /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(value) ? value : null;
+}
+
 /** An empty string clears the ISIN. Throws the ApiError (422 for a malformed ISIN). */
 export function setIsin(ticker: string, isin: string | null): Promise<{ ticker: string; isin: string | null }> {
   return apiFetch(`/portfolio/instruments/${encodeURIComponent(ticker)}/isin`, {
