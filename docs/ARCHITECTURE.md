@@ -516,11 +516,12 @@ stored row use the same numbers. A value or a resulting total too large for the 
 "Those numbers are too large to store." on both routes, with nothing written.
 
 **No undo.** The trade log has no delete, so unmarking a line would leave its trade behind and the
-portfolio and the plan would disagree. A SELL leaves the average cost unchanged, so it only fixes a
-wrong share count: a SELL of the extra shares. A wrong price, or an order that was never placed, is
-fixed by editing the holding's shares and average cost on the holdings page (the holding form, a
-full-replace upsert); for example, holding 10 at 100 and recording 1 at 1000 by mistake gives 11 at
-181.82, and a SELL of 1 leaves 10 at 181.82, not 100. Either way the line stays marked placed.
+portfolio and the plan would disagree. A SELL in the trade log corrects the share count but not the
+average cost. To get both right, edit the holding's shares and average cost on the holdings page (the
+holding form, a full-replace upsert). A wrong price, or an order that was never placed, is corrected the
+same way. For example, holding 10 at 100 and wrongly recording 2 at 50 instead of 1 at 50 gives 12 at
+91.67; a SELL of 1 leaves 11 at 91.67, but the correct result is 11 at 95.45. Too few shares recorded
+cannot be fixed with a SELL at all. Either way the line stays marked placed.
 Deleting a plan removes its lines but keeps the trades they logged.
 
 **Privacy.** Plan data, tickets and ISINs are never logged and never sent to Telegram.

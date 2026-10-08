@@ -85,10 +85,11 @@ average cost, write the `trades` row) is extracted from the route into one share
 route and the new one use the same code and the cost basis is computed in one place.
 
 There is no undo: the trade log has no delete, so unmarking a line would leave its trade behind. A SELL
-keeps the average cost unchanged, so it only fixes a wrong share count (a SELL of the difference). A wrong
-price, or an order that was never placed, is corrected by editing the holding's shares and average cost on
-the holdings page (the holding form, a full-replace upsert): holding 10 at 100 and recording 1 at 1000 by
-mistake gives 11 at 181.82, and a SELL of 1 leaves 10 at 181.82, not 100. The line stays marked placed.
+in the trade log corrects the share count but not the average cost. To get both right, edit the holding's
+shares and average cost on the holdings page (the holding form, a full-replace upsert). A wrong price, or
+an order that was never placed, is corrected the same way: holding 10 at 100 and wrongly recording 2 at 50
+instead of 1 at 50 gives 12 at 91.67; a SELL of 1 leaves 11 at 91.67, but the correct result is 11 at
+95.45. Too few shares recorded cannot be fixed with a SELL at all. The line stays marked placed.
 
 ## The screens
 
