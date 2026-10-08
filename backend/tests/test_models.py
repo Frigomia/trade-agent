@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.models import (
     ChatMessage,
+    ContributionPlan,
+    ContributionPlanLine,
     Holding,
     InvestmentPreferences,
     PortfolioSnapshot,
@@ -168,3 +170,41 @@ def test_telegram_link_defaults(db_session):
     db_session.refresh(link)
     assert (link.status, link.digest_enabled, link.moves_enabled) == ("ok", True, True)
     assert float(link.move_threshold_pct) == 5.0
+
+
+def test_planner_columns_and_tables_have_the_documented_defaults(db_session):
+    uid = uuid.uuid4()
+    pref = InvestmentPreferences(user_id=uid)
+    link = TelegramLink(user_id=uid, chat_id=4242)
+    item = WatchlistItem(user_id=uid, ticker="NVDA", asset_type="STOCK")
+    plan = ContributionPlan(
+        user_id=uid,
+        amount_eur=500,
+        whole_shares=False,
+        total_before_eur=4000,
+        leftover_eur=0,
+        notes=["a note"],
+    )
+    db_session.add_all([pref, link, item, plan])
+    db_session.commit()
+    db_session.add(
+        ContributionPlanLine(
+            user_id=uid,
+            plan_id=plan.id,
+            ticker="NVDA",
+            name="NVDA",
+            amount_eur=264.71,
+            shares=2.647,
+            price_eur=100,
+            currency="USD",
+            rate=0.8,
+            reason="new_position",
+        )
+    )
+    db_session.commit()
+    for row in (pref, link, item, plan):
+        db_session.refresh(row)
+    assert pref.monthly_contribution is None and float(pref.drift_threshold_pct) == 5.0
+    assert link.plan_reminder_enabled is True
+    assert item.target_weight is None
+    assert plan.created_at is not None and plan.notes == ["a note"]

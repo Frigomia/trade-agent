@@ -183,6 +183,8 @@ def test_export_returns_only_the_callers_own_rows(client, db_session):
         "portfolio_snapshots",
         "user_api_keys",
         "telegram_links",
+        "contribution_plans",
+        "contribution_plan_lines",
     }
     for table_name in rows_with_user_id:
         rows = body[table_name]
