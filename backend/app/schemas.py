@@ -54,6 +54,7 @@ class WatchlistItemIn(BaseModel):
     ticker: Ticker
     asset_type: AssetType
     note: str | None = Field(default=None, max_length=500)  # matches WatchlistItem.note String(500)
+    target_weight: float | None = Field(default=None, ge=0, le=1)
 
 
 class WatchlistItemOut(WatchlistItemIn):
@@ -190,6 +191,8 @@ class PreferencesIn(BaseModel):
     sector_avoid_list: list[SectorName] = Field(default_factory=list, max_length=MAX_AVOID_SECTORS)
     notes: str | None = Field(default=None, max_length=2000)
     auto_analysis: bool | None = None  # None: leave as it is
+    monthly_contribution: float | None = Field(default=None, gt=0, le=1_000_000)
+    drift_threshold_pct: float | None = Field(default=None, ge=1, le=50)  # None: leave as it is
 
 
 class PreferencesOut(BaseModel):
@@ -202,6 +205,8 @@ class PreferencesOut(BaseModel):
     sector_avoid_list: list[str] = Field(default_factory=list)
     notes: str | None = None
     auto_analysis: bool = False
+    monthly_contribution: float | None = None
+    drift_threshold_pct: float = 5.0
     # Only filled when auto_analysis is on
     auto_analysis_paused: AutoAnalysisPaused | None = None
 
@@ -375,6 +380,7 @@ class TelegramOut(BaseModel):
     digest_enabled: bool = True
     moves_enabled: bool = True
     move_threshold_pct: float = 5.0
+    plan_reminder_enabled: bool = True
     bot_username: str | None = None
 
 
@@ -386,4 +392,5 @@ class TelegramLinkOut(BaseModel):
 class TelegramSettingsIn(BaseModel):
     digest_enabled: bool | None = None
     moves_enabled: bool | None = None
+    plan_reminder_enabled: bool | None = None
     move_threshold_pct: float | None = Field(default=None, ge=1, le=50)

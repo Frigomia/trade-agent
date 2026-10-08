@@ -57,6 +57,7 @@ def _save(db: Session, user: CurrentUser, payload: PreferencesIn) -> InvestmentP
     # Only the fields the client actually sent; the rest keep their stored values.
     values = payload.model_dump(exclude_unset=True)
     auto = values.pop("auto_analysis", None)  # an explicit null is ignored (the column is not null)
+    drift = values.pop("drift_threshold_pct", None)  # same: the column is not null
     pref = _load(db, user)
     if pref is None:
         pref = InvestmentPreferences(user_id=user.id, **values)
@@ -66,6 +67,8 @@ def _save(db: Session, user: CurrentUser, payload: PreferencesIn) -> InvestmentP
             setattr(pref, field, value)
     if auto is not None:
         pref.auto_analysis = auto
+    if drift is not None:
+        pref.drift_threshold_pct = drift
     try:
         db.commit()
     except SQLAlchemyError:

@@ -752,3 +752,21 @@ def test_log_trade_is_rate_limited(client):
 @pytest.mark.parametrize("path", ["/portfolio/holdings", "/portfolio/snapshots"])
 def test_portfolio_responses_are_not_cacheable(client, path):
     assert client.get(path).headers["cache-control"] == "no-store"
+
+
+def test_a_watchlist_item_can_carry_a_target_and_an_omitted_target_keeps_it(client):
+    body = {"ticker": "NVDA", "asset_type": "STOCK", "target_weight": 0.2}
+    assert client.post("/portfolio/watchlist", json=body).json()["target_weight"] == 0.2
+    # the add-ticker form does not send it: it must not be wiped
+    again = client.post(
+        "/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK", "note": "hi"}
+    )
+    assert again.json()["target_weight"] == 0.2
+    cleared = client.post("/portfolio/watchlist", json={**body, "target_weight": None})
+    assert cleared.json()["target_weight"] is None
+
+
+@pytest.mark.parametrize("value", [-0.1, 1.01])
+def test_a_watchlist_target_must_be_between_0_and_1(client, value):
+    body = {"ticker": "NVDA", "asset_type": "STOCK", "target_weight": value}
+    assert client.post("/portfolio/watchlist", json=body).status_code == 422

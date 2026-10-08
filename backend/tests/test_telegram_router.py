@@ -28,6 +28,7 @@ def test_not_linked_shows_the_defaults(client, configured):
         "digest_enabled": True,
         "moves_enabled": True,
         "move_threshold_pct": 5.0,
+        "plan_reminder_enabled": True,
         "bot_username": "trade_agent_bot",
     }
 
@@ -118,3 +119,10 @@ def test_a_linked_user_without_a_bot_username_can_still_see_and_remove_the_link(
     assert (body["linked"], body["configured"]) == (True, False)
     assert client.delete("/me/telegram").status_code == 204
     assert client.get("/me/telegram").json()["linked"] is False
+
+
+def test_the_plan_reminder_switch_defaults_on_and_can_be_turned_off(client, configured, db_session):
+    _link(db_session)
+    assert client.get("/me/telegram").json()["plan_reminder_enabled"] is True
+    body = client.patch("/me/telegram", json={"plan_reminder_enabled": False}).json()
+    assert body["plan_reminder_enabled"] is False and body["digest_enabled"] is True
