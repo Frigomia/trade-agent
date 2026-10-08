@@ -17,10 +17,11 @@ from app.models import (
     ContributionPlan,
     ContributionPlanLine,
     Holding,
+    InvestmentPreferences,
     Recommendation,
     WatchlistItem,
 )
-from app.schemas import PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
+from app.schemas import DriftItemOut, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
 
 DISCLAIMER = "Advisory only. Nothing is sent to a broker."
 MAX_PLANS = 120
@@ -138,6 +139,47 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
         ],
         notes=notes + result.notes,
     )
+
+
+def _load_drift(db: Session, user_id: uuid.UUID) -> tuple[_Loaded, float]:
+    pref = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
+    return _load(db, user_id), pref.drift_threshold_pct if pref else 5.0
+
+
+async def drift(db: Session, user_id: uuid.UUID) -> list[DriftItemOut]:
+    """Targeted open holdings whose weight is beyond the person's own drift threshold."""
+    (holdings, _watch, _calls), threshold = await run_in_threadpool(_load_drift, db, user_id)
+    db.close()  # release the connection before the price lookups, as compute() does
+    targets = {
+        t: (name, shares, Decimal(str(target)))
+        for t, name, shares, target in holdings
+        if shares > 0 and target and target > 0
+    }
+    prices, _skipped = await eur_prices(set(targets))
+    candidates = [
+        planner.Candidate(
+            ticker=t,
+            name=name,
+            held=True,
+            current_value=shares * prices[t].price_eur,
+            target=target,
+            price_eur=prices[t].price_eur,
+            currency=prices[t].currency,
+            rate=prices[t].rate,
+        )
+        for t, (name, shares, target) in targets.items()
+        if t in prices
+    ]
+    return [
+        DriftItemOut(
+            ticker=i.ticker,
+            name=i.name,
+            weight=float(i.weight),
+            target=float(i.target),
+            points=float(i.points),
+        )
+        for i in planner.drift_items(candidates, Decimal(str(threshold)))
+    ]
 
 
 def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:

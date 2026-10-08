@@ -332,6 +332,14 @@ class PlanSummaryOut(BaseModel):
     line_count: int
 
 
+class DriftItemOut(BaseModel):
+    ticker: str
+    name: str
+    weight: float  # fractions of the targeted open holdings
+    target: float
+    points: float  # weight minus target, in percentage points
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]

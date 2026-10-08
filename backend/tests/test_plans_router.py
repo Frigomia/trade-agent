@@ -218,3 +218,38 @@ def test_the_preview_is_rate_limited(client, db_session):
 def test_plans_require_authentication(anon_client):
     assert anon_client.post("/plans/preview", json={"amount": 5}).status_code == 401
     assert anon_client.get("/plans").status_code == 401
+
+
+def test_drift_lists_holdings_beyond_the_threshold(client, db_session):
+    _holding(db_session, "AAPL", 5, 0.4)  # 1000
+    _holding(db_session, "MSFT", 7.5, 0.4)  # 3000: weights 25 / 75 against 50 / 50
+    with _prices(AAPL=200, MSFT=400):
+        body = client.get("/plans/drift").json()
+    assert [(i["ticker"], round(i["points"], 1)) for i in body] == [("AAPL", -25.0), ("MSFT", 25.0)]
+    assert body[0]["weight"] == pytest.approx(0.25) and body[0]["target"] == pytest.approx(0.5)
+
+
+def test_drift_uses_the_persons_own_threshold(client, db_session):
+    _holding(db_session, "AAPL", 5, 0.4)
+    _holding(db_session, "MSFT", 7.5, 0.4)
+    client.post("/preferences", json={"drift_threshold_pct": 30})
+    with _prices(AAPL=200, MSFT=400):
+        assert client.get("/plans/drift").json() == []
+
+
+def test_drift_is_empty_without_targets_and_never_lists_the_watchlist(client, db_session):
+    _holding(db_session, "AAPL", 5, None)
+    _watch(db_session, "NVDA", 0.5)
+    with _prices(AAPL=200, NVDA=100):
+        assert client.get("/plans/drift").json() == []
+
+
+def test_drift_is_not_confused_with_a_plan_id(client):
+    assert client.get("/plans/drift").status_code == 200
+
+
+def test_drift_ignores_other_users(client, db_session):
+    _holding(db_session, "TSLA", 100, 0.5, user_id=OTHER_USER_ID)
+    _holding(db_session, "GOOG", 1, 0.5, user_id=OTHER_USER_ID)
+    with _prices(TSLA=50, GOOG=100):
+        assert client.get("/plans/drift").json() == []
