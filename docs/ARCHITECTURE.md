@@ -487,7 +487,11 @@ words on screen are "Order" and "Placed", never Buy or Sell.
 `PUT /portfolio/instruments/{ticker}/isin` (validated by `app/isin.py`: shape plus the ISO 6166 check
 digit). It is resolved at read time by `plans._isins`: for a ticker that is both held and watched, the
 holding's ISIN wins, else the watchlist item's. Because nothing is copied onto the line, an ISIN added
-after a plan was saved appears on the older plan too.
+after a plan was saved appears on the older plan too. Besides the ticket's "Add ISIN" field, the ticker
+search on Add holding, the first-holding form and the watchlist row sets it: when the text searched
+for is an ISIN (right shape), the picked result carries it client-side only (search results hold none,
+and the holdings and watchlist upserts never take it), and after the add succeeds the form calls the
+ISIN route; a failed ISIN save does not undo the add (the ticket's Add ISIN adds it later).
 
 **The currency rule.** A plan line's price is in EUR, converted at plan time; a holding's cost basis is
 in whatever currency the person uses for it (for example USD). So the plan's EUR price is never written

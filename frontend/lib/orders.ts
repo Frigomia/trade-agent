@@ -110,3 +110,16 @@ export function setIsin(ticker: string, isin: string | null): Promise<{ ticker: 
     body: JSON.stringify({ isin }),
   });
 }
+
+/**
+ * Saves an ISIN found by searching for it, after the holding or watchlist row it belongs to was
+ * saved. Never throws: a failure is swallowed (the add stands). The ISIN is not logged.
+ */
+export async function saveIsinAfterAdd(ticker: string, isin: string | null): Promise<void> {
+  if (!isin) return;
+  try {
+    await setIsin(ticker, isin);
+  } catch {
+    /* the add stands; the ticket's Add ISIN is the way to add it later */
+  }
+}

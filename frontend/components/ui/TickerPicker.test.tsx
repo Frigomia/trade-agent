@@ -160,4 +160,55 @@ describe("TickerPicker", () => {
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
     expect(screen.queryByText("VWCE.DE")).not.toBeInTheDocument();
   });
+
+  describe("ISIN search", () => {
+    it("passes the typed ISIN, upper-cased, with the pick", async () => {
+      const onPick = vi.fn();
+      render(<Harness onPick={onPick} />);
+      await type("ie00bkm4gz66");
+
+      fireEvent.click(await screen.findByText("VWCE.DE"));
+
+      expect(onPick).toHaveBeenCalledWith({ ...VWCE, isin: "IE00BKM4GZ66" });
+    });
+
+    it("passes no isin for a name or ticker query", async () => {
+      const onPick = vi.fn();
+      render(<Harness onPick={onPick} />);
+      await type("vwce");
+
+      fireEvent.click(await screen.findByText("VWCE.DE"));
+
+      expect(onPick).toHaveBeenCalledWith(VWCE);
+      expect(onPick.mock.calls[0][0]).not.toHaveProperty("isin");
+    });
+
+    it("repeats the cue in each search result row, only for an ISIN query", async () => {
+      render(<Harness />);
+      await type("vwce");
+      expect(screen.queryByText(/^Saves ISIN/)).not.toBeInTheDocument();
+
+      await type("ie00bkm4gz66");
+      expect(screen.getAllByText("Saves ISIN IE00BKM4GZ66 with it")).toHaveLength(2);
+    });
+
+    it("does not put the cue on a portfolio row", async () => {
+      apiFetch.mockResolvedValue([AAPL]);
+      render(<Harness suggestions={[{ ...OWNED, name: "IE00BKM4GZ66 fund" }]} />);
+
+      await type("IE00BKM4GZ66");
+
+      expect(screen.getAllByRole("option")).toHaveLength(2);
+      expect(screen.getAllByText("Saves ISIN IE00BKM4GZ66 with it")).toHaveLength(1);
+    });
+
+    it("shows the no-match line when the ISIN finds nothing", async () => {
+      apiFetch.mockResolvedValue([]);
+      render(<Harness />);
+
+      await type("IE00BKM4GZ66");
+
+      expect(screen.getByText(/no match/i)).toBeInTheDocument();
+    });
+  });
 });

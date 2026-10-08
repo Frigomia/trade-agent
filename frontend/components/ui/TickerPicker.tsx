@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Autocomplete, Box, TextField, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import type { SymbolMatch } from "@/lib/tickerSearch";
+import { looksLikeIsin, type SymbolMatch } from "@/lib/tickerSearch";
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
@@ -61,6 +61,7 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
     ...found.filter((m) => !own.some((s) => s.symbol === m.symbol)).map((m) => ({ ...m, group: SEARCH_GROUP })),
   ];
   const noMatch = answered && options.length === 0;
+  const isin = looksLikeIsin(query) ? query.toUpperCase() : null;
 
   return (
     <Autocomplete<Option, false, false, true>
@@ -73,7 +74,14 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
         if (option === null || typeof option === "string") return;
         setPicked(option.symbol);
         onChange(option.symbol);
-        onPick?.({ symbol: option.symbol, name: option.name, type: option.type, exchange: option.exchange });
+        // The typed text is the only place an ISIN comes from: search results carry none.
+        onPick?.({
+          symbol: option.symbol,
+          name: option.name,
+          type: option.type,
+          exchange: option.exchange,
+          ...(isin && { isin }),
+        });
       }}
       filterOptions={(all) => all}
       groupBy={(option) => option.group}
@@ -86,6 +94,11 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
               {[option.name, option.exchange, option.type].filter(Boolean).join(" · ")}
             </Typography>
+            {isin && option.group === SEARCH_GROUP && (
+              <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+                Saves ISIN {isin} with it
+              </Typography>
+            )}
           </Box>
         </li>
       )}

@@ -256,4 +256,68 @@ describe("HoldingForm", () => {
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
   });
+
+  describe("adding by searching for an ISIN", () => {
+    const EIMI = { symbol: "EIMI.L", name: "iShares Core MSCI EM IMI", type: "ETF", exchange: "LSE" };
+    const puts = () => apiFetch.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "PUT");
+    const posts = () => apiFetch.mock.calls.filter((c) => c[0] === "/portfolio/holdings");
+
+    function mockApi(isinResult: () => Promise<unknown> = () => Promise.resolve({})) {
+      apiFetch.mockImplementation((path: string) => {
+        if (path.startsWith("/market/search")) return Promise.resolve([EIMI]);
+        if (path.startsWith("/portfolio/instruments/")) return isinResult();
+        return Promise.resolve({});
+      });
+    }
+
+    async function pickByIsin() {
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "ie00bkm4gz66" } });
+      fireEvent.click(await screen.findByText("EIMI.L"));
+      type("Shares", "5");
+      type("Average cost", "30");
+    }
+    const save = () => fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+
+    it("posts the holding without the ISIN, then saves the ISIN on its own route", async () => {
+      mockApi();
+      const { onSaved, onClose } = setup();
+      await pickByIsin();
+
+      save();
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(onSaved).toHaveBeenCalled();
+      expect(posts()).toHaveLength(1);
+      const body = JSON.parse((posts()[0][1] as RequestInit).body as string);
+      expect(body).toMatchObject({ ticker: "EIMI.L", name: "iShares Core MSCI EM IMI", asset_type: "ETF" });
+      expect(body).not.toHaveProperty("isin");
+      expect(puts()).toHaveLength(1);
+      expect(puts()[0][0]).toBe("/portfolio/instruments/EIMI.L/isin");
+      expect(JSON.parse((puts()[0][1] as RequestInit).body as string)).toEqual({ isin: "IE00BKM4GZ66" });
+    });
+
+    it("does not save the ISIN when the ticker was edited after the pick", async () => {
+      mockApi();
+      const { onClose } = setup();
+      await pickByIsin();
+      type("Ticker", "SXR8.DE");
+
+      save();
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(posts()).toHaveLength(1);
+      expect(puts()).toHaveLength(0);
+    });
+
+    it("keeps the holding and closes the form when the ISIN could not be saved", async () => {
+      mockApi(() => Promise.reject(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit.")));
+      const { onSaved, onClose } = setup();
+      await pickByIsin();
+
+      save();
+
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(onSaved).toHaveBeenCalled();
+    });
+  });
 });

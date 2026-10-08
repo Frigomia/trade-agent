@@ -37,6 +37,8 @@ import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_E
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
+import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { AVG_COST_DISPLAY, HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
@@ -213,6 +215,7 @@ export default function PortfolioPage() {
   const [watchType, setWatchType] = useState<AssetType>("STOCK");
   const [watchTarget, setWatchTarget] = useState("");
   const [editingTarget, setEditingTarget] = useState<WatchlistSummary | null>(null);
+  const watchIsin = usePickedIsin();
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
@@ -250,7 +253,7 @@ export default function PortfolioPage() {
   const alreadyWatched = watched.has(typedTicker);
 
   // target_weight is sent only when one was typed: omitting it keeps a saved target (null would clear it).
-  function addToWatchlist(ticker: string, assetType: AssetType, targetText = "") {
+  function addToWatchlist(ticker: string, assetType: AssetType, targetText = "", isin: string | null = null) {
     if (!ticker) return;
     const target = percentTextToFraction(targetText);
     if (target === undefined) {
@@ -264,6 +267,8 @@ export default function PortfolioPage() {
       });
       setWatchTicker("");
       setWatchTarget("");
+      // The ISIN has its own route; a failure there does not undo the add.
+      await saveIsinAfterAdd(ticker, isin);
       mutateSummary();
     });
   }
@@ -457,7 +462,10 @@ export default function PortfolioPage() {
               label="Watchlist ticker"
               value={watchTicker}
               onChange={setWatchTicker}
-              onPick={(match) => setWatchType(match.type)}
+              onPick={(match) => {
+                setWatchType(match.type);
+                watchIsin.pick(match);
+              }}
             />
           </Box>
           <TextField
@@ -478,7 +486,9 @@ export default function PortfolioPage() {
           <Button
             variant="outlined"
             disabled={alreadyWatched || watch.submitting}
-            onClick={() => void addToWatchlist(typedTicker, watchType, watchTarget)}
+            onClick={() =>
+              void addToWatchlist(typedTicker, watchType, watchTarget, watchIsin.isinFor(typedTicker))
+            }
             sx={{ whiteSpace: "nowrap" }}
           >
             Add to watchlist

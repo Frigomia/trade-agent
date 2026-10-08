@@ -9,6 +9,8 @@ import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
+import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
 const STEPS = ["Add holdings", "Run an analysis on Today", "Decide"];
@@ -19,6 +21,7 @@ const STEPS = ["Add holdings", "Run an analysis on Today", "Decide"];
  * newcomer is one short form away from their first analysis. Saving is the same upsert the drawer uses.
  */
 export function FirstHolding({ onSaved }: { onSaved: () => void }) {
+  const { pick, isinFor } = usePickedIsin();
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
   const [costBasis, setCostBasis] = useState("");
@@ -32,6 +35,7 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
+    pick(match);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -57,6 +61,8 @@ export function FirstHolding({ onSaved }: { onSaved: () => void }) {
           target_weight: null,
         }),
       });
+      // The holdings upsert never carries the ISIN; a failure saving it does not undo the add.
+      await saveIsinAfterAdd(normalizedTicker, isinFor(normalizedTicker));
       onSaved();
     });
   }

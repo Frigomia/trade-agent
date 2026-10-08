@@ -10,6 +10,8 @@ import { useAction } from "@/lib/useAction";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
 import { fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TickerPicker } from "@/components/ui/TickerPicker";
+import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
 export interface HoldingFormProps {
@@ -47,6 +49,7 @@ function HoldingFormBody({
   const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
   const { run, submitting, error, setError } = useAction();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const { pick, isinFor } = usePickedIsin();
 
   const normalizedTicker = ticker.trim().toUpperCase();
   // POST /portfolio/holdings is an upsert: adding a held ticker silently overwrites it.
@@ -56,6 +59,7 @@ function HoldingFormBody({
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
+    pick(match);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -95,6 +99,8 @@ function HoldingFormBody({
           target_weight: targetWeight,
         }),
       });
+      // The holdings upsert never carries the ISIN; it has its own route, and a failure there does not undo the save.
+      await saveIsinAfterAdd(normalizedTicker, editing ? null : isinFor(normalizedTicker));
       onSaved();
       onClose();
     });
