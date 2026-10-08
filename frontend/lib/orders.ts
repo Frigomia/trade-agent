@@ -122,7 +122,7 @@ export async function saveIsinAfterAdd(ticker: string, isin: string | null): Pro
     await setIsin(ticker, isin);
     return null;
   } catch (err) {
-    const detail = err instanceof ApiError ? err.detail : "the request failed";
+    const detail = (err instanceof ApiError ? err.detail : "the request failed").replace(/.$/, "");
     return `Saved. The ISIN could not be saved: ${detail}. Add it on a plan.`;
   }
 }

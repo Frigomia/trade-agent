@@ -361,6 +361,8 @@ describe("PortfolioPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
 
       await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "ETF" }));
+      // Settled: the add finished (field cleared), so a PUT would already have been sent.
+      await waitFor(() => expect(screen.getByLabelText("Watchlist ticker")).toHaveValue(""));
       expect(count("PUT /portfolio/instruments/EIMI.L/isin")).toBe(0);
       expect(apiFetch.mock.calls.some((c) => c[1]?.method === "PUT")).toBe(false);
     });
@@ -529,7 +531,7 @@ describe("PortfolioPage", () => {
       handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
       handlers["PUT /portfolio/instruments/EIMI.L/isin"] = () => {
-        throw new FakeApiError(422, "ISIN check digit is wrong");
+        throw new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit.");
       };
       renderFresh();
       await screen.findByText(/what do you own/i);
@@ -546,8 +548,28 @@ describe("PortfolioPage", () => {
       const put = apiFetch.mock.calls.find((c) => c[1]?.method === "PUT")!;
       expect(JSON.parse(put[1].body)).toEqual({ isin: "IE00BKM4GZ66" });
       expect(
-        await screen.findByText("Saved. The ISIN could not be saved: ISIN check digit is wrong. Add it on a plan."),
+        await screen.findByText("Saved. The ISIN could not be saved: Not a valid ISIN: 12 characters with a correct check digit. Add it on a plan."),
       ).toBeInTheDocument();
+    });
+
+    it("does not save the ISIN when the first holding's ticker was edited after the pick", async () => {
+      handlers["GET /portfolio/summary"] = () => EMPTY;
+      handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
+      handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+      renderFresh();
+      await screen.findByText(/what do you own/i);
+      const before = count("GET /portfolio/summary");
+
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "IE00BKM4GZ66" } });
+      fireEvent.click(await screen.findByText("EIMI.L"));
+      fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "SXR8.DE" } });
+      fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "3" } });
+      fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: "30" } });
+      fireEvent.click(addHoldingButton());
+
+      await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+      expect(count("POST /portfolio/holdings")).toBe(1);
+      expect(apiFetch.mock.calls.some((c) => c[1]?.method === "PUT")).toBe(false);
     });
 
     it("sends the optional name, type and date when they are filled in", async () => {

@@ -6,6 +6,7 @@ import { Alert, Button } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary, TradeAction } from "@/lib/api/portfolio-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { IsinNote } from "@/components/ui/IsinNote";
 import { HoldingForm } from "./HoldingForm";
 import { TradeSheet } from "./TradeSheet";
 
@@ -26,6 +27,8 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
   const { data: summary, mutate } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const [open, setOpen] = useState(false);
   const [logged, setLogged] = useState(false);
+  // Kept here: HoldingForm is replaced by the "Trade logged." alert once saved.
+  const [isinNote, setIsinNote] = useState<string | null>(null);
 
   const action = TRADE_ACTION[recommendation.action];
   if (!action || !summary) return null;
@@ -35,9 +38,12 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
 
   if (logged) {
     return (
-      <Alert severity="success" sx={{ mt: 2, textAlign: "left" }}>
-        Trade logged.
-      </Alert>
+      <>
+        <Alert severity="success" sx={{ mt: 2, textAlign: "left" }}>
+          Trade logged.
+        </Alert>
+        <IsinNote note={isinNote} onClose={() => setIsinNote(null)} />
+      </>
     );
   }
 
@@ -66,6 +72,7 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
           heldTickers={summary.holdings.map((h) => h.ticker)}
           prefillTicker={recommendation.ticker}
           onSaved={done}
+          onNote={setIsinNote}
         />
       )}
     </>

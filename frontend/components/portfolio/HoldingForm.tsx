@@ -21,18 +21,20 @@ export interface HoldingFormProps {
   heldTickers: string[];
   prefillTicker?: string;
   onSaved: () => void;
+  /** Where to show the "ISIN not saved" note when this form is replaced once saved; default: its own. */
+  onNote?: (note: string | null) => void;
 }
 
 // The body lives in an inner component so its state resets each time the drawer closes.
-export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
+export function HoldingForm({ open, onClose, onNote, ...rest }: HoldingFormProps) {
   // The note lives out here: the drawer's body is gone once it closes.
   const [note, setNote] = useState<string | null>(null);
   return (
     <>
       <Drawer anchor="right" open={open} onClose={onClose}>
-        <HoldingFormBody onClose={onClose} onNote={setNote} {...rest} />
+        <HoldingFormBody onClose={onClose} onNote={onNote ?? setNote} {...rest} />
       </Drawer>
-      <IsinNote note={note} onClose={() => setNote(null)} />
+      {!onNote && <IsinNote note={note} onClose={() => setNote(null)} />}
     </>
   );
 }
