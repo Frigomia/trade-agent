@@ -3,7 +3,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.agents.market_data import fetch_fundamentals, fetch_price_history, fetch_quote_and_history
+from app.agents.market_data import (
+    fetch_currency,
+    fetch_fundamentals,
+    fetch_price_history,
+    fetch_quote_and_history,
+)
 
 
 def test_fetch_quote_and_history_cache_miss_calls_yfinance():
@@ -185,3 +190,39 @@ def test_fetch_quote_and_history_raises_after_exhausting_retries():
             asyncio.run(fetch_quote_and_history("AAPL"))
 
     assert fake_ticker.history.call_count == 3
+
+
+def _run_currency(fast_info, cached=None):
+    fake_ticker = MagicMock()
+    fake_ticker.fast_info = fast_info
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake_ticker) as mock_yf,
+        patch("app.agents.market_data.get_redis") as mock_get_redis,
+    ):
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = cached
+        mock_get_redis.return_value = mock_redis
+        import asyncio
+
+        result = asyncio.run(fetch_currency("AAPL"))
+    return result, mock_yf, mock_redis
+
+
+def test_fetch_currency_reads_fast_info_and_caches_it():
+    result, mock_yf, mock_redis = _run_currency({"currency": "USD"})
+    assert result == "USD"
+    mock_yf.assert_called_once_with("AAPL")
+    assert mock_redis.set.call_args.args[:2] == ("currency:AAPL", "USD")
+    assert mock_redis.set.call_args.kwargs["ex"] == 86400
+
+
+def test_fetch_currency_cache_hit_skips_yfinance():
+    result, mock_yf, _ = _run_currency({"currency": "USD"}, cached="GBp")
+    assert result == "GBp"
+    mock_yf.assert_not_called()
+
+
+def test_fetch_currency_missing_field_is_none_and_not_cached():
+    result, _, mock_redis = _run_currency({"currency": None})
+    assert result is None
+    mock_redis.set.assert_not_called()
