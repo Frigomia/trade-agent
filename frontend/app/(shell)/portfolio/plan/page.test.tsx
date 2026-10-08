@@ -52,6 +52,10 @@ const PLAN: Plan = {
   leftover_eur: 0,
   lines: [
     {
+      id: null,
+      isin: null,
+      placed_at: null,
+      placed_trade_id: null,
       ticker: "MSFT",
       name: "Microsoft",
       amount_eur: 312.04,
@@ -65,6 +69,10 @@ const PLAN: Plan = {
       reason_text: "Below its target, and its newest call is ADD or BUY",
     },
     {
+      id: null,
+      isin: null,
+      placed_at: null,
+      placed_trade_id: null,
       ticker: "SAP",
       name: "SAP SE",
       amount_eur: 187.96,

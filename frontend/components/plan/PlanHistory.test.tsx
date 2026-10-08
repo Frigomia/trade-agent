@@ -20,6 +20,10 @@ const SEPTEMBER: Plan = {
   leftover_eur: 12.5,
   lines: [
     {
+      id: null,
+      isin: null,
+      placed_at: null,
+      placed_trade_id: null,
       ticker: "KO",
       name: "Coca-Cola",
       amount_eur: 487.5,
