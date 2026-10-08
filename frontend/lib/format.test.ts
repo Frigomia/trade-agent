@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { formatAmount, formatPct, formatSigned, todayIso } from "./format";
+import { formatAmount, formatPct, formatSigned, localTodayIso, todayIso } from "./format";
 
 describe("format", () => {
   it("formats amounts with thousands separators and two decimals, no currency symbol", () => {
@@ -19,6 +19,17 @@ describe("format", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-30T23:30:00Z"));
     expect(todayIso()).toBe("2026-09-30");
+    vi.useRealTimers();
+  });
+
+  it("gives today's local calendar date near local midnight, whatever the UTC date is", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 8, 0, 15)); // 00:15 local on 8 Oct
+    expect(localTodayIso()).toBe("2026-10-08");
+    vi.setSystemTime(new Date(2026, 9, 8, 23, 45)); // 23:45 local on 8 Oct
+    expect(localTodayIso()).toBe("2026-10-08");
+    vi.setSystemTime(new Date(2026, 0, 1, 0, 5));
+    expect(localTodayIso()).toBe("2026-01-01");
     vi.useRealTimers();
   });
 

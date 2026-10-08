@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import Holding, PortfolioSnapshot, WatchlistItem
+from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 
@@ -770,3 +770,182 @@ def test_a_watchlist_item_can_carry_a_target_and_an_omitted_target_keeps_it(clie
 def test_a_watchlist_target_must_be_between_0_and_1(client, value):
     body = {"ticker": "NVDA", "asset_type": "STOCK", "target_weight": value}
     assert client.post("/portfolio/watchlist", json=body).status_code == 422
+
+
+def _hold_etf(client, ticker="EIMI.L"):
+    return client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": ticker,
+            "name": "iShares EM IMI",
+            "asset_type": "ETF",
+            "shares": 2,
+            "cost_basis": 10,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+
+
+def test_isin_is_set_on_the_holding_and_never_wiped_by_a_holding_upsert(client):
+    _hold_etf(client)
+    ok = client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": " ie00bkm4gz66 "})
+    assert ok.status_code == 200 and ok.json() == {"ticker": "EIMI.L", "isin": "IE00BKM4GZ66"}
+    _hold_etf(client)  # a full-replace upsert that omits the isin
+    assert [h["isin"] for h in client.get("/portfolio/holdings").json()] == ["IE00BKM4GZ66"]
+
+
+def test_isin_goes_to_the_watchlist_item_too_and_empty_clears(client):
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK"})
+    _hold_etf(client, "NVDA")
+    client.put("/portfolio/instruments/NVDA/isin", json={"isin": "US0378331005"})
+    assert client.get("/portfolio/watchlist").json()[0]["isin"] == "US0378331005"
+    assert client.get("/portfolio/holdings").json()[0]["isin"] == "US0378331005"
+    cleared = client.put("/portfolio/instruments/NVDA/isin", json={"isin": ""}).json()
+    assert cleared["isin"] is None
+    assert client.get("/portfolio/holdings").json()[0]["isin"] is None
+    assert client.get("/portfolio/watchlist").json()[0]["isin"] is None
+
+
+@pytest.mark.parametrize("bad", ["US0378331006", "IE00BKM4GZ6", "x" * 13, "ie00bkm4gz65"])
+def test_a_bad_isin_is_rejected_and_nothing_is_stored(client, bad):
+    _hold_etf(client)
+    assert client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": bad}).status_code == 422
+    assert client.get("/portfolio/holdings").json()[0]["isin"] is None
+
+
+def test_isin_for_an_unknown_ticker_is_404(client):
+    assert (
+        client.put("/portfolio/instruments/ZZZZ/isin", json={"isin": "US0378331005"}).status_code
+        == 404
+    )
+
+
+def test_isin_never_touches_another_persons_rows(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    db_session.add(
+        Holding(
+            user_id=OTHER_USER_ID,
+            ticker="EIMI.L",
+            name="x",
+            asset_type="ETF",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2024, 1, 1),
+        )
+    )
+    db_session.commit()
+    resp = client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": "IE00BKM4GZ66"})
+    assert resp.status_code == 404
+    assert db_session.query(Holding).filter_by(user_id=OTHER_USER_ID).one().isin is None
+
+
+def test_upsert_holding_takes_the_per_user_lock_before_looking_up_the_ticker(client, app_engine):
+    for _ in range(2):  # creating the ticker, then updating it
+        statements = _record_statements(app_engine)
+        res = client.post("/portfolio/holdings", json=_holding_payload("LOCKME"))
+        assert res.status_code == 200
+        lock_at = next(i for i, s in enumerate(statements) if "pg_advisory_xact_lock" in s)
+        lookup_at = next(i for i, s in enumerate(statements) if "FROM holdings" in s)
+        assert lock_at < lookup_at
+
+
+def _trade_body(**overrides):
+    return {"date": "2024-03-01", "ticker": "VWCE", "action": "BUY", "shares": 1, "price": 1.0} | (
+        overrides
+    )
+
+
+def _hold_vwce(client):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "VWCE",
+            "name": "Vanguard FTSE All-World",
+            "asset_type": "ETF",
+            "shares": 10,
+            "cost_basis": 90.0,
+            "first_purchase_date": "2024-01-15",
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "literal"),
+    [("price", "1e999"), ("price", "Infinity"), ("price", "NaN"), ("shares", "-Infinity")],
+)
+def test_log_trade_rejects_non_finite_numbers(client, db_session, field, literal):
+    _hold_vwce(client)
+    other = "shares" if field == "price" else "price"
+    raw = (
+        '{"date": "2024-03-01", "ticker": "VWCE", "action": "BUY", '
+        f'"{field}": {literal}, "{other}": 1}}'
+    )  # raw JSON text: these literals cannot be written with json=
+    res = client.post(
+        "/portfolio/trades", content=raw, headers={"content-type": "application/json"}
+    )
+    assert res.status_code == 422
+    assert db_session.query(Trade).count() == 0
+
+
+def test_log_trade_with_a_huge_finite_number_is_422_and_writes_nothing(client, db_session):
+    _hold_vwce(client)
+    res = client.post("/portfolio/trades", json=_trade_body(price=1e30))
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Those numbers are too large to store."
+    assert db_session.query(Trade).count() == 0
+    holding = client.get("/portfolio/holdings").json()[0]
+    assert (holding["shares"], holding["cost_basis"]) == (10, 90.0)
+
+
+@pytest.mark.parametrize("field", ["shares", "price"])
+def test_log_trade_rejects_values_below_the_stored_step(client, db_session, field):
+    _hold_vwce(client)
+    assert client.post("/portfolio/trades", json=_trade_body(**{field: 4e-7})).status_code == 422
+    assert db_session.query(Trade).count() == 0
+
+
+def test_log_trade_accepts_the_smallest_stored_step(client, db_session):
+    _hold_vwce(client)
+    assert client.post("/portfolio/trades", json=_trade_body(shares=1e-6)).status_code == 200
+    assert float(db_session.query(Trade).one().shares) == 0.000001
+
+
+def test_log_trade_oversell_leaves_the_cost_basis_and_adds_no_trade(client, db_session):
+    _hold_vwce(client)
+    res = client.post("/portfolio/trades", json=_trade_body(action="SELL", shares=11))
+    assert res.status_code == 422
+    holding = client.get("/portfolio/holdings").json()[0]
+    assert (holding["shares"], holding["cost_basis"]) == (10, 90.0)
+    assert db_session.query(Trade).count() == 0
+
+
+def test_isin_on_a_watchlist_only_ticker(client):
+    client.post("/portfolio/watchlist", json={"ticker": "NVDA", "asset_type": "STOCK"})
+    res = client.put("/portfolio/instruments/NVDA/isin", json={"isin": "US0378331005"})
+    assert res.status_code == 200
+    assert client.get("/portfolio/watchlist").json()[0]["isin"] == "US0378331005"
+    assert client.get("/portfolio/holdings").json() == []
+
+
+def test_a_non_text_isin_is_422(client):
+    _hold_etf(client)
+    assert client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": 123}).status_code == 422
+    assert client.get("/portfolio/holdings").json()[0]["isin"] is None
+
+
+def test_a_lowercase_ticker_in_the_isin_path_works(client):
+    _hold_etf(client)
+    res = client.put("/portfolio/instruments/eimi.l/isin", json={"isin": "IE00BKM4GZ66"})
+    assert res.status_code == 200 and res.json()["ticker"] == "EIMI.L"
+    assert client.get("/portfolio/holdings").json()[0]["isin"] == "IE00BKM4GZ66"
+
+
+def test_log_trade_whose_holding_total_overflows_is_422_and_writes_nothing(client, db_session):
+    _hold_vwce(client)
+    big = _trade_body(shares=900_000_000_000, price=1)
+    assert client.post("/portfolio/trades", json=big).status_code == 200
+    res = client.post("/portfolio/trades", json=big)  # 1.8e12 shares: past Numeric(18,6)
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Those numbers are too large to store."
+    assert db_session.query(Trade).count() == 1
+    assert client.get("/portfolio/holdings").json()[0]["shares"] == 900_000_000_010

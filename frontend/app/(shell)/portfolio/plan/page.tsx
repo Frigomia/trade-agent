@@ -14,6 +14,7 @@ import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
+import { OrdersSection } from "@/components/plan/OrdersSection";
 import { PlanHistory } from "@/components/plan/PlanHistory";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
@@ -84,7 +85,7 @@ function NoTargets() {
 
 /** "This month": the form and the preview, which lives only in this component's state until saved. */
 function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
-  const { save } = usePlans();
+  const { save, load } = usePlans();
   const [amount, setAmount] = useState(initialAmount !== null ? initialAmount.toFixed(2) : "");
   const [wholeShares, setWholeShares] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -105,6 +106,14 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
       setRefreshed(false);
       setWholeShares(next.whole_shares);
     });
+  }
+
+  // The saved plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer for a
+  // plan no longer shown (a new preview, another save) is dropped.
+  async function reload() {
+    if (plan?.id == null) return;
+    const fresh = await load(plan.id);
+    setPlan((current) => (current?.id === fresh.id ? fresh : current));
   }
 
   function toggleWhole(next: boolean) {
@@ -156,7 +165,8 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
       {refreshed && plan?.created_at && (
         <Alert severity="info">Prices were refreshed when saving; this is the plan that was saved.</Alert>
       )}
-      {plan && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
+      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} />}
+      {plan && plan.id === null && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
   );
 }

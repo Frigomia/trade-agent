@@ -50,7 +50,8 @@ async function handleApiResponse<T>(response: Response): Promise<T> {
         detail = body.detail;
       } else if (Array.isArray(body.detail)) {
         // FastAPI's default 422 validation-error shape: { detail: [{ loc, msg, type }, ...] }.
-        detail = body.detail.map((error) => error.msg).join("; ");
+        // A custom validator's message comes prefixed with "Value error, ": drop it, it is noise.
+        detail = body.detail.map((error) => error.msg.replace(/^Value error, /, "")).join("; ");
       }
     } catch {
       // Error body wasn't JSON (a proxy error page, a timeout) — statusText is still useful.

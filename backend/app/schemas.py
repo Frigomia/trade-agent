@@ -8,10 +8,12 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeFloat,
-    PositiveFloat,
     StringConstraints,
     computed_field,
+    field_validator,
 )
+
+from app.isin import is_valid_isin
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
 # Excludes path metacharacters (/, ?, #) and any ".." that yfinance interpolates
@@ -50,6 +52,7 @@ class HoldingOut(HoldingIn):
 
     id: int
     user_id: UUID
+    isin: str | None = None
 
 
 class WatchlistItemIn(BaseModel):
@@ -64,14 +67,27 @@ class WatchlistItemOut(WatchlistItemIn):
 
     id: int
     user_id: UUID
+    isin: str | None = None
+
+
+# A share count or price as a trade stores it (Numeric(18,6)): finite and at least the smallest
+# stored step, so a smaller value cannot store as 0 while the cost basis used the unrounded one.
+TradeNumber = Annotated[float, Field(ge=0.000001, allow_inf_nan=False)]
 
 
 class TradeIn(BaseModel):
     date: date
     ticker: Ticker
     action: Literal["BUY", "SELL"]
-    shares: PositiveFloat
-    price: PositiveFloat
+    shares: TradeNumber
+    price: TradeNumber
+
+
+class PlaceIn(BaseModel):
+    date: date
+    shares: TradeNumber
+    price: TradeNumber
+    asset_type: AssetType | None = None  # needed only when the ticker is not a holding yet
 
 
 class TradeOut(TradeIn):
@@ -305,7 +321,7 @@ class PlanIn(BaseModel):
 REASON_TEXT = {
     "new_position": "A new position that starts at 0 %",
     "underweight": "Below its target weight",
-    "favoured": "Below its target, and its newest call is ADD or BUY",
+    "favoured": "Below its target, and a pending call favours adding",
     "remainder": "Extra money shared by target weight",
 }
 
@@ -313,6 +329,12 @@ REASON_TEXT = {
 class PlanLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: int | None = None
+    isin: str | None = None
+    placed_at: datetime | None = None
+    placed_trade_id: int | None = None
+    placed_shares: float | None = None  # read from the logged trade, never stored
+    placed_price: float | None = None
     ticker: str
     name: str
     amount_eur: float
@@ -460,3 +482,26 @@ class TelegramSettingsIn(BaseModel):
     moves_enabled: bool | None = None
     plan_reminder_enabled: bool | None = None
     move_threshold_pct: float | None = Field(default=None, ge=1, le=50)
+
+
+class IsinIn(BaseModel):
+    isin: str | None = None
+
+    @field_validator("isin", mode="before")
+    @classmethod
+    def _normalise(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("isin must be text")
+        text = value.strip().upper()
+        if text == "":
+            return None
+        if not is_valid_isin(text):
+            raise ValueError("Not a valid ISIN: 12 characters with a correct check digit.")
+        return text
+
+
+class IsinOut(BaseModel):
+    ticker: str
+    isin: str | None

@@ -5,14 +5,18 @@ import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
 import { formatRate, type Plan, type PlanLine } from "@/lib/plans";
 
-const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
+export const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "150px minmax(0, 1fr) 220px 130px 150px" };
 const BEFORE = "color-mix(in oklab, var(--accent-solid) 42%, var(--bg))";
 
 const pct = (fraction: number) => `${(fraction * 100).toFixed(1)}%`;
 
-function shares(line: PlanLine, whole: boolean): string {
+/** The bar scale shared by every line of a plan: the largest weight plus some headroom. */
+export const weightScale = (plan: Plan) =>
+  Math.max(0.01, ...plan.lines.flatMap((l) => [l.weight_before ?? 0, l.weight_after ?? 0])) * 1.15;
+
+export function shares(line: PlanLine, whole: boolean): string {
   if (whole) return `${line.shares} sh`;
   return `about ${line.shares.toLocaleString("en-US", { maximumFractionDigits: 3 })} sh`;
 }
@@ -31,21 +35,34 @@ const wide = { gridColumn: { xs: "1 / -1", md: "auto" } } as const;
 const amountCell = { gridRow: { xs: 1, md: "auto" }, gridColumn: { xs: 2, md: "auto" }, textAlign: "right" } as const;
 const priceCell = { display: { xs: "none", md: "block" }, textAlign: "right" } as const;
 
-/** Before (lighter) and after (solid) on one track scaled to the largest weight in the plan. */
+/** Before (lighter) and after (solid) on one track scaled to the largest weight in the plan. Spans, so it fits in a button. */
 function WeightBar({ before, after, scale }: { before: number; after: number; scale: number }) {
   const seg = (width: number, bg: string) => (
-    <Box sx={{ position: "absolute", inset: "0 auto 0 0", width: `${Math.min(width / scale, 1) * 100}%`, borderRadius: 999, bgcolor: bg }} />
+    <Box component="span" sx={{ position: "absolute", inset: "0 auto 0 0", width: `${Math.min(width / scale, 1) * 100}%`, borderRadius: 999, bgcolor: bg }} />
   );
   return (
-    <Box aria-hidden sx={{ position: "relative", height: 8, borderRadius: 999, bgcolor: "var(--track)", minWidth: 80 }}>
+    <Box component="span" aria-hidden sx={{ display: "block", position: "relative", height: 8, borderRadius: 999, bgcolor: "var(--track)", minWidth: 80 }}>
       {seg(after, "var(--accent-solid)")}
       {seg(before, BEFORE)}
     </Box>
   );
 }
 
-function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: number }) {
+/** The bar and "Weight 17.9% to 18.4%", or "No weight yet". */
+export function LineWeight({ line, scale }: { line: PlanLine; scale: number }) {
   const { weight_before: before, weight_after: after } = line;
+  if (before === null || after === null) return <Typography component="span" sx={{ ...muted, display: "block" }}>No weight yet</Typography>;
+  return (
+    <>
+      <WeightBar before={before} after={after} scale={scale} />
+      <Typography component="span" sx={{ ...muted, display: "block", "& b": { color: "var(--text)", fontWeight: 650 } }}>
+        Weight <b>{pct(before)}</b> to <b>{pct(after)}</b>
+      </Typography>
+    </>
+  );
+}
+
+function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: number }) {
   return (
     <Box role="row" sx={rowSx}>
       <Box role="cell" sx={{ minWidth: 0 }}>
@@ -56,16 +73,7 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
         {line.reason_text}
       </Box>
       <Box role="cell" sx={{ ...wide, display: "flex", flexDirection: "column", gap: 0.75 }}>
-        {before !== null && after !== null ? (
-          <>
-            <WeightBar before={before} after={after} scale={scale} />
-            <Typography sx={{ ...muted, "& b": { color: "var(--text)", fontWeight: 650 } }}>
-              Weight <b>{pct(before)}</b> to <b>{pct(after)}</b>
-            </Typography>
-          </>
-        ) : (
-          <Typography sx={muted}>No weight yet</Typography>
-        )}
+        <LineWeight line={line} scale={scale} />
       </Box>
       <Box role="cell" sx={{ ...priceCell, ...muted }}>
         {formatAmount(line.price_eur)} EUR
@@ -128,7 +136,7 @@ function NothingToFund({ plan }: { plan: Plan }) {
 export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode }) {
   if (plan.lines.length === 0) return <NothingToFund plan={plan} />;
   const total = plan.lines.reduce((sum, l) => sum + l.amount_eur, 0);
-  const scale = Math.max(0.01, ...plan.lines.flatMap((l) => [l.weight_before ?? 0, l.weight_after ?? 0])) * 1.15;
+  const scale = weightScale(plan);
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
       <Panel role="table" aria-label="Plan lines" sx={{ pt: 0.75, overflow: "hidden" }}>

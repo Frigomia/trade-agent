@@ -141,6 +141,12 @@ WatchlistItem
   target_weight (Numeric(5,4), nullable, check 0 to 1: the share of the contribution pool the person
   wants this ticker to be; a holding's own target_weight is the same idea)
 
+-- Holding and WatchlistItem also carry isin (varchar(12), nullable, a check that it is empty or matches
+-- ^[A-Z]{2}[A-Z0-9]{9}[0-9]$; the API also verifies the ISO 6166 check digit). It is set only by
+-- PUT /portfolio/instruments/{ticker}/isin: the upserts never touch it (the holdings upsert is a full
+-- replace), so saving a holding cannot wipe it. It is entered by hand, never looked up (the price
+-- source is unreliable for ISINs, and a wrong ISIN on an order is worse than none).
+
 Trade
   id, user_id, date, ticker, action ("BUY"|"SELL"), shares, price
 
@@ -217,7 +223,9 @@ ContributionPlanLine
   id, user_id, plan_id, ticker, name, amount_eur (Numeric(12,2)), shares (Numeric(18,6)), price_eur
   (Numeric(18,6)), currency (the quote currency), rate (Numeric(18,8): EUR per 1 unit of it),
   weight_before and weight_after (Numeric(7,6), nullable), reason ("new_position"|"favoured"|
-  "underweight"|"remainder")
+  "underweight"|"remainder"), placed_at (nullable timestamp) and placed_trade_id (nullable integer:
+  the trade the "Placed" step logged; no foreign key, like every other user table)
+  -- The ISIN is not copied onto a line: it is resolved at read time (see Order tickets below).
   -- A saved plan is a record of the plan as computed when saved (prices can move between the preview and the save): it stores the prices and rates used and is
   -- never recomputed. Both tables carry user_id with owner-only row-level security, are in
   -- GET /me/export (lines nested under their plan) and are removed by DELETE /me/data. There is
@@ -244,6 +252,10 @@ AppSettings
   -- to the Settings value from the environment. No user_id, no RLS (like app_users); the runtime role
   -- may SELECT, INSERT and UPDATE it, never DELETE.
 ```
+
+The order-ticket columns (`isin` on holdings and watchlist items, `placed_at` and `placed_trade_id` on
+plan lines) come from one hand-written migration, `e7b2c4d91a35_add_order_tickets.py`, on top of
+`d5f3a9b72e18`. Existing migrations are never edited.
 
 ### Migrations — Alembic
 
@@ -300,7 +312,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that). Accepts `target_weight` (0 to 1) |
 | DELETE | `/portfolio/watchlist/{ticker}` | — | Removes the caller's watchlist item (`204`; `404` if it is not on the list); 60 requests a minute per user |
 | GET | `/market/search?q=` | — | Stocks and ETFs matching a name, ticker or ISIN (`yfinance` search): up to 8 of `{symbol, name, type, exchange}`; `q` is 2–60 characters; cached an hour; 30 requests a minute per user; an empty list when Yahoo fails. The ticker field in the holding and backtest forms uses it |
-| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis; 60 requests a minute per user |
+| PUT | `/portfolio/instruments/{ticker}/isin` | `{isin: string \| null}` | Sets or clears the ISIN on whichever of the caller's holding and watchlist rows exist for the ticker (both when both exist). The text is trimmed and upper-cased; an empty string or `null` clears it; `422` for a wrong shape or check digit; `404` when neither row exists. The only way to set an ISIN; 60 requests a minute per user |
+| POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis through the shared `app/trades.py`; takes the per-person lock `lock_user_for_insert`, so it serializes with placements; `shares` and `price` must be finite and at least 0.000001, and a number too large to store is a `422` with nothing written; 60 requests a minute per user |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
@@ -323,15 +336,16 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `422` "This plan is too large to store." when a figure overflows its column. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
 | GET | `/plans/drift` | — | Open holdings with a target weight whose weight is at least `drift_threshold_pct` points away from it, largest first: `{ticker, name, weight, target, points}` (fractions, `points` signed). An empty list when nothing drifts or nothing can be priced. Rate limited: 30/min per user |
-| GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's |
-| DELETE | `/plans/{id}` | — | Deletes the plan and its lines (`204`); `404` if it is not the caller's |
+| GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's. Each line also carries `id`, `isin` (read now from the caller's holding, else the watchlist item, for that ticker; `null` when none), `placed_at` and `placed_trade_id` (`null` until placed), plus `placed_shares` and `placed_price`, read at request time from the logged trade (`null` when unplaced or the trade was deleted; never stored on the line) |
+| POST | `/plans/{plan_id}/lines/{line_id}/placed` | `{date, shares, price, asset_type?}` | Records that the person placed this line's order in their broker (see "Order tickets" below); returns the line. `shares` and `price` must be finite and at least 0.000001 (`422` for zero, negative, smaller, `NaN` or infinity). `404` for a missing line or one that is not the caller's; `409` when already placed, or when a new position would pass the 100-holding cap; `422` when `asset_type` is missing for a ticker that is not a holding yet, or when the numbers are too large to store. 60 requests a minute per user |
+| DELETE | `/plans/{id}` | — | Deletes the plan and its lines (`204`); `404` if it is not the caller's. Trades that placed lines logged stay in the trade log |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
 | GET | `/chat/messages?session_id=main` | — | The caller's last 50 messages of that session, oldest first (`id, session_id, role, content, created_at`). Not counted against the monthly cap |
 | DELETE | `/chat/messages?session_id=main` | — | Deletes the caller's messages of that session. `204` |
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
 | POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
-| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list; the `telegram` block includes `plan_reminder_enabled`) |
+| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list, each line with its `id`, resolved `isin` and placed fields; holdings and watchlist items carry their `isin`; the `telegram` block includes `plan_reminder_enabled`) |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
@@ -431,7 +445,8 @@ holding without a target is outside the pool: it neither receives money nor coun
    buy one share is dropped with a note, and whatever no line uses is the leftover.
 8. `weight_before` is the item's value over `pool_before` (null when the pool is 0); `weight_after` is
    its value plus the line over `pool_before` plus what was spent. The reason is `remainder`,
-   `new_position` (not held), `favoured` (ADD or BUY) or `underweight`.
+   `new_position` (not held), `favoured` (ADD or BUY; shown as "Below its target, and a pending call
+   favours adding") or `underweight`.
 
 If a holding and a watchlist item share a ticker, the holding's target is used; when the holding has no target, the watchlist target applies to the held position (its real shares count, it is not a `new_position`, and it is not counted among the holdings without a target). A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
 priced (a note says no ticker with a target could be priced), every targeted ticker excluded. `POST /plans` returns the plan as read back from the
@@ -455,6 +470,66 @@ day, so it cannot repeat in a month. The line carries no amounts and no tickers.
 
 **The export block.** `GET /me/export` has a `contribution_plans` list; each plan carries its notes
 and its lines. `DELETE /me/data` removes both plan tables.
+
+### Order tickets
+
+A saved plan line can be turned into text the person copies into their broker and places themselves,
+then recorded as placed. The system never places a trade and never calls a broker: a ticket is text on
+a screen, and "Placed" records what the person did.
+
+**The ticket.** Built in the frontend from the line, one neutral format for every broker (no broker
+setting): `Order (amount): 92.30 EUR · <name> · ISIN <isin> · about 1.69 shares at 54.64 EUR`. The
+ISIN part is left out when none is saved (the screen offers "Add ISIN"); a whole-shares plan says
+"N shares" instead of "about N shares". Tickets exist only on saved plans, never on a preview. The
+words on screen are "Order" and "Placed", never Buy or Sell.
+
+**The ISIN** lives on the holding and the watchlist item and is set only through
+`PUT /portfolio/instruments/{ticker}/isin` (validated by `app/isin.py`: shape plus the ISO 6166 check
+digit). It is resolved at read time by `plans._isins`: for a ticker that is both held and watched, the
+holding's ISIN wins, else the watchlist item's. Because nothing is copied onto the line, an ISIN added
+after a plan was saved appears on the older plan too.
+
+**The currency rule.** A plan line's price is in EUR, converted at plan time; a holding's cost basis is
+in whatever currency the person uses for it (for example USD). So the plan's EUR price is never written
+to the trade log: the "Placed" sheet prefills only the planned shares, and the person types the real
+fill price in the holding's own currency. Writing the EUR price would corrupt the average cost.
+
+**What "Placed" does** (`plans.place_line`, `POST /plans/{plan_id}/lines/{line_id}/placed`). One
+transaction under the per-person lock `lock_user_for_insert`, so a double click or a second tab cannot
+place a line twice or interleave with another write: find the line (own rows only: `404` otherwise;
+`409` if already placed); when the ticker is not a holding yet, create it from the line's name and the
+given `asset_type` with shares 0 and cost basis 0 (`asset_type` is optional in the body and required
+only in that case; the 100-holding cap from `app/limits.py` applies, the same message as the holdings
+route); apply a BUY through `app/trades.py`; stamp `placed_at` and `placed_trade_id`. Because the new
+holding starts at zero, its cost basis becomes exactly the fill price. Any failure rolls the whole
+thing back: no half-created holding, no stamped line.
+
+**The shared trade code.** `app/trades.py` holds `apply_trade(db, user_id, holding, payload)`, the one
+place a trade changes shares and average cost and writes the `trades` row. It does not commit (the
+caller owns the transaction) and raises `TradeRefused` for what it cannot apply (selling more than is
+held); `POST /portfolio/trades` turns that into the same `422` messages as before and `place_line` into
+a `422` of its own. `POST /portfolio/trades` now takes the same per-person lock, so trades and
+placements serialize per person. Shares and price (in `TradeIn` and the placement body alike) must be
+finite and at least 0.000001, the smallest step the `Numeric(18,6)` columns store (`422` otherwise);
+`apply_trade` rounds both to 6 decimals (half-even) before the arithmetic, so the average cost and the
+stored row use the same numbers. A value or a resulting total too large for the column is a `422`
+"Those numbers are too large to store." on both routes, with nothing written.
+
+**No undo.** The trade log has no delete, so unmarking a line would leave its trade behind and the
+portfolio and the plan would disagree. A SELL in the trade log corrects the share count but not the
+average cost. To get both right, edit the holding's shares and average cost on the holdings page (the
+holding form, a full-replace upsert). A wrong price, or an order that was never placed, is corrected the
+same way. For example, holding 10 at 100 and wrongly recording 2 at 50 instead of 1 at 50 gives 12 at
+91.67; a SELL of 1 leaves 11 at 91.67, but the correct result is 11 at 95.45. Too few shares recorded
+cannot be fixed with a SELL at all. Either way the line stays marked placed.
+Deleting a plan removes its lines but keeps the trades they logged.
+
+**Privacy.** Plan data, tickets and ISINs are never logged and never sent to Telegram.
+
+**Future work.** An "Orders" tab next to This month and Saved plans, listing open (not yet placed)
+lines across all saved plans (a query over lines with no `placed_at`); a broker preference with
+broker-specific wording; undo, if the trade log ever gets a delete (until then a wrong price is
+corrected on the holding form, since a SELL does not restore the average cost).
 
 ---
 

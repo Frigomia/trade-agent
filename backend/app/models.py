@@ -22,10 +22,15 @@ from sqlalchemy.sql import expression
 
 from app.db import Base
 
+ISIN_CHECK = "isin IS NULL OR isin ~ '^[A-Z]{2}[A-Z0-9]{9}[0-9]$'"
+
 
 class Holding(Base):
     __tablename__ = "holdings"
-    __table_args__ = (UniqueConstraint("user_id", "ticker", name="uq_holdings_user_ticker"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "ticker", name="uq_holdings_user_ticker"),
+        CheckConstraint(ISIN_CHECK, name="ck_holdings_isin"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
@@ -37,11 +42,15 @@ class Holding(Base):
     first_purchase_date: Mapped[date] = mapped_column(Date)
     target_weight: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    isin: Mapped[str | None] = mapped_column(String(12), nullable=True)
 
 
 class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
-    __table_args__ = (UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),
+        CheckConstraint(ISIN_CHECK, name="ck_watchlist_items_isin"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
@@ -49,6 +58,7 @@ class WatchlistItem(Base):
     asset_type: Mapped[str] = mapped_column(String(10))
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     target_weight: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
+    isin: Mapped[str | None] = mapped_column(String(12), nullable=True)
 
 
 class Trade(Base):
@@ -269,3 +279,5 @@ class ContributionPlanLine(Base):
     weight_before: Mapped[float | None] = mapped_column(Numeric(7, 6), nullable=True)
     weight_after: Mapped[float | None] = mapped_column(Numeric(7, 6), nullable=True)
     reason: Mapped[str] = mapped_column(String(20))
+    placed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    placed_trade_id: Mapped[int | None] = mapped_column(nullable=True)

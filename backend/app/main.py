@@ -92,10 +92,15 @@ async def _validation_error_without_input(
     request: Request, exc: RequestValidationError
 ) -> Response:
     """Pydantic echoes the request body as `input` in a 422; on the key route that body is a secret,
-    so drop it there. Every other route keeps FastAPI's usual response."""
+    so drop it there. Every other route keeps FastAPI's usual response (input-free only when the
+    input itself cannot be encoded)."""
     # endswith, not ==: the path may carry a root-path or mount prefix.
     if not request.url.path.endswith("/me/claude-key"):
-        return await request_validation_exception_handler(request, exc)
+        try:
+            return await request_validation_exception_handler(request, exc)
+        except ValueError:
+            # An echoed input such as `inf` cannot be written as JSON: answer without the input.
+            pass
     errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 

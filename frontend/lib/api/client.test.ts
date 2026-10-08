@@ -96,6 +96,26 @@ describe("apiFetch", () => {
     });
   });
 
+  it("drops the 'Value error, ' prefix a custom validator's message carries", async () => {
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: [
+            { loc: ["body", "isin"], msg: "Value error, Not a valid ISIN.", type: "value_error" },
+            { loc: ["body", "x"], msg: "Keeps a Value error, in the middle", type: "value_error" },
+          ],
+        }),
+        { status: 422 },
+      ),
+    );
+
+    await expect(apiFetch("/portfolio/instruments/X/isin")).rejects.toMatchObject({
+      status: 422,
+      detail: "Not a valid ISIN.; Keeps a Value error, in the middle",
+    });
+  });
+
   it("parses the backend's error detail on a non-2xx response", async () => {
     mockSession(null);
     vi.mocked(fetch).mockResolvedValue(

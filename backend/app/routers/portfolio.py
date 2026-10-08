@@ -3,18 +3,22 @@ import logging
 import math
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
 from app.http_headers import no_store
+from app.limits import MAX_HOLDINGS, cap_message
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import (
     HoldingIn,
     HoldingOut,
     HoldingSummaryOut,
+    IsinIn,
+    IsinOut,
     PortfolioSnapshotOut,
     PortfolioSummaryOut,
     TradeIn,
@@ -24,6 +28,7 @@ from app.schemas import (
     WatchlistSummaryOut,
 )
 from app.snapshots import record_snapshot
+from app.trades import TOO_LARGE, TradeRefused, apply_trade
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +41,9 @@ router = APIRouter(
 )
 
 # Every row can become a paid analysis run or a live quote fetch, so a user's lists are bounded.
-MAX_HOLDINGS = 100
 MAX_WATCHLIST = 100
 WRITE_LIMIT_PER_MINUTE = 60  # per user, per route: the holdings/watchlist upserts
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
-
-
-def _cap_message(what: str, cap: int) -> str:
-    return f"You can keep up to {cap} {what}. Remove one before adding another."
 
 
 @router.get("/holdings", response_model=list[HoldingOut])
@@ -51,6 +51,31 @@ def list_holdings(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> list[Holding]:
     return db.query(Holding).filter_by(user_id=user.id).all()
+
+
+@router.put(
+    "/instruments/{ticker}/isin",
+    response_model=IsinOut,
+    dependencies=[Depends(rate_limiter("portfolio_isin", limit=WRITE_LIMIT_PER_MINUTE))],
+)
+def set_isin(
+    ticker: str,
+    payload: IsinIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> IsinOut:
+    """Sets (or clears) the ISIN on the person's holding and/or watchlist row for this ticker.
+    A dedicated route: the holdings upsert replaces the whole record and would wipe it."""
+    symbol = ticker.upper()
+    holding = db.query(Holding).filter_by(user_id=user.id, ticker=symbol).one_or_none()
+    item = db.query(WatchlistItem).filter_by(user_id=user.id, ticker=symbol).one_or_none()
+    if holding is None and item is None:
+        raise HTTPException(status_code=404, detail="No holding or watchlist item for that ticker")
+    for row in (holding, item):
+        if row is not None:
+            row.isin = payload.isin
+    db.commit()
+    return IsinOut(ticker=symbol, isin=payload.isin)
 
 
 @router.post(
@@ -63,11 +88,13 @@ def upsert_holding(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> Holding:
+    # Lock first, before the lookup: a plan-line placement creating this same ticker takes the same
+    # lock, so it cannot insert between this lookup and the insert below (a unique-key error).
+    lock_user_for_insert(db, user.id)
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
-        lock_user_for_insert(db, user.id)
         if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
-            raise HTTPException(status_code=409, detail=_cap_message("holdings", MAX_HOLDINGS))
+            raise HTTPException(status_code=409, detail=cap_message("holdings", MAX_HOLDINGS))
         holding = Holding(user_id=user.id, **payload.model_dump())
         db.add(holding)
     else:
@@ -111,7 +138,7 @@ def upsert_watchlist_item(
         lock_user_for_insert(db, user.id)
         if db.query(WatchlistItem).filter_by(user_id=user.id).count() >= MAX_WATCHLIST:
             raise HTTPException(
-                status_code=409, detail=_cap_message("watchlist items", MAX_WATCHLIST)
+                status_code=409, detail=cap_message("watchlist items", MAX_WATCHLIST)
             )
         item = WatchlistItem(user_id=user.id, **payload.model_dump())
         db.add(item)
@@ -150,6 +177,8 @@ def log_trade(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> Trade:
+    # Same per-person lock as placing a plan line, so two writes to one holding cannot interleave.
+    lock_user_for_insert(db, user.id)
     holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
     if holding is None:
         raise HTTPException(
@@ -157,25 +186,16 @@ def log_trade(
             detail=f"No holding for {payload.ticker}; add it via POST /portfolio/holdings first",
         )
 
-    if payload.action == "BUY":
-        prior_value = float(holding.shares) * float(holding.cost_basis)
-        added_value = payload.shares * payload.price
-        total_cost = prior_value + added_value
-        holding.shares = float(holding.shares) + payload.shares
-        holding.cost_basis = total_cost / float(holding.shares)
-    elif payload.action == "SELL":
-        if payload.shares > float(holding.shares):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Cannot sell {payload.shares}; holding has {float(holding.shares)}",
-            )
-        holding.shares = float(holding.shares) - payload.shares
-    else:
-        raise HTTPException(status_code=422, detail="action must be BUY or SELL")
-
-    trade = Trade(user_id=user.id, **payload.model_dump())
-    db.add(trade)
-    db.commit()
+    try:
+        trade = apply_trade(db, user.id, holding, payload)
+        db.commit()
+    except TradeRefused as exc:
+        db.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except DataError:
+        # A total past Numeric(18,6), such as the holding's share count: refused at the commit.
+        db.rollback()
+        raise HTTPException(status_code=422, detail=TOO_LARGE) from None
     db.refresh(trade)
     return trade
 

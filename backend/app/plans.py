@@ -3,7 +3,9 @@ the person's rows, prices them (app/fx.py) and turns the result into API shapes.
 nothing here talks to a broker."""
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import NamedTuple
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -11,18 +13,29 @@ from sqlalchemy.exc import DataError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app import planner
+from app import planner, trades
 from app.db import lock_user_for_insert
 from app.fx import eur_prices
+from app.limits import MAX_HOLDINGS, cap_message
 from app.models import (
     ContributionPlan,
     ContributionPlanLine,
     Holding,
     InvestmentPreferences,
     Recommendation,
+    Trade,
     WatchlistItem,
 )
-from app.schemas import DriftItemOut, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
+from app.schemas import (
+    DriftItemOut,
+    PlaceIn,
+    PlanIn,
+    PlanLineOut,
+    PlanOut,
+    PlanSummaryOut,
+    TradeIn,
+)
+from app.trades import TradeRefused, apply_trade
 
 MAX_PLANS = 120
 
@@ -224,7 +237,54 @@ def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
     return saved
 
 
-def _out(row: ContributionPlan, lines: list[ContributionPlanLine]) -> PlanOut:
+def _isins(db: Session, user_id: uuid.UUID) -> dict[str, str]:
+    """ticker -> ISIN, the holding's winning over the watchlist item's; only the person's rows."""
+    found: dict[str, str] = {}
+    for model in (WatchlistItem, Holding):  # holdings last, so they win
+        rows = db.query(model.ticker, model.isin).filter(
+            model.user_id == user_id, model.isin.isnot(None)
+        )
+        found.update({ticker: isin for ticker, isin in rows if isin is not None})
+    return found
+
+
+def _placed(
+    db: Session, user_id: uuid.UUID, lines: list[ContributionPlanLine]
+) -> dict[int, tuple[float, float]]:
+    """trade id -> (shares, price) for the trades that placed these lines; only the person's own
+    trades. A trade that was deleted is simply absent."""
+    ids = {ln.placed_trade_id for ln in lines if ln.placed_trade_id is not None}
+    if not ids:
+        return {}
+    rows = db.query(Trade.id, Trade.shares, Trade.price).filter(
+        Trade.user_id == user_id, Trade.id.in_(ids)
+    )
+    return {trade_id: (float(shares), float(price)) for trade_id, shares, price in rows}
+
+
+class _Extras(NamedTuple):
+    """What a plan line shows beyond its own columns."""
+
+    isins: dict[str, str]  # ticker -> ISIN
+    placed: dict[int, tuple[float, float]]  # trade id -> (shares, price)
+
+
+def _extras(db: Session, user_id: uuid.UUID, lines: list[ContributionPlanLine]) -> _Extras:
+    return _Extras(_isins(db, user_id), _placed(db, user_id, lines))
+
+
+def _line_out(ln: ContributionPlanLine, extras: _Extras) -> PlanLineOut:
+    found = extras.placed.get(ln.placed_trade_id) if ln.placed_trade_id is not None else None
+    return PlanLineOut.model_validate(ln, from_attributes=True).model_copy(
+        update={
+            "isin": extras.isins.get(ln.ticker),
+            "placed_shares": found[0] if found else None,
+            "placed_price": found[1] if found else None,
+        }
+    )
+
+
+def _out(row: ContributionPlan, lines: list[ContributionPlanLine], extras: _Extras) -> PlanOut:
     return PlanOut(
         id=row.id,
         created_at=row.created_at,
@@ -232,7 +292,7 @@ def _out(row: ContributionPlan, lines: list[ContributionPlanLine]) -> PlanOut:
         whole_shares=row.whole_shares,
         total_before_eur=float(row.total_before_eur),
         leftover_eur=float(row.leftover_eur),
-        lines=[PlanLineOut.model_validate(ln, from_attributes=True) for ln in lines],
+        lines=[_line_out(ln, extras) for ln in lines],
         notes=list(row.notes or []),
     )
 
@@ -247,7 +307,7 @@ def load(db: Session, user_id: uuid.UUID, plan_id: int) -> PlanOut | None:
         .order_by(ContributionPlanLine.id)
         .all()
     )
-    return _out(row, lines)
+    return _out(row, lines, _extras(db, user_id, lines))
 
 
 def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
@@ -270,7 +330,8 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
     )
     for line in lines:
         by_plan.setdefault(line.plan_id, []).append(line)
-    return [_out(r, by_plan.get(r.id, [])) for r in rows]
+    extras = _extras(db, user_id, lines)  # once, not per plan
+    return [_out(r, by_plan.get(r.id, []), extras) for r in rows]
 
 
 def list_summaries(db: Session, user_id: uuid.UUID) -> list[PlanSummaryOut]:
@@ -310,3 +371,67 @@ def delete(db: Session, user_id: uuid.UUID, plan_id: int) -> bool:
         db.rollback()
         raise
     return True
+
+
+def place_line(
+    db: Session, user_id: uuid.UUID, plan_id: int, line_id: int, payload: PlaceIn
+) -> PlanLineOut:
+    """Records that the person placed this line's order in their broker: creates the holding when
+    it is new, logs a BUY through the shared trade code, stamps the line. One transaction."""
+    try:
+        lock_user_for_insert(db, user_id)  # a double click or a second tab cannot place it twice
+        line = (
+            db.query(ContributionPlanLine)
+            .filter_by(id=line_id, plan_id=plan_id, user_id=user_id)
+            .one_or_none()
+        )
+        if line is None:
+            raise HTTPException(404, "Plan line not found")
+        if line.placed_at is not None:
+            raise HTTPException(409, "This line is already recorded as placed.")
+        holding = (
+            db.query(Holding)
+            .filter_by(user_id=user_id, ticker=line.ticker)
+            .with_for_update()
+            .one_or_none()
+        )
+        if holding is None:
+            if payload.asset_type is None:
+                raise HTTPException(422, "asset_type is required for a new position.")
+            if db.query(Holding).filter_by(user_id=user_id).count() >= MAX_HOLDINGS:
+                raise HTTPException(409, cap_message("holdings", MAX_HOLDINGS))
+            holding = Holding(
+                user_id=user_id,
+                ticker=line.ticker,
+                name=line.name,
+                asset_type=payload.asset_type,
+                shares=0,
+                cost_basis=0,
+                first_purchase_date=payload.date,
+            )
+            db.add(holding)
+        trade = apply_trade(
+            db,
+            user_id,
+            holding,
+            TradeIn(
+                date=payload.date,
+                ticker=line.ticker,
+                action="BUY",
+                shares=payload.shares,
+                price=payload.price,
+            ),
+        )
+        db.flush()  # assigns trade.id
+        line.placed_at = datetime.now(UTC).replace(tzinfo=None)
+        line.placed_trade_id = trade.id
+        db.commit()
+    except (TradeRefused, DataError, SQLAlchemyError, HTTPException) as exc:
+        db.rollback()
+        if isinstance(exc, TradeRefused):
+            raise HTTPException(422, str(exc)) from None
+        if isinstance(exc, DataError):
+            raise HTTPException(422, trades.TOO_LARGE) from None
+        raise
+    db.refresh(line)
+    return _line_out(line, _extras(db, user_id, [line]))

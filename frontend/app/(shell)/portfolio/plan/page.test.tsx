@@ -52,6 +52,12 @@ const PLAN: Plan = {
   leftover_eur: 0,
   lines: [
     {
+      id: null,
+      isin: null,
+      placed_at: null,
+      placed_trade_id: null,
+      placed_shares: null,
+      placed_price: null,
       ticker: "MSFT",
       name: "Microsoft",
       amount_eur: 312.04,
@@ -62,9 +68,15 @@ const PLAN: Plan = {
       weight_before: 0.18,
       weight_after: 0.184,
       reason: "favoured",
-      reason_text: "Below its target, and its newest call is ADD or BUY",
+      reason_text: "Below its target, and a pending call favours adding",
     },
     {
+      id: null,
+      isin: null,
+      placed_at: null,
+      placed_trade_id: null,
+      placed_shares: null,
+      placed_price: null,
       ticker: "SAP",
       name: "SAP SE",
       amount_eur: 187.96,
@@ -204,7 +216,7 @@ describe("Plan page", () => {
     const msft = within(table).getAllByRole("row")[1];
     expect(within(msft).getByText("Add 312.04 EUR")).toBeInTheDocument();
     expect(within(msft).getByText("about 0.795 sh")).toBeInTheDocument();
-    expect(within(msft).getByText("Below its target, and its newest call is ADD or BUY")).toBeInTheDocument();
+    expect(within(msft).getByText("Below its target, and a pending call favours adding")).toBeInTheDocument();
     expect(msft).toHaveTextContent("Weight 18.0% to 18.4%");
     expect(msft).toHaveTextContent("392.18 EUR");
     expect(within(table).getByText("Leftover 0.00 EUR")).toBeInTheDocument();
@@ -243,13 +255,71 @@ describe("Plan page", () => {
     expect(await screen.findByText(/Saved 8 Oct 2026/)).toBeInTheDocument();
     expect(body("/plans")).toEqual([{ amount: 500, whole_shares: false }]);
     expect(screen.queryByRole("button", { name: "Save plan" })).not.toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Plan lines" })).toBeInTheDocument();
+    // The saved plan shows its orders instead of the ledger.
+    expect(screen.queryByRole("table", { name: "Plan lines" })).not.toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Orders" })).toBeInTheDocument();
+    expect(screen.getByText("0 of 2 placed")).toBeInTheDocument();
 
     view("saved");
     const history = await screen.findByRole("table", { name: "Saved plans" });
     await waitFor(() => expect(within(history).getAllByRole("row")).toHaveLength(4));
     view("month");
-    expect(screen.getByText("Add 312.04 EUR")).toBeVisible();
+    expect(screen.getByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" })).toBeVisible();
+  });
+
+  it("shows no orders on a preview", async () => {
+    await makePlan();
+    expect(screen.queryByRole("list", { name: "Orders" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/placed/i)).not.toBeInTheDocument();
+  });
+
+  it("reloads the saved plan after an ISIN is saved, so the ticket carries it", async () => {
+    let isin: string | null = null;
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/portfolio/instruments/SAP/isin") {
+        isin = (JSON.parse(init!.body as string) as { isin: string }).isin;
+        return Promise.resolve({ ticker: "SAP", isin });
+      }
+      if (path === "/plans/7" && !init) {
+        return Promise.resolve({ ...SAVED, lines: SAVED.lines.map((l) => (l.ticker === "SAP" ? { ...l, isin } : l)) });
+      }
+      return base(path, init);
+    });
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "SAP, 187.96 EUR, not placed, press to open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add ISIN" }));
+    fireEvent.change(screen.getByLabelText("ISIN for SAP"), { target: { value: "DE0007164600" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save ISIN" }));
+    expect(await screen.findByText(/SAP SE · ISIN DE0007164600 · about 0.817 shares/)).toBeInTheDocument();
+    expect(screen.getByText(/Saved 8 Oct 2026/)).toBeInTheDocument();
+  });
+
+  it("records a placed order on the saved plan through the shared sheet and opens the next line", async () => {
+    const stored = { ...SAVED, lines: SAVED.lines.map((l, i) => ({ ...l, id: 70 + i })) };
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/plans" && init?.method === "POST") return Promise.resolve(stored);
+      if (path === "/plans/7/lines/70/placed") return Promise.resolve({});
+      if (path === "/plans/7" && !init) return Promise.resolve(stored);
+      return base(path, init);
+    });
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+    // MSFT is a holding in the summary the page loaded: no asset type.
+    expect(within(sheet).queryByText("Asset type")).not.toBeInTheDocument();
+    expect(within(sheet).getByLabelText("Price per share")).toHaveValue("");
+    fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "425.5" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+    expect(await screen.findByText("MSFT recorded as placed. Next: SAP, opened for you.")).toBeInTheDocument();
+    expect(body("/plans/7/lines/70/placed")).toEqual([{ date: expect.any(String), shares: 0.795, price: 425.5 }]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "SAP, 187.96 EUR, not placed, press to close" })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("shows the exchange rate with four significant digits", async () => {
