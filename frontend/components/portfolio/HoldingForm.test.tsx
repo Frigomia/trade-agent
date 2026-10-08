@@ -115,6 +115,31 @@ describe("HoldingForm", () => {
     expect(screen.getByLabelText("Name")).toHaveValue("Vanguard FTSE All-World");
   });
 
+  it("shows the saved target as a percentage and always sends the current one", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: HELD });
+    expect(screen.getByLabelText("Target weight (%)")).toHaveValue("20");
+
+    type("Target weight (%)", "7.25");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody().target_weight).toBe(0.0725);
+  });
+
+  it("sends null when the target is cleared, and refuses one above 100", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: HELD });
+
+    type("Target weight (%)", "101");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    expect(apiFetch).not.toHaveBeenCalled();
+
+    type("Target weight (%)", "");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).toHaveProperty("target_weight", null);
+  });
+
   it("keeps the ticker locked while editing, with no search", () => {
     setup({ holding: HELD });
 

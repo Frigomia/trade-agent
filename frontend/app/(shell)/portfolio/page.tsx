@@ -18,7 +18,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Camera, Check, Eye, Plus, X } from "lucide-react";
+import { Camera, Check, Eye, Pencil, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import type {
@@ -26,12 +26,16 @@ import type {
   HoldingSummary,
   PortfolioSummary,
   Snapshot,
+  WatchlistSummary,
 } from "@/lib/api/portfolio-types";
 import { formatAmount, formatPct, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { Amount } from "@/components/portfolio/Amount";
 import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
+import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
+import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
+import { fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
@@ -144,6 +148,8 @@ export default function PortfolioPage() {
   const watch = useAction();
   const [watchTicker, setWatchTicker] = useState("");
   const [watchType, setWatchType] = useState<AssetType>("STOCK");
+  const [watchTarget, setWatchTarget] = useState("");
+  const [editingTarget, setEditingTarget] = useState<WatchlistSummary | null>(null);
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
@@ -174,14 +180,21 @@ export default function PortfolioPage() {
   const typedTicker = watchTicker.trim().toUpperCase();
   const alreadyWatched = watched.has(typedTicker);
 
-  function addToWatchlist(ticker: string, assetType: AssetType) {
+  // target_weight is sent only when one was typed: omitting it keeps a saved target (null would clear it).
+  function addToWatchlist(ticker: string, assetType: AssetType, targetText = "") {
     if (!ticker) return;
+    const target = percentTextToFraction(targetText);
+    if (target === undefined) {
+      watch.setError(TARGET_ERROR);
+      return;
+    }
     return watch.run(async () => {
       await apiFetch("/portfolio/watchlist", {
         method: "POST",
-        body: JSON.stringify({ ticker, asset_type: assetType }),
+        body: JSON.stringify({ ticker, asset_type: assetType, ...(target !== null && { target_weight: target }) }),
       });
       setWatchTicker("");
+      setWatchTarget("");
       mutateSummary();
     });
   }
@@ -324,11 +337,20 @@ export default function PortfolioPage() {
               <Typography sx={{ fontWeight: 600 }}>{item.ticker}</Typography>
               <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
                 {item.note ?? "Watching"}
+                {item.target_weight != null && ` · target ${fractionToPercentText(item.target_weight)}%`}
               </Typography>
             </Box>
             <Typography>
               {item.current_price !== null ? formatAmount(item.current_price) : DASH}
             </Typography>
+            <IconButton
+              size="small"
+              aria-label={`Edit target for ${item.ticker}`}
+              onClick={() => setEditingTarget(item)}
+              sx={{ ml: 0.5, color: "var(--muted)" }}
+            >
+              <Pencil size={15} />
+            </IconButton>
             <IconButton
               size="small"
               aria-label={`Remove ${item.ticker} from watchlist`}
@@ -367,10 +389,11 @@ export default function PortfolioPage() {
             <option value="STOCK">Stock</option>
             <option value="ETF">ETF</option>
           </TextField>
+          <TargetWeightField size="small" value={watchTarget} onChange={setWatchTarget} sx={{ width: 150 }} />
           <Button
             variant="outlined"
             disabled={alreadyWatched || watch.submitting}
-            onClick={() => void addToWatchlist(typedTicker, watchType)}
+            onClick={() => void addToWatchlist(typedTicker, watchType, watchTarget)}
             sx={{ whiteSpace: "nowrap" }}
           >
             Add to watchlist
@@ -387,6 +410,7 @@ export default function PortfolioPage() {
       </Panel>
       </Box>
 
+      <WatchTargetDialog item={editingTarget} onClose={() => setEditingTarget(null)} onSaved={() => mutateSummary()} />
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogContent>
           <DialogContentText>Remove {removing} from your watchlist?</DialogContentText>

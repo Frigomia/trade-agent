@@ -243,6 +243,50 @@ describe("PortfolioPage", () => {
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
     });
 
+    it("does not send target_weight from the add-ticker row unless one was typed", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NVDA" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "nvda" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "STOCK" }));
+    });
+
+    it("sends a typed target as a fraction, and refuses one above 100", async () => {
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "NVDA" });
+      renderFresh();
+      await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Watchlist ticker"), { target: { value: "nvda" } });
+
+      fireEvent.change(screen.getByLabelText("Target weight (%)"), { target: { value: "150" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+      expect(postedWatch()).toBeNull();
+
+      fireEvent.change(screen.getByLabelText("Target weight (%)"), { target: { value: "12.5" } });
+      fireEvent.click(screen.getByRole("button", { name: /^add to watchlist$/i }));
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "NVDA", asset_type: "STOCK", target_weight: 0.125 }));
+    });
+
+    it("edits a saved target from the watchlist row", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, target_weight: 0.05, current_price: 702.4 }],
+      });
+      handlers["POST /portfolio/watchlist"] = () => ({ ticker: "ASML" });
+      renderFresh();
+      expect(await screen.findByText(/target 5%/)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /edit target for asml/i }));
+      const field = within(screen.getByRole("dialog")).getByLabelText("Target weight (%)") as HTMLInputElement;
+      expect(field.value).toBe("5");
+      fireEvent.change(field, { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: /save target/i }));
+
+      await waitFor(() => expect(postedWatch()).toEqual({ ticker: "ASML", asset_type: "STOCK", target_weight: null }));
+    });
+
     it("explains the icon with a tooltip", async () => {
       renderFresh();
       await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
