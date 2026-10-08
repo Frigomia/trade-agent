@@ -32,3 +32,11 @@ export function formatPct(value: number): string {
 export function toTime(iso: string): number {
   return Date.parse(/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : `${iso}Z`);
 }
+
+/** Plain decimal text (a comma works too) within min..max and at most `places` decimals; else null. */
+export function parseDecimal(raw: string, places: number, min: number, max: number): number | null {
+  const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
+  if (!new RegExp(String.raw`^\d+(\.\d{1,${places}})?$`).test(text)) return null;
+  const n = Number(text);
+  return n >= min && n <= max ? n : null;
+}

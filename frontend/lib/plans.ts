@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { apiFetch } from "@/lib/api/client";
-import { toTime } from "@/lib/format";
+import { parseDecimal, toTime } from "@/lib/format";
 
 export interface PlanRequest {
   amount: number;
@@ -55,10 +55,7 @@ export const AMOUNT_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimal
 
 /** The backend's bounds: at least 0.01, at most 1,000,000, two decimals at most. null when invalid. */
 export function parseAmount(raw: string): number | null {
-  const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
-  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
-  const n = Number(text);
-  return n >= 0.01 && n <= 1_000_000 ? n : null;
+  return parseDecimal(raw, 2, 0.01, 1_000_000);
 }
 
 /** "1 USD = 0.9259 EUR" (four significant digits); pence are "1 penny = 0.0118 EUR". */
@@ -78,8 +75,10 @@ export function plansDiffer(a: Plan, b: Plan): boolean {
   return key(a) !== key(b);
 }
 
-// The backend stores naive UTC timestamps; toTime reads them as UTC, as the portfolio chart does.
-/** "October 2026", in the viewer's time zone. */
+/**
+ * "October 2026", in the viewer's time zone. The backend stores naive UTC timestamps; toTime reads
+ * them as UTC, as the portfolio chart does.
+ */
 export function planMonth(iso: string): string {
   return new Date(toTime(iso)).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
 }
@@ -124,7 +123,6 @@ export function usePlans() {
     plans: data,
     error,
     isLoading,
-    preview: previewPlan,
     save,
     remove,
     load,

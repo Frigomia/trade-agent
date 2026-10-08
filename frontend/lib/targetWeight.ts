@@ -1,3 +1,5 @@
+import { parseDecimal } from "@/lib/format";
+
 export const TARGET_ERROR = "Enter a target from 0 to 100, two decimals at most.";
 
 /** A saved fraction (0..1) as the text of the percent field; "" when there is none. */
@@ -7,11 +9,9 @@ export function fractionToPercentText(fraction: number | null | undefined): stri
 
 /** The percent field's text as a fraction: null when blank, undefined when invalid. */
 export function percentTextToFraction(raw: string): number | null | undefined {
-  const text = raw.trim().replace(",", ".");
-  if (text === "") return null;
-  if (!/^\d+(\.\d{1,2})?$/.test(text)) return undefined;
-  const percent = Number(text);
-  return percent <= 100 ? Math.round(percent * 100) / 10000 : undefined;
+  if (raw.trim() === "") return null;
+  const percent = parseDecimal(raw, 2, 0, 100);
+  return percent === null ? undefined : Math.round(percent * 100) / 10000;
 }
 
 /**

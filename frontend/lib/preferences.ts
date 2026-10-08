@@ -1,3 +1,5 @@
+import { parseDecimal } from "@/lib/format";
+
 export type RiskTolerance = "conservative" | "moderate" | "aggressive";
 
 export interface AutoAnalysisPaused {
@@ -41,20 +43,14 @@ export function addSector(list: string[], raw: string): string[] {
 export const CONTRIBUTION_ERROR = "Enter an amount from 0.01 to 1,000,000, two decimals at most, or leave it empty.";
 export const DRIFT_ERROR = "Enter a number from 1 to 50, one decimal at most.";
 
-function parseBounded(raw: string, decimals: number, min: number, max: number): number | null {
-  const text = raw.trim().replace(",", "."); // some decimal keypads show a comma
-  if (!new RegExp(String.raw`^\d+(\.\d{1,${decimals}})?$`).test(text)) return null;
-  const n = Number(text);
-  return n >= min && n <= max ? n : null;
-}
 
 /** Empty clears the saved amount (null); "invalid" is anything outside 0.01 to 1,000,000 with two decimals. */
 export function parseContribution(raw: string): number | null | "invalid" {
   if (raw.trim() === "") return null;
-  return parseBounded(raw, 2, 0.01, 1_000_000) ?? "invalid";
+  return parseDecimal(raw, 2, 0.01, 1_000_000) ?? "invalid";
 }
 
 /** The drift threshold has no "clear": null would be ignored by the backend, so it is invalid here. */
 export function parseDrift(raw: string): number | "invalid" {
-  return parseBounded(raw, 1, 1, 50) ?? "invalid";
+  return parseDecimal(raw, 1, 1, 50) ?? "invalid";
 }
