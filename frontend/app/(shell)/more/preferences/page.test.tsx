@@ -24,7 +24,7 @@ import PreferencesPage from "./page";
 
 function renderFresh() {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, focusThrottleInterval: 0 }}>
       <PreferencesPage />
     </SWRConfig>,
   );
@@ -340,6 +340,88 @@ describe("PreferencesPage", () => {
       fireEvent.change(field, { target: { value: "100" } });
       save();
       expect(await screen.findByText("Amount rejected")).toBeInTheDocument();
+    });
+
+    it.each([
+      ["500,5", 500.5],
+      ["1e3", "bad"],
+      ["500.555", "bad"],
+    ])("amount %j", async (v, want) => {
+      renderFresh();
+      fireEvent.change(await amount(), { target: { value: v } });
+      save();
+      if (want === "bad") {
+        expect(await screen.findByText(/1 to 1,000,000/)).toBeInTheDocument();
+        expect(posts()).toHaveLength(0);
+      } else {
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body().monthly_contribution).toBe(want);
+      }
+    });
+
+    it("describes the field by its helper and announces the error", async () => {
+      renderFresh();
+      const field = await amount();
+      expect(field).toHaveAccessibleDescription(/EUR, 1 to 1,000,000/);
+      fireEvent.change(field, { target: { value: "0" } });
+      save();
+      expect(await screen.findByRole("alert")).toHaveTextContent(/1 to 1,000,000/);
+      expect(field).toHaveAccessibleDescription(/two decimals at most/);
+      expect(field).toHaveAttribute("aria-invalid", "true");
+      const d = await drift();
+      fireEvent.change(d, { target: { value: "99" } });
+      save();
+      await waitFor(() => expect(d).toHaveAccessibleDescription(/1 to 50, one decimal at most/));
+    });
+
+    describe("baseline", () => {
+      let server: Record<string, unknown>;
+      beforeEach(() => {
+        server = { ...LOADED };
+        apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+          if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
+          return server;
+        });
+      });
+      const revalidate = async (change: Record<string, unknown>) => {
+        server = { ...server, ...change };
+        fireEvent.focus(window);
+        await waitFor(() => expect(apiFetch.mock.calls.filter((c) => !c[1]).length).toBeGreaterThan(1));
+      };
+
+      it("an untouched plan field is not sent after the server value changed elsewhere", async () => {
+        renderFresh();
+        await screen.findByLabelText(/notes/i);
+        await revalidate({ monthly_contribution: 800, drift_threshold_pct: 9 });
+        fireEvent.click(screen.getByRole("button", { name: /^aggressive$/i }));
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body()).toMatchObject({ risk_tolerance: "aggressive" });
+        expect("monthly_contribution" in body()).toBe(false);
+        expect("drift_threshold_pct" in body()).toBe(false);
+      });
+
+      it("a touched amount is still sent after such a change", async () => {
+        renderFresh();
+        const field = await amount();
+        await revalidate({ monthly_contribution: 800 });
+        fireEvent.change(field, { target: { value: "300" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        expect(body().monthly_contribution).toBe(300);
+      });
+
+      it("after a save the baseline is what was saved", async () => {
+        renderFresh();
+        fireEvent.change(await amount(), { target: { value: "300" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(1));
+        await screen.findByText(/^saved$/i);
+        fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: "again" } });
+        save();
+        await waitFor(() => expect(posts()).toHaveLength(2));
+        expect("monthly_contribution" in JSON.parse(posts()[1][1].body)).toBe(false);
+      });
     });
 
     it("Discard restores both fields", async () => {

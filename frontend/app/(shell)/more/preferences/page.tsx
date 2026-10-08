@@ -39,6 +39,9 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   const [sectors, setSectors] = useState<string[]>(initial.sector_avoid_list);
   const [sectorInput, setSectorInput] = useState("");
   const [notes, setNotes] = useState(initial.notes ?? "");
+  // Baseline of the plan fields: captured at mount and after each save, never the live SWR value,
+  // so a revalidation from another tab cannot turn an untouched field into a change.
+  const [plan, setPlan] = useState({ amount: initial.monthly_contribution, drift: initial.drift_threshold_pct });
   const [amount, setAmount] = useState(amountText(initial));
   const [drift, setDrift] = useState(String(initial.drift_threshold_pct));
   const [amountError, setAmountError] = useState(false);
@@ -49,8 +52,8 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
   // Compared as numbers so "1200.50" is not a change from a saved 1200.5.
   const amountValue = parseContribution(amount);
   const driftValue = parseDrift(drift);
-  const amountChanged = amountValue !== initial.monthly_contribution;
-  const driftChanged = driftValue !== initial.drift_threshold_pct;
+  const amountChanged = amountValue !== plan.amount;
+  const driftChanged = driftValue !== plan.drift;
 
   const dirty =
     amountChanged ||
@@ -64,8 +67,8 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
     setSectors(initial.sector_avoid_list);
     setNotes(initial.notes ?? "");
     setSectorInput("");
-    setAmount(amountText(initial));
-    setDrift(String(initial.drift_threshold_pct));
+    setAmount(plan.amount === null ? "" : String(plan.amount));
+    setDrift(String(plan.drift));
     setAmountError(false);
     setDriftError(false);
     setSaved(false);
@@ -84,6 +87,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
     return run(async () => {
       await apiFetch("/preferences", { method: "POST", body: JSON.stringify(body) });
       onSaved();
+      setPlan({ amount: amountValue, drift: driftValue });
       setSaved(true);
     });
   }
@@ -164,6 +168,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         >
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
             <TextField
+              id="pref-contribution"
               label="Monthly contribution"
               size="small"
               value={amount}
@@ -175,12 +180,14 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
               helperText={amountError ? CONTRIBUTION_ERROR : "EUR, 1 to 1,000,000. Leave empty for none."}
               slotProps={{
                 inputLabel: { shrink: true },
+                formHelperText: { role: amountError ? "alert" : undefined },
                 htmlInput: { inputMode: "decimal" },
                 input: { endAdornment: <InputAdornment position="end">EUR</InputAdornment> },
               }}
               sx={{ width: 260 }}
             />
             <TextField
+              id="pref-drift"
               label="Drift threshold"
               size="small"
               value={drift}
@@ -192,6 +199,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
               helperText={driftError ? DRIFT_ERROR : "Percentage points, 1 to 50. Default 5."}
               slotProps={{
                 inputLabel: { shrink: true },
+                formHelperText: { role: driftError ? "alert" : undefined },
                 htmlInput: { inputMode: "decimal" },
                 input: { endAdornment: <InputAdornment position="end">pp</InputAdornment> },
               }}
