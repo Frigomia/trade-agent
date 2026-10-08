@@ -10,6 +10,7 @@ import { useAction } from "@/lib/useAction";
 import { Panel } from "@/components/ui/Panel";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
 const STEPS = ["Add holdings", "Run an analysis on Today", "Decide"];
@@ -19,16 +20,8 @@ const STEPS = ["Add holdings", "Run an analysis on Today", "Decide"];
  * tucked behind an "optional" row. A name defaults to the ticker and the date to today, so a
  * newcomer is one short form away from their first analysis. Saving is the same upsert the drawer uses.
  */
-export function FirstHolding({
-  onSaved,
-  onNote,
-}: {
-  onSaved: () => void;
-  /** Where to show the "ISIN not saved" note: this form is replaced by the table once saved. */
-  onNote: (note: string) => void;
-}) {
-  // The ISIN typed to find the picked symbol; it only counts while the ticker still is that symbol.
-  const [pickedIsin, setPickedIsin] = useState<{ symbol: string; isin: string } | null>(null);
+export function FirstHolding({ onSaved }: { onSaved: () => void }) {
+  const { pick, isinFor } = usePickedIsin();
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
   const [costBasis, setCostBasis] = useState("");
@@ -42,7 +35,7 @@ export function FirstHolding({
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
-    setPickedIsin(match.isin ? { symbol: match.symbol.toUpperCase(), isin: match.isin } : null);
+    pick(match);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -69,11 +62,7 @@ export function FirstHolding({
         }),
       });
       // The holdings upsert never carries the ISIN; a failure saving it does not undo the add.
-      const isinNote = await saveIsinAfterAdd(
-        normalizedTicker,
-        pickedIsin?.symbol === normalizedTicker ? pickedIsin.isin : null,
-      );
-      if (isinNote) onNote(isinNote);
+      await saveIsinAfterAdd(normalizedTicker, isinFor(normalizedTicker));
       onSaved();
     });
   }

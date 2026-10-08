@@ -36,9 +36,9 @@ import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
 import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
-import { IsinNote } from "@/components/ui/IsinNote";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { AVG_COST_DISPLAY, HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
@@ -215,9 +215,7 @@ export default function PortfolioPage() {
   const [watchType, setWatchType] = useState<AssetType>("STOCK");
   const [watchTarget, setWatchTarget] = useState("");
   const [editingTarget, setEditingTarget] = useState<WatchlistSummary | null>(null);
-  const [isinNote, setIsinNote] = useState<string | null>(null);
-  // The ISIN typed to find the picked watchlist symbol; it only counts while the ticker still is that symbol.
-  const [watchIsin, setWatchIsin] = useState<{ symbol: string; isin: string } | null>(null);
+  const watchIsin = usePickedIsin();
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
@@ -269,10 +267,8 @@ export default function PortfolioPage() {
       });
       setWatchTicker("");
       setWatchTarget("");
-      setWatchIsin(null);
       // The ISIN has its own route; a failure there does not undo the add.
-      const note = await saveIsinAfterAdd(ticker, isin);
-      if (note) setIsinNote(note);
+      await saveIsinAfterAdd(ticker, isin);
       mutateSummary();
     });
   }
@@ -359,8 +355,7 @@ export default function PortfolioPage() {
           alignItems: "start",
         }}
       >
-      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} onNote={setIsinNote} />}
-      <IsinNote note={isinNote} onClose={() => setIsinNote(null)} />
+      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} />}
       {open.length > 0 && (
         <Panel sx={{ p: "8px 18px" }}>
           <Box
@@ -469,7 +464,7 @@ export default function PortfolioPage() {
               onChange={setWatchTicker}
               onPick={(match) => {
                 setWatchType(match.type);
-                setWatchIsin(match.isin ? { symbol: match.symbol.toUpperCase(), isin: match.isin } : null);
+                watchIsin.pick(match);
               }}
             />
           </Box>
@@ -492,7 +487,7 @@ export default function PortfolioPage() {
             variant="outlined"
             disabled={alreadyWatched || watch.submitting}
             onClick={() =>
-              void addToWatchlist(typedTicker, watchType, watchTarget, watchIsin?.symbol === typedTicker ? watchIsin.isin : null)
+              void addToWatchlist(typedTicker, watchType, watchTarget, watchIsin.isinFor(typedTicker))
             }
             sx={{ whiteSpace: "nowrap" }}
           >

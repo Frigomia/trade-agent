@@ -183,15 +183,6 @@ describe("TickerPicker", () => {
       expect(onPick.mock.calls[0][0]).not.toHaveProperty("isin");
     });
 
-    it("says the ISIN will be saved, only for an ISIN query with results", async () => {
-      render(<Harness />);
-      await type("vwce");
-      expect(screen.queryByText(/will be saved with this ticker/i)).not.toBeInTheDocument();
-
-      await type("IE00BKM4GZ66");
-      expect(screen.getByText("ISIN IE00BKM4GZ66 will be saved with this ticker.")).toBeInTheDocument();
-    });
-
     it("repeats the cue in each search result row, only for an ISIN query", async () => {
       render(<Harness />);
       await type("vwce");
@@ -211,13 +202,12 @@ describe("TickerPicker", () => {
       expect(screen.getAllByText("Saves ISIN IE00BKM4GZ66 with it")).toHaveLength(1);
     });
 
-    it("shows no such line when the ISIN finds nothing", async () => {
+    it("shows the no-match line when the ISIN finds nothing", async () => {
       apiFetch.mockResolvedValue([]);
       render(<Harness />);
 
       await type("IE00BKM4GZ66");
 
-      expect(screen.queryByText(/will be saved with this ticker/i)).not.toBeInTheDocument();
       expect(screen.getByText(/no match/i)).toBeInTheDocument();
     });
   });

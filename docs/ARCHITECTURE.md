@@ -491,7 +491,7 @@ after a plan was saved appears on the older plan too. Besides the ticket's "Add 
 search on Add holding, the first-holding form and the watchlist row sets it: when the text searched
 for is an ISIN (right shape), the picked result carries it client-side only (search results hold none,
 and the holdings and watchlist upserts never take it), and after the add succeeds the form calls the
-ISIN route; if that fails the add stays saved and a note says so.
+ISIN route; a failed ISIN save does not undo the add (the ticket's Add ISIN adds it later).
 
 **The currency rule.** A plan line's price is in EUR, converted at plan time; a holding's cost basis is
 in whatever currency the person uses for it (for example USD). So the plan's EUR price is never written

@@ -9,9 +9,9 @@ import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
 import { fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
-import { IsinNote } from "@/components/ui/IsinNote";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { saveIsinAfterAdd } from "@/lib/orders";
+import { usePickedIsin } from "@/lib/usePickedIsin";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
 export interface HoldingFormProps {
@@ -21,21 +21,14 @@ export interface HoldingFormProps {
   heldTickers: string[];
   prefillTicker?: string;
   onSaved: () => void;
-  /** Where to show the "ISIN not saved" note when this form is replaced once saved; default: its own. */
-  onNote?: (note: string | null) => void;
 }
 
 // The body lives in an inner component so its state resets each time the drawer closes.
-export function HoldingForm({ open, onClose, onNote, ...rest }: HoldingFormProps) {
-  // The note lives out here: the drawer's body is gone once it closes.
-  const [note, setNote] = useState<string | null>(null);
+export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
   return (
-    <>
-      <Drawer anchor="right" open={open} onClose={onClose}>
-        <HoldingFormBody onClose={onClose} onNote={onNote ?? setNote} {...rest} />
-      </Drawer>
-      {!onNote && <IsinNote note={note} onClose={() => setNote(null)} />}
-    </>
+    <Drawer anchor="right" open={open} onClose={onClose}>
+      <HoldingFormBody onClose={onClose} {...rest} />
+    </Drawer>
   );
 }
 
@@ -45,8 +38,7 @@ function HoldingFormBody({
   prefillTicker,
   onClose,
   onSaved,
-  onNote,
-}: Omit<HoldingFormProps, "open"> & { onNote: (note: string | null) => void }) {
+}: Omit<HoldingFormProps, "open">) {
   const editing = holding !== undefined;
   const [ticker, setTicker] = useState(holding?.ticker ?? prefillTicker ?? "");
   const [name, setName] = useState(holding?.name ?? "");
@@ -57,8 +49,7 @@ function HoldingFormBody({
   const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
   const { run, submitting, error, setError } = useAction();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
-  // The ISIN typed to find the picked symbol; it only counts while the ticker still is that symbol.
-  const [pickedIsin, setPickedIsin] = useState<{ symbol: string; isin: string } | null>(null);
+  const { pick, isinFor } = usePickedIsin();
 
   const normalizedTicker = ticker.trim().toUpperCase();
   // POST /portfolio/holdings is an upsert: adding a held ticker silently overwrites it.
@@ -68,7 +59,7 @@ function HoldingFormBody({
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
-    setPickedIsin(match.isin ? { symbol: match.symbol.toUpperCase(), isin: match.isin } : null);
+    pick(match);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -109,11 +100,7 @@ function HoldingFormBody({
         }),
       });
       // The holdings upsert never carries the ISIN; it has its own route, and a failure there does not undo the save.
-      const isinNote = await saveIsinAfterAdd(
-        normalizedTicker,
-        !editing && pickedIsin?.symbol === normalizedTicker ? pickedIsin.isin : null,
-      );
-      if (isinNote) onNote(isinNote);
+      await saveIsinAfterAdd(normalizedTicker, editing ? null : isinFor(normalizedTicker));
       onSaved();
       onClose();
     });

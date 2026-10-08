@@ -526,7 +526,7 @@ describe("PortfolioPage", () => {
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
     });
 
-    it("saves the ISIN from an ISIN search after the first holding, and says so when that fails", async () => {
+    it("saves the ISIN from an ISIN search after the first holding, and the add stands when that fails", async () => {
       handlers["GET /portfolio/summary"] = () => EMPTY;
       handlers["GET /market/search?q=IE00BKM4GZ66"] = () => [EIMI];
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
@@ -547,9 +547,6 @@ describe("PortfolioPage", () => {
       expect(JSON.parse(post[1].body)).not.toHaveProperty("isin");
       const put = apiFetch.mock.calls.find((c) => c[1]?.method === "PUT")!;
       expect(JSON.parse(put[1].body)).toEqual({ isin: "IE00BKM4GZ66" });
-      expect(
-        await screen.findByText("Saved. The ISIN could not be saved: Not a valid ISIN: 12 characters with a correct check digit. Add it on a plan."),
-      ).toBeInTheDocument();
     });
 
     it("does not save the ISIN when the first holding's ticker was edited after the pick", async () => {

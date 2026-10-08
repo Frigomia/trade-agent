@@ -61,7 +61,7 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
     ...found.filter((m) => !own.some((s) => s.symbol === m.symbol)).map((m) => ({ ...m, group: SEARCH_GROUP })),
   ];
   const noMatch = answered && options.length === 0;
-  const isinQuery = looksLikeIsin(query);
+  const isin = looksLikeIsin(query) ? query.toUpperCase() : null;
 
   return (
     <Autocomplete<Option, false, false, true>
@@ -80,7 +80,7 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
           name: option.name,
           type: option.type,
           exchange: option.exchange,
-          ...(isinQuery && { isin: query.toUpperCase() }),
+          ...(isin && { isin }),
         });
       }}
       filterOptions={(all) => all}
@@ -94,9 +94,9 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
               {[option.name, option.exchange, option.type].filter(Boolean).join(" · ")}
             </Typography>
-            {isinQuery && option.group === SEARCH_GROUP && (
+            {isin && option.group === SEARCH_GROUP && (
               <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
-                Saves ISIN {query.toUpperCase()} with it
+                Saves ISIN {isin} with it
               </Typography>
             )}
           </Box>
@@ -108,13 +108,7 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
           label={label}
           size={dense ? "small" : undefined}
           margin={dense ? "none" : "normal"}
-          helperText={
-            noMatch
-              ? "No match. You can still type the ticker."
-              : isinQuery && found.length > 0
-                ? `ISIN ${query.toUpperCase()} will be saved with this ticker.`
-                : undefined
-          }
+          helperText={noMatch ? "No match. You can still type the ticker." : undefined}
           slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, autoComplete: "off" } }}
         />
       )}

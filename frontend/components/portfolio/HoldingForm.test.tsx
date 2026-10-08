@@ -309,7 +309,7 @@ describe("HoldingForm", () => {
       expect(puts()).toHaveLength(0);
     });
 
-    it("keeps the holding and shows a note when the ISIN could not be saved", async () => {
+    it("keeps the holding and closes the form when the ISIN could not be saved", async () => {
       mockApi(() => Promise.reject(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit.")));
       const { onSaved, onClose } = setup();
       await pickByIsin();
@@ -318,9 +318,6 @@ describe("HoldingForm", () => {
 
       await waitFor(() => expect(onClose).toHaveBeenCalled());
       expect(onSaved).toHaveBeenCalled();
-      expect(
-        await screen.findByText("Saved. The ISIN could not be saved: Not a valid ISIN: 12 characters with a correct check digit. Add it on a plan."),
-      ).toBeInTheDocument();
     });
   });
 });

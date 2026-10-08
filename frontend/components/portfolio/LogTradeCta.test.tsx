@@ -147,29 +147,4 @@ describe("LogTradeCta", () => {
     await waitFor(() => expect(screen.getByText(/trade logged/i)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /log the trade i placed/i })).not.toBeInTheDocument();
   });
-
-  it("still shows the ISIN note after the Trade logged state replaces the form", async () => {
-    const EIMI = { symbol: "EIMI.L", name: "iShares Core MSCI EM IMI", type: "ETF", exchange: "LSE" };
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY);
-      if (path.startsWith("/market/search")) return Promise.resolve([EIMI]);
-      if (path === "/portfolio/holdings" && init?.method === "POST") return Promise.resolve({});
-      if (path === "/portfolio/instruments/EIMI.L/isin")
-        return Promise.reject(new FakeApiError(422, "Not a valid ISIN: 12 characters with a correct check digit."));
-      return Promise.reject(new Error("unexpected " + path));
-    });
-    renderFresh(rec({ ticker: "NVDA", action: "BUY" }));
-    fireEvent.click(await screen.findByRole("button", { name: /log the trade i placed/i }));
-
-    fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "IE00BKM4GZ66" } });
-    fireEvent.click(await screen.findByText("EIMI.L"));
-    fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "5" } });
-    fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
-
-    expect(await screen.findByText("Trade logged.")).toBeInTheDocument();
-    expect(
-      await screen.findByText("Saved. The ISIN could not be saved: Not a valid ISIN: 12 characters with a correct check digit. Add it on a plan."),
-    ).toBeInTheDocument();
-  });
 });
