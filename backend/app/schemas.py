@@ -79,6 +79,13 @@ class TradeIn(BaseModel):
     price: PositiveFloat
 
 
+class PlaceIn(BaseModel):
+    date: date
+    shares: PositiveFloat
+    price: PositiveFloat
+    asset_type: AssetType | None = None  # needed only when the ticker is not a holding yet
+
+
 class TradeOut(TradeIn):
     model_config = ConfigDict(from_attributes=True)
 

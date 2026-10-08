@@ -10,6 +10,7 @@ from app.models import (
     ContributionPlanLine,
     Holding,
     Recommendation,
+    Trade,
     WatchlistItem,
 )
 from tests.auth_support import OTHER_USER_ID, USER_ID
@@ -389,3 +390,166 @@ def test_another_persons_isin_never_leaks_onto_my_lines(client, db_session):
     db_session.commit()
     plan = _saved(client)
     assert all(ln["isin"] is None for ln in client.get(f"/plans/{plan['id']}").json()["lines"])
+
+
+def _line(client, plan, ticker):
+    return next(
+        ln for ln in client.get(f"/plans/{plan['id']}").json()["lines"] if ln["ticker"] == ticker
+    )
+
+
+def _place(client, plan, line, **body):
+    payload = {"date": "2026-10-09", "shares": 1.5, "price": 210.0, **body}
+    return client.post(f"/plans/{plan['id']}/lines/{line['id']}/placed", json=payload)
+
+
+def test_placing_a_line_of_a_held_ticker_logs_the_buy_like_the_trade_route(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    res = _place(client, plan, line, shares=2, price=250)
+    assert res.status_code == 200 and res.json()["placed_trade_id"] is not None
+    assert res.json()["placed_at"] is not None
+    holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="AAPL").one()
+    db_session.refresh(holding)
+    assert float(holding.shares) == 7.0 and round(float(holding.cost_basis), 4) == round(
+        (5 * 10 + 2 * 250) / 7, 4
+    )
+    trade = db_session.query(Trade).filter_by(user_id=USER_ID).one()
+    assert (trade.ticker, trade.action, float(trade.shares), float(trade.price)) == (
+        "AAPL",
+        "BUY",
+        2.0,
+        250.0,
+    )
+    assert _line(client, plan, "AAPL")["placed_trade_id"] == trade.id
+
+
+def test_the_plans_euro_price_is_never_written_to_the_trade(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    _place(client, plan, line, shares=1, price=999.5)
+    assert float(db_session.query(Trade).one().price) == 999.5  # exactly what the person sent
+
+
+def test_placing_a_new_position_creates_the_holding(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "NVDA")  # on the watchlist, not held
+    assert _place(client, plan, line, asset_type="STOCK", shares=2.6, price=130).status_code == 200
+    holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="NVDA").one()
+    assert (holding.asset_type, holding.name) == ("STOCK", line["name"])
+    assert (float(holding.shares), float(holding.cost_basis)) == (2.6, 130.0)
+    assert str(holding.first_purchase_date) == "2026-10-09"
+
+
+def test_a_new_position_needs_an_asset_type(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "NVDA")
+    assert _place(client, plan, line).status_code == 422
+    assert db_session.query(Holding).filter_by(user_id=USER_ID, ticker="NVDA").count() == 0
+    assert db_session.query(Trade).count() == 0
+
+
+def test_a_line_can_be_placed_once(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    assert _place(client, plan, line).status_code == 200
+    assert _place(client, plan, line).status_code == 409
+    assert db_session.query(Trade).count() == 1
+
+
+def test_another_persons_line_is_404_and_changes_nothing(client, db_session):
+    other = ContributionPlan(
+        user_id=OTHER_USER_ID,
+        amount_eur=100,
+        whole_shares=False,
+        total_before_eur=0,
+        leftover_eur=0,
+        notes=[],
+    )
+    db_session.add(other)
+    db_session.commit()
+    other_line = ContributionPlanLine(
+        user_id=OTHER_USER_ID,
+        plan_id=other.id,
+        ticker="AAPL",
+        name="Apple",
+        amount_eur=100,
+        shares=1,
+        price_eur=100,
+        currency="EUR",
+        rate=1,
+        reason="underweight",
+    )
+    db_session.add(other_line)
+    db_session.commit()
+    res = client.post(
+        f"/plans/{other.id}/lines/{other_line.id}/placed",
+        json={"date": "2026-10-09", "shares": 1, "price": 1},
+    )
+    assert res.status_code == 404
+    assert db_session.query(Trade).count() == 0
+    assert db_session.get(ContributionPlanLine, other_line.id).placed_at is None
+
+
+def test_a_line_id_from_another_plan_is_404(client, db_session):
+    _seed_basic(db_session)
+    first, second = _saved(client), _saved(client)
+    line = _line(client, first, "AAPL")
+    res = client.post(
+        f"/plans/{second['id']}/lines/{line['id']}/placed",
+        json={"date": "2026-10-09", "shares": 1, "price": 1},
+    )
+    assert res.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "body", [{"shares": 0}, {"shares": -1}, {"price": 0}, {"price": "x"}, {"date": "nope"}]
+)
+def test_bad_shares_price_or_date_are_422(client, db_session, body):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    assert _place(client, plan, _line(client, plan, "AAPL"), **body).status_code == 422
+    assert db_session.query(Trade).count() == 0
+
+
+def test_a_new_position_past_the_holding_cap_is_409_and_writes_nothing(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "NVDA")
+    for i in range(98):  # 2 held + 98 = 100
+        _holding(db_session, f"T{i}", 1, None)
+    res = _place(client, plan, line, asset_type="STOCK")
+    assert res.status_code == 409
+    assert db_session.query(Trade).count() == 0
+    assert db_session.get(ContributionPlanLine, line["id"]).placed_at is None
+
+
+def test_deleting_a_plan_keeps_the_trades_it_produced(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    _place(client, plan, _line(client, plan, "AAPL"))
+    assert client.delete(f"/plans/{plan['id']}").status_code == 204
+    assert db_session.query(Trade).count() == 1
+    assert db_session.query(ContributionPlanLine).filter_by(plan_id=plan["id"]).count() == 0
+
+
+def test_placing_is_rate_limited_per_person(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    codes = [_place(client, plan, line).status_code for _ in range(62)]
+    assert codes[0] == 200 and 429 in codes
+
+
+def test_placing_requires_authentication(anon_client):
+    assert (
+        anon_client.post(
+            "/plans/1/lines/1/placed", json={"date": "2026-10-09", "shares": 1, "price": 1}
+        ).status_code
+        == 401
+    )

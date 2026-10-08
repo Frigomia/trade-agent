@@ -3,6 +3,7 @@ the person's rows, prices them (app/fx.py) and turns the result into API shapes.
 nothing here talks to a broker."""
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -22,9 +23,19 @@ from app.models import (
     Recommendation,
     WatchlistItem,
 )
-from app.schemas import DriftItemOut, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
+from app.schemas import (
+    DriftItemOut,
+    PlaceIn,
+    PlanIn,
+    PlanLineOut,
+    PlanOut,
+    PlanSummaryOut,
+    TradeIn,
+)
+from app.trades import TradeRefused, apply_trade
 
 MAX_PLANS = 120
+MAX_HOLDINGS = 100  # the same cap as the holdings route
 
 
 def _load(
@@ -329,3 +340,69 @@ def delete(db: Session, user_id: uuid.UUID, plan_id: int) -> bool:
         db.rollback()
         raise
     return True
+
+
+def place_line(
+    db: Session, user_id: uuid.UUID, plan_id: int, line_id: int, payload: PlaceIn
+) -> PlanLineOut:
+    """Records that the person placed this line's order in their broker: creates the holding when
+    it is new, logs a BUY through the shared trade code, stamps the line. One transaction."""
+    try:
+        lock_user_for_insert(db, user_id)  # a double click or a second tab cannot place it twice
+        line = (
+            db.query(ContributionPlanLine)
+            .filter_by(id=line_id, plan_id=plan_id, user_id=user_id)
+            .one_or_none()
+        )
+        if line is None:
+            raise HTTPException(404, "Plan line not found")
+        if line.placed_at is not None:
+            raise HTTPException(409, "This line is already recorded as placed.")
+        holding = db.query(Holding).filter_by(user_id=user_id, ticker=line.ticker).one_or_none()
+        if holding is None:
+            if payload.asset_type is None:
+                raise HTTPException(422, "asset_type is required for a new position.")
+            if db.query(Holding).filter_by(user_id=user_id).count() >= MAX_HOLDINGS:
+                raise HTTPException(
+                    409,
+                    f"You can keep up to {MAX_HOLDINGS} holdings. Remove one first.",
+                )
+            holding = Holding(
+                user_id=user_id,
+                ticker=line.ticker,
+                name=line.name,
+                asset_type=payload.asset_type,
+                shares=0,
+                cost_basis=0,
+                first_purchase_date=payload.date,
+            )
+            db.add(holding)
+        trade = apply_trade(
+            db,
+            user_id,
+            holding,
+            TradeIn(
+                date=payload.date,
+                ticker=line.ticker,
+                action="BUY",
+                shares=payload.shares,
+                price=payload.price,
+            ),
+        )
+        db.flush()  # assigns trade.id
+        line.placed_at = datetime.now(UTC).replace(tzinfo=None)
+        line.placed_trade_id = trade.id
+        db.commit()
+    except TradeRefused as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from None
+    except DataError:
+        db.rollback()
+        raise HTTPException(422, "Those numbers are too large to store.") from None
+    except (SQLAlchemyError, HTTPException):
+        db.rollback()
+        raise
+    db.refresh(line)
+    return PlanLineOut.model_validate(line, from_attributes=True).model_copy(
+        update={"isin": _isins(db, user_id).get(line.ticker)}
+    )

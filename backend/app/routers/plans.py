@@ -6,7 +6,7 @@ from app import plans
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.http_headers import no_store
 from app.rate_limit import rate_limiter
-from app.schemas import DriftItemOut, PlanIn, PlanOut, PlanSummaryOut
+from app.schemas import DriftItemOut, PlaceIn, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
 
 router = APIRouter(
     prefix="/plans", tags=["plans"], dependencies=[Depends(get_current_user), Depends(no_store)]
@@ -80,3 +80,18 @@ def delete_plan(
     if not plans.delete(db, user.id, plan_id):
         raise HTTPException(status_code=404, detail="Plan not found")
     return Response(status_code=204)
+
+
+@router.post(
+    "/{plan_id}/lines/{line_id}/placed",
+    response_model=PlanLineOut,
+    dependencies=[Depends(rate_limiter("plans_placed", limit=60))],
+)
+def place_plan_line(
+    plan_id: int,
+    line_id: int,
+    payload: PlaceIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> PlanLineOut:
+    return plans.place_line(db, user.id, plan_id, line_id, payload)
