@@ -329,6 +329,8 @@ class PlanLineOut(BaseModel):
     isin: str | None = None
     placed_at: datetime | None = None
     placed_trade_id: int | None = None
+    placed_shares: float | None = None  # read from the logged trade, never stored
+    placed_price: float | None = None
     ticker: str
     name: str
     amount_eur: float

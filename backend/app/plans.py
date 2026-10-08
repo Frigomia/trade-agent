@@ -22,6 +22,7 @@ from app.models import (
     Holding,
     InvestmentPreferences,
     Recommendation,
+    Trade,
     WatchlistItem,
 )
 from app.schemas import (
@@ -246,8 +247,38 @@ def _isins(db: Session, user_id: uuid.UUID) -> dict[str, str]:
     return found
 
 
+def _placed(
+    db: Session, user_id: uuid.UUID, lines: list[ContributionPlanLine]
+) -> dict[int, tuple[float, float]]:
+    """trade id -> (shares, price) for the trades that placed these lines; only the person's own
+    trades. A trade that was deleted is simply absent."""
+    ids = {ln.placed_trade_id for ln in lines if ln.placed_trade_id is not None}
+    if not ids:
+        return {}
+    rows = db.query(Trade.id, Trade.shares, Trade.price).filter(
+        Trade.user_id == user_id, Trade.id.in_(ids)
+    )
+    return {trade_id: (float(shares), float(price)) for trade_id, shares, price in rows}
+
+
+def _line_out(
+    ln: ContributionPlanLine, isins: dict[str, str], placed: dict[int, tuple[float, float]]
+) -> PlanLineOut:
+    found = placed.get(ln.placed_trade_id) if ln.placed_trade_id is not None else None
+    return PlanLineOut.model_validate(ln, from_attributes=True).model_copy(
+        update={
+            "isin": isins.get(ln.ticker),
+            "placed_shares": found[0] if found else None,
+            "placed_price": found[1] if found else None,
+        }
+    )
+
+
 def _out(
-    row: ContributionPlan, lines: list[ContributionPlanLine], isins: dict[str, str]
+    row: ContributionPlan,
+    lines: list[ContributionPlanLine],
+    isins: dict[str, str],
+    placed: dict[int, tuple[float, float]],
 ) -> PlanOut:
     return PlanOut(
         id=row.id,
@@ -256,12 +287,7 @@ def _out(
         whole_shares=row.whole_shares,
         total_before_eur=float(row.total_before_eur),
         leftover_eur=float(row.leftover_eur),
-        lines=[
-            PlanLineOut.model_validate(ln, from_attributes=True).model_copy(
-                update={"isin": isins.get(ln.ticker)}
-            )
-            for ln in lines
-        ],
+        lines=[_line_out(ln, isins, placed) for ln in lines],
         notes=list(row.notes or []),
     )
 
@@ -276,7 +302,7 @@ def load(db: Session, user_id: uuid.UUID, plan_id: int) -> PlanOut | None:
         .order_by(ContributionPlanLine.id)
         .all()
     )
-    return _out(row, lines, _isins(db, user_id))
+    return _out(row, lines, _isins(db, user_id), _placed(db, user_id, lines))
 
 
 def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
@@ -300,7 +326,8 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
     for line in lines:
         by_plan.setdefault(line.plan_id, []).append(line)
     isins = _isins(db, user_id)  # once, not per plan
-    return [_out(r, by_plan.get(r.id, []), isins) for r in rows]
+    placed = _placed(db, user_id, lines)  # once, not per plan
+    return [_out(r, by_plan.get(r.id, []), isins, placed) for r in rows]
 
 
 def list_summaries(db: Session, user_id: uuid.UUID) -> list[PlanSummaryOut]:
@@ -405,6 +432,4 @@ def place_line(
         db.rollback()
         raise
     db.refresh(line)
-    return PlanLineOut.model_validate(line, from_attributes=True).model_copy(
-        update={"isin": _isins(db, user_id).get(line.ticker)}
-    )
+    return _line_out(line, _isins(db, user_id), _placed(db, user_id, [line]))

@@ -597,3 +597,56 @@ def test_a_huge_finite_number_is_422_and_writes_nothing(client, db_session):
     holding = db_session.query(Holding).filter_by(user_id=USER_ID, ticker="AAPL").one()
     db_session.refresh(holding)
     assert float(holding.shares) == 5.0
+
+
+def test_a_placed_line_shows_what_was_recorded_not_the_plans_euro_price(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    res = _place(client, plan, line, shares=1.69, price=54.6)
+    assert (res.json()["placed_shares"], res.json()["placed_price"]) == (1.69, 54.6)
+    got = _line(client, plan, "AAPL")
+    assert (got["placed_shares"], got["placed_price"]) == (1.69, 54.6)
+    exported = client.get("/me/export").json()["contribution_plans"][0]["lines"]
+    assert [(x["placed_shares"], x["placed_price"]) for x in exported if x["id"] == line["id"]] == [
+        (1.69, 54.6)
+    ]
+    unplaced = [x for x in exported if x["id"] != line["id"]]
+    assert unplaced and all(
+        x["placed_shares"] is None and x["placed_price"] is None for x in unplaced
+    )
+
+
+def test_a_deleted_trade_leaves_the_placed_fields_empty(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    _place(client, plan, line)
+    db_session.query(Trade).filter_by(user_id=USER_ID).delete()
+    db_session.commit()
+    got = _line(client, plan, "AAPL")
+    assert got["placed_trade_id"] is not None
+    assert (got["placed_shares"], got["placed_price"]) == (None, None)
+
+
+def test_another_persons_trade_with_the_same_id_is_never_read(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    line = _line(client, plan, "AAPL")
+    foreign = Trade(
+        user_id=OTHER_USER_ID,
+        date=date(2026, 10, 9),
+        ticker="AAPL",
+        action="BUY",
+        shares=9,
+        price=9,
+    )
+    db_session.add(foreign)
+    db_session.commit()
+    db_session.query(ContributionPlanLine).filter_by(id=line["id"]).update(
+        {"placed_trade_id": foreign.id}
+    )
+    db_session.commit()
+    got = _line(client, plan, "AAPL")
+    assert got["placed_trade_id"] == foreign.id
+    assert (got["placed_shares"], got["placed_price"]) == (None, None)
