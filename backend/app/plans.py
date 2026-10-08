@@ -24,25 +24,16 @@ from app.models import (
 )
 from app.schemas import DriftItemOut, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
 
-DISCLAIMER = "Advisory only. Nothing is sent to a broker."
 MAX_PLANS = 120
-MAX_AMOUNT = 1_000_000
-REASON_TEXT = {
-    "new_position": "A new position that starts at 0 %",
-    "underweight": "Below its target weight",
-    "favoured": "Below its target, and its newest call is ADD or BUY",
-    "remainder": "Extra money shared by target weight",
-}
-
-# holdings (ticker, name, shares, target), watchlist (ticker, target), ticker -> newest call
-_Loaded = tuple[
-    list[tuple[str, str, Decimal, float | None]],
-    list[tuple[str, float | None]],
-    dict[str, str],
-]
 
 
-def _load(db: Session, user_id: uuid.UUID) -> _Loaded:
+def _load(
+    db: Session, user_id: uuid.UUID
+) -> tuple[
+    list[tuple[str, str, Decimal, float | None]],  # holdings: ticker, name, shares, target
+    list[tuple[str, float | None]],  # watchlist: ticker, target
+    dict[str, str],  # ticker -> newest pending call
+]:
     holdings = db.query(Holding).filter_by(user_id=user_id).all()
     watch = db.query(WatchlistItem).filter_by(user_id=user_id).all()
     targeted = {h.ticker for h in holdings if h.target_weight} | {
@@ -130,34 +121,25 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
         whole_shares=payload.whole_shares,
         total_before_eur=float(result.total_before),
         leftover_eur=float(result.leftover),
-        lines=[
-            PlanLineOut(
-                ticker=line.ticker,
-                name=line.name,
-                amount_eur=float(line.amount_eur),
-                shares=float(line.shares),
-                price_eur=float(line.price_eur),
-                currency=line.currency,
-                rate=float(line.rate),
-                weight_before=None if line.weight_before is None else float(line.weight_before),
-                weight_after=None if line.weight_after is None else float(line.weight_after),
-                reason=line.reason,
-                reason_text=REASON_TEXT[line.reason],
-            )
-            for line in result.lines
-        ],
+        lines=[PlanLineOut.model_validate(line, from_attributes=True) for line in result.lines],
         notes=notes + result.notes,
     )
 
 
-def _load_drift(db: Session, user_id: uuid.UUID) -> tuple[_Loaded, float]:
+def _load_drift(
+    db: Session, user_id: uuid.UUID
+) -> tuple[list[tuple[str, str, Decimal, float | None]], float]:
+    holdings = db.query(Holding).filter_by(user_id=user_id).all()
     pref = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
-    return _load(db, user_id), pref.drift_threshold_pct if pref else 5.0
+    return (
+        [(h.ticker, h.name, Decimal(str(h.shares)), h.target_weight) for h in holdings],
+        pref.drift_threshold_pct if pref else 5.0,
+    )
 
 
 async def drift(db: Session, user_id: uuid.UUID) -> list[DriftItemOut]:
     """Targeted open holdings whose weight is beyond the person's own drift threshold."""
-    (holdings, _watch, _calls), threshold = await run_in_threadpool(_load_drift, db, user_id)
+    holdings, threshold = await run_in_threadpool(_load_drift, db, user_id)
     db.close()  # release the connection before the price lookups, as compute() does
     targets = {
         t: (name, shares, Decimal(str(target)))
@@ -250,22 +232,7 @@ def _out(row: ContributionPlan, lines: list[ContributionPlanLine]) -> PlanOut:
         whole_shares=row.whole_shares,
         total_before_eur=float(row.total_before_eur),
         leftover_eur=float(row.leftover_eur),
-        lines=[
-            PlanLineOut(
-                ticker=ln.ticker,
-                name=ln.name,
-                amount_eur=float(ln.amount_eur),
-                shares=float(ln.shares),
-                price_eur=float(ln.price_eur),
-                currency=ln.currency,
-                rate=float(ln.rate),
-                weight_before=None if ln.weight_before is None else float(ln.weight_before),
-                weight_after=None if ln.weight_after is None else float(ln.weight_after),
-                reason=ln.reason,
-                reason_text=REASON_TEXT.get(ln.reason, ""),
-            )
-            for ln in lines
-        ],
+        lines=[PlanLineOut.model_validate(ln, from_attributes=True) for ln in lines],
         notes=list(row.notes or []),
     )
 

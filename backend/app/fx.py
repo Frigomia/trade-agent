@@ -77,16 +77,17 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
     ordered = sorted(tickers)
     sem = asyncio.Semaphore(LOOKUP_CONCURRENCY)
 
-    async def one(ticker: str) -> tuple[str, Decimal | None, str | None, str | None]:
+    async def one(ticker: str) -> tuple[str, tuple[Decimal, str] | str]:
+        """The ticker's (price, currency), or the reason it is left out."""
         try:
             async with sem:
                 data = await fetch_quote_and_history(ticker)
         except Exception as exc:
             logger.warning("Price lookup failed (%s)", type(exc).__name__)
-            return ticker, None, None, f"{ticker} is left out: no price available."
+            return ticker, f"{ticker} is left out: no price available."
         price = _positive(data.get("price")) if isinstance(data, dict) else None
         if price is None:
-            return ticker, None, None, f"{ticker} is left out: no price available."
+            return ticker, f"{ticker} is left out: no price available."
         try:
             async with sem:
                 currency = await fetch_currency(ticker)
@@ -94,24 +95,24 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
             logger.warning("Currency lookup failed (%s)", type(exc).__name__)
             currency = None
         if not currency:
-            return ticker, None, None, f"{ticker} is left out: its currency is unknown."
+            return ticker, f"{ticker} is left out: its currency is unknown."
         if currency not in SUPPORTED:
-            note = f"{ticker} is left out: currency {currency[:8]} is not supported."
-            return ticker, None, None, note
-        return ticker, price, currency, None
+            return ticker, f"{ticker} is left out: currency {currency[:8]} is not supported."
+        return ticker, (price, currency)
 
     found = await asyncio.gather(*(one(t) for t in ordered))
-    currencies = sorted({c for _, _, c, _ in found if c is not None})
+    currencies = sorted({r[1] for _, r in found if not isinstance(r, str)})
     # zip pairs each currency with its rate; strict=True fails loudly if the lengths differ
     found_rates = await asyncio.gather(*(_rate(c) for c in currencies))
     rates = dict(zip(currencies, found_rates, strict=True))
 
     prices: dict[str, EurPrice] = {}
     skipped: dict[str, str] = {}
-    for ticker, price, currency, reason in found:
-        if reason is not None or price is None or currency is None:
-            skipped[ticker] = reason or f"{ticker} is left out: no price available."
+    for ticker, result in found:
+        if isinstance(result, str):
+            skipped[ticker] = result
             continue
+        price, currency = result
         rate = rates[currency]
         if rate is None or not MIN_RATE <= rate <= MAX_RATE:
             skipped[ticker] = f"{ticker} is left out: no exchange rate for {currency}."

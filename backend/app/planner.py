@@ -60,8 +60,9 @@ class DriftItem:
     points: Decimal  # weight minus target, in percentage points
 
 
-def _targeted(candidates: list[Candidate]) -> list[Candidate]:
-    return [c for c in candidates if c.target is not None and c.target > ZERO]
+def _targeted(candidates: list[Candidate]) -> list[tuple[Candidate, Decimal]]:
+    """Each candidate that has a target above zero, with that target."""
+    return [(c, c.target) for c in candidates if c.target is not None and c.target > ZERO]
 
 
 def _round_to_total(raw: dict[str, Decimal], total: Decimal) -> dict[str, Decimal]:
@@ -92,7 +93,7 @@ def _merge_small(raw: dict[str, Decimal]) -> dict[str, Decimal]:
 def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bool = False) -> Plan:
     amount = amount.quantize(CENT, ROUND_FLOOR)  # whole cents only, so the lines can add up exactly
     targeted = _targeted(candidates)
-    pool_before = sum((c.current_value for c in targeted), ZERO)
+    pool_before = sum((c.current_value for c, _ in targeted), ZERO)
     if amount <= ZERO:
         return Plan([], ["The contribution must be more than zero."], pool_before, ZERO)
     if not targeted:
@@ -101,12 +102,12 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
         )
 
     notes: list[str] = []
-    total_target = sum((c.target for c in targeted if c.target is not None), ZERO)
-    weight = {c.ticker: (c.target or ZERO) / total_target for c in targeted}
+    total_target = sum((t for _, t in targeted), ZERO)
+    weight = {c.ticker: t / total_target for c, t in targeted}
     pool = pool_before + amount
 
     eligible = []
-    for c in sorted(targeted, key=lambda c: c.ticker):
+    for c in sorted((c for c, _ in targeted), key=lambda c: c.ticker):
         if not c.price_eur.is_finite() or c.price_eur <= ZERO:
             notes.append(f"{c.ticker} gets no money: its price is not usable.")
         elif c.call in EXCLUDING_CALLS:
@@ -178,15 +179,15 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
 def drift_items(candidates: list[Candidate], threshold_points: Decimal) -> list[DriftItem]:
     """Open holdings with a target whose weight is at least `threshold_points` away from it (both
     weights taken within the pool of such holdings)."""
-    held = [c for c in _targeted(candidates) if c.held and c.current_value > ZERO]
-    pool = sum((c.current_value for c in held), ZERO)
+    held = [(c, t) for c, t in _targeted(candidates) if c.held and c.current_value > ZERO]
+    pool = sum((c.current_value for c, _ in held), ZERO)
     if pool <= ZERO:
         return []
-    total_target = sum((c.target for c in held if c.target is not None), ZERO)
+    total_target = sum((t for _, t in held), ZERO)
     items = []
-    for c in held:
+    for c, target in held:
         weight_now = c.current_value / pool
-        weight_target = (c.target or ZERO) / total_target
+        weight_target = target / total_target
         points = (weight_now - weight_target) * 100
         if abs(points) >= threshold_points:
             items.append(DriftItem(c.ticker, c.name, weight_now, weight_target, points))

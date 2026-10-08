@@ -10,6 +10,7 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     StringConstraints,
+    computed_field,
 )
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
@@ -301,6 +302,14 @@ class PlanIn(BaseModel):
     whole_shares: bool = False
 
 
+REASON_TEXT = {
+    "new_position": "A new position that starts at 0 %",
+    "underweight": "Below its target weight",
+    "favoured": "Below its target, and its newest call is ADD or BUY",
+    "remainder": "Extra money shared by target weight",
+}
+
+
 class PlanLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -314,7 +323,11 @@ class PlanLineOut(BaseModel):
     weight_before: float | None
     weight_after: float | None
     reason: str
-    reason_text: str = ""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def reason_text(self) -> str:
+        return REASON_TEXT.get(self.reason, "")
 
 
 class PlanOut(BaseModel):
