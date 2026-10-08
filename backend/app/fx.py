@@ -27,9 +27,15 @@ RATE_SYMBOLS = {
     "DKK": "EURDKK=X",
     "PLN": "EURPLN=X",
 }
-SUBUNITS = {"GBp": ("GBP", Decimal("0.01"))}  # pence: 1/100 of a pound
+# pence: 1/100 of a pound (yfinance reports either spelling)
+SUBUNITS = {"GBp": ("GBP", Decimal("0.01")), "GBX": ("GBP", Decimal("0.01"))}
 SUPPORTED = frozenset({"EUR", *RATE_SYMBOLS, *SUBUNITS})
 LOOKUP_CONCURRENCY = 8
+# Bounds that keep amounts inside the plan columns (Numeric 18,6 for prices and 18,8 for rates)
+MIN_PRICE_EUR = Decimal("0.000001")
+MAX_PRICE_EUR = Decimal("1000000000")
+MIN_RATE = Decimal("0.00000001")
+MAX_RATE = Decimal("100000000")
 
 
 @dataclass(frozen=True)
@@ -63,7 +69,7 @@ async def _rate(currency: str) -> Decimal | None:
     except Exception as exc:
         logger.warning("Rate lookup failed for %s (%s)", base, type(exc).__name__)
         return None
-    per_eur = _positive(data.get("price"))
+    per_eur = _positive(data.get("price")) if isinstance(data, dict) else None
     return factor / per_eur if per_eur is not None else None
 
 
@@ -75,13 +81,18 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
         try:
             async with sem:
                 data = await fetch_quote_and_history(ticker)
-                currency = await fetch_currency(ticker)
         except Exception as exc:
             logger.warning("Price lookup failed (%s)", type(exc).__name__)
             return ticker, None, None, f"{ticker} is left out: no price available."
-        price = _positive(data.get("price"))
+        price = _positive(data.get("price")) if isinstance(data, dict) else None
         if price is None:
             return ticker, None, None, f"{ticker} is left out: no price available."
+        try:
+            async with sem:
+                currency = await fetch_currency(ticker)
+        except Exception as exc:
+            logger.warning("Currency lookup failed (%s)", type(exc).__name__)
+            currency = None
         if not currency:
             return ticker, None, None, f"{ticker} is left out: its currency is unknown."
         if currency not in SUPPORTED:
@@ -102,12 +113,12 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
             skipped[ticker] = reason or f"{ticker} is left out: no price available."
             continue
         rate = rates[currency]
-        if rate is None:
+        if rate is None or not MIN_RATE <= rate <= MAX_RATE:
             skipped[ticker] = f"{ticker} is left out: no exchange rate for {currency}."
             continue
         price_eur = price * rate
-        if not price_eur.is_finite() or price_eur <= 0:
-            skipped[ticker] = f"{ticker} is left out: its price could not be converted."
+        if not MIN_PRICE_EUR <= price_eur <= MAX_PRICE_EUR:
+            skipped[ticker] = f"{ticker} is left out: its price is outside the supported range."
             continue
         prices[ticker] = EurPrice(price_eur, currency, rate)
     return prices, skipped

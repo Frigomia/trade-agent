@@ -91,6 +91,47 @@ def test_a_bad_rate_leaves_the_ticker_out(rate):
     assert prices == {} and "AAPL" in skipped["AAPL"]
 
 
-def test_no_amount_can_be_non_finite():
-    (prices, _), _ = run_prices(["AAPL"], {"AAPL": 1e308}, {"AAPL": "USD"}, {"EURUSD=X": 1e-300})
-    assert all(p.price_eur.is_finite() for p in prices.values())
+@pytest.mark.parametrize(
+    ("price", "rate"), [(1e-9, 1.0), (5e9, 1.0), (1e308, 1.0), (1e308, 1e-300), (10.0, 1e-9)]
+)
+def test_an_implausible_amount_is_dropped_with_a_note(price, rate):
+    (prices, skipped), _ = run_prices(
+        ["AAPL"], {"AAPL": price}, {"AAPL": "USD"}, {"EURUSD=X": rate}
+    )
+    assert prices == {} and "AAPL" in skipped["AAPL"]
+
+
+def test_one_bad_ticker_leaves_another_priced():
+    (prices, skipped), _ = run_prices(
+        ["GOOD", "BAD"], {"GOOD": 10.0, "BAD": 1e-9}, {"GOOD": "EUR", "BAD": "EUR"}
+    )
+    assert list(prices) == ["GOOD"] and "BAD" in skipped["BAD"]
+
+
+def test_gbx_is_treated_like_pence():
+    (prices, _), _ = run_prices(["VOD.L"], {"VOD.L": 5000.0}, {"VOD.L": "GBX"}, {"EURGBP=X": 0.8})
+    assert prices["VOD.L"].price_eur == D("62.5")
+
+
+def test_a_failing_currency_lookup_says_the_currency_is_unknown():
+    async def boom(ticker):
+        raise RuntimeError("down")
+
+    with (
+        patch(
+            "app.fx.fetch_quote_and_history",
+            AsyncMock(return_value={"price": 10.0, "closes": [10.0]}),
+        ),
+        patch("app.fx.fetch_currency", AsyncMock(side_effect=boom)),
+    ):
+        prices, skipped = run(fx.eur_prices({"AAPL"}))
+    assert prices == {} and "currency" in skipped["AAPL"]
+
+
+def test_a_non_dict_quote_leaves_the_ticker_out():
+    with (
+        patch("app.fx.fetch_quote_and_history", AsyncMock(return_value=None)),
+        patch("app.fx.fetch_currency", AsyncMock(return_value="EUR")),
+    ):
+        prices, skipped = run(fx.eur_prices({"AAPL"}))
+    assert prices == {} and "AAPL" in skipped["AAPL"]
