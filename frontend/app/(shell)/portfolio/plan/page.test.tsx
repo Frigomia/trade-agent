@@ -100,6 +100,7 @@ const SUMMARIES: PlanSummary[] = [
 ];
 
 let plans: PlanSummary[];
+let openOrders: Plan["lines"] = [];
 
 function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } = {}) {
   plans = [...SUMMARIES];
@@ -116,6 +117,7 @@ function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } 
       plans = [{ id: 7, created_at: SAVED.created_at!, amount_eur: 500, line_count: 2 }, ...plans];
       return Promise.resolve(SAVED);
     }
+    if (path === "/plans/orders/open") return Promise.resolve({ open_lines: openOrders.length, plans: openOrders.length ? [{ ...SAVED, lines: openOrders }] : [] });
     if (path === "/plans/5" && method === "GET") return Promise.resolve({ ...PLAN, id: 5, created_at: "2026-09-15T12:00:00" });
     if (path === "/plans/5" && method === "DELETE") {
       plans = plans.filter((p) => p.id !== 5);
@@ -156,7 +158,22 @@ describe("Plan page", () => {
   beforeEach(() => {
     apiFetch.mockReset();
     search = "";
+    openOrders = [];
     setup();
+  });
+
+  it("opens straight on Orders from a deep link, with the disclaimer once", async () => {
+    openOrders = SAVED.lines.map((l, i) => ({ ...l, id: 70 + i }));
+    search = "tab=orders";
+    renderFresh();
+    expect(await screen.findByRole("heading", { name: "October 2026, 2 open" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" })).toBeVisible();
+    expect(await screen.findByRole("img", { name: "2 open orders" })).toBeInTheDocument();
+    expect(screen.getAllByText(DISCLAIMER)).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/\b(Buy|Sell)\b/);
+    view("month");
+    expect(await screen.findByRole("button", { name: "Make plan" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "October 2026, 2 open" })).not.toBeInTheDocument();
   });
 
   it("titles the page Portfolio and marks the view from ?tab in the strip", async () => {

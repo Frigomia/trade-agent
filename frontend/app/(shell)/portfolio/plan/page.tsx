@@ -15,6 +15,7 @@ import { useAction } from "@/lib/useAction";
 import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
 import { OrdersSection } from "@/components/plan/OrdersSection";
+import { OrdersView } from "@/components/plan/OrdersView";
 import { PlanHistory } from "@/components/plan/PlanHistory";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
@@ -210,7 +211,7 @@ export default function PlanPage() {
       <Box hidden={view !== "saved"}>
         <PlanHistory />
       </Box>
-      {view === "orders" && null /* Task 4 */}
+      {view === "orders" && <OrdersView />}
 
       <Typography
         sx={{ mt: 2, fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}

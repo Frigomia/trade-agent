@@ -100,6 +100,19 @@ export function planSavedAt(iso: string): string {
   });
 }
 
+/** "8 Sep", in the viewer's time zone. */
+export function planDay(iso: string): string {
+  return new Date(toTime(iso)).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** A plan saved more than this many days ago carries the "prices have moved" note on the Orders tab. */
+export const OLD_PLAN_DAYS = 14;
+
+/** Saved more than OLD_PLAN_DAYS before `now` (epoch ms); exactly OLD_PLAN_DAYS is not old yet. */
+export function isOldPlan(iso: string, now: number): boolean {
+  return now - toTime(iso) > OLD_PLAN_DAYS * 86_400_000;
+}
+
 const PATH = "/plans";
 const post = (path: string, req: PlanRequest) => apiFetch<Plan>(path, { method: "POST", body: JSON.stringify(req) });
 

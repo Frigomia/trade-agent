@@ -17,6 +17,21 @@ const COLUMNS = { xs: "minmax(0, 1fr) auto 24px", md: "170px minmax(0, 1fr) 220p
 const gridSx = { display: "grid", gridTemplateColumns: COLUMNS, gap: { xs: "6px 12px", md: 2 }, alignItems: "center", px: { xs: 2, md: 2.5 } } as const;
 const hidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 const bigButton = { minHeight: 48, flex: 1 } as const;
+// The Orders tab's plan heading sticks to the top of the page (which scrolls) while the plan's lines
+// pass under it, edge to edge across the main padding.
+const stickySx = {
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: { xs: "flex-start", sm: "center" },
+  gap: { xs: 1.25, sm: 2 },
+  mx: { xs: -2, md: -3 },
+  px: { xs: 2, md: 3 },
+  py: 1.25,
+  bgcolor: "var(--bg)",
+} as const;
 
 /** "8 Oct", in the viewer's time zone. */
 const placedDay = (iso: string) => new Date(toTime(iso)).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -52,6 +67,14 @@ export interface OrdersPanelProps {
   status?: string;
   /** The card whose button takes the focus (by ticker), e.g. the one that just opened after Placed. */
   focusTicker?: string | null;
+  /**
+   * The Orders tab's plan heading. Given, it replaces the placed count, sticks to the top while the
+   * plan's lines scroll, and the total, the plan notes and the hint row are left out (the tab has one
+   * hint for every plan).
+   */
+  heading?: ReactNode;
+  /** Under the heading and the status line, above the cards: the Orders tab's old-plan note. */
+  notice?: ReactNode;
 }
 
 /**
@@ -60,7 +83,7 @@ export interface OrdersPanelProps {
  * card is a button that opens it to show Copy, Placed, the ticket text and the ISIN. A placed line has
  * no buttons but still opens to show its ticket. Previews never come here.
  */
-export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status, focusTicker }: OrdersPanelProps) {
+export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status, focusTicker, heading, notice }: OrdersPanelProps) {
   const [ownOpen, setOwnOpen] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null); // a ticker, or "*" for Copy all lines
   const [failed, setFailed] = useState<string | null>(null);
@@ -103,7 +126,8 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+      <Box sx={heading ? stickySx : { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+        {heading ?? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
           {allPlaced ? (
             <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--up)" }}>
@@ -129,13 +153,14 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
             ))}
           </Box>
         </Box>
+        )}
         <Button
           variant="outlined"
           size="small"
           disabled={allPlaced}
           startIcon={copied === "*" ? <Check size={14} /> : <Copy size={14} />}
           onClick={() => void copy("*", copyAllText(plan))}
-          sx={{ minHeight: 44, width: { xs: "100%", sm: "auto" } }}
+          sx={heading ? { minHeight: 44, flex: "none" } : { minHeight: 44, width: { xs: "100%", sm: "auto" } }}
         >
           {copied === "*" ? "Copied" : "Copy all lines"}
         </Button>
@@ -159,6 +184,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
           {status}
         </Box>
       )}
+      {notice}
 
       <Panel sx={{ pt: { md: 0.75 }, overflow: "hidden" }}>
         <Box aria-hidden sx={{ ...gridSx, display: { xs: "none", md: "grid" }, py: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
@@ -188,17 +214,23 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
             />
           ))}
         </Box>
+        {!heading && (
         <Box sx={{ ...gridSx, py: 1.5, borderTop: "1px solid var(--line)", fontWeight: 650, bgcolor: "var(--tab-bg)" }}>
           <Box sx={{ gridRow: 1 }}>Total</Box>
           <Box sx={{ ...muted, gridColumn: { xs: "1 / -1", md: "2 / 4" }, gridRow: { xs: 2, md: 1 } }}>Leftover {formatAmount(plan.leftover_eur)} EUR</Box>
           <Box sx={{ gridRow: 1, gridColumn: { xs: "2 / -1", md: 4 }, textAlign: "right", whiteSpace: "nowrap" }}>{formatAmount(total)} EUR</Box>
         </Box>
+        )}
       </Panel>
-      <PlanNotes notes={plan.notes} />
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.75, flexWrap: "wrap" }}>
-        <Typography sx={muted}>Tap a line to open its order.</Typography>
-        {footer}
-      </Box>
+      {!heading && (
+        <>
+          <PlanNotes notes={plan.notes} />
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.75, flexWrap: "wrap" }}>
+            <Typography sx={muted}>Tap a line to open its order.</Typography>
+            {footer}
+          </Box>
+        </>
+      )}
       <Box role="status" aria-live="polite" sx={hidden}>
         {announce}
       </Box>
