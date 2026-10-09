@@ -211,14 +211,16 @@ def reject_recommendation(
 def _set_recommendation_status(
     db: Session, user_id: uuid.UUID, recommendation_id: int, status: str
 ) -> Recommendation:
-    # One conditional UPDATE: only a PENDING row of this user changes, so two decisions
-    # (or a decision racing a re-run that supersedes the row) cannot overwrite each other.
+    # One conditional UPDATE: a PENDING row, or one holding the opposite decision (so a decision
+    # can be reversed), of this user changes. SUPERSEDED rows and a repeat of the same decision
+    # match nothing, and a decision racing a re-run that supersedes the row cannot overwrite it.
+    opposite = "REJECTED" if status == "APPROVED" else "APPROVED"
     result = db.execute(
         update(Recommendation)
         .where(
             Recommendation.id == recommendation_id,
             Recommendation.user_id == user_id,
-            Recommendation.status == "PENDING",
+            Recommendation.status.in_(("PENDING", opposite)),
         )
         .values(status=status, reviewed_at=datetime.now(UTC))
     )

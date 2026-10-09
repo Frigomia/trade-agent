@@ -321,8 +321,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
-| POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Only a `PENDING` recommendation can be decided: one already `APPROVED`, `REJECTED` or `SUPERSEDED` returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
-| POST | `/analysis/recommendations/{id}/reject` | — | Same rules as approve (`PENDING` only, else `409`) |
+| POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Allowed from `PENDING` or `REJECTED` (a decision can be reversed); from `APPROVED` (same decision again) or `SUPERSEDED` it returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
+| POST | `/analysis/recommendations/{id}/reject` | — | Same rules, mirrored: allowed from `PENDING` or `APPROVED`; `409` from `REJECTED` or `SUPERSEDED` |
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run`. Rate limited: 5/min per user; one running backtest per user at a time (`409` while one is `RUNNING`) |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
@@ -414,8 +414,8 @@ together afterwards.
 GBP, GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN. A rate comes from a fixed table of Yahoo
 symbols (`EURUSD=X` and so on), never from user text; `GBp` and `GBX` are pence, converted through GBP
 at one hundredth. Nothing is stored for this: the price in EUR, the currency and the rate are
-returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, as a `left_out` entry of kind `unpriced`, when its price
-is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
+returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1
+penny. A ticker is left out, as a `left_out` entry of kind `unpriced`, when its price is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
 lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-4 to
 1e9 (those bounds keep every figure inside its column). Nothing negative, infinite or NaN ever
 reaches an amount. This conversion is not yet applied to `/portfolio/summary`, so portfolio totals
@@ -429,8 +429,9 @@ holding without a target is outside the pool: it neither receives money nor coun
 
 1. Targets are normalised to add up to 1 (`weight`).
 2. Each ticker whose price is unusable, or whose newest PENDING recommendation is TRIM or SELL, gets
-   no money and a `left_out` entry (kind `unusable_price` or `excluded_call`), never a note. If that leaves nobody, the plan is empty, the whole contribution is the
-   leftover, and `left_out` says why.
+   no money and a `left_out` entry (kind `unusable_price` or `excluded_call`), never a note. If that
+   leaves nobody, the plan is empty, the whole contribution is the leftover, and `left_out` says
+   why.
 3. For every other item, `gap = max(weight * pool - current_value, 0)`. A watchlist item or closed
    position has a current value of 0, so it is the furthest below its target. If the newest pending
    call is ADD or BUY the gap is multiplied by `FAVOUR_FACTOR` = 1.25.
@@ -589,7 +590,8 @@ recommendation for a ticker, that ticker's older `PENDING` (unreviewed) ones are
 `SUPERSEDED` — kept for history, never shown as awaiting review, and excluded from
 `?status=PENDING`; reviewed (`APPROVED`/`REJECTED`) rows are untouched. The dashboard's
 "Approve"/"Dismiss" buttons call the approve/reject endpoints, which only
-flip the status flag, and only on `PENDING` rows (any other status answers 409). **Nothing in this system calls a broker API or
+flip the status flag, from `PENDING` or from the opposite decision (so a decision can be
+reversed); a `SUPERSEDED` row or a repeat of the same decision answers 409. **Nothing in this system calls a broker API or
 executes a trade.** The loop closes when the human, having approved a
 recommendation and manually executed it in Trade Republic, calls
 `POST /portfolio/trades` (or clicks a "mark as executed" action in the UI,
@@ -1054,9 +1056,12 @@ and invited users; nobody can sign up on their own.
      `/reset-password`. After a recovery link the route sets a 15-minute `ta_recovery` cookie;
      `/reset-password` shows the new-password form only with that cookie or a
      `PASSWORD_RECOVERY` event, and sends any other signed-in user to `/more/account`.
-  3. **Authentication → Sign In / Providers → Email → "Secure password change": turn ON.** The
-     app asks for the current password before a change, but that is only a UI convenience; this
-     server-side setting is what stops a stolen session token from changing the password.
+  3. **Authentication → Sign In / Providers → Email → "Secure password change": turn ON.** It only
+     forces reauthentication when the session is more than 24 hours old, so a token stolen from a
+     younger session can still change the password. The app's current-password check is only a UI
+     convenience. Supabase also has a server-side "Require current password" setting (used with
+     `updateUser({ password, current_password })`) that would close this; the app does not use it
+     yet.
   **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
   walkthrough against a live Supabase project has not been performed — the implementing agent's
   sandboxed environment has no browser or email access. This remains a required manual

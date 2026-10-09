@@ -18,8 +18,8 @@ export function ConfirmationPanel({
 }) {
   const { run, submitting, error } = useAction();
 
-  // Neither endpoint guards on the current status — calling the opposite action on an
-  // already-decided recommendation cleanly reverses it. No backend change needed.
+  // The backend allows reversing a decision (the opposite action on an APPROVED or REJECTED
+  // recommendation flips it), but not touching a superseded one (409).
   const changeDecision = () =>
     run(async () => {
       const oppositeAction = recommendation.status === "APPROVED" ? "reject" : "approve";

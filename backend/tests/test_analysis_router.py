@@ -196,20 +196,42 @@ def test_decide_pending_recommendation(client, db_session):
         assert rec.status == expected  # persisted, not just echoed in the response
 
 
-def test_decide_non_pending_recommendation_returns_409_and_leaves_it(client, db_session):
-    for old in ("APPROVED", "REJECTED", "SUPERSEDED"):
-        for action in ("approve", "reject"):
-            rec = _rec(USER_ID)
-            rec.status = old
-            db_session.add(rec)
-            db_session.commit()
-            db_session.refresh(rec)
-            response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
-            assert response.status_code == 409
-            assert "already decided" in response.json()["detail"]
-            db_session.refresh(rec)
-            assert rec.status == old
-            assert rec.reviewed_at is None
+def test_a_decision_can_be_reversed(client, db_session):
+    for old, action, expected in (
+        ("APPROVED", "reject", "REJECTED"),
+        ("REJECTED", "approve", "APPROVED"),
+    ):
+        rec = _rec(USER_ID)
+        rec.status = old
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 200
+        assert response.json()["status"] == expected
+        db_session.refresh(rec)
+        assert rec.status == expected
+        assert rec.reviewed_at is not None
+
+
+def test_same_decision_or_superseded_returns_409_and_leaves_it(client, db_session):
+    for old, action in (
+        ("APPROVED", "approve"),
+        ("REJECTED", "reject"),
+        ("SUPERSEDED", "approve"),
+        ("SUPERSEDED", "reject"),
+    ):
+        rec = _rec(USER_ID)
+        rec.status = old
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 409
+        assert "already decided" in response.json()["detail"]
+        db_session.refresh(rec)
+        assert rec.status == old
+        assert rec.reviewed_at is None
 
 
 def test_reject_unknown_or_other_users_recommendation_returns_404(client, db_session):

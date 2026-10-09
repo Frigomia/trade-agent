@@ -149,6 +149,10 @@ async def _process_ticker(
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
             else:
                 # Sync DB work (it can wait on the user's advisory lock): off the event loop.
+                # ponytail: if the scheduled timeout cancels run_job, this worker thread can still
+                # finish its commit after the run was counted failed. Accepted: the write is still
+                # serialised by the advisory lock and the active check, and it needs a timeout
+                # that lands during the DB write.
                 entry = await asyncio.to_thread(
                     _save_recommendation, user_id, ticker_info, state, source
                 )
