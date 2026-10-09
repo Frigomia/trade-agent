@@ -41,7 +41,7 @@ import { saveIsinAfterAdd } from "@/lib/orders";
 import { usePickedIsin } from "@/lib/usePickedIsin";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
-import { AVG_COST_DISPLAY, HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
+import { HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
 
 const DASH = "—";
 // A share count on the phone line, to one decimal at most ("1.4 sh"); a tiny one keeps its digits.
@@ -165,8 +165,12 @@ function HoldingRow({
           )}
         </Typography>
       </Box>
-      <Typography sx={cell}>{holding.shares}</Typography>
-      <Typography sx={{ ...cell, display: AVG_COST_DISPLAY }}>{formatAmount(holding.cost_basis)}</Typography>
+      <Typography sx={cell}>
+        {holding.shares}
+        <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--muted)" }}>
+          avg {Number.isFinite(holding.cost_basis) ? formatAmount(holding.cost_basis) : DASH}
+        </Box>
+      </Typography>
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
       </Typography>
@@ -373,9 +377,6 @@ export default function PortfolioPage() {
           >
             <span>Holding</span>
             <span>Shares</span>
-            <Box component="span" sx={{ display: AVG_COST_DISPLAY }}>
-              Avg cost
-            </Box>
             <span>Price</span>
             <span>Value</span>
             <span>P/L</span>

@@ -3,12 +3,9 @@
 // would push the grid wider than the panel instead of sharing the room out.
 // Widths (main = viewport - 211px sidebar - 48px padding; the watchlist sits beside from lg):
 // 900px: ~550px for the cells, 1024: ~670, 1280: ~590 (beside the watchlist), 1536: ~850.
-// Below xl there is no room for seven numeric columns, so Avg cost (also in the holding form) is dropped.
+// Avg cost has no column of its own: it is the second line of the Shares cell.
 const track = (fr: number) => `minmax(0, ${fr}fr)`;
 const SIX = [1.5, 0.8, 0.8, 0.8, 1.1, 1].map(track).join(" "); // holding, shares, price, value, P/L, weight
-const SEVEN = [1.5, 0.8, 0.8, 0.8, 0.8, 1.1, 1].map(track).join(" "); // + avg cost after shares
 
-export const HOLDING_COLUMNS = { xs: "minmax(0, 1fr) auto", md: SIX, xl: SEVEN } as const;
+export const HOLDING_COLUMNS = { xs: "minmax(0, 1fr) auto", md: SIX } as const;
 export const HOLDING_GAP = { xs: 2, md: 1.25 } as const;
-/** Avg cost shows only where HOLDING_COLUMNS has its seventh track. */
-export const AVG_COST_DISPLAY = { xs: "none", xl: "block" } as const;
