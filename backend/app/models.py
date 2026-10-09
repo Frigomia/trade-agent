@@ -261,10 +261,17 @@ class ContributionPlan(Base):
     total_before_eur: Mapped[float] = mapped_column(Numeric(16, 2))
     leftover_eur: Mapped[float] = mapped_column(Numeric(12, 2))
     notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    left_out: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, nullable=True)
 
 
 class ContributionPlanLine(Base):
     __tablename__ = "contribution_plan_lines"
+    __table_args__ = (
+        CheckConstraint(
+            "target_weight IS NULL OR (target_weight >= 0 AND target_weight <= 1)",
+            name="ck_plan_lines_target_weight",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
@@ -281,3 +288,4 @@ class ContributionPlanLine(Base):
     reason: Mapped[str] = mapped_column(String(20))
     placed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     placed_trade_id: Mapped[int | None] = mapped_column(nullable=True)
+    target_weight: Mapped[float | None] = mapped_column(Numeric(7, 6), nullable=True)
