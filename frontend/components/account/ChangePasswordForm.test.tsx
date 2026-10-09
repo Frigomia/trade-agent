@@ -4,8 +4,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 const updateUser = vi.fn();
 const getUser = vi.fn();
 const signInWithPassword = vi.fn();
+const signOut = vi.fn();
 vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ auth: { updateUser, getUser, signInWithPassword } }),
+  createClient: () => ({ auth: { updateUser, getUser, signInWithPassword, signOut } }),
 }));
 
 import { ChangePasswordForm } from "./ChangePasswordForm";
@@ -22,6 +23,7 @@ describe("ChangePasswordForm", () => {
     updateUser.mockReset();
     getUser.mockReset().mockResolvedValue({ data: { user: { email: "me@example.com" } } });
     signInWithPassword.mockReset().mockResolvedValue({ error: null });
+    signOut.mockReset().mockResolvedValue({ error: null });
   });
 
   it("blocks a short password and a mismatch without calling Supabase", () => {
@@ -71,5 +73,42 @@ describe("ChangePasswordForm", () => {
     fill("longenough1", "longenough1");
     expect(await screen.findByText(/should be different from the old password/i)).toBeInTheDocument();
     expect(screen.queryByText(/password changed/i)).not.toBeInTheDocument();
+  });
+
+  it("asks for the current password before any network call", () => {
+    render(<ChangePasswordForm />);
+    fill("longenough1", "longenough1", "");
+    expect(screen.getByText("Enter your current password.")).toBeInTheDocument();
+    expect(getUser).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it("signs out the other sessions after the update", async () => {
+    updateUser.mockResolvedValue({ error: null });
+    render(<ChangePasswordForm />);
+    fill("longenough1", "longenough1");
+    await waitFor(() => expect(signOut).toHaveBeenCalledWith({ scope: "others" }));
+    expect(updateUser.mock.invocationCallOrder[0]).toBeLessThan(signOut.mock.invocationCallOrder[0]);
+    expect(await screen.findByText(/password changed/i)).toBeInTheDocument();
+  });
+
+  it("does not sign out when the current password is wrong", async () => {
+    signInWithPassword.mockResolvedValue({ error: { message: "Invalid login credentials" } });
+    render(<ChangePasswordForm />);
+    fill("longenough1", "longenough1");
+    await screen.findByText("The current password is not correct.");
+    expect(signOut).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["getUser", () => getUser.mockRejectedValue(new Error("network"))],
+    ["signInWithPassword", () => signInWithPassword.mockRejectedValue(new Error("network"))],
+  ])("shows the generic error and never updates when %s throws", async (_name, arrange) => {
+    arrange();
+    render(<ChangePasswordForm />);
+    fill("longenough1", "longenough1");
+    expect(await screen.findByText("Something went wrong.")).toBeInTheDocument();
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(signOut).not.toHaveBeenCalled();
   });
 });

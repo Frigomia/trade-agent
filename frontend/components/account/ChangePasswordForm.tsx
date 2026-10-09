@@ -17,6 +17,10 @@ export function ChangePasswordForm() {
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setDone(false);
+    if (!current) {
+      setError("Enter your current password.");
+      return;
+    }
     if (password.length < MIN_PASSWORD) {
       setError(`Use at least ${MIN_PASSWORD} characters.`);
       return;
@@ -44,6 +48,8 @@ export function ChangePasswordForm() {
         setError(updateError.message);
         return;
       }
+      // End every other session; the change itself succeeded, so ignore a failure here.
+      await auth.signOut({ scope: "others" }).catch(() => undefined);
       setCurrent("");
       setPassword("");
       setConfirm("");

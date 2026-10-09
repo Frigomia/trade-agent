@@ -16,7 +16,7 @@ import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
 const ASK_SHAPE = /^Why (BUY|ADD|HOLD|TRIM|SELL|WATCH) on [A-Za-z0-9.^=-]{1,20}\?$/;
-const HISTORY_PATH =`/chat/messages?session_id=${CHAT_SESSION}`;
+const HISTORY_PATH = `/chat/messages?session_id=${CHAT_SESSION}`;
 
 export default function ChatPage() {
   // useSearchParams needs a Suspense boundary for the static build.
