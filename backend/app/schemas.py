@@ -331,7 +331,7 @@ class LeftOutOut(BaseModel):
 
     ticker: str
     name: str
-    kind: str  # "excluded_call" | "unusable_price" | "too_small" | "unpriced"
+    kind: str  # see LeftOut in frontend/lib/plans.ts
     reason: str
 
 

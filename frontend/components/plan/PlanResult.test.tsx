@@ -51,7 +51,6 @@ describe("PlanResult", () => {
     // The scale is the largest of before, after and target, plus headroom: 0.19 * 1.15.
     expect(leftPct(tick)).toBeCloseTo((0.19 / (0.19 * 1.15)) * 100, 5);
     expect(screen.getByText("target (within this plan)")).toBeInTheDocument();
-    expect(screen.queryByText(/rescaled/)).not.toBeInTheDocument();
   });
 
   it("keeps the tick inside the track when the target is above every weight", () => {
@@ -112,17 +111,6 @@ describe("PlanResult", () => {
     render(<PlanResult plan={plan({ whole_shares: true, lines: [], leftover_eur: 500, left_out: [tooSmall] })} />);
     expect(screen.getByText(/This amount is not enough for one whole share/)).toBeInTheDocument();
     expect(screen.getByText("40.00 EUR is less than one share (392.18 EUR).")).toBeInTheDocument();
-  });
-
-  it("keeps the whole-shares copy for an old plan that says it only in a note", () => {
-    const old = plan({ whole_shares: true, lines: [], leftover_eur: 500, notes: ["MSFT is dropped: 40.00 EUR is less than one share (392.18 EUR)."] });
-    render(<PlanResult plan={old} />);
-    expect(screen.getByText(/This amount is not enough for one whole share/)).toBeInTheDocument();
-  });
-
-  it("explains the rescaled targets when a ticker could not be priced", () => {
-    render(<PlanResult plan={plan({ left_out: [NVDA] })} />);
-    expect(screen.getByText("Targets are rescaled to the tickers this plan could price.")).toBeInTheDocument();
   });
 
   it("renders a response without the new fields, with no tick and no left-out rows", () => {

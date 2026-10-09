@@ -169,10 +169,7 @@ export function PlanNotes({ notes }: { notes: string[] }) {
 }
 
 function NothingToFund({ plan }: { plan: Plan }) {
-  // Plans saved before left_out existed say it in a note instead.
-  const wholeSharesTooSmall =
-    plan.left_out.some((e) => e.kind === "too_small") ||
-    (plan.whole_shares && plan.notes.some((n) => n.includes("less than one share")));
+  const wholeSharesTooSmall = plan.left_out.some((e) => e.kind === "too_small");
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
       <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650 }}>
@@ -251,9 +248,6 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
             </Box>
           )}
         </Box>
-        {plan.left_out.some((e) => e.kind === "unpriced") && (
-          <Typography sx={muted}>Targets are rescaled to the tickers this plan could price.</Typography>
-        )}
         {footer}
       </Box>
     </Box>

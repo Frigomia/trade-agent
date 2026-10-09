@@ -139,7 +139,7 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
         lines=[PlanLineOut.model_validate(line, from_attributes=True) for line in result.lines],
         notes=notes + result.notes,
         left_out=[
-            LeftOutOut.model_validate(e, from_attributes=True)
+            LeftOutOut.model_validate(e)
             for e in sorted(unpriced + result.left_out, key=lambda e: e.ticker)
         ],
     )
@@ -302,7 +302,7 @@ def _out(row: ContributionPlan, lines: list[ContributionPlanLine], extras: _Extr
         leftover_eur=float(row.leftover_eur),
         lines=[_line_out(ln, extras) for ln in lines],
         notes=list(row.notes or []),
-        left_out=[LeftOutOut(**e) for e in (row.left_out or [])],
+        left_out=[LeftOutOut.model_validate(e) for e in (row.left_out or [])],
     )
 
 
