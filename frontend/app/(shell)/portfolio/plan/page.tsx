@@ -177,7 +177,8 @@ export default function PlanPage() {
   // This month and Saved plans are one route; only ?tab changes, which Next does not remount.
   // useSearchParams needs no Suspense boundary here because the (shell) routes are dynamic (the layout
   // reads the session); if this page were ever prerendered statically, wrap it in <Suspense>.
-  const saved = useSearchParams().get("tab") === "saved";
+  const tab = useSearchParams().get("tab");
+  const view: "month" | "saved" | "orders" = tab === "saved" || tab === "orders" ? tab : "month";
 
   // Preferences only prefill the amount: if they fail, the field starts empty.
   const ready = summary !== undefined && (prefs !== undefined || prefsError);
@@ -185,10 +186,10 @@ export default function PlanPage() {
   return (
     <Box>
       <PageHeader title="Portfolio" />
-      <PortfolioTabs current={saved ? "saved" : "month"} />
+      <PortfolioTabs current={view} />
 
       {/* Both panels stay mounted, so a preview survives a look at the saved plans. */}
-      <Box hidden={saved}>
+      <Box hidden={view !== "month"}>
         {/* A failed background revalidation keeps the data on screen; only a first load failure shows. */}
         {summaryError && !summary && (
           <Alert
@@ -206,9 +207,10 @@ export default function PlanPage() {
         {ready && !hasTargets(summary) && <NoTargets />}
         {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} />}
       </Box>
-      <Box hidden={!saved}>
+      <Box hidden={view !== "saved"}>
         <PlanHistory />
       </Box>
+      {view === "orders" && null /* Task 4 */}
 
       <Typography
         sx={{ mt: 2, fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}

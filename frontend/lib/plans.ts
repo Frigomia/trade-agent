@@ -145,3 +145,19 @@ export function useDrift() {
   });
   return { drift: data, error, isLoading };
 }
+
+export interface OpenOrders {
+  open_lines: number;
+  plans: Plan[]; // saved plans with only their unplaced lines, newest first
+}
+
+/** The unplaced order lines across the saved plans: one shared read, no polling; a failure shows up in `error`. */
+export function useOpenOrders() {
+  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(`${PATH}/orders/open`, apiFetch, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    refreshInterval: 0,
+    shouldRetryOnError: false,
+  });
+  return { openLines: data?.open_lines ?? 0, plans: data?.plans ?? [], error, isLoading, mutate };
+}

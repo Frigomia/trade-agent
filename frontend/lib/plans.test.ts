@@ -17,7 +17,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { usePlans, useDrift, previewPlan, parseAmount, planMonth, formatRate, type Plan } from "./plans";
+import { usePlans, useDrift, useOpenOrders, previewPlan, parseAmount, planMonth, formatRate, type Plan } from "./plans";
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(SWRConfig, { value: { provider: () => new Map(), dedupingInterval: 0 } }, children);
@@ -185,5 +185,52 @@ describe("formatRate", () => {
 describe("planMonth", () => {
   it("names the month and year", () => {
     expect(planMonth("2026-09-15T12:00:00")).toBe("September 2026");
+  });
+});
+
+describe("useOpenOrders", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  beforeEach(() => {
+    apiFetch.mockReset();
+  });
+
+  it("reads the open-orders route once and exposes the count and plans", async () => {
+    apiFetch.mockResolvedValue({ open_lines: 3, plans: [plan] });
+    const { result } = renderHook(() => useOpenOrders(), { wrapper });
+    expect(result.current.openLines).toBe(0);
+    await waitFor(() => expect(result.current.openLines).toBe(3));
+    expect(result.current.plans).toEqual([plan]);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch).toHaveBeenCalledWith("/plans/orders/open");
+  });
+
+  it("tolerates a failure: openLines 0, error set, no throw, no retry", async () => {
+    vi.useFakeTimers();
+    apiFetch.mockImplementation(async () => {
+      throw new FakeApiError(500, "boom");
+    });
+    const { result } = renderHook(() => useOpenOrders(), { wrapper });
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(result.current.error?.detail).toBe("boom");
+    expect(result.current.openLines).toBe(0);
+    expect(result.current.plans).toEqual([]);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not poll or refetch on focus or reconnect", async () => {
+    vi.useFakeTimers();
+    apiFetch.mockResolvedValue({ open_lines: 1, plans: [] });
+    const { result } = renderHook(() => useOpenOrders(), { wrapper });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.current.openLines).toBe(1);
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("online"));
+      await vi.advanceTimersByTimeAsync(5000);
+    });
+    expect(apiFetch).toHaveBeenCalledTimes(1);
   });
 });

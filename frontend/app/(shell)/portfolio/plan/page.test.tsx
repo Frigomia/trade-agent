@@ -177,6 +177,15 @@ describe("Plan page", () => {
     expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
   });
 
+  it("marks Orders current from ?tab=orders and keeps the other panels mounted but hidden", async () => {
+    search = "tab=orders";
+    renderFresh();
+    expect(screen.getByRole("link", { name: "Orders" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
+    expect(await screen.findByRole("button", { name: "Make plan", hidden: true })).not.toBeVisible();
+    expect(screen.getByRole("table", { name: "Saved plans", hidden: true })).not.toBeVisible();
+  });
+
   it("prefills the saved monthly amount and validates it", async () => {
     renderFresh();
     const field = await screen.findByLabelText("Amount this month");
