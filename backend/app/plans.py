@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.schemas import (
     DriftItemOut,
+    OpenOrdersOut,
     PlaceIn,
     PlanIn,
     PlanLineOut,
@@ -332,6 +333,29 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
         by_plan.setdefault(line.plan_id, []).append(line)
     extras = _extras(db, user_id, lines)  # once, not per plan
     return [_out(r, by_plan.get(r.id, []), extras) for r in rows]
+
+
+def open_orders(db: Session, user_id: uuid.UUID) -> OpenOrdersOut:
+    """The saved plans that still have lines to place, newest first, each with ONLY its unplaced
+    lines. Three reads however many plans there are: lines, plans, extras."""
+    lines = (
+        db.query(ContributionPlanLine)
+        .filter(ContributionPlanLine.user_id == user_id, ContributionPlanLine.placed_at.is_(None))
+        .order_by(ContributionPlanLine.id)
+        .all()
+    )
+    by_plan: dict[int, list[ContributionPlanLine]] = {}
+    for line in lines:
+        by_plan.setdefault(line.plan_id, []).append(line)
+    rows = (
+        db.query(ContributionPlan)
+        .filter(ContributionPlan.user_id == user_id, ContributionPlan.id.in_(list(by_plan) or [0]))
+        .order_by(ContributionPlan.id.desc())
+        .all()
+    )
+    extras = _extras(db, user_id, lines)  # once, not per plan
+    plans_out = [_out(row, by_plan[row.id], extras) for row in rows]
+    return OpenOrdersOut(open_lines=sum(len(p.lines) for p in plans_out), plans=plans_out)
 
 
 def list_summaries(db: Session, user_id: uuid.UUID) -> list[PlanSummaryOut]:

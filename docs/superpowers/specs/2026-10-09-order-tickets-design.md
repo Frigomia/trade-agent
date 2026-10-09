@@ -151,7 +151,7 @@ ticket and the currency rule), RUNBOOK (nothing to configure; what "Placed" does
 
 ## Future work
 
-- **Orders tab:** a tab next to This month and Saved plans listing open (not yet placed) lines across all
+- **Orders tab (backend done: `GET /plans/orders/open`; the screen follows):** a tab next to This month and Saved plans listing open (not yet placed) lines across all
   saved plans, so unfinished lines from earlier months stay visible. The data model already supports it (a
   query over lines with no `placed_at`).
 - A broker preference with broker-specific wording, if the neutral text proves confusing in one app.

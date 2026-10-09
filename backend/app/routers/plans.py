@@ -6,7 +6,15 @@ from app import plans
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.http_headers import no_store
 from app.rate_limit import rate_limiter
-from app.schemas import DriftItemOut, PlaceIn, PlanIn, PlanLineOut, PlanOut, PlanSummaryOut
+from app.schemas import (
+    DriftItemOut,
+    OpenOrdersOut,
+    PlaceIn,
+    PlanIn,
+    PlanLineOut,
+    PlanOut,
+    PlanSummaryOut,
+)
 
 router = APIRouter(
     prefix="/plans", tags=["plans"], dependencies=[Depends(get_current_user), Depends(no_store)]
@@ -60,6 +68,13 @@ async def drift(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> list[DriftItemOut]:
     return await plans.drift(db, user.id)
+
+
+@router.get("/orders/open", response_model=OpenOrdersOut)
+def open_orders(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> OpenOrdersOut:
+    return plans.open_orders(db, user.id)
 
 
 # Keep the "/{plan_id}" routes LAST: fixed paths such as "/drift" must be declared above them.

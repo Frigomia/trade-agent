@@ -670,3 +670,78 @@ def test_another_persons_trade_with_the_same_id_is_never_read(client, db_session
     got = _line(client, plan, "AAPL")
     assert got["placed_trade_id"] == foreign.id
     assert (got["placed_shares"], got["placed_price"]) == (None, None)
+
+
+def test_open_orders_lists_only_unplaced_lines_newest_plan_first(client, db_session):
+    _seed_basic(db_session)
+    first = _saved(client)
+    second = _saved(client)
+    _place(client, first, _line(client, first, "AAPL"))
+    body = client.get("/plans/orders/open").json()
+    assert [p["id"] for p in body["plans"]] == [second["id"], first["id"]]
+    assert {ln["ticker"] for ln in body["plans"][1]["lines"]} == {"NVDA"}  # AAPL was placed
+    assert {ln["ticker"] for ln in body["plans"][0]["lines"]} == {"AAPL", "NVDA"}
+    assert body["open_lines"] == 3
+    assert all(ln["placed_at"] is None for p in body["plans"] for ln in p["lines"])
+
+
+def test_a_plan_with_every_line_placed_is_omitted(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    for ticker in ("AAPL", "NVDA"):
+        _place(client, plan, _line(client, plan, ticker), asset_type="STOCK")
+    body = client.get("/plans/orders/open").json()
+    assert body == {"open_lines": 0, "plans": []}
+
+
+def test_open_orders_is_empty_without_plans(client):
+    assert client.get("/plans/orders/open").json() == {"open_lines": 0, "plans": []}
+
+
+def test_open_orders_never_lists_another_persons_lines(client, db_session):
+    _seed_basic(db_session)
+    other = ContributionPlan(
+        user_id=OTHER_USER_ID,
+        amount_eur=100,
+        whole_shares=False,
+        total_before_eur=0,
+        leftover_eur=0,
+        notes=[],
+    )
+    db_session.add(other)
+    db_session.commit()
+    db_session.add(
+        ContributionPlanLine(
+            user_id=OTHER_USER_ID,
+            plan_id=other.id,
+            ticker="AAPL",
+            name="Apple",
+            amount_eur=100,
+            shares=1,
+            price_eur=100,
+            currency="EUR",
+            rate=1,
+            reason="underweight",
+        )
+    )
+    db_session.commit()
+    assert client.get("/plans/orders/open").json() == {"open_lines": 0, "plans": []}
+
+
+def test_open_lines_carry_the_live_isin_and_a_whole_shares_flag(client, db_session):
+    _seed_basic(db_session)
+    plan = _saved(client)
+    client.put("/portfolio/instruments/AAPL/isin", json={"isin": "US0378331005"})
+    first = client.get("/plans/orders/open").json()["plans"][0]
+    line = next(ln for ln in first["lines"] if ln["ticker"] == "AAPL")
+    assert line["isin"] == "US0378331005"
+    assert first["whole_shares"] is False
+    assert plan["id"] == first["id"]
+
+
+def test_the_open_orders_route_is_not_shadowed_by_the_plan_id_route(client):
+    assert client.get("/plans/orders/open").status_code == 200  # not 422/404 for "orders"
+
+
+def test_open_orders_requires_authentication(anon_client):
+    assert anon_client.get("/plans/orders/open").status_code == 401
