@@ -91,17 +91,25 @@ def test_a_bad_rate_leaves_the_ticker_out(rate):
     assert prices == {} and skipped["AAPL"] == "No exchange rate for USD."
 
 
+_RANGE = "Its price is outside the supported range."
+_NO_RATE = "No exchange rate for USD."  # a rate outside the bounds is refused first
+
+
 @pytest.mark.parametrize(
-    ("price", "rate"), [(1e-9, 1.0), (5e9, 1.0), (1e308, 1.0), (1e308, 1e-300), (10.0, 1e-9)]
+    ("price", "rate", "expected"),
+    [
+        (1e-9, 1.0, _RANGE),
+        (5e9, 1.0, _RANGE),
+        (1e308, 1.0, _RANGE),
+        (1e308, 1e-300, _NO_RATE),
+        (10.0, 1e-9, _NO_RATE),
+    ],
 )
-def test_an_implausible_amount_is_dropped_with_a_note(price, rate):
+def test_an_implausible_amount_is_dropped_with_a_note(price, rate, expected):
     (prices, skipped), _ = run_prices(
         ["AAPL"], {"AAPL": price}, {"AAPL": "USD"}, {"EURUSD=X": rate}
     )
-    assert prices == {} and skipped["AAPL"] in {
-        "Its price is outside the supported range.",
-        "No exchange rate for USD.",  # a rate outside the bounds is refused first
-    }
+    assert prices == {} and skipped["AAPL"] == expected
 
 
 def test_one_bad_ticker_leaves_another_priced():

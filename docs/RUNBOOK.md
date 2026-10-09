@@ -235,8 +235,8 @@ minutes.
 
 Nothing to set up: it has no secrets and no settings of its own, and it uses no Claude key. The plan
 screen needs quotes and exchange rates from the price source, the same one the rest of the app uses.
-A "left out" note on a plan (for example "AAPL is left out: no price available" or "its currency is
-unknown") means that lookup failed or the currency is not one of the supported ones (EUR, USD, GBP,
+A "left out" row on a plan (for example AAPL with the reason "No price available." or "Its currency is
+unknown.") means that lookup failed or the currency is not one of the supported ones (EUR, USD, GBP,
 GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN); the ticker is simply not in the plan, nothing is
 guessed. It is usually a passing price-source problem: make the plan again a few minutes later.
 

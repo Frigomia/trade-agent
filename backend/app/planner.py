@@ -58,7 +58,7 @@ class Plan:
     notes: list[str]
     total_before: Decimal  # EUR value of the pool before the contribution
     leftover: Decimal  # part of the contribution no line uses
-    left_out: list[LeftOut] = field(default_factory=list)  # tickers that got no line, and why
+    left_out: list[LeftOut] = field(default_factory=list)  # tickers excluded or dropped, and why
 
 
 @dataclass(frozen=True)

@@ -177,7 +177,7 @@ def test_a_sub_cent_amount_is_floored_to_whole_cents(amount):
 
 
 @pytest.mark.parametrize("price", [0, -5])
-def test_an_unusable_price_is_skipped_with_a_note(price):
+def test_an_unusable_price_is_a_left_out_entry_for_zero_and_negative_prices(price):
     cands = [cand("BAD", 0, 0.5, price=price), cand("OK", 0, 0.5)]
     plan = build_plan(cands, D("100"))
     assert amounts(plan) == {"OK": D("100.00")}

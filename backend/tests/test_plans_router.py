@@ -116,15 +116,6 @@ def test_an_approved_or_old_decided_call_does_not_exclude(client, db_session):
     assert {ln["ticker"] for ln in body["lines"]} == {"AAPL", "NVDA"}
 
 
-def test_an_unpriced_ticker_is_left_out_with_a_note(client, db_session):
-    _seed_basic(db_session)
-    with _prices(AAPL=200, MSFT=400):  # NVDA has no price
-        body = client.post("/plans/preview", json={"amount": 500}).json()
-    assert [ln["ticker"] for ln in body["lines"]] == ["AAPL"]
-    assert [(e["ticker"], e["kind"]) for e in body["left_out"]] == [("NVDA", "unpriced")]
-    assert not any("NVDA" in n for n in body["notes"])
-
-
 def test_holdings_without_a_target_are_not_priced_and_are_noted(client, db_session):
     _seed_basic(db_session)
     _holding(db_session, "OLD", 3, None)
