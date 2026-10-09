@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 import {
   Alert,
   Box,
@@ -18,6 +18,7 @@ import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
 import { planMonth, planSavedAt, usePlans, type Plan, type PlanSummary } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
+import { useWhenActive } from "@/lib/useWhenActive";
 import { OrdersSection } from "./OrdersSection";
 
 const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
@@ -52,10 +53,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
 
   // The page keeps this view mounted while hidden, and a line may have been placed on the Orders view
   // since: back on this view, the opened plan again (a no-op when none is open).
-  const onShown = useEffectEvent(() => void reload().catch(() => {}));
-  useEffect(() => {
-    if (active) onShown();
-  }, [active]);
+  useWhenActive(active, () => void reload().catch(() => {}));
 
   if (error) return <Alert severity="error">Could not load your saved plans.</Alert>;
   if (isLoading || !plans) return <Skeleton variant="rounded" height={160} />;
@@ -155,7 +153,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
               Delete plan
             </Button>
           </Box>
-          <OrdersSection key={opened.id} plan={opened} onChanged={reload} />
+          <OrdersSection key={opened.id} plan={opened} onChanged={reload} onPlaced={() => void reload().catch(() => {})} />
         </>
       )}
 

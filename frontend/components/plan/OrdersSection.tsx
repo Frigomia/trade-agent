@@ -15,16 +15,11 @@ export interface OrdersSectionProps {
   plan: Plan;
   /** Reloads the plan; the parent replaces `plan` with the fresh one. */
   onChanged: () => Promise<unknown>;
-  /**
-   * The plan comes from the open orders read, which a placement refreshes already: onChanged is not
-   * called again after one (it still is after an ISIN change and a 409 "already recorded").
-   */
-  fromOpenOrders?: boolean;
   footer?: ReactNode;
   /** The Orders tab's sticky plan heading and old-plan note; see OrdersPanel. */
   heading?: ReactNode;
   notice?: ReactNode;
-  /** After a line is recorded, with the line that opens next (null: none left in this plan). */
+  /** After a line is recorded (the parent reloads its plan for the placed chip), with the line that opens next (null: none left in this plan). */
   onPlaced?: (line: PlanLine, next: PlanLine | null) => void;
 }
 
@@ -33,7 +28,7 @@ export interface OrdersSectionProps {
  * owns which line is open, the sheet, and the status line. After a line is recorded the next unplaced
  * line opens by itself and takes the focus.
  */
-export function OrdersSection({ plan, onChanged, fromOpenOrders, footer, heading, notice, onPlaced }: OrdersSectionProps) {
+export function OrdersSection({ plan, onChanged, footer, heading, notice, onPlaced }: OrdersSectionProps) {
   // The plan page loads it already; SWR shares the one request.
   const { data: summary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const { mutate } = useSWRConfig();
@@ -75,7 +70,6 @@ export function OrdersSection({ plan, onChanged, fromOpenOrders, footer, heading
     );
     // The panel focuses that card; the sheet's own focus return lands on the Placed button, gone by then.
     setFocusTicker(next?.ticker ?? line.ticker);
-    if (!fromOpenOrders) void onChanged(); // the plan, for the placed chip
   }
 
   return (

@@ -12,17 +12,17 @@ const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
 // Kept mounted while empty, so a new message is announced.
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
-function PlanHeading({ plan, id }: { plan: Plan; id: string }) {
+function PlanHeading({ plan, created, id }: { plan: Plan; created: string; id: string }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
       <Typography id={id} component="h2" sx={{ fontSize: 17, fontWeight: 650 }}>
-        {planMonth(plan.created_at!)}
+        {planMonth(created)}
         <Box component="span" sx={{ fontWeight: 500, color: "var(--text2)" }}>
           , {plan.lines.length} open
         </Box>
       </Typography>
       <Typography sx={{ ...muted, fontVariantNumeric: "tabular-nums" }}>
-        Saved {planDay(plan.created_at!)} · {formatAmount(plan.amount_eur)} EUR plan
+        Saved {planDay(created)} · {formatAmount(plan.amount_eur)} EUR plan
       </Typography>
     </Box>
   );
@@ -123,17 +123,17 @@ export function OrdersView() {
       ) : (
         <>
           {plans.map((plan) => {
+            const created = plan.created_at!;
             const headingId = `orders-plan-${plan.id}`;
             return (
               <Box component="section" key={plan.id} aria-labelledby={headingId} sx={{ mb: 3 }}>
                 <OrdersSection
                   plan={plan}
                   onChanged={() => mutate()}
-                  fromOpenOrders
-                  heading={<PlanHeading plan={plan} id={headingId} />}
-                  notice={isOldPlan(plan.created_at!, now) ? <OldNote iso={plan.created_at!} /> : undefined}
+                  heading={<PlanHeading plan={plan} created={created} id={headingId} />}
+                  notice={isOldPlan(created, now) ? <OldNote iso={created} /> : undefined}
                   onPlaced={(line, next) =>
-                    setStatus(next ? "" : `${line.ticker} recorded as placed. It was the last open order of ${planMonth(plan.created_at!)}.`)
+                    setStatus(next ? "" : `${line.ticker} recorded as placed. It was the last open order of ${planMonth(created)}.`)
                   }
                 />
               </Box>

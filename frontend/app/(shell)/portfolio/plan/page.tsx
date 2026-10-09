@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
@@ -12,6 +12,7 @@ import { formatAmount } from "@/lib/format";
 import { AMOUNT_ERROR, DISCLAIMER, parseAmount, planSavedAt, plansDiffer, previewPlan, usePlans, type Plan } from "@/lib/plans";
 import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
+import { useWhenActive } from "@/lib/useWhenActive";
 import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
 import { OrdersSection } from "@/components/plan/OrdersSection";
@@ -118,12 +119,8 @@ function ThisMonth({ initialAmount, active }: { initialAmount: number | null; ac
   }
 
   // This panel stays mounted while hidden, and a line may have been placed on the Orders view since:
-  // back on this view, the saved plan again (a no-op while none is shown). An effect event, so only
-  // `active` re-runs it.
-  const onShown = useEffectEvent(() => void reload().catch(() => {}));
-  useEffect(() => {
-    if (active) onShown();
-  }, [active]);
+  // back on this view, the saved plan again (a no-op while none is shown).
+  useWhenActive(active, () => void reload().catch(() => {}));
 
   function toggleWhole(next: boolean) {
     if (plan) request(next);
@@ -174,7 +171,7 @@ function ThisMonth({ initialAmount, active }: { initialAmount: number | null; ac
       {refreshed && plan?.created_at && (
         <Alert severity="info">Prices were refreshed when saving; this is the plan that was saved.</Alert>
       )}
-      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} />}
+      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} onPlaced={() => void reload().catch(() => {})} />}
       {plan && plan.id === null && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
   );
