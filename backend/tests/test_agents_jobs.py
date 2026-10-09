@@ -2,15 +2,20 @@ import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.agents.jobs import (
     MAX_RUN_TICKERS,
+    AnalysisAlreadyRunning,
+    _active_key,
     create_job,
     default_ticker_infos,
     get_job_status,
     run_job,
 )
 from app.models import Holding, Recommendation, WatchlistItem
-from tests.auth_support import OTHER_USER_ID, USER_ID
+from app.redis_client import get_redis
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 FAKE_STATE_BUY = {
     "action": "BUY",
@@ -33,6 +38,9 @@ FAKE_STATE_SKIP = {
 
 
 def test_job_lifecycle_completes_and_records_results(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
+
     async def _fake_run_graph(
         user_id, ticker: str, asset_type: str, is_held: bool, client=None
     ) -> dict:
@@ -101,6 +109,9 @@ def test_get_job_status_hides_other_users_jobs():
 def test_a_new_run_supersedes_the_tickers_unreviewed_recommendations(
     session_local, app_session_local
 ):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
+
     def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool, client=None) -> dict:
         return FAKE_STATE_BUY
 
@@ -190,12 +201,16 @@ def _run_one_ticker(app_session_local, source=None):
 
 
 def test_a_scheduled_run_stores_its_recommendations_as_scheduled(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
     _run_one_ticker(app_session_local, source="scheduled")
     with session_local() as db:
         assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "scheduled"
 
 
 def test_a_manual_run_stores_manual(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
     _run_one_ticker(app_session_local)
     with session_local() as db:
         assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "manual"
@@ -240,3 +255,92 @@ def test_default_ticker_infos_drops_excluded_tickers_before_the_cap(session_loca
         excluded = {f"T{i}" for i in range(MAX_RUN_TICKERS)}  # the first 50 are already fresh
         infos = default_ticker_infos(db, USER_ID, exclude=excluded)
     assert [i["ticker"] for i in infos] == [f"T{i}" for i in range(MAX_RUN_TICKERS, 60)]
+
+
+def test_a_second_create_job_is_refused_while_the_first_is_active():
+    async def _run() -> None:
+        await create_job(OTHER_USER_ID, [])
+        with pytest.raises(AnalysisAlreadyRunning):
+            await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_after_a_successful_run(session_local, app_session_local):
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        with (
+            patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, OTHER_USER_ID, tickers)
+        await create_job(OTHER_USER_ID, tickers)  # no AnalysisAlreadyRunning
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_when_the_run_raises():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        with (
+            patch("app.agents.jobs.asyncio.gather", AsyncMock(side_effect=RuntimeError("boom"))),
+            pytest.raises(RuntimeError),
+        ):
+            await run_job(job_id, OTHER_USER_ID, [])
+        await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_a_job_does_not_release_a_marker_held_by_another_job():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        await get_redis().set(_active_key(OTHER_USER_ID), "someone-else")
+        await run_job(job_id, OTHER_USER_ID, [])
+        with pytest.raises(AnalysisAlreadyRunning):
+            await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_even_when_marking_the_job_done_fails():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        with (
+            patch.object(get_redis().__class__, "hset", AsyncMock(side_effect=OSError)),
+            pytest.raises(OSError),
+        ):
+            await run_job(job_id, OTHER_USER_ID, [])
+        assert await get_redis().get(_active_key(OTHER_USER_ID)) is None
+
+    asyncio.run(_run())
+
+
+def test_the_marker_expiry_is_refreshed_after_each_ticker(session_local, app_session_local):
+    from app.agents.jobs import JOB_TTL_SECONDS, _process_ticker
+
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        redis = get_redis()
+        await redis.expire(_active_key(OTHER_USER_ID), 30)  # nearly expired
+        with patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)):
+            await _process_ticker(job_id, OTHER_USER_ID, tickers[0], asyncio.Semaphore(1))
+        assert await redis.ttl(_active_key(OTHER_USER_ID)) > JOB_TTL_SECONDS - 60
+
+    asyncio.run(_run())
+
+
+def test_the_refresh_does_not_recreate_a_missing_marker(session_local, app_session_local):
+    from app.agents.jobs import _process_ticker
+
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        await get_redis().delete(_active_key(OTHER_USER_ID))
+        with patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)):
+            await _process_ticker(job_id, OTHER_USER_ID, tickers[0], asyncio.Semaphore(1))
+        assert await get_redis().get(_active_key(OTHER_USER_ID)) is None
+
+    asyncio.run(_run())

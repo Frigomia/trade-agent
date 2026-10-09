@@ -6,6 +6,7 @@ import pytest
 from app.auth.deps import CurrentUser
 from app.config import Settings
 from app.models import AppSettings
+from app.redis_client import get_redis
 from app.usage import (
     LimitDefaults,
     UsageLimitExceeded,
@@ -14,6 +15,7 @@ from app.usage import (
     effective_limit,
     get_usage,
     load_limit_defaults,
+    refund_usage,
 )
 
 
@@ -132,3 +134,36 @@ def test_load_limit_defaults_prefers_the_stored_values_per_column(db_session):
     db_session.commit()
 
     assert load_limit_defaults(db_session, env) == LimitDefaults(3, 500)
+
+
+def test_refund_usage_gives_one_back_and_never_goes_below_zero():
+    user_id = str(uuid.uuid4())
+
+    async def _run() -> None:
+        await check_and_increment_usage("test_kind", user_id, limit=3)
+        await check_and_increment_usage("test_kind", user_id, limit=3)
+        await refund_usage("test_kind", user_id)
+        assert await get_usage("test_kind", user_id) == 1
+        await refund_usage("test_kind", user_id)
+        await refund_usage("test_kind", user_id)
+        assert await get_usage("test_kind", user_id) == 0
+
+    asyncio.run(_run())
+
+
+def test_refund_usage_never_creates_the_key_and_never_goes_below_zero():
+    user_id = str(uuid.uuid4())
+
+    async def _run() -> None:
+        redis = get_redis()
+        key = _usage_key("test_kind", user_id)
+        await refund_usage("test_kind", user_id)
+        assert await redis.get(key) is None  # missing stays missing
+        await redis.set(key, 0)
+        await refund_usage("test_kind", user_id)
+        assert await redis.get(key) == "0"
+        await redis.set(key, 3)
+        await refund_usage("test_kind", user_id)
+        assert await redis.get(key) == "2"
+
+    asyncio.run(_run())

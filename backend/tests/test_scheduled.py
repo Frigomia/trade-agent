@@ -689,6 +689,21 @@ def test_running_twice_on_the_same_day_skips_everything_the_second_time(env):
     assert _usage(USER_ID) == "1"
 
 
+def test_a_scheduled_run_skips_while_a_manual_analysis_is_active(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _arun(get_redis().set(f"analysis_active:{USER_ID}", "manual-job"))
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (0, 1, 0)
+    assert _usage(USER_ID) == "0"  # charged, then refunded
+    # The same-day marker was forgotten, so a later run today may still happen.
+    _arun(get_redis().delete(f"analysis_active:{USER_ID}"))
+    summary, _ = _run_analysis(graph=graph)
+    assert summary.analysis_runs == 1
+    assert _usage(USER_ID) == "1"
+
+
 def test_nothing_to_analyze_counts_no_run(env):
     _opted_in(env, USER_ID)  # no holdings, no watchlist
     _opted_in(env, OTHER_USER_ID)
@@ -1335,3 +1350,28 @@ def test_the_standalone_notify_command_does_not_look_at_the_analysis(env):
         assert _arun(scheduled.run_command("notify")) == 0
     analysis.assert_not_called()
     notify.assert_called_once()
+
+
+def test_a_user_disabled_during_their_run_is_skipped_not_failed(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+
+    async def graph_then_disable(*args):
+        env.query(AppUser).filter_by(id=USER_ID).update({"status": "disabled"})
+        env.commit()
+        return _state()
+
+    summary, _ = _run_analysis(graph=AsyncMock(side_effect=graph_then_disable))
+    assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (0, 1, 0)
+    assert _recs(env, USER_ID) == []
+
+
+def test_a_failed_refund_keeps_the_same_day_marker(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _arun(get_redis().set(f"analysis_active:{USER_ID}", "manual-job"))
+    with patch("app.scheduled.refund_usage", AsyncMock(side_effect=OSError)):
+        summary, _ = _run_analysis()
+    assert summary.analysis_failures == 1
+    marker = scheduled._ran_marker_key(USER_ID, MONDAY)
+    assert _arun(get_redis().get(marker)) == "1"  # kept: the charge was not given back

@@ -13,7 +13,13 @@ from redis.asyncio import Redis
 
 from app import claude_keys, telegram
 from app import db as app_db
-from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
+from app.agents.jobs import (
+    AnalysisAlreadyRunning,
+    create_job,
+    default_ticker_infos,
+    get_job_status,
+    run_job,
+)
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.memory.outcomes import evaluate_due_outcomes
@@ -27,6 +33,7 @@ from app.usage import (
     check_and_increment_usage,
     effective_limit,
     load_limit_defaults,
+    refund_usage,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,7 +106,10 @@ async def run_snapshots(summary: Summary) -> None:
                     reason = "no open holdings" if not has_open else "already recorded today"
                     logger.info("Snapshot user %s: skipped (%s)", user_id, reason)
                     continue
-                await record_snapshot(db, user_id)
+                if await record_snapshot(db, user_id) is None:
+                    summary.snapshots_skipped += 1
+                    logger.info("Snapshot user %s: skipped (account not active)", user_id)
+                    continue
                 summary.snapshots_recorded += 1
                 logger.info("Snapshot user %s: recorded", user_id)
         except Exception as exc:
@@ -219,7 +229,14 @@ async def _analyze_user(
             return "skipped"  # raced past the limit after pause_state; usage already took it back
         raise  # the counter could not be read or written
     try:
-        job_id = await create_job(user_id, infos)
+        try:
+            job_id = await create_job(user_id, infos)
+        except AnalysisAlreadyRunning:
+            # The person has a manual run going: not a failure. Undo the charge and the marker.
+            # Refund first: if it raises, the marker stays and nobody is charged twice.
+            await refund_usage("analysis_run", str(user_id))
+            await _forget_marker(marker)
+            return "skipped"
         async with asyncio.timeout(run_seconds):
             await run_job(job_id, user_id, infos, client=client, source="scheduled")
         status = await get_job_status(job_id, user_id)
@@ -230,6 +247,9 @@ async def _analyze_user(
         return "failed"
     errored = status is not None and any("error" in r for r in status["results"])
     with app_db.scoped_session(user_id) as db:
+        current = db.get(AppUser, user_id)
+        if current is None or current.status != "active":
+            return "skipped"  # removed or disabled during the run: not a failure
         rejected = not claude_keys.has_usable_key(db, user_id, role)  # flagged during the run
     return "failed" if errored or rejected else "ran"
 

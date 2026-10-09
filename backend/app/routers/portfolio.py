@@ -208,7 +208,10 @@ def log_trade(
 async def create_snapshot(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> PortfolioSnapshot:
-    return await record_snapshot(db, user.id)
+    snapshot = await record_snapshot(db, user.id)
+    if snapshot is None:
+        raise HTTPException(status_code=403, detail="This account is not active.")
+    return snapshot
 
 
 @router.get("/snapshots", response_model=list[PortfolioSnapshotOut])

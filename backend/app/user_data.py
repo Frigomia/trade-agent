@@ -10,7 +10,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from app import rls
-from app.db import Base, open_user_session
+from app.db import Base, lock_user_for_insert, open_user_session
 from app.models import AppUser, TelegramLink
 
 
@@ -21,6 +21,8 @@ def delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> int 
     Returns the Telegram chat id the user was linked to (None when there was none), read before the
     delete, so the caller can remove the Redis chat-to-user mapping too."""
     with open_user_session(factory, user_id) as session:
+        # Waits for any background writer holding this user's lock, so none lands after the delete.
+        lock_user_for_insert(session, user_id)
         chat_id = session.scalar(
             select(TelegramLink.chat_id).where(TelegramLink.user_id == user_id)
         )

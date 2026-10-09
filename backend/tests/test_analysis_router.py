@@ -1,3 +1,4 @@
+import threading
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -179,6 +180,69 @@ def test_cannot_approve_another_users_recommendation(client, db_session):
     db_session.refresh(rec)
 
     assert client.post(f"/analysis/recommendations/{rec.id}/approve").status_code == 404
+
+
+def test_decide_pending_recommendation(client, db_session):
+    for action, expected in (("approve", "APPROVED"), ("reject", "REJECTED")):
+        rec = _rec(USER_ID)
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 200
+        assert response.json()["status"] == expected
+        db_session.refresh(rec)
+        assert rec.reviewed_at is not None
+        assert rec.status == expected  # persisted, not just echoed in the response
+
+
+def test_a_decision_can_be_reversed(client, db_session):
+    for old, action, expected in (
+        ("APPROVED", "reject", "REJECTED"),
+        ("REJECTED", "approve", "APPROVED"),
+    ):
+        rec = _rec(USER_ID)
+        rec.status = old
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 200
+        assert response.json()["status"] == expected
+        db_session.refresh(rec)
+        assert rec.status == expected
+        assert rec.reviewed_at is not None
+
+
+def test_same_decision_or_superseded_returns_409_and_leaves_it(client, db_session):
+    for old, action in (
+        ("APPROVED", "approve"),
+        ("REJECTED", "reject"),
+        ("SUPERSEDED", "approve"),
+        ("SUPERSEDED", "reject"),
+    ):
+        rec = _rec(USER_ID)
+        rec.status = old
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 409
+        assert "already decided" in response.json()["detail"]
+        db_session.refresh(rec)
+        assert rec.status == old
+        assert rec.reviewed_at is None
+
+
+def test_reject_unknown_or_other_users_recommendation_returns_404(client, db_session):
+    theirs = _rec(OTHER_USER_ID)
+    db_session.add(theirs)
+    db_session.commit()
+    db_session.refresh(theirs)
+    assert client.post(f"/analysis/recommendations/{theirs.id}/reject").status_code == 404
+    assert client.post("/analysis/recommendations/999999/reject").status_code == 404
+    db_session.refresh(theirs)
+    assert theirs.status == "PENDING"
 
 
 def test_run_analysis_builds_the_job_for_the_token_user(client, db_session):
@@ -604,3 +668,58 @@ def test_run_analysis_gives_the_job_the_callers_own_client(client, db_session):
 
     assert response.status_code == 202
     assert mock_run_job.call_args.kwargs["client"] is constructor.return_value
+
+
+def test_a_second_run_while_one_is_active_is_a_409_and_costs_no_run(client):
+    import asyncio
+
+    from app import redis_client, usage
+
+    with (
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro_module),
+    ):
+        first = client.post("/analysis/run", json={})
+        second = client.post("/analysis/run", json={})
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]
+    redis_client._redis = None  # the cached client is bound to the request's event loop
+    assert asyncio.run(usage.get_usage("analysis_run", str(USER_ID))) == 1
+
+
+def test_approve_racing_a_supersede_returns_409_and_keeps_superseded(
+    client, db_session, session_local
+):
+    """The job's supersede UPDATE is held uncommitted; approve blocks on the row, then finds it
+    no longer PENDING once the supersede commits."""
+    rec = _rec(USER_ID)
+    db_session.add(rec)
+    db_session.commit()
+    db_session.refresh(rec)
+
+    responses = []
+    # daemon: if an assertion fails below, the blocked request must not hang pytest at exit
+    thread = threading.Thread(
+        target=lambda: responses.append(client.post(f"/analysis/recommendations/{rec.id}/approve")),
+        daemon=True,
+    )
+    holder = session_local()
+    try:
+        holder.query(Recommendation).filter_by(id=rec.id).update({"status": "SUPERSEDED"})
+        holder.flush()  # the row is now locked by an uncommitted supersede
+        thread.start()
+        thread.join(timeout=1.5)
+        assert thread.is_alive()  # approve is waiting on the row lock
+        holder.commit()
+        thread.join(timeout=10)
+    finally:
+        holder.rollback()  # no-op after the commit; frees the lock if an assertion failed
+        holder.close()
+
+    assert not thread.is_alive()
+    assert responses[0].status_code == 409
+    db_session.refresh(rec)
+    assert rec.status == "SUPERSEDED"
+    assert rec.reviewed_at is None

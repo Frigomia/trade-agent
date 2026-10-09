@@ -28,7 +28,12 @@ either way, but a private repository means the encrypted file is not downloadabl
 ### Supabase
 
 1. Create the project.
-2. Authentication, Sign In / Providers: disable public email sign-ups.
+2. Authentication, Sign In / Providers: disable public email sign-ups, and turn ON "Secure
+   password change" (it only forces reauthentication when the session is more than 24 hours old,
+   so a token stolen from a younger session can still change the password; the app's
+   current-password check is only a UI convenience. Supabase's server-side "Require current
+   password" setting, used with `updateUser({ password, current_password })`, would close this;
+   the app does not use it yet).
 3. Authentication, URL Configuration: add the exact production origin's
    `<origin>/auth/confirm` and `<origin>/reset-password` to Redirect URLs (exact origins only, never a
    wildcard such as `*.vercel.app`; also set `NEXT_PUBLIC_SITE_URL` to that origin in Vercel), set the Site URL to the Vercel origin (the invite

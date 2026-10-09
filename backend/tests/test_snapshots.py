@@ -4,9 +4,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models import Holding, PortfolioSnapshot
+from app.models import AppUser, Holding, PortfolioSnapshot
 from app.snapshots import PriceUnavailable, record_snapshot
-from tests.auth_support import OTHER_USER_ID, USER_ID
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
+
+
+@pytest.fixture(autouse=True)
+def _active_user(db_session):
+    add_app_user(db_session, USER_ID)  # record_snapshot only writes for an active account
 
 
 def _holding(db, ticker="AAPL", shares=10, cost=150.0, user_id=USER_ID):
@@ -90,4 +95,16 @@ def test_record_snapshot_lets_a_quote_error_propagate(db_session):
     with pytest.raises(RuntimeError, match="yfinance unavailable"):
         _record(db_session, AsyncMock(side_effect=RuntimeError("yfinance unavailable")))
 
+    assert db_session.query(PortfolioSnapshot).count() == 0
+
+
+@pytest.mark.parametrize("status", ["disabled", None])
+def test_record_snapshot_writes_nothing_for_a_blocked_user(db_session, status):
+    if status is None:
+        db_session.query(AppUser).filter_by(id=USER_ID).delete()
+    else:
+        db_session.query(AppUser).filter_by(id=USER_ID).update({"status": status})
+    db_session.commit()
+
+    assert _record(db_session, AsyncMock(return_value={"price": 1.0, "closes": []})) is None
     assert db_session.query(PortfolioSnapshot).count() == 0

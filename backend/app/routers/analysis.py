@@ -7,12 +7,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app import claude_keys
 from app.agents.jobs import (
     MAX_RUN_TICKERS,
+    AnalysisAlreadyRunning,
     create_job,
     default_ticker_infos,
     get_job_status,
@@ -25,7 +27,7 @@ from app.claude_keys import require_claude_key
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut, Ticker
-from app.usage import check_monthly_usage
+from app.usage import check_monthly_usage, refund_usage
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +66,15 @@ async def run_analysis(
     client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
     # The queries are synchronous, so they run in a worker thread to keep the event loop free.
     ticker_infos = await run_in_threadpool(_build_ticker_infos, db, user.id, payload.tickers)
-    job_id = await create_job(user.id, ticker_infos)
+    try:
+        job_id = await create_job(user.id, ticker_infos)
+    except AnalysisAlreadyRunning:
+        # The monthly-usage dependency already counted this call; a refused run must not cost one.
+        await refund_usage("analysis_run", str(user.id))
+        raise HTTPException(
+            status_code=409,
+            detail="An analysis is already running. Wait for it to finish, then start another.",
+        ) from None
     task = asyncio.create_task(run_job(job_id, user.id, ticker_infos, client=client))
     _track_background_task(task)
     return {"job_id": job_id}
@@ -201,11 +211,30 @@ def reject_recommendation(
 def _set_recommendation_status(
     db: Session, user_id: uuid.UUID, recommendation_id: int, status: str
 ) -> Recommendation:
-    rec = db.query(Recommendation).filter_by(id=recommendation_id, user_id=user_id).one_or_none()
+    # One conditional UPDATE: a PENDING row, or one holding the opposite decision (so a decision
+    # can be reversed), of this user changes. SUPERSEDED rows and a repeat of the same decision
+    # match nothing, and a decision racing a re-run that supersedes the row cannot overwrite it.
+    opposite = "REJECTED" if status == "APPROVED" else "APPROVED"
+    rec = db.scalars(
+        update(Recommendation)
+        .where(
+            Recommendation.id == recommendation_id,
+            Recommendation.user_id == user_id,
+            Recommendation.status.in_(("PENDING", opposite)),
+        )
+        .values(status=status, reviewed_at=datetime.now(UTC))
+        .returning(Recommendation)
+    ).one_or_none()
     if rec is None:
-        raise HTTPException(status_code=404, detail="Recommendation not found")
-    rec.status = status
-    rec.reviewed_at = datetime.now(UTC)
+        exists = (
+            db.query(Recommendation.id)
+            .filter_by(id=recommendation_id, user_id=user_id)
+            .one_or_none()
+        )
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Recommendation not found")
+        raise HTTPException(
+            status_code=409, detail="This recommendation was already decided or replaced."
+        )
     db.commit()
-    db.refresh(rec)
     return rec

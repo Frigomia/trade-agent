@@ -1,7 +1,8 @@
 "use client";
 
 import { Box, Typography, Button, Alert } from "@mui/material";
-import { apiFetch } from "@/lib/api/client";
+import { useSWRConfig } from "swr";
+import { apiFetch, ApiError } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
@@ -17,16 +18,27 @@ export function DecisionActions({
   /** Lay the actions out as one row with this title on the left (the desktop detail bar). */
   title?: string;
 }) {
-  const { run, submitting, error } = useAction();
+  const { run, submitting, error, setError } = useAction();
+  const { mutate } = useSWRConfig();
 
   const decide = (action: "approve" | "reject") =>
-    run(async () =>
-      onDecided(
-        await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, {
-          method: "POST",
-        }),
-      ),
-    );
+    run(async () => {
+      try {
+        onDecided(
+          await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, {
+            method: "POST",
+          }),
+        );
+      } catch (err) {
+        // 409: already decided or replaced. Show why and refetch the list and detail so the stale card updates.
+        if (err instanceof ApiError && err.status === 409) {
+          setError(err.detail);
+          void mutate((key) => typeof key === "string" && key.startsWith("/analysis/recommendations"));
+          return;
+        }
+        throw err;
+      }
+    });
 
   const dismiss = (
     <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} sx={{ flex: title ? "none" : 1 }}>

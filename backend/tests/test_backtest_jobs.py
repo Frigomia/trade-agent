@@ -7,10 +7,12 @@ import pytest
 from app.backtest.engine import BacktestMetrics
 from app.backtest.jobs import BacktestAlreadyRunning, create_job, get_job_status, run_job
 from app.models import BacktestResult
-from tests.auth_support import OTHER_USER_ID, USER_ID
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 
 def test_backtest_job_completes_and_persists_result(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
     fake_metrics = BacktestMetrics(
         final_value=11000.0,
         buy_and_hold_value=10500.0,

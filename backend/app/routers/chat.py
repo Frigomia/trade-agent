@@ -11,6 +11,7 @@ from app.agents.chat import run_chat
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.claude_keys import require_claude_key
 from app.config import settings
+from app.db import lock_and_check_active
 from app.models import ChatMessage
 from app.rate_limit import rate_limiter
 from app.schemas import ChatIn, ChatMessageOut, ChatOut
@@ -103,6 +104,8 @@ def _prepare_chat(db: Session, user_id: uuid.UUID, payload: ChatIn) -> list[Chat
 
 
 def _save_reply(db: Session, user_id: uuid.UUID, session_id: str, reply: str) -> None:
+    if not lock_and_check_active(db, user_id):
+        return  # the account was removed or disabled while Claude answered: store nothing
     db.add(ChatMessage(user_id=user_id, session_id=session_id, role="assistant", content=reply))
     _commit_or_raise(db, "Failed to persist assistant chat message")
 

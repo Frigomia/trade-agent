@@ -317,12 +317,12 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
-| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
+| POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key). One analysis job per user at a time: a second call while one is `RUNNING` returns `409` ("An analysis is already running...") and does not count against the monthly cap; a scheduled run skips that user meanwhile |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
-| POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade |
-| POST | `/analysis/recommendations/{id}/reject` | — | |
+| POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Allowed from `PENDING` or `REJECTED` (a decision can be reversed); from `APPROVED` (same decision again) or `SUPERSEDED` it returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
+| POST | `/analysis/recommendations/{id}/reject` | — | Same rules, mirrored: allowed from `PENDING` or `APPROVED`; `409` from `REJECTED` or `SUPERSEDED` |
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run`. Rate limited: 5/min per user; one running backtest per user at a time (`409` while one is `RUNNING`) |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
@@ -414,8 +414,8 @@ together afterwards.
 GBP, GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN. A rate comes from a fixed table of Yahoo
 symbols (`EURUSD=X` and so on), never from user text; `GBp` and `GBX` are pence, converted through GBP
 at one hundredth. Nothing is stored for this: the price in EUR, the currency and the rate are
-returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, as a `left_out` entry of kind `unpriced`, when its price
-is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
+returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1
+penny. A ticker is left out, as a `left_out` entry of kind `unpriced`, when its price is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
 lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-4 to
 1e9 (those bounds keep every figure inside its column). Nothing negative, infinite or NaN ever
 reaches an amount. This conversion is not yet applied to `/portfolio/summary`, so portfolio totals
@@ -429,8 +429,9 @@ holding without a target is outside the pool: it neither receives money nor coun
 
 1. Targets are normalised to add up to 1 (`weight`).
 2. Each ticker whose price is unusable, or whose newest PENDING recommendation is TRIM or SELL, gets
-   no money and a `left_out` entry (kind `unusable_price` or `excluded_call`), never a note. If that leaves nobody, the plan is empty, the whole contribution is the
-   leftover, and `left_out` says why.
+   no money and a `left_out` entry (kind `unusable_price` or `excluded_call`), never a note. If that
+   leaves nobody, the plan is empty, the whole contribution is the leftover, and `left_out` says
+   why.
 3. For every other item, `gap = max(weight * pool - current_value, 0)`. A watchlist item or closed
    position has a current value of 0, so it is the furthest below its target. If the newest pending
    call is ADD or BUY the gap is multiplied by `FAVOUR_FACTOR` = 1.25.
@@ -589,7 +590,8 @@ recommendation for a ticker, that ticker's older `PENDING` (unreviewed) ones are
 `SUPERSEDED` — kept for history, never shown as awaiting review, and excluded from
 `?status=PENDING`; reviewed (`APPROVED`/`REJECTED`) rows are untouched. The dashboard's
 "Approve"/"Dismiss" buttons call the approve/reject endpoints, which only
-flip the status flag. **Nothing in this system calls a broker API or
+flip the status flag, from `PENDING` or from the opposite decision (so a decision can be
+reversed); a `SUPERSEDED` row or a repeat of the same decision answers 409. **Nothing in this system calls a broker API or
 executes a trade.** The loop closes when the human, having approved a
 recommendation and manually executed it in Trade Republic, calls
 `POST /portfolio/trades` (or clicks a "mark as executed" action in the UI,
@@ -789,7 +791,9 @@ default — same dialect and models as production, started with
   marker makes a same-day re-run a no-op for that user, so "Re-run jobs" after a red run does not
   charge anyone twice (a user who needs a retry uses Run analysis in the app); it is removed when
   the limit check refuses the run, and a user skipped for no key, the limit or nothing to analyze
-  never gets one. A ticker that always errors or yields no call has no pending call, so it is
+  never gets one. A user with a manual run in progress (their `analysis_active:<user_id>` marker is
+  set) is skipped: the same-day marker is removed and the charge refunded. That marker has a 1 h
+  expiry that is refreshed after every ticker, so a long manual run does not lose it. A ticker that always errors or yields no call has no pending call, so it is
   analyzed again, and counts a run, every weekday. The database session is closed before the run
   starts, so no connection is held for minutes. The step has its own lock
   (`scheduled:analysis-step`), shared by `daily` and `analysis`, so they cannot analyze at the same
@@ -1015,9 +1019,15 @@ and invited users; nobody can sign up on their own.
   first invitation, review Authentication, Users and delete any unconfirmed accounts you did
   not create: inviting an address reuses an existing unconfirmed Supabase user, so an account
   pre-created by someone else while sign-ups were on would keep its password. (ii) Removing a
-  user deletes their data twice (before and after the Supabase delete), but a background job
-  still running for that user can write rows after that. Remove a user after their jobs finish
-  (jobs are short-lived); the residual risk is accepted. (iii) The runtime role can INSERT
+  user deletes their data twice (before and after the Supabase delete). The background writers
+  (the analysis job's recommendation insert, the chat reply, the backtest result) call
+  `lock_and_check_active` first: it takes the user's advisory lock (`lock_user_for_insert`) and
+  checks that the `app_users` row exists with status `active`; a writer that fails the check
+  writes nothing (analysis records the ticker as skipped, chat drops the reply, the backtest ends
+  FAILED). `delete_user_data` takes the same lock before it deletes, so a writer that already
+  holds the lock finishes first and its row is deleted, and one that starts later sees the
+  account disabled or gone. Self-service `DELETE /me/data` leaves the account active, so a row
+  written after it belongs to a live user and is intended. (iii) The runtime role can INSERT
   `app_users` rows with any `role` value (invite hardcodes `"user"`); only UPDATE of `role`,
   `email`, and `id` is denied.
 - ✓ Per-user monthly limits and overrides, monthly usage tracking, and self-service export/deletion (sub-project 2c)
@@ -1046,6 +1056,12 @@ and invited users; nobody can sign up on their own.
      `/reset-password`. After a recovery link the route sets a 15-minute `ta_recovery` cookie;
      `/reset-password` shows the new-password form only with that cookie or a
      `PASSWORD_RECOVERY` event, and sends any other signed-in user to `/more/account`.
+  3. **Authentication → Sign In / Providers → Email → "Secure password change": turn ON.** It only
+     forces reauthentication when the session is more than 24 hours old, so a token stolen from a
+     younger session can still change the password. The app's current-password check is only a UI
+     convenience. Supabase also has a server-side "Require current password" setting (used with
+     `updateUser({ password, current_password })`) that would close this; the app does not use it
+     yet.
   **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
   walkthrough against a live Supabase project has not been performed — the implementing agent's
   sandboxed environment has no browser or email access. This remains a required manual

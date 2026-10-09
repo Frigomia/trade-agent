@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton, Typography } from "@mui/material";
 import { Trash2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
-import { CHAT_SESSION, MAX_MESSAGE, STARTERS, type ChatMessage } from "@/lib/chat";
+import { CHAT_SESSION, STARTERS, type ChatMessage } from "@/lib/chat";
 import { nextResetDate, type Usage } from "@/lib/usage";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -15,6 +15,7 @@ import { Composer } from "@/components/chat/Composer";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
+const ASK_SHAPE = /^Why (BUY|ADD|HOLD|TRIM|SELL|WATCH) on [A-Za-z0-9.^=-]{1,20}\?$/;
 const HISTORY_PATH = `/chat/messages?session_id=${CHAT_SESSION}`;
 
 export default function ChatPage() {
@@ -32,7 +33,11 @@ function ChatScreen() {
   const { data: messages, mutate: mutateMessages } = useSWR<ChatMessage[]>(HISTORY_PATH, apiFetch);
   const { data: usage, mutate: mutateUsage } = useSWR<Usage>("/me/usage", apiFetch);
   // "Ask about this" links here with the question already typed: it is only ever put in the box.
-  const [draft, setDraft] = useState(() => (params.get("ask") ?? "").slice(0, MAX_MESSAGE));
+  // Only that exact shape is accepted: a crafted link must not be able to put free text in the box.
+  const [draft, setDraft] = useState(() => {
+    const ask = params.get("ask") ?? "";
+    return ASK_SHAPE.test(ask) ? ask : "";
+  });
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
