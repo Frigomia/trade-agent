@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from app import claude_keys
 from app.agents.jobs import (
     MAX_RUN_TICKERS,
+    AnalysisAlreadyRunning,
     create_job,
     default_ticker_infos,
     get_job_status,
@@ -25,7 +26,7 @@ from app.claude_keys import require_claude_key
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import RecommendationOut, Ticker
-from app.usage import check_monthly_usage
+from app.usage import check_monthly_usage, refund_usage
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,15 @@ async def run_analysis(
     client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
     # The queries are synchronous, so they run in a worker thread to keep the event loop free.
     ticker_infos = await run_in_threadpool(_build_ticker_infos, db, user.id, payload.tickers)
-    job_id = await create_job(user.id, ticker_infos)
+    try:
+        job_id = await create_job(user.id, ticker_infos)
+    except AnalysisAlreadyRunning:
+        # The monthly-usage dependency already counted this call; a refused run must not cost one.
+        await refund_usage("analysis_run", str(user.id))
+        raise HTTPException(
+            status_code=409,
+            detail="An analysis is already running. Wait for it to finish, then start another.",
+        ) from None
     task = asyncio.create_task(run_job(job_id, user.id, ticker_infos, client=client))
     _track_background_task(task)
     return {"job_id": job_id}

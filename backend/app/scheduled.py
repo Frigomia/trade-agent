@@ -13,7 +13,13 @@ from redis.asyncio import Redis
 
 from app import claude_keys, telegram
 from app import db as app_db
-from app.agents.jobs import create_job, default_ticker_infos, get_job_status, run_job
+from app.agents.jobs import (
+    AnalysisAlreadyRunning,
+    create_job,
+    default_ticker_infos,
+    get_job_status,
+    run_job,
+)
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.memory.outcomes import evaluate_due_outcomes
@@ -27,6 +33,7 @@ from app.usage import (
     check_and_increment_usage,
     effective_limit,
     load_limit_defaults,
+    refund_usage,
 )
 
 logger = logging.getLogger(__name__)
@@ -219,7 +226,13 @@ async def _analyze_user(
             return "skipped"  # raced past the limit after pause_state; usage already took it back
         raise  # the counter could not be read or written
     try:
-        job_id = await create_job(user_id, infos)
+        try:
+            job_id = await create_job(user_id, infos)
+        except AnalysisAlreadyRunning:
+            # The person has a manual run going: not a failure. Undo the charge and the marker.
+            await _forget_marker(marker)
+            await refund_usage("analysis_run", str(user_id))
+            return "skipped"
         async with asyncio.timeout(run_seconds):
             await run_job(job_id, user_id, infos, client=client, source="scheduled")
         status = await get_job_status(job_id, user_id)

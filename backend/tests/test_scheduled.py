@@ -689,6 +689,21 @@ def test_running_twice_on_the_same_day_skips_everything_the_second_time(env):
     assert _usage(USER_ID) == "1"
 
 
+def test_a_scheduled_run_skips_while_a_manual_analysis_is_active(env):
+    _opted_in(env, USER_ID)
+    _holding(env, USER_ID, "AAPL")
+    _arun(get_redis().set(f"analysis_active:{USER_ID}", "manual-job"))
+    summary, graph = _run_analysis()
+    graph.assert_not_awaited()
+    assert (summary.analysis_runs, summary.analysis_skipped, summary.analysis_failures) == (0, 1, 0)
+    assert _usage(USER_ID) == "0"  # charged, then refunded
+    # The same-day marker was forgotten, so a later run today may still happen.
+    _arun(get_redis().delete(f"analysis_active:{USER_ID}"))
+    summary, _ = _run_analysis(graph=graph)
+    assert summary.analysis_runs == 1
+    assert _usage(USER_ID) == "1"
+
+
 def test_nothing_to_analyze_counts_no_run(env):
     _opted_in(env, USER_ID)  # no holdings, no watchlist
     _opted_in(env, OTHER_USER_ID)

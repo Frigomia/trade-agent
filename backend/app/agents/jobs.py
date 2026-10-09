@@ -16,7 +16,27 @@ logger = logging.getLogger(__name__)
 
 JOB_TTL_SECONDS = 3600
 MAX_CONCURRENT_TICKERS = 3
+ACTIVE_TTL_SECONDS = (
+    JOB_TTL_SECONDS  # a run is bounded well below this; expires if the process dies
+)
 MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search plus an embedding)
+
+# Deletes the marker only if it still holds this job's id (a newer job may own it by now).
+# Lua runs atomically inside Redis, so the compare and the delete cannot be interleaved.
+_RELEASE_IF_MINE = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
+
+
+class AnalysisAlreadyRunning(Exception):
+    """The user already has a RUNNING analysis job."""
+
+
+def _active_key(user_id: uuid.UUID) -> str:
+    return f"analysis_active:{user_id}"
 
 
 def default_ticker_infos(
@@ -44,12 +64,19 @@ def default_ticker_infos(
 async def create_job(user_id: uuid.UUID, tickers: list[dict[str, Any]]) -> str:
     job_id = str(uuid.uuid4())
     redis = get_redis()
-    await redis.hset(
-        f"job:{job_id}",
-        mapping={"status": "RUNNING", "total": len(tickers), "done": 0, "owner": str(user_id)},
-    )
-    await redis.expire(f"job:{job_id}", JOB_TTL_SECONDS)
-    await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
+    # SET ... NX is atomic: only one concurrent request can claim the slot.
+    if not await redis.set(_active_key(user_id), job_id, ex=ACTIVE_TTL_SECONDS, nx=True):
+        raise AnalysisAlreadyRunning
+    try:
+        await redis.hset(
+            f"job:{job_id}",
+            mapping={"status": "RUNNING", "total": len(tickers), "done": 0, "owner": str(user_id)},
+        )
+        await redis.expire(f"job:{job_id}", JOB_TTL_SECONDS)
+        await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
+    except Exception:
+        await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)
+        raise
     return job_id
 
 
@@ -146,3 +173,4 @@ async def run_job(
     finally:
         redis = get_redis()
         await redis.hset(f"job:{job_id}", "status", "DONE")
+        await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)

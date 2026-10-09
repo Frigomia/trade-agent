@@ -112,6 +112,15 @@ async def check_and_increment_usage(kind: str, user_id: str, limit: int) -> None
         raise UsageLimitExceeded(kind, limit)
 
 
+async def refund_usage(kind: str, user_id: str) -> None:
+    """Gives back one unit of this month's count (a run that was counted but never started).
+    Never goes below 0."""
+    redis = get_redis()
+    key = _usage_key(kind, user_id)
+    if await redis.decr(key) < 0:
+        await redis.set(key, 0, keepttl=True)
+
+
 async def get_usage(kind: str, user_id: str) -> int:
     """This month's count so far, without incrementing it."""
     redis = get_redis()

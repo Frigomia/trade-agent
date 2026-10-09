@@ -604,3 +604,22 @@ def test_run_analysis_gives_the_job_the_callers_own_client(client, db_session):
 
     assert response.status_code == 202
     assert mock_run_job.call_args.kwargs["client"] is constructor.return_value
+
+
+def test_a_second_run_while_one_is_active_is_a_409_and_costs_no_run(client):
+    import asyncio
+
+    from app import redis_client, usage
+
+    with (
+        patch("app.routers.analysis.run_job", AsyncMock()),
+        patch("app.routers.analysis.asyncio.create_task", side_effect=_close_coro_module),
+    ):
+        first = client.post("/analysis/run", json={})
+        second = client.post("/analysis/run", json={})
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert "already running" in second.json()["detail"]
+    redis_client._redis = None  # the cached client is bound to the request's event loop
+    assert asyncio.run(usage.get_usage("analysis_run", str(USER_ID))) == 1

@@ -2,14 +2,19 @@ import asyncio
 from datetime import date
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from app.agents.jobs import (
     MAX_RUN_TICKERS,
+    AnalysisAlreadyRunning,
+    _active_key,
     create_job,
     default_ticker_infos,
     get_job_status,
     run_job,
 )
 from app.models import Holding, Recommendation, WatchlistItem
+from app.redis_client import get_redis
 from tests.auth_support import OTHER_USER_ID, USER_ID
 
 FAKE_STATE_BUY = {
@@ -240,3 +245,62 @@ def test_default_ticker_infos_drops_excluded_tickers_before_the_cap(session_loca
         excluded = {f"T{i}" for i in range(MAX_RUN_TICKERS)}  # the first 50 are already fresh
         infos = default_ticker_infos(db, USER_ID, exclude=excluded)
     assert [i["ticker"] for i in infos] == [f"T{i}" for i in range(MAX_RUN_TICKERS, 60)]
+
+
+def test_a_second_create_job_is_refused_while_the_first_is_active():
+    async def _run() -> None:
+        await create_job(OTHER_USER_ID, [])
+        with pytest.raises(AnalysisAlreadyRunning):
+            await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_after_a_successful_run(session_local, app_session_local):
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        with (
+            patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, OTHER_USER_ID, tickers)
+        await create_job(OTHER_USER_ID, tickers)  # no AnalysisAlreadyRunning
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_when_the_run_raises():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        with (
+            patch("app.agents.jobs.asyncio.gather", AsyncMock(side_effect=RuntimeError("boom"))),
+            pytest.raises(RuntimeError),
+        ):
+            await run_job(job_id, OTHER_USER_ID, [])
+        await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_a_job_does_not_release_a_marker_held_by_another_job():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        await get_redis().set(_active_key(OTHER_USER_ID), "someone-else")
+        await run_job(job_id, OTHER_USER_ID, [])
+        with pytest.raises(AnalysisAlreadyRunning):
+            await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
+
+
+def test_the_marker_is_released_when_create_job_fails_after_claiming():
+    async def _run() -> None:
+        with (
+            patch.object(get_redis().__class__, "hset", AsyncMock(side_effect=OSError)),
+            pytest.raises(OSError),
+        ):
+            await create_job(OTHER_USER_ID, [])
+        await create_job(OTHER_USER_ID, [])
+
+    asyncio.run(_run())
