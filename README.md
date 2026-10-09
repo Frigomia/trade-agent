@@ -10,28 +10,35 @@ the trade yourself in your broker's app.
 
 ## Status
 
-Every screen is built and merged. The deployment files exist (Dockerfile, Fly config, deploy,
-scheduled-job and backup workflows); the first deploy is still to be done by following
-[docs/RUNBOOK.md](docs/RUNBOOK.md). The production checklist is in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Built, merged and deployed (backend on Fly.io, frontend on Vercel, Supabase for auth and data).
+Deploy, manual checks, rollback and backup restore are in [docs/RUNBOOK.md](docs/RUNBOOK.md); the
+production checklist is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- **Backend:** multi-user, invitation-only. Supabase Auth + JWT verification, Row Level Security,
-  an admin API for inviting/managing users, per-user monthly usage limits, and self-service data
-  export/deletion (PRs [#21](../../pull/21), [#22](../../pull/22), [#23](../../pull/23)). The
-  analysis agents, portfolio, watchlist, trade log and snapshots, recommendations with 20-day
-  outcomes, backtests with a stored equity curve ([#33](../../pull/33)), long-term memory,
-  per-user rate limits and bounded preferences ([#34](../../pull/34)), scheduled daily
-  snapshot and outcome jobs ([#35](../../pull/35)), admin-editable default usage limits
-  ([#48](../../pull/48)), and chat history and clear endpoints ([#50](../../pull/50)).
-- **Frontend:** foundation ([#24](../../pull/24)), login and admin ([#27](../../pull/27)), the
-  recommendation review loop ([#29](../../pull/29)), Portfolio ([#31](../../pull/31)), and the
-  secondary screens ([#32](../../pull/32)), Backtests ([#33](../../pull/33)) and Chat
-  ([#50](../../pull/50)). That is Today, recommendation detail and approve/dismiss (with the web
-  opinion rendered from markdown), Portfolio (holdings, watchlist, "log a trade"), Track record,
-  Backtests, Chat (one ongoing conversation with a usage meter), Preferences, Account (usage,
-  export, delete my data), and the admin users and usage-and-limits screens, with light and dark
-  themes, a phone-first shell with desktop layouts, and session-backed route protection. The
-  visual design follows the mockups in `docs/design/mockups/` (see [DESIGN.md](DESIGN.md)).
+- **Analysis and review:** analysis agents (fundamentals gate buy/sell, technicals time entries, a
+  web-search second opinion kept separate from the numbers), recommendations with approve/dismiss
+  and 20-day outcomes, long-term memory, backtests with a stored equity curve, and a
+  portfolio-aware chat.
+- **Portfolio:** holdings, watchlist (with ISIN search and target weights), trade log and daily
+  snapshots.
+- **Monthly contribution planner:** enter an amount and get a plan of how much to add to each
+  ticker with a target weight, from the gap to target and the pending calls. Plain arithmetic, no
+  Claude call. Plans convert to EUR at plan time, can be saved, and show the target tick and the
+  tickers left out with the reason. A Today drift card and an optional start-of-month Telegram
+  reminder go with it.
+- **Order tickets and Orders:** each saved plan line becomes copyable order text (name, optional
+  ISIN, amount, about how many shares). "Placed" records that you placed it yourself and logs the
+  buy; the Orders view lists every line not yet placed. Nothing is sent to a broker.
+- **Notifications:** opt-in weekday Telegram message (tickers, actions and percentages only, never
+  amounts), connected from Account.
+- **Multi-user:** invitation-only. Supabase Auth with JWT verification, Row Level Security, an
+  admin API for inviting and managing users, each user's own Claude key, per-user monthly usage
+  limits, rate limits, and self-service data export and deletion.
+- **Operations:** scheduled daily snapshot, outcome and analysis jobs, and a database backup
+  workflow (GitHub Actions).
+- **Frontend:** Today, recommendation detail, Portfolio (Holdings, This month, Saved plans,
+  Orders), Track record, Backtests, Chat, Preferences, Account, and the admin screens, with light
+  and dark themes and a phone-first shell with desktop layouts. The visual design is in
+  [DESIGN.md](DESIGN.md).
 
 ## Layout
 
