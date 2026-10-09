@@ -304,18 +304,6 @@ def test_a_job_does_not_release_a_marker_held_by_another_job():
     asyncio.run(_run())
 
 
-def test_the_marker_is_released_when_create_job_fails_after_claiming():
-    async def _run() -> None:
-        with (
-            patch.object(get_redis().__class__, "hset", AsyncMock(side_effect=OSError)),
-            pytest.raises(OSError),
-        ):
-            await create_job(OTHER_USER_ID, [])
-        await create_job(OTHER_USER_ID, [])
-
-    asyncio.run(_run())
-
-
 def test_the_marker_is_released_even_when_marking_the_job_done_fails():
     async def _run() -> None:
         job_id = await create_job(OTHER_USER_ID, [])
@@ -330,7 +318,7 @@ def test_the_marker_is_released_even_when_marking_the_job_done_fails():
 
 
 def test_the_marker_expiry_is_refreshed_after_each_ticker(session_local, app_session_local):
-    from app.agents.jobs import ACTIVE_TTL_SECONDS, _process_ticker
+    from app.agents.jobs import JOB_TTL_SECONDS, _process_ticker
 
     async def _run() -> None:
         tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
@@ -339,7 +327,7 @@ def test_the_marker_expiry_is_refreshed_after_each_ticker(session_local, app_ses
         await redis.expire(_active_key(OTHER_USER_ID), 30)  # nearly expired
         with patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)):
             await _process_ticker(job_id, OTHER_USER_ID, tickers[0], asyncio.Semaphore(1))
-        assert await redis.ttl(_active_key(OTHER_USER_ID)) > ACTIVE_TTL_SECONDS - 60
+        assert await redis.ttl(_active_key(OTHER_USER_ID)) > JOB_TTL_SECONDS - 60
 
     asyncio.run(_run())
 

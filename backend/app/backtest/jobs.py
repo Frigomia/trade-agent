@@ -8,7 +8,7 @@ from app.agents.market_data import fetch_price_history
 from app.backtest.engine import BacktestMetrics, simulate
 from app.db import lock_and_check_active, scoped_session
 from app.models import BacktestResult
-from app.redis_client import get_redis
+from app.redis_client import _RELEASE_IF_MINE, get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +20,6 @@ JOB_TTL_SECONDS = 3600
 # JOB_MAX_SECONDS and the marker outlives that, so a live job never loses its marker to expiry.
 JOB_MAX_SECONDS = 600
 ACTIVE_TTL_SECONDS = JOB_MAX_SECONDS + 60
-
-# Deletes the marker only if it still holds this job's id (a newer job may own it by now).
-# Lua runs atomically inside Redis, so the compare and the delete cannot be interleaved.
-_RELEASE_IF_MINE = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('del', KEYS[1])
-end
-return 0
-"""
 
 
 class BacktestAlreadyRunning(Exception):

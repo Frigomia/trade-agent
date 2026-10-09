@@ -10,25 +10,13 @@ from sqlalchemy.orm import Session
 from app.agents.graph import AnalysisState, run_graph_for_ticker
 from app.db import lock_and_check_active, scoped_session
 from app.models import Holding, Recommendation, WatchlistItem
-from app.redis_client import get_redis
+from app.redis_client import _RELEASE_IF_MINE, get_redis
 
 logger = logging.getLogger(__name__)
 
 JOB_TTL_SECONDS = 3600
 MAX_CONCURRENT_TICKERS = 3
-# A manual run has no time limit, so the marker is refreshed after every ticker (see
-# _process_ticker); this is how long a dead process can block the user.
-ACTIVE_TTL_SECONDS = JOB_TTL_SECONDS
 MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search plus an embedding)
-
-# Deletes the marker only if it still holds this job's id (a newer job may own it by now).
-# Lua runs atomically inside Redis, so the compare and the delete cannot be interleaved.
-_RELEASE_IF_MINE = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('del', KEYS[1])
-end
-return 0
-"""
 
 
 class AnalysisAlreadyRunning(Exception):
@@ -64,19 +52,16 @@ def default_ticker_infos(
 async def create_job(user_id: uuid.UUID, tickers: list[dict[str, Any]]) -> str:
     job_id = str(uuid.uuid4())
     redis = get_redis()
+    await redis.hset(
+        f"job:{job_id}",
+        mapping={"status": "RUNNING", "total": len(tickers), "done": 0, "owner": str(user_id)},
+    )
+    await redis.expire(f"job:{job_id}", JOB_TTL_SECONDS)
+    await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
+    # Claimed last, so a failure above leaves nothing to release (the hash expires on its own).
     # SET ... NX is atomic: only one concurrent request can claim the slot.
-    if not await redis.set(_active_key(user_id), job_id, ex=ACTIVE_TTL_SECONDS, nx=True):
+    if not await redis.set(_active_key(user_id), job_id, ex=JOB_TTL_SECONDS, nx=True):
         raise AnalysisAlreadyRunning
-    try:
-        await redis.hset(
-            f"job:{job_id}",
-            mapping={"status": "RUNNING", "total": len(tickers), "done": 0, "owner": str(user_id)},
-        )
-        await redis.expire(f"job:{job_id}", JOB_TTL_SECONDS)
-        await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
-    except Exception:
-        await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)
-        raise
     return job_id
 
 
@@ -149,10 +134,8 @@ async def _process_ticker(
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
             else:
                 # Sync DB work (it can wait on the user's advisory lock): off the event loop.
-                # ponytail: if the scheduled timeout cancels run_job, this worker thread can still
-                # finish its commit after the run was counted failed. Accepted: the write is still
-                # serialised by the advisory lock and the active check, and it needs a timeout
-                # that lands during the DB write.
+                # ponytail: A scheduled timeout can leave this thread committing after the run
+                # ended. Still lock-serialised and active-checked.
                 entry = await asyncio.to_thread(
                     _save_recommendation, user_id, ticker_info, state, source
                 )
@@ -167,7 +150,7 @@ async def _process_ticker(
         await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
         await redis.hincrby(f"job:{job_id}", "done", 1)
         # Keep the marker alive while the run goes on. EXPIRE on a missing key does nothing.
-        await redis.expire(_active_key(user_id), ACTIVE_TTL_SECONDS)
+        await redis.expire(_active_key(user_id), JOB_TTL_SECONDS)
 
 
 async def run_job(
@@ -198,5 +181,5 @@ async def run_job(
             try:
                 await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)
             except Exception as exc:
-                # The marker expires on its own after ACTIVE_TTL_SECONDS.
+                # The marker expires on its own after JOB_TTL_SECONDS.
                 logger.warning("Analysis: marker release failed (%s)", type(exc).__name__)

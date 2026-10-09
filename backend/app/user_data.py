@@ -22,8 +22,6 @@ def delete_user_data(factory: sessionmaker[Session], user_id: uuid.UUID) -> int 
     delete, so the caller can remove the Redis chat-to-user mapping too."""
     with open_user_session(factory, user_id) as session:
         # Waits for any background writer holding this user's lock, so none lands after the delete.
-        # Self-service DELETE /me/data leaves the account active, so a late row there belongs to a
-        # live user and is intended; the admin remove_user flow disables the account first.
         lock_user_for_insert(session, user_id)
         chat_id = session.scalar(
             select(TelegramLink.chat_id).where(TelegramLink.user_id == user_id)

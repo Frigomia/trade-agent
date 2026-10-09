@@ -215,7 +215,7 @@ def _set_recommendation_status(
     # can be reversed), of this user changes. SUPERSEDED rows and a repeat of the same decision
     # match nothing, and a decision racing a re-run that supersedes the row cannot overwrite it.
     opposite = "REJECTED" if status == "APPROVED" else "APPROVED"
-    result = db.execute(
+    rec = db.scalars(
         update(Recommendation)
         .where(
             Recommendation.id == recommendation_id,
@@ -223,9 +223,9 @@ def _set_recommendation_status(
             Recommendation.status.in_(("PENDING", opposite)),
         )
         .values(status=status, reviewed_at=datetime.now(UTC))
-    )
-    if result.rowcount == 0:  # type: ignore[attr-defined]
-        db.rollback()
+        .returning(Recommendation)
+    ).one_or_none()
+    if rec is None:
         exists = (
             db.query(Recommendation.id)
             .filter_by(id=recommendation_id, user_id=user_id)
@@ -237,4 +237,4 @@ def _set_recommendation_status(
             status_code=409, detail="This recommendation was already decided or replaced."
         )
     db.commit()
-    return db.query(Recommendation).filter_by(id=recommendation_id, user_id=user_id).one()
+    return rec
