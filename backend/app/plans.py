@@ -337,7 +337,9 @@ def load_all(db: Session, user_id: uuid.UUID) -> list[PlanOut]:
 
 def open_orders(db: Session, user_id: uuid.UUID) -> OpenOrdersOut:
     """The saved plans that still have lines to place, newest first, each with ONLY its unplaced
-    lines. Three reads however many plans there are: lines, plans, extras."""
+    lines. Four reads however many plans there are: lines, plans, and two for the ISINs (holdings,
+    watchlist); the placed fields need none, as every line here is unplaced. One read when nothing
+    is open."""
     lines = (
         db.query(ContributionPlanLine)
         .filter(ContributionPlanLine.user_id == user_id, ContributionPlanLine.placed_at.is_(None))
@@ -347,9 +349,11 @@ def open_orders(db: Session, user_id: uuid.UUID) -> OpenOrdersOut:
     by_plan: dict[int, list[ContributionPlanLine]] = {}
     for line in lines:
         by_plan.setdefault(line.plan_id, []).append(line)
+    if not by_plan:
+        return OpenOrdersOut(open_lines=0, plans=[])
     rows = (
         db.query(ContributionPlan)
-        .filter(ContributionPlan.user_id == user_id, ContributionPlan.id.in_(list(by_plan) or [0]))
+        .filter(ContributionPlan.user_id == user_id, ContributionPlan.id.in_(list(by_plan)))
         .order_by(ContributionPlan.id.desc())
         .all()
     )

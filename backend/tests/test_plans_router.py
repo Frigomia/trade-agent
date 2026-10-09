@@ -694,7 +694,11 @@ def test_a_plan_with_every_line_placed_is_omitted(client, db_session):
     assert body == {"open_lines": 0, "plans": []}
 
 
-def test_open_orders_is_empty_without_plans(client):
+def test_open_orders_is_empty_without_plans(client, monkeypatch):
+    def _unexpected(*args: object) -> None:
+        raise AssertionError("no extras read when nothing is open")
+
+    monkeypatch.setattr("app.plans._extras", _unexpected)  # the early return skips it
     assert client.get("/plans/orders/open").json() == {"open_lines": 0, "plans": []}
 
 
