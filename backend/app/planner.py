@@ -4,7 +4,7 @@ Everything is in EUR and `Decimal`. Weights and gaps are computed on the pool of
 target (an item without a target is outside the pool). See the design spec for the rules.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import ROUND_FLOOR, ROUND_HALF_EVEN, Decimal
 
 ZERO = Decimal(0)
@@ -41,6 +41,15 @@ class PlanLine:
     weight_before: Decimal | None
     weight_after: Decimal | None
     reason: str  # "new_position" | "favoured" | "underweight" | "remainder"
+    target_weight: Decimal  # the target after normalising the pool's targets to add up to 1
+
+
+@dataclass(frozen=True)
+class LeftOut:
+    ticker: str
+    name: str
+    kind: str  # "excluded_call" | "unusable_price" | "too_small" | "unpriced"
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -49,6 +58,7 @@ class Plan:
     notes: list[str]
     total_before: Decimal  # EUR value of the pool before the contribution
     leftover: Decimal  # part of the contribution no line uses
+    left_out: list[LeftOut] = field(default_factory=list)  # tickers that got no line, and why
 
 
 @dataclass(frozen=True)
@@ -102,6 +112,7 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
         )
 
     notes: list[str] = []
+    left_out: list[LeftOut] = []
     total_target = sum((t for _, t in targeted), ZERO)
     weight = {c.ticker: t / total_target for c, t in targeted}
     pool = pool_before + amount
@@ -109,14 +120,16 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
     eligible = []
     for c in sorted((c for c, _ in targeted), key=lambda c: c.ticker):
         if not c.price_eur.is_finite() or c.price_eur <= ZERO:
-            notes.append(f"{c.ticker} gets no money: its price is not usable.")
+            left_out.append(LeftOut(c.ticker, c.name, "unusable_price", "Its price is not usable."))
         elif c.call in EXCLUDING_CALLS:
-            notes.append(f"{c.ticker} gets no money: its newest pending call is {c.call}.")
+            left_out.append(
+                LeftOut(c.ticker, c.name, "excluded_call", f"Its newest pending call is {c.call}.")
+            )
         else:
             eligible.append(c)
     if not eligible:
         notes.append("Every ticker with a target is excluded or unpriced, so nothing is proposed.")
-        return Plan([], notes, pool_before, amount)
+        return Plan([], notes, pool_before, amount, left_out)
 
     gap: dict[str, Decimal] = {}
     for c in eligible:
@@ -138,8 +151,13 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
         if whole_shares:
             shares = (cash / c.price_eur).to_integral_value(rounding=ROUND_FLOOR)
             if shares <= ZERO:
-                notes.append(
-                    f"{ticker}: {cash} EUR is less than one share ({c.price_eur:.2f} EUR)."
+                left_out.append(
+                    LeftOut(
+                        ticker,
+                        c.name,
+                        "too_small",
+                        f"{cash} EUR is less than one share ({c.price_eur:.2f} EUR).",
+                    )
                 )
                 continue
             cash = (shares * c.price_eur).quantize(CENT, ROUND_HALF_EVEN)
@@ -171,9 +189,10 @@ def build_plan(candidates: list[Candidate], amount: Decimal, *, whole_shares: bo
                 weight_before=c.current_value / pool_before if pool_before > ZERO else None,
                 weight_after=(c.current_value + cash) / total_after if total_after > ZERO else None,
                 reason=reason,
+                target_weight=weight[c.ticker],
             )
         )
-    return Plan(lines, notes, pool_before, amount - spent)
+    return Plan(lines, notes, pool_before, amount - spent, left_out)
 
 
 def drift_items(candidates: list[Candidate], threshold_points: Decimal) -> list[DriftItem]:

@@ -64,7 +64,7 @@ def test_a_trim_or_sell_call_gets_no_money_and_the_others_share_it(call):
     cands[0] = cand("AAPL", 1000, 0.4, price=200, call=call)
     plan = build_plan(cands, D("500"))
     assert amounts(plan) == {"NVDA": D("500.00")}
-    assert any("AAPL" in n and call in n for n in plan.notes)
+    assert [e.ticker for e in plan.left_out] == ["AAPL"]
 
 
 @pytest.mark.parametrize("call", ["HOLD", "WATCH", None])
@@ -157,7 +157,7 @@ def test_whole_shares_round_down_and_report_the_leftover():
 def test_whole_shares_drop_a_line_that_cannot_buy_one_share():
     plan = build_plan([cand("BIG", 0, 1, price=150)], D("100"), whole_shares=True)
     assert plan.lines == [] and plan.leftover == D("100.00")
-    assert any("BIG" in n for n in plan.notes)
+    assert [e.ticker for e in plan.left_out] == ["BIG"]
 
 
 def test_a_converted_price_is_used_for_the_shares():
@@ -182,7 +182,7 @@ def test_an_unusable_price_is_skipped_with_a_note(price):
     plan = build_plan(cands, D("100"))
     assert amounts(plan) == {"OK": D("100.00")}
     assert all(ln.shares > 0 for ln in plan.lines)
-    assert any("BAD" in n and "price" in n for n in plan.notes)
+    assert [(e.ticker, e.kind) for e in plan.left_out] == [("BAD", "unusable_price")]
 
 
 def test_all_unusable_prices_give_clean_wording():
@@ -192,3 +192,50 @@ def test_all_unusable_prices_give_clean_wording():
         "Every ticker with a target is excluded or unpriced, so nothing is proposed."
     )
     assert not any("TRIM or SELL" in n for n in plan.notes)
+
+
+def test_each_line_carries_its_normalised_target():
+    plan = build_plan(basic(), D("500"))
+    by = {line.ticker: line for line in plan.lines}
+    assert by["AAPL"].target_weight == D("0.4") and by["NVDA"].target_weight == D("0.2")
+    cands = [cand("A", 0, 0.3), cand("B", 0, 0.3)]  # 0.3 + 0.3 = 0.6 is normalised to 0.5 each
+    assert {ln.target_weight for ln in build_plan(cands, D("1000")).lines} == {D("0.5")}
+
+
+@pytest.mark.parametrize("call", ["TRIM", "SELL"])
+def test_an_excluded_call_is_a_left_out_entry_not_a_note(call):
+    cands = basic()
+    cands[0] = cand("AAPL", 1000, 0.4, price=200, call=call)
+    plan = build_plan(cands, D("500"))
+    assert [(e.ticker, e.kind, e.reason) for e in plan.left_out] == [
+        ("AAPL", "excluded_call", f"Its newest pending call is {call}.")
+    ]
+    assert not any("AAPL" in n for n in plan.notes)
+
+
+def test_an_unusable_price_is_a_left_out_entry():
+    cands = [cand("OK", 0, 0.5), cand("BAD", 0, 0.5, price=0)]
+    plan = build_plan(cands, D("100"))
+    assert [(e.ticker, e.kind, e.reason) for e in plan.left_out] == [
+        ("BAD", "unusable_price", "Its price is not usable.")
+    ]
+    assert amounts(plan) == {"OK": D("100.00")}
+
+
+def test_a_line_dropped_for_less_than_one_share_is_a_too_small_entry():
+    plan = build_plan([cand("BIG", 0, 1, price=150)], D("100"), whole_shares=True)
+    assert plan.lines == []
+    assert [(e.ticker, e.kind) for e in plan.left_out] == [("BIG", "too_small")]
+    assert plan.left_out[0].reason == "100.00 EUR is less than one share (150.00 EUR)."
+    assert plan.notes == []
+
+
+def test_the_general_sentences_stay_in_the_notes_and_nothing_else_changes():
+    plan = build_plan(
+        [cand("A", 1000, 0.5, call="SELL"), cand("B", 1000, 0.5, call="TRIM")], D("500")
+    )
+    assert plan.lines == [] and plan.leftover == D("500")
+    assert plan.notes == [
+        "Every ticker with a target is excluded or unpriced, so nothing is proposed."
+    ]
+    assert [e.ticker for e in plan.left_out] == ["A", "B"]
