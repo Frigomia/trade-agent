@@ -37,8 +37,10 @@ const SEPTEMBER: Plan = {
       weight_after: 0.12,
       reason: "underweight",
       reason_text: "Below its target weight",
+      target_weight: null,
     },
   ],
+  left_out: [],
   notes: [],
   disclaimer: "Advisory only. Nothing is sent to a broker.",
 };

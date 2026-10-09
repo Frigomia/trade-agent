@@ -27,6 +27,15 @@ export interface PlanLine {
   weight_after: number | null;
   reason: string;
   reason_text: string;
+  target_weight: number | null; // the plan-time target, normalised over the priced pool; null on plans saved before
+}
+
+/** A ticker with a target that got no line, and why (a short sentence without the ticker). */
+export interface LeftOut {
+  ticker: string;
+  name: string;
+  kind: "excluded_call" | "unusable_price" | "too_small" | "unpriced";
+  reason: string;
 }
 
 export interface Plan {
@@ -37,6 +46,7 @@ export interface Plan {
   total_before_eur: number;
   leftover_eur: number;
   lines: PlanLine[];
+  left_out: LeftOut[]; // empty on plans saved before, whose ticker sentences are in `notes`
   notes: string[];
   disclaimer: string;
 }
@@ -119,7 +129,17 @@ export function isOldPlan(iso: string, now: number): boolean {
 
 const PATH = "/plans";
 const OPEN_ORDERS = `${PATH}/orders/open`;
-const post = (path: string, req: PlanRequest) => apiFetch<Plan>(path, { method: "POST", body: JSON.stringify(req) });
+/** A backend that has not shipped yet leaves out `left_out` and each line's `target_weight`: fill them in once, here. */
+export function normalisePlan(plan: Plan): Plan {
+  return {
+    ...plan,
+    left_out: plan.left_out ?? [],
+    lines: plan.lines.map((l) => ({ ...l, target_weight: l.target_weight ?? null })),
+  };
+}
+
+const post = async (path: string, req: PlanRequest) =>
+  normalisePlan(await apiFetch<Plan>(path, { method: "POST", body: JSON.stringify(req) }));
 
 /** Not stored anywhere: the caller keeps the result in its own state. Throws the ApiError. */
 export function previewPlan(req: PlanRequest): Promise<Plan> {
@@ -145,7 +165,7 @@ export function usePlans() {
     await mutate();
   }
 
-  const load = (id: number) => apiFetch<Plan>(`${PATH}/${id}`);
+  const load = async (id: number) => normalisePlan(await apiFetch<Plan>(`${PATH}/${id}`));
 
   return {
     plans: data,
@@ -173,9 +193,14 @@ export interface OpenOrders {
   plans: Plan[]; // saved plans with only their unplaced lines, newest first
 }
 
+async function openOrdersFetcher(path: string): Promise<OpenOrders> {
+  const data = await apiFetch<OpenOrders>(path);
+  return { ...data, plans: data.plans.map(normalisePlan) };
+}
+
 /** The unplaced order lines across the saved plans: one shared read, no polling; a failure shows up in `error`. */
 export function useOpenOrders() {
-  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(OPEN_ORDERS, apiFetch, {
+  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(OPEN_ORDERS, openOrdersFetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     refreshInterval: 0,

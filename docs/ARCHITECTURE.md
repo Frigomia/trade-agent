@@ -217,12 +217,12 @@ TelegramLink
 ContributionPlan
   id, user_id, created_at, amount_eur (Numeric(12,2)), whole_shares (bool), total_before_eur
   (Numeric(16,2): the EUR value of the targeted items before the contribution), leftover_eur
-  (Numeric(12,2)), notes (JSON list[str]: what was left out and why)
+  (Numeric(12,2)), notes (JSON list[str]: general sentences only, such as holdings without a target or a price outage), left_out (nullable JSON list of {ticker, name, kind, reason}: each ticker excluded, unpriced or too small for one whole share, and why (a ticker already above its target, or a small line folded into the largest, has no entry); kind is "excluded_call"|"unusable_price"|"too_small"|"unpriced"; NULL on plans saved before this)
 
 ContributionPlanLine
   id, user_id, plan_id, ticker, name, amount_eur (Numeric(12,2)), shares (Numeric(18,6)), price_eur
   (Numeric(18,6)), currency (the quote currency), rate (Numeric(18,8): EUR per 1 unit of it),
-  weight_before and weight_after (Numeric(7,6), nullable), reason ("new_position"|"favoured"|
+  weight_before, weight_after and target_weight (Numeric(7,6), nullable; target_weight is the normalised target at plan time, NULL on old plans), reason ("new_position"|"favoured"|
   "underweight"|"remainder"), placed_at (nullable timestamp) and placed_trade_id (nullable integer:
   the trade the "Placed" step logged; no foreign key, like every other user table)
   -- The ISIN is not copied onto a line: it is resolved at read time (see Order tickets below).
@@ -332,12 +332,12 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes `auto_analysis` and `auto_analysis_paused` (`null` when not paused or when the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is 0.01 to 1,000,000 with two decimals at most (`422` otherwise); `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
-| POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is 0.01 to 1,000,000 EUR with two decimals at most (`422` otherwise). Returns the lines, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
+| POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is 0.01 to 1,000,000 EUR with two decimals at most (`422` otherwise). Returns the lines, `left_out`, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
 | POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `422` "This plan is too large to store." when a figure overflows its column. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
-| GET | `/plans/orders/open` | — | The caller's saved plans that still have lines to place, newest first, each with only its unplaced lines (same line shape as `GET /plans/{id}`, with the live `isin`): `{open_lines, plans}`. A plan with every line placed is left out; `{open_lines: 0, plans: []}` when nothing is open. Four reads however many plans there are (lines, plans, and two for the ISINs: holdings and watchlist), one when nothing is open. Declared above `/plans/{id}` so `orders` is not read as an id |
+| GET | `/plans/orders/open` | — | The caller's saved plans that still have lines to place, newest first, each with only its unplaced lines and its saved `left_out` (same line shape as `GET /plans/{id}`, with the live `isin`): `{open_lines, plans}`. A plan with every line placed is left out; `{open_lines: 0, plans: []}` when nothing is open. Four reads however many plans there are (lines, plans, and two for the ISINs: holdings and watchlist), one when nothing is open. Declared above `/plans/{id}` so `orders` is not read as an id |
 | GET | `/plans/drift` | — | Open holdings with a target weight whose weight is at least `drift_threshold_pct` points away from it, largest first: `{ticker, name, weight, target, points}` (fractions, `points` signed). An empty list when nothing drifts or nothing can be priced. Rate limited: 30/min per user |
-| GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's. Each line also carries `id`, `isin` (read now from the caller's holding, else the watchlist item, for that ticker; `null` when none), `placed_at` and `placed_trade_id` (`null` until placed), plus `placed_shares` and `placed_price`, read at request time from the logged trade (`null` when unplaced or the trade was deleted; never stored on the line) |
+| GET | `/plans/{id}` | — | One saved plan with its lines (each carries `target_weight`) and its `left_out`; `404` if it is missing or not the caller's. Each line also carries `id`, `isin` (read now from the caller's holding, else the watchlist item, for that ticker; `null` when none), `placed_at` and `placed_trade_id` (`null` until placed), plus `placed_shares` and `placed_price`, read at request time from the logged trade (`null` when unplaced or the trade was deleted; never stored on the line) |
 | POST | `/plans/{plan_id}/lines/{line_id}/placed` | `{date, shares, price, asset_type?}` | Records that the person placed this line's order in their broker (see "Order tickets" below); returns the line. `shares` and `price` must be finite and at least 0.000001 (`422` for zero, negative, smaller, `NaN` or infinity). `404` for a missing line or one that is not the caller's; `409` when already placed, or when a new position would pass the 100-holding cap; `422` when `asset_type` is missing for a ticker that is not a holding yet, or when the numbers are too large to store. 60 requests a minute per user |
 | DELETE | `/plans/{id}` | — | Deletes the plan and its lines (`204`); `404` if it is not the caller's. Trades that placed lines logged stay in the trade log |
 | POST | `/chat` | `{session_id, message}` | Portfolio-aware Claude chat with web search. Rate limited: 20/min per user; also capped at a monthly total (default 500/month, admin-configurable); only the last 20 messages of the session are sent to Claude. The monthly counter is incremented when the request starts, so a failed reply (503/500) still counts as a used message. Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key) |
@@ -414,7 +414,7 @@ together afterwards.
 GBP, GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN. A rate comes from a fixed table of Yahoo
 symbols (`EURUSD=X` and so on), never from user text; `GBp` and `GBX` are pence, converted through GBP
 at one hundredth. Nothing is stored for this: the price in EUR, the currency and the rate are
-returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, with a note, when its price
+returned on each line (and kept on a saved plan); for `GBp` and `GBX` the stored `rate` is EUR per 1 penny. A ticker is left out, as a `left_out` entry of kind `unpriced`, when its price
 is missing, not finite or not above 0; when its currency is unknown or not on the list; when the rate
 lookup fails; when a rate falls outside 1e-8 to 1e8; or when its price in EUR falls outside 1e-4 to
 1e9 (those bounds keep every figure inside its column). Nothing negative, infinite or NaN ever
@@ -429,8 +429,8 @@ holding without a target is outside the pool: it neither receives money nor coun
 
 1. Targets are normalised to add up to 1 (`weight`).
 2. Each ticker whose price is unusable, or whose newest PENDING recommendation is TRIM or SELL, gets
-   no money and a note. If that leaves nobody, the plan is empty, the whole contribution is the
-   leftover, and the notes say why.
+   no money and a `left_out` entry (kind `unusable_price` or `excluded_call`), never a note. If that leaves nobody, the plan is empty, the whole contribution is the
+   leftover, and `left_out` says why.
 3. For every other item, `gap = max(weight * pool - current_value, 0)`. A watchlist item or closed
    position has a current value of 0, so it is the furthest below its target. If the newest pending
    call is ADD or BUY the gap is multiplied by `FAVOUR_FACTOR` = 1.25.
@@ -444,14 +444,14 @@ holding without a target is outside the pool: it neither receives money nor coun
    to `A` exactly.
 7. Shares are `amount / price_eur`, to three decimals. With "Whole shares only", each line is
    `floor(amount / price_eur)` shares and its amount becomes shares times price; a line that cannot
-   buy one share is dropped with a note, and whatever no line uses is the leftover.
+   buy one share is dropped with a `too_small` `left_out` entry, and whatever no line uses is the leftover.
 8. `weight_before` is the item's value over `pool_before` (null when the pool is 0); `weight_after` is
    its value plus the line over `pool_before` plus what was spent. The reason is `remainder`,
    `new_position` (not held), `favoured` (ADD or BUY; shown as "Below its target, and a pending call
    favours adding") or `underweight`.
 
 If a holding and a watchlist item share a ticker, the holding's target is used; when the holding has no target, the watchlist target applies to the held position (its real shares count, it is not a `new_position`, and it is not counted among the holdings without a target). A holding with 0 shares and a target is treated like a watchlist item and can get a `new_position` line. Edge cases return an explanatory note and no lines, never an error: no targets at all, nothing
-priced (a note says no ticker with a target could be priced), every targeted ticker excluded. `POST /plans` returns the plan as read back from the
+priced (a note says no ticker with a target could be priced), every targeted ticker excluded. The plan response carries `left_out` (`LeftOutOut`: ticker, name, kind, reason) beside `notes`, which keep only general sentences, and each line carries `target_weight`; plans saved before this change return `left_out: []` and `target_weight: null`. `POST /plans` returns the plan as read back from the
 database, so a saved plan shows exactly the rounded figures it stored. A person keeps at most
 `MAX_PLANS` = 120 saved plans (`409` beyond that). Preview and save have separate rate-limit buckets (10 a minute each); `GET` and `DELETE` of plans have no extra limit.
 
@@ -470,7 +470,7 @@ nothing else would be sent, the line alone is the message. There is no separate 
 reminder is only added on the first weekday and the existing per-day marker allows one message a
 day, so it cannot repeat in a month. The line carries no amounts and no tickers.
 
-**The export block.** `GET /me/export` has a `contribution_plans` list; each plan carries its notes
+**The export block.** `GET /me/export` has a `contribution_plans` list; each plan carries its notes, its `left_out` list
 and its lines. `DELETE /me/data` removes both plan tables.
 
 ### Order tickets

@@ -249,3 +249,38 @@ def test_isin_and_placed_columns_are_nullable_and_the_isin_check_rejects_junk(db
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
+
+def test_plan_target_and_left_out_columns_are_nullable_and_the_target_check_rejects_junk(
+    db_session,
+):
+    uid = uuid.uuid4()
+    plan = ContributionPlan(
+        user_id=uid, amount_eur=1, whole_shares=False, total_before_eur=0, leftover_eur=0, notes=[]
+    )
+    db_session.add(plan)
+    db_session.commit()
+    line = ContributionPlanLine(
+        user_id=uid,
+        plan_id=plan.id,
+        ticker="A",
+        name="A",
+        amount_eur=1,
+        shares=1,
+        price_eur=1,
+        currency="EUR",
+        rate=1,
+        reason="underweight",
+    )
+    db_session.add(line)
+    db_session.commit()
+    assert plan.left_out is None and line.target_weight is None
+    plan.left_out = [
+        {"ticker": "NVDA", "name": "NVIDIA", "kind": "unpriced", "reason": "No price available."}
+    ]
+    line.target_weight = 0.19
+    db_session.commit()
+    line.target_weight = 1.5
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()

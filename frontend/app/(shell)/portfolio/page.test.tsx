@@ -138,6 +138,30 @@ describe("PortfolioPage", () => {
     expect(screen.queryByText(/plan this month's contribution/i)).not.toBeInTheDocument();
   });
 
+  describe("avg cost in the Shares cell", () => {
+    it("shows the average cost as the second line, with no Avg cost column", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], shares: 3, cost_basis: 1492.38 }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(within(row).getByText("avg 1,492.38")).toBeInTheDocument();
+      expect(screen.queryByText("Avg cost")).not.toBeInTheDocument();
+      expect(screen.getByText("Shares")).toBeInTheDocument();
+    });
+
+    it("shows the dash when there is no usable cost basis", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [{ ...SUMMARY.holdings[0], cost_basis: null as unknown as number }],
+      });
+      renderFresh();
+      const row = await screen.findByRole("button", { name: "Edit AAPL" });
+      expect(within(row).getByText("avg —")).toBeInTheDocument();
+    });
+  });
+
   describe("weight and target", () => {
     const withTargets = (aapl: number | null, watch: { ticker: string; target_weight: number | null }[]) => () => ({
       ...SUMMARY,

@@ -40,7 +40,7 @@ def _watch(db, ticker, target, user_id=USER_ID):
 def _prices(**eur):
     async def fake(tickers):
         got = {t: EurPrice(D(str(eur[t])), "EUR", D(1)) for t in tickers if t in eur}
-        return got, {t: f"{t} is left out: no price available." for t in tickers if t not in eur}
+        return got, {t: "No price available." for t in tickers if t not in eur}
 
     return patch("app.plans.eur_prices", AsyncMock(side_effect=fake))
 
@@ -95,7 +95,7 @@ def test_a_pending_trim_or_sell_call_excludes_a_ticker(client, db_session):
     with _prices(AAPL=200, MSFT=400, NVDA=100):
         body = client.post("/plans/preview", json={"amount": 500}).json()
     assert [ln["ticker"] for ln in body["lines"]] == ["NVDA"]
-    assert any("AAPL" in n for n in body["notes"])
+    assert [(e["ticker"], e["kind"]) for e in body["left_out"]] == [("AAPL", "excluded_call")]
 
 
 def test_an_approved_or_old_decided_call_does_not_exclude(client, db_session):
@@ -114,14 +114,6 @@ def test_an_approved_or_old_decided_call_does_not_exclude(client, db_session):
     with _prices(AAPL=200, MSFT=400, NVDA=100):
         body = client.post("/plans/preview", json={"amount": 500}).json()
     assert {ln["ticker"] for ln in body["lines"]} == {"AAPL", "NVDA"}
-
-
-def test_an_unpriced_ticker_is_left_out_with_a_note(client, db_session):
-    _seed_basic(db_session)
-    with _prices(AAPL=200, MSFT=400):  # NVDA has no price
-        body = client.post("/plans/preview", json={"amount": 500}).json()
-    assert [ln["ticker"] for ln in body["lines"]] == ["AAPL"]
-    assert any("NVDA" in n for n in body["notes"])
 
 
 def test_holdings_without_a_target_are_not_priced_and_are_noted(client, db_session):
@@ -749,3 +741,119 @@ def test_the_open_orders_route_is_not_shadowed_by_the_plan_id_route(client):
 
 def test_open_orders_requires_authentication(anon_client):
     assert anon_client.get("/plans/orders/open").status_code == 401
+
+
+def test_an_unpriced_ticker_is_a_left_out_entry_and_not_a_note(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400):  # NVDA has no price
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert body["left_out"] == [
+        {"ticker": "NVDA", "name": "NVDA", "kind": "unpriced", "reason": "No price available."}
+    ]
+    assert not any("NVDA" in n for n in body["notes"])
+
+
+def test_an_excluded_call_is_a_left_out_entry(client, db_session):
+    _seed_basic(db_session)
+    db_session.add(
+        Recommendation(
+            user_id=USER_ID,
+            ticker="AAPL",
+            asset_type="STOCK",
+            action="SELL",
+            reasoning=["x"],
+            status="PENDING",
+        )
+    )
+    db_session.commit()
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert [(e["ticker"], e["kind"], e["reason"]) for e in body["left_out"]] == [
+        ("AAPL", "excluded_call", "Its newest pending call is SELL.")
+    ]
+
+
+def test_a_ticker_with_no_price_and_a_sell_call_is_left_out_once(client, db_session):
+    _seed_basic(db_session)
+    db_session.add(
+        Recommendation(
+            user_id=USER_ID,
+            ticker="NVDA",
+            asset_type="STOCK",
+            action="SELL",
+            reasoning=["x"],
+            status="PENDING",
+        )
+    )
+    db_session.commit()
+    with _prices(AAPL=200, MSFT=400):  # NVDA unpriced
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    assert [e["ticker"] for e in body["left_out"]] == ["NVDA"]
+    assert body["left_out"][0]["kind"] == "unpriced"
+
+
+def test_lines_carry_their_normalised_target(client, db_session):
+    _seed_basic(db_session)  # targets 0.4, 0.4, 0.2
+    with _prices(AAPL=200, MSFT=400, NVDA=100):
+        body = client.post("/plans/preview", json={"amount": 500}).json()
+    lines = {ln["ticker"]: ln for ln in body["lines"]}
+    assert lines["AAPL"]["target_weight"] == pytest.approx(0.4)
+    assert lines["NVDA"]["target_weight"] == pytest.approx(0.2)
+
+
+def test_the_target_and_the_left_out_list_survive_save_and_load_and_export(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400):
+        saved = client.post("/plans", json={"amount": 500}).json()
+    loaded = client.get(f"/plans/{saved['id']}").json()
+    assert loaded["left_out"] == saved["left_out"]
+    assert loaded["left_out"][0]["ticker"] == "NVDA"
+    assert [ln["target_weight"] for ln in loaded["lines"]] == [
+        ln["target_weight"] for ln in saved["lines"]
+    ]
+    assert all(ln["target_weight"] is not None for ln in loaded["lines"])
+    exported = client.get("/me/export").json()["contribution_plans"][0]
+    assert exported["left_out"] == loaded["left_out"]
+    assert [ln["target_weight"] for ln in exported["lines"]] == [
+        ln["target_weight"] for ln in loaded["lines"]
+    ]
+
+
+def test_open_orders_return_the_plans_left_out_list_and_the_line_targets(client, db_session):
+    _seed_basic(db_session)
+    with _prices(AAPL=200, MSFT=400):
+        saved = client.post("/plans", json={"amount": 500}).json()
+    plan = client.get("/plans/orders/open").json()["plans"][0]
+    assert plan["left_out"] == saved["left_out"] and plan["left_out"][0]["ticker"] == "NVDA"
+    assert all(ln["target_weight"] is not None for ln in plan["lines"])
+
+
+def test_a_plan_saved_before_this_change_loads_with_no_target_and_no_left_out(client, db_session):
+    plan = ContributionPlan(
+        user_id=USER_ID,
+        amount_eur=100,
+        whole_shares=False,
+        total_before_eur=0,
+        leftover_eur=0,
+        notes=["NVDA is left out: no price available."],
+    )
+    db_session.add(plan)
+    db_session.commit()
+    db_session.add(
+        ContributionPlanLine(
+            user_id=USER_ID,
+            plan_id=plan.id,
+            ticker="AAPL",
+            name="Apple",
+            amount_eur=100,
+            shares=1,
+            price_eur=100,
+            currency="EUR",
+            rate=1,
+            reason="underweight",
+        )
+    )
+    db_session.commit()
+    body = client.get(f"/plans/{plan.id}").json()
+    assert body["left_out"] == [] and body["lines"][0]["target_weight"] is None
+    assert body["notes"] == ["NVDA is left out: no price available."]  # saved notes untouched

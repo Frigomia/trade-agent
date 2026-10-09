@@ -34,6 +34,7 @@ const line = (o: Partial<PlanLine> = {}): PlanLine => ({
   weight_after: null,
   reason: "",
   reason_text: "",
+  target_weight: null,
   ...o,
 });
 const plan = (lines: PlanLine[], whole = false): Plan => ({
@@ -44,6 +45,7 @@ const plan = (lines: PlanLine[], whole = false): Plan => ({
   total_before_eur: 0,
   leftover_eur: 0,
   lines,
+  left_out: [],
   notes: [],
   disclaimer: "",
 });
