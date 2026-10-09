@@ -12,9 +12,11 @@ import { formatAmount } from "@/lib/format";
 import { AMOUNT_ERROR, DISCLAIMER, parseAmount, planSavedAt, plansDiffer, previewPlan, usePlans, type Plan } from "@/lib/plans";
 import type { Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
+import { useWhenActive } from "@/lib/useWhenActive";
 import { PlanForm } from "@/components/plan/PlanForm";
 import { PlanResult } from "@/components/plan/PlanResult";
 import { OrdersSection } from "@/components/plan/OrdersSection";
+import { OrdersView } from "@/components/plan/OrdersView";
 import { PlanHistory } from "@/components/plan/PlanHistory";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
@@ -84,7 +86,7 @@ function NoTargets() {
 }
 
 /** "This month": the form and the preview, which lives only in this component's state until saved. */
-function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
+function ThisMonth({ initialAmount, active }: { initialAmount: number | null; active: boolean }) {
   const { save, load } = usePlans();
   const [amount, setAmount] = useState(initialAmount !== null ? initialAmount.toFixed(2) : "");
   const [wholeShares, setWholeShares] = useState(false);
@@ -110,11 +112,15 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
 
   // The saved plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer for a
   // plan no longer shown (a new preview, another save) is dropped.
-  async function reload() {
-    if (plan?.id == null) return;
-    const fresh = await load(plan.id);
-    setPlan((current) => (current?.id === fresh.id ? fresh : current));
+  // A .then, not await: the effect below calls it, and the lint reads code after an await as synchronous.
+  function reload(): Promise<void> {
+    if (plan?.id == null) return Promise.resolve();
+    return load(plan.id).then((fresh) => setPlan((current) => (current?.id === fresh.id ? fresh : current)));
   }
+
+  // This panel stays mounted while hidden, and a line may have been placed on the Orders view since:
+  // back on this view, the saved plan again (a no-op while none is shown).
+  useWhenActive(active, () => void reload().catch(() => {}));
 
   function toggleWhole(next: boolean) {
     if (plan) request(next);
@@ -165,7 +171,7 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
       {refreshed && plan?.created_at && (
         <Alert severity="info">Prices were refreshed when saving; this is the plan that was saved.</Alert>
       )}
-      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} />}
+      {plan && plan.id !== null && <OrdersSection key={plan.id} plan={plan} footer={footer} onChanged={reload} onPlaced={() => void reload().catch(() => {})} />}
       {plan && plan.id === null && <PlanResult plan={plan} footer={plan.lines.length > 0 ? footer : null} />}
     </Box>
   );
@@ -177,7 +183,8 @@ export default function PlanPage() {
   // This month and Saved plans are one route; only ?tab changes, which Next does not remount.
   // useSearchParams needs no Suspense boundary here because the (shell) routes are dynamic (the layout
   // reads the session); if this page were ever prerendered statically, wrap it in <Suspense>.
-  const saved = useSearchParams().get("tab") === "saved";
+  const tab = useSearchParams().get("tab");
+  const view: "month" | "saved" | "orders" = tab === "saved" || tab === "orders" ? tab : "month";
 
   // Preferences only prefill the amount: if they fail, the field starts empty.
   const ready = summary !== undefined && (prefs !== undefined || prefsError);
@@ -185,10 +192,10 @@ export default function PlanPage() {
   return (
     <Box>
       <PageHeader title="Portfolio" />
-      <PortfolioTabs current={saved ? "saved" : "month"} />
+      <PortfolioTabs current={view} />
 
       {/* Both panels stay mounted, so a preview survives a look at the saved plans. */}
-      <Box hidden={saved}>
+      <Box hidden={view !== "month"}>
         {/* A failed background revalidation keeps the data on screen; only a first load failure shows. */}
         {summaryError && !summary && (
           <Alert
@@ -204,11 +211,12 @@ export default function PlanPage() {
         )}
         {!summaryError && !ready && <Skeleton variant="rounded" height={72} />}
         {ready && !hasTargets(summary) && <NoTargets />}
-        {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} />}
+        {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} active={view === "month"} />}
       </Box>
-      <Box hidden={!saved}>
-        <PlanHistory />
+      <Box hidden={view !== "saved"}>
+        <PlanHistory active={view === "saved"} />
       </Box>
+      {view === "orders" && <OrdersView />}
 
       <Typography
         sx={{ mt: 2, fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}

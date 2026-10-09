@@ -267,7 +267,7 @@ describe("Record placed order", () => {
     expect(screen.getByRole("dialog", { name: "Record placed order" })).toBeInTheDocument();
     resolve(line({ placed_at: "2026-10-08T10:00:00" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(onChanged).not.toHaveBeenCalled(); // the parent reloads in onPlaced
     expect(screen.getByText("EIMI.L recorded as placed. Next: IWDA.L, opened for you.")).toBeInTheDocument();
   });
 
@@ -343,19 +343,45 @@ describe("Record placed order", () => {
     expect(placeCalls()).toHaveLength(1);
   });
 
-  it("on success closes, reloads the plan and the portfolio, opens the next line and says so", async () => {
+  it("on success closes, reloads the portfolio (the parent reloads the plan), opens the next line and says so", async () => {
     const { sheet } = await openSheet("EIMI.L");
     typePrice(sheet, "54.6");
     const summaryCalls = () => apiFetch.mock.calls.filter(([p]) => p === "/portfolio/summary").length;
     const before = summaryCalls();
     fireEvent.click(record(sheet));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(onChanged).toHaveBeenCalledTimes(1);
+    expect(onChanged).not.toHaveBeenCalled(); // the parent reloads in onPlaced
     await waitFor(() => expect(summaryCalls()).toBeGreaterThan(before));
     expect(screen.getByText("EIMI.L recorded as placed. Next: IWDA.L, opened for you.")).toBeInTheDocument();
     expect(card("IWDA.L")).toHaveAttribute("aria-expanded", "true");
     expect(card("EIMI.L")).toHaveAttribute("aria-expanded", "false");
     await waitFor(() => expect(card("IWDA.L")).toHaveFocus());
+  });
+
+  it("refreshes the open orders (the strip's badge) after a line is recorded", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/plans/orders/open" ? Promise.resolve({ open_lines: 3, plans: [] }) : base(path, init),
+    );
+    function Badge() {
+      useSWR("/plans/orders/open", apiFetch);
+      return null;
+    }
+    render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <Badge />
+        <OrdersSection plan={plan()} onChanged={onChanged} />
+      </SWRConfig>,
+    );
+    await summaryLoaded();
+    const openCalls = () => apiFetch.mock.calls.filter(([p]) => p === "/plans/orders/open").length;
+    const before = openCalls();
+    fireEvent.click(card("EIMI.L"));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+    typePrice(sheet, "54.6");
+    fireEvent.click(record(sheet));
+    await waitFor(() => expect(openCalls()).toBeGreaterThan(before));
   });
 
   it("says All lines placed after the last line", async () => {

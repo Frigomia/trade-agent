@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useSWRConfig } from "swr";
 import NextLink from "next/link";
 import { Box, TextField, Button, Alert, IconButton, InputAdornment, Link } from "@mui/material";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
@@ -11,6 +12,7 @@ import { apiFetch } from "@/lib/api/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,6 +23,9 @@ export default function LoginPage() {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
+    // A session can end without the sign-out buttons (expiry, another tab): drop whatever the previous
+    // person's screens cached before this one signs in, as the sign-out buttons do.
+    await mutate(() => true, undefined, { revalidate: false });
     const supabase = createClient();
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (signInError) {

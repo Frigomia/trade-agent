@@ -335,6 +335,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is 0.01 to 1,000,000 EUR with two decimals at most (`422` otherwise). Returns the lines, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
 | POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `422` "This plan is too large to store." when a figure overflows its column. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
+| GET | `/plans/orders/open` | — | The caller's saved plans that still have lines to place, newest first, each with only its unplaced lines (same line shape as `GET /plans/{id}`, with the live `isin`): `{open_lines, plans}`. A plan with every line placed is left out; `{open_lines: 0, plans: []}` when nothing is open. Four reads however many plans there are (lines, plans, and two for the ISINs: holdings and watchlist), one when nothing is open. Declared above `/plans/{id}` so `orders` is not read as an id |
 | GET | `/plans/drift` | — | Open holdings with a target weight whose weight is at least `drift_threshold_pct` points away from it, largest first: `{ticker, name, weight, target, points}` (fractions, `points` signed). An empty list when nothing drifts or nothing can be priced. Rate limited: 30/min per user |
 | GET | `/plans/{id}` | — | One saved plan with its lines; `404` if it is missing or not the caller's. Each line also carries `id`, `isin` (read now from the caller's holding, else the watchlist item, for that ticker; `null` when none), `placed_at` and `placed_trade_id` (`null` until placed), plus `placed_shares` and `placed_price`, read at request time from the logged trade (`null` when unplaced or the trade was deleted; never stored on the line) |
 | POST | `/plans/{plan_id}/lines/{line_id}/placed` | `{date, shares, price, asset_type?}` | Records that the person placed this line's order in their broker (see "Order tickets" below); returns the line. `shares` and `price` must be finite and at least 0.000001 (`422` for zero, negative, smaller, `NaN` or infinity). `404` for a missing line or one that is not the caller's; `409` when already placed, or when a new position would pass the 100-holding cap; `422` when `asset_type` is missing for a ticker that is not a holding yet, or when the numbers are too large to store. 60 requests a minute per user |
@@ -396,7 +397,8 @@ tickers between holdings and watchlist.
 `app/planner.py` (pure arithmetic: `Decimal`, no I/O), `app/fx.py` (currency and EUR conversion),
 `app/plans.py` (loads the rows, prices them, saves and reads plans) and `app/routers/plans.py`. It
 uses no Claude call and needs no key. The page is `/portfolio/plan` ("This month"; `?tab=saved` shows
-Saved plans), reached from the Portfolio view strip (Holdings | This month | Saved plans) and the
+Saved plans, `?tab=orders` the Orders view), reached from the Portfolio view strip (Holdings | This month |
+Saved plans | Orders) and the
 desktop sidebar's Plan sub-item under Portfolio. Like everything else it is
 advice: a plan line says where this month's money could go; nothing is sent to a broker, and every
 plan response and screen carries "Advisory only. Nothing is sent to a broker."
@@ -483,6 +485,10 @@ ISIN part is left out when none is saved (the screen offers "Add ISIN"); a whole
 "N shares" instead of "about N shares". Tickets exist only on saved plans, never on a preview. The
 words on screen are "Order" and "Placed", never Buy or Sell.
 
+**Open lines across plans** (`plans.open_orders`, `GET /plans/orders/open`): one read for the caller's lines with no `placed_at` (and nothing more when there are none), one for their plans, two for the ISINs (holdings, watchlist), shared by every plan; the placed fields need no read, every line here being unplaced.
+
+**The Orders view** (`/portfolio/plan?tab=orders`, the fourth view of the Portfolio strip) shows that read: one section per saved plan with open lines, newest first, under a sticky heading ("October 2026, 2 open", "Saved 8 Oct · 600.00 EUR plan"), with the same cards, tickets and Placed sheet as a saved plan. A placed line leaves on the refetch, a plan with none left drops out (the focus moves to the message saying so), and a plan saved more than 14 days ago carries a note that prices and weights have moved. The strip's Orders link carries a badge with the open count (hidden at 0; the count is in the link's accessible name), read from the same SWR key, which is revalidated after a placement and after a plan is saved or deleted. This month and Saved plans hold their plan in component state and stay mounted while hidden, so each reloads its shown plan when it becomes the current view again: a line placed on the Orders view shows as placed there.
+
 **The ISIN** lives on the holding and the watchlist item and is set only through
 `PUT /portfolio/instruments/{ticker}/isin` (validated by `app/isin.py`: shape plus the ISO 6166 check
 digit). It is resolved at read time by `plans._isins`: for a ticker that is both held and watched, the
@@ -530,8 +536,7 @@ Deleting a plan removes its lines but keeps the trades they logged.
 
 **Privacy.** Plan data, tickets and ISINs are never logged and never sent to Telegram.
 
-**Future work.** An "Orders" tab next to This month and Saved plans, listing open (not yet placed)
-lines across all saved plans (a query over lines with no `placed_at`); a broker preference with
+**Future work.** (Done: the Orders tab, see "The Orders view" above.) A broker preference with
 broker-specific wording; undo, if the trade log ever gets a delete (until then a wrong price is
 corrected on the holding form, since a SELL does not restore the average cost).
 

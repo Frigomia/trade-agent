@@ -100,6 +100,7 @@ const SUMMARIES: PlanSummary[] = [
 ];
 
 let plans: PlanSummary[];
+let openOrders: Plan["lines"] = [];
 
 function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } = {}) {
   plans = [...SUMMARIES];
@@ -116,6 +117,7 @@ function setup({ summary = SUMMARY as unknown, monthly = 500 as number | null } 
       plans = [{ id: 7, created_at: SAVED.created_at!, amount_eur: 500, line_count: 2 }, ...plans];
       return Promise.resolve(SAVED);
     }
+    if (path === "/plans/orders/open") return Promise.resolve({ open_lines: openOrders.length, plans: openOrders.length ? [{ ...SAVED, lines: openOrders }] : [] });
     if (path === "/plans/5" && method === "GET") return Promise.resolve({ ...PLAN, id: 5, created_at: "2026-09-15T12:00:00" });
     if (path === "/plans/5" && method === "DELETE") {
       plans = plans.filter((p) => p.id !== 5);
@@ -138,10 +140,45 @@ function renderFresh() {
   return result;
 }
 
-function view(tab: "month" | "saved") {
-  search = tab === "saved" ? "tab=saved" : "";
+function view(tab: "month" | "saved" | "orders") {
+  search = tab === "month" ? "" : `tab=${tab}`;
   rerenderPage();
 }
+
+// Plan 7 saved with line ids; placing its MSFT line (70) marks it placed in /plans/7 and drops it from
+// the open orders, as the server does.
+function withStoredPlan() {
+  let placedAt: string | null = null;
+  const stored = (): Plan => ({
+    ...SAVED,
+    lines: SAVED.lines.map((l, i) => ({ ...l, id: 70 + i, placed_at: i === 0 ? placedAt : null })),
+  });
+  openOrders = stored().lines;
+  const base = apiFetch.getMockImplementation()!;
+  apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+    if (path === "/plans" && init?.method === "POST") return base(path, init).then(stored);
+    if (path === "/plans/7/lines/70/placed") {
+      placedAt = "2026-10-09T10:00:00";
+      openOrders = openOrders.filter((l) => l.id !== 70);
+      return Promise.resolve({});
+    }
+    if (path === "/plans/7" && !init) return Promise.resolve(stored());
+    return base(path, init);
+  });
+}
+
+async function placeMsftOnOrders() {
+  view("orders");
+  fireEvent.click(await screen.findByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" }));
+  fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+  const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+  fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "425.5" } });
+  fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+  expect(await screen.findByText("MSFT recorded as placed. Next: SAP, opened for you.")).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+}
+
+const openGets = (path: string) => apiFetch.mock.calls.filter(([p, init]) => p === path && !init).length;
 
 const body = (path: string) =>
   apiFetch.mock.calls.filter(([p, init]) => p === path && (init as RequestInit | undefined)?.method === "POST").map(([, init]) => JSON.parse((init as RequestInit).body as string));
@@ -156,16 +193,31 @@ describe("Plan page", () => {
   beforeEach(() => {
     apiFetch.mockReset();
     search = "";
+    openOrders = [];
     setup();
+  });
+
+  it("opens straight on Orders from a deep link, with the disclaimer once", async () => {
+    openOrders = SAVED.lines.map((l, i) => ({ ...l, id: 70 + i }));
+    search = "tab=orders";
+    renderFresh();
+    expect(await screen.findByRole("heading", { name: "October 2026, 2 open" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" })).toBeVisible();
+    expect(await screen.findByRole("link", { name: "Orders, 2 open orders" })).toBeInTheDocument();
+    expect(screen.getAllByText(DISCLAIMER)).toHaveLength(1);
+    expect(document.body.textContent).not.toMatch(/\b(Buy|Sell)\b/);
+    view("month");
+    expect(await screen.findByRole("button", { name: "Make plan" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "October 2026, 2 open" })).not.toBeInTheDocument();
   });
 
   it("titles the page Portfolio and marks the view from ?tab in the strip", async () => {
     renderFresh();
     expect(screen.getByRole("heading", { level: 1, name: "Portfolio" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "This month" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^This month/ })).toHaveAttribute("aria-current", "page");
     view("saved");
-    expect(screen.getByRole("link", { name: "Saved plans" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: /^Saved plans/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^This month/ })).not.toHaveAttribute("aria-current");
     expect(await screen.findByRole("table", { name: "Saved plans" })).toBeVisible();
   });
 
@@ -173,8 +225,17 @@ describe("Plan page", () => {
     search = "tab=saved";
     renderFresh();
     expect(await screen.findByRole("table", { name: "Saved plans" })).toBeVisible();
-    expect(screen.getByRole("link", { name: "Saved plans" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "This month" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: /^Saved plans/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^This month/ })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Orders current from ?tab=orders and keeps the other panels mounted but hidden", async () => {
+    search = "tab=orders";
+    renderFresh();
+    expect(screen.getByRole("link", { name: "Orders" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: /^This month/ })).not.toHaveAttribute("aria-current");
+    expect(await screen.findByRole("button", { name: "Make plan", hidden: true })).not.toBeVisible();
+    expect(screen.getByRole("table", { name: "Saved plans", hidden: true })).not.toBeVisible();
   });
 
   it("prefills the saved monthly amount and validates it", async () => {
@@ -320,6 +381,70 @@ describe("Plan page", () => {
     expect(body("/plans/7/lines/70/placed")).toEqual([{ date: expect.any(String), shares: 0.795, price: 425.5 }]);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "SAP, 187.96 EUR, not placed, press to close" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("shows a line placed on the Orders view as placed back on This month", async () => {
+    withStoredPlan();
+    await makePlan();
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    await screen.findByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" });
+    const loadsBefore = openGets("/plans/7");
+    await placeMsftOnOrders();
+    view("month");
+    expect(await screen.findByRole("button", { name: /^MSFT, 312\.04 EUR, placed 9 Oct, / })).toBeVisible();
+    expect(openGets("/plans/7")).toBe(loadsBefore + 1); // one reload on return, no loop
+  });
+
+  it("shows a line placed on the Orders view as placed back on the opened Saved plan", async () => {
+    withStoredPlan();
+    plans = [{ id: 7, created_at: SAVED.created_at!, amount_eur: 500, line_count: 2 }, ...plans];
+    search = "tab=saved";
+    renderFresh();
+    fireEvent.click(await screen.findByRole("button", { name: "Open the October 2026 plan" }));
+    await screen.findByRole("button", { name: "MSFT, 312.04 EUR, not placed, press to open" });
+    await placeMsftOnOrders();
+    view("saved");
+    expect(await screen.findByRole("button", { name: /^MSFT, 312\.04 EUR, placed 9 Oct, / })).toBeVisible();
+  });
+
+  it("fetches no saved plan on first mount, before one is shown", async () => {
+    renderFresh();
+    await screen.findByRole("button", { name: "Make plan" });
+    view("saved");
+    await screen.findByRole("table", { name: "Saved plans" });
+    view("month");
+    expect(apiFetch.mock.calls.filter(([p]) => /^\/plans\/\d+$/.test(p as string))).toEqual([]);
+  });
+
+  it("updates the Orders badge after a plan is saved", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/plans" && init?.method === "POST") openOrders = SAVED.lines.map((l, i) => ({ ...l, id: 70 + i }));
+      return base(path, init);
+    });
+    await makePlan();
+    expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument();
+    const reads = openGets("/plans/orders/open");
+    fireEvent.click(screen.getByRole("button", { name: "Save plan" }));
+    expect(await screen.findByRole("link", { name: "Orders, 2 open orders" })).toBeInTheDocument();
+    expect(openGets("/plans/orders/open")).toBeGreaterThan(reads);
+  });
+
+  it("updates the Orders badge after a plan is deleted", async () => {
+    openOrders = SAVED.lines.map((l, i) => ({ ...l, id: 70 + i }));
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === "/plans/5" && init?.method === "DELETE") openOrders = [];
+      return base(path, init);
+    });
+    search = "tab=saved";
+    renderFresh();
+    expect(await screen.findByRole("link", { name: "Orders, 2 open orders" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Open the September 2026 plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete plan" }));
+    const dialog = await screen.findByRole("dialog", { name: /Delete the September 2026 plan/ });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delete plan" }));
+    expect(await screen.findByRole("link", { name: "Orders" })).toBeInTheDocument();
   });
 
   it("shows the exchange rate with four significant digits", async () => {
