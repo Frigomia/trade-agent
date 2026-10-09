@@ -59,11 +59,20 @@ describe("plans", () => {
 
   it("previews with a POST of the numeric payload", async () => {
     apiFetch.mockResolvedValue(plan);
-    await expect(previewPlan(req)).resolves.toBe(plan);
+    await expect(previewPlan(req)).resolves.toEqual(plan);
     expect(apiFetch).toHaveBeenCalledWith("/plans/preview", {
       method: "POST",
       body: JSON.stringify(req),
     });
+  });
+
+  it("fills in left_out and target_weight when the backend leaves them out", async () => {
+    const { left_out: _left, ...old } = plan;
+    void _left;
+    apiFetch.mockResolvedValue({ ...old, lines: [{ ticker: "AAPL" }] });
+    const got = await previewPlan(req);
+    expect(got.left_out).toEqual([]);
+    expect(got.lines[0].target_weight).toBeNull();
   });
 
   it("save posts then revalidates the list", async () => {
@@ -95,7 +104,7 @@ describe("plans", () => {
     });
     expect(apiFetch).toHaveBeenCalledWith("/plans/1", { method: "DELETE" });
     expect(listCalls()).toBe(before + 1);
-    await expect(result.current.load(1)).resolves.toBe(plan);
+    await expect(result.current.load(1)).resolves.toEqual(plan);
   });
 
   it.each([
@@ -213,6 +222,15 @@ describe("useOpenOrders", () => {
     expect(result.current.plans).toEqual([plan]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
     expect(apiFetch).toHaveBeenCalledWith("/plans/orders/open");
+  });
+
+  it("fills in left_out on plans from a backend that does not send it yet", async () => {
+    const { left_out: _left, ...old } = plan;
+    void _left;
+    apiFetch.mockResolvedValue({ open_lines: 1, plans: [old] });
+    const { result } = renderHook(() => useOpenOrders(), { wrapper });
+    await waitFor(() => expect(result.current.openLines).toBe(1));
+    expect(result.current.plans[0].left_out).toEqual([]);
   });
 
   it("tolerates a failure: openLines 0, error set, no throw, no retry", async () => {

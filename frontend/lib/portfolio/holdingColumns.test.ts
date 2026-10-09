@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as columns from "./holdingColumns";
 import { HOLDING_COLUMNS } from "./holdingColumns";
 
+// Splits a grid-template on spaces outside parentheses, so `minmax(0, 1.2fr)` stays one track.
 const tracks = (t: string) => t.split(/ (?![^(]*\))/);
 
 describe("holding columns", () => {
