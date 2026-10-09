@@ -364,6 +364,11 @@ class PlanOut(BaseModel):
     disclaimer: str = "Advisory only. Nothing is sent to a broker."
 
 
+class OpenOrdersOut(BaseModel):
+    open_lines: int
+    plans: list[PlanOut]
+
+
 class PlanSummaryOut(BaseModel):
     id: int
     created_at: datetime

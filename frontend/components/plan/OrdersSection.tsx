@@ -16,6 +16,11 @@ export interface OrdersSectionProps {
   /** Reloads the plan; the parent replaces `plan` with the fresh one. */
   onChanged: () => Promise<unknown>;
   footer?: ReactNode;
+  /** The Orders tab's sticky plan heading and old-plan note; see OrdersPanel. */
+  heading?: ReactNode;
+  notice?: ReactNode;
+  /** After a line is recorded (the parent reloads its plan for the placed chip), with the line that opens next (null: none left in this plan). */
+  onPlaced?: (line: PlanLine, next: PlanLine | null) => void;
 }
 
 /**
@@ -23,7 +28,7 @@ export interface OrdersSectionProps {
  * owns which line is open, the sheet, and the status line. After a line is recorded the next unplaced
  * line opens by itself and takes the focus.
  */
-export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
+export function OrdersSection({ plan, onChanged, footer, heading, notice, onPlaced }: OrdersSectionProps) {
   // The plan page loads it already; SWR shares the one request.
   const { data: summary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const { mutate } = useSWRConfig();
@@ -49,11 +54,13 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
   }
 
   function placed(line: PlanLine) {
-    // The new trade moved holdings and totals: refresh every portfolio read, even when this view has
-    // gone (the cache is global, so the next screen shows the new numbers).
-    void mutate((key) => typeof key === "string" && key.startsWith("/portfolio"));
+    // The new trade moved holdings and totals and left one open order fewer: refresh every portfolio
+    // read and the open orders (the strip's badge), even when this view has gone (the cache is global,
+    // so the next screen shows the new numbers).
+    void mutate((key) => typeof key === "string" && (key.startsWith("/portfolio") || key === "/plans/orders/open"));
     if (!mounted.current) return;
     const next = nextUnplaced(plan, line.ticker);
+    onPlaced?.(line, next);
     setSheetOpen(false);
     setOpenTicker(next?.ticker ?? null);
     setStatus(
@@ -63,7 +70,6 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
     );
     // The panel focuses that card; the sheet's own focus return lands on the Placed button, gone by then.
     setFocusTicker(next?.ticker ?? line.ticker);
-    void onChanged(); // the plan, for the placed chip
   }
 
   return (
@@ -77,6 +83,8 @@ export function OrdersSection({ plan, onChanged, footer }: OrdersSectionProps) {
         status={status}
         focusTicker={focusTicker}
         footer={footer}
+        heading={heading}
+        notice={notice}
       />
       <PlacedSheet
         open={sheetOpen}
