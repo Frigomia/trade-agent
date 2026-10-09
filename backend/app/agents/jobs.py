@@ -7,7 +7,7 @@ from typing import Any
 from anthropic import Anthropic
 from sqlalchemy.orm import Session
 
-from app.agents.graph import run_graph_for_ticker
+from app.agents.graph import AnalysisState, run_graph_for_ticker
 from app.db import lock_and_check_active, scoped_session
 from app.models import Holding, Recommendation, WatchlistItem
 from app.redis_client import get_redis
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 JOB_TTL_SECONDS = 3600
 MAX_CONCURRENT_TICKERS = 3
-ACTIVE_TTL_SECONDS = (
-    JOB_TTL_SECONDS  # a run is bounded well below this; expires if the process dies
-)
+# A manual run has no time limit, so the marker is refreshed after every ticker (see
+# _process_ticker); this is how long a dead process can block the user.
+ACTIVE_TTL_SECONDS = JOB_TTL_SECONDS
 MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search plus an embedding)
 
 # Deletes the marker only if it still holds this job's id (a newer job may own it by now).
@@ -95,6 +95,38 @@ async def get_job_status(job_id: str, user_id: uuid.UUID) -> dict[str, Any] | No
     }
 
 
+def _save_recommendation(
+    user_id: uuid.UUID, ticker_info: dict[str, Any], state: AnalysisState, source: str
+) -> dict[str, Any]:
+    """Writes one recommendation; the session lives and dies inside one worker thread."""
+    with scoped_session(user_id) as db:
+        if not lock_and_check_active(db, user_id):
+            # The account was removed or disabled while the analysis ran: write nothing.
+            return {"ticker": ticker_info["ticker"], "skipped": True}
+        # A new run replaces this ticker's earlier unreviewed recommendations, so
+        # Today never piles up stale duplicates. Marked, not deleted: history stays.
+        db.query(Recommendation).filter_by(
+            user_id=user_id, ticker=ticker_info["ticker"], status="PENDING"
+        ).update({"status": "SUPERSEDED"})
+        rec = Recommendation(
+            user_id=user_id,
+            ticker=ticker_info["ticker"],
+            asset_type=ticker_info["asset_type"],
+            action=state["action"],
+            reasoning=state["reasoning"],
+            ai_analysis=state["ai_analysis"],
+            suggested_position_pct=state["suggested_position_pct"],
+            price_at_recommendation=state["quote"]["price"],
+            fundamental_score=state["fundamental_score"],
+            technical_signal=state["technical_signal"],
+            source=source,
+        )
+        db.add(rec)
+        db.commit()
+        db.refresh(rec)
+        return {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
+
+
 async def _process_ticker(
     job_id: str,
     user_id: uuid.UUID,
@@ -116,33 +148,10 @@ async def _process_ticker(
             if state["action"] is None:
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
             else:
-                with scoped_session(user_id) as db:
-                    if not lock_and_check_active(db, user_id):
-                        # The account was removed or disabled while the analysis ran: write nothing.
-                        entry = {"ticker": ticker_info["ticker"], "skipped": True}
-                    else:
-                        # A new run replaces this ticker's earlier unreviewed recommendations, so
-                        # Today never piles up stale duplicates. Marked, not deleted: history stays.
-                        db.query(Recommendation).filter_by(
-                            user_id=user_id, ticker=ticker_info["ticker"], status="PENDING"
-                        ).update({"status": "SUPERSEDED"})
-                        rec = Recommendation(
-                            user_id=user_id,
-                            ticker=ticker_info["ticker"],
-                            asset_type=ticker_info["asset_type"],
-                            action=state["action"],
-                            reasoning=state["reasoning"],
-                            ai_analysis=state["ai_analysis"],
-                            suggested_position_pct=state["suggested_position_pct"],
-                            price_at_recommendation=state["quote"]["price"],
-                            fundamental_score=state["fundamental_score"],
-                            technical_signal=state["technical_signal"],
-                            source=source,
-                        )
-                        db.add(rec)
-                        db.commit()
-                        db.refresh(rec)
-                        entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
+                # Sync DB work (it can wait on the user's advisory lock): off the event loop.
+                entry = await asyncio.to_thread(
+                    _save_recommendation, user_id, ticker_info, state, source
+                )
         except Exception as exc:
             # Class name only, no traceback: a traceback carries the exception message, which can
             # include key material. Manual runs therefore log no traceback either.
@@ -153,6 +162,8 @@ async def _process_ticker(
         await redis.rpush(f"job:{job_id}:results", json.dumps(entry))
         await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
         await redis.hincrby(f"job:{job_id}", "done", 1)
+        # Keep the marker alive while the run goes on. EXPIRE on a missing key does nothing.
+        await redis.expire(_active_key(user_id), ACTIVE_TTL_SECONDS)
 
 
 async def run_job(
@@ -176,5 +187,12 @@ async def run_job(
                 logger.error("Unhandled error in _process_ticker (%s)", type(result).__name__)
     finally:
         redis = get_redis()
-        await redis.hset(f"job:{job_id}", "status", "DONE")
-        await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)
+        try:
+            await redis.hset(f"job:{job_id}", "status", "DONE")
+        finally:
+            # Runs even if the hset raised, so the user is never locked out until the TTL.
+            try:
+                await redis.eval(_RELEASE_IF_MINE, 1, _active_key(user_id), job_id)
+            except Exception as exc:
+                # The marker expires on its own after ACTIVE_TTL_SECONDS.
+                logger.warning("Analysis: marker release failed (%s)", type(exc).__name__)

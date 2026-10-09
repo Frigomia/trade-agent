@@ -589,7 +589,7 @@ recommendation for a ticker, that ticker's older `PENDING` (unreviewed) ones are
 `SUPERSEDED` — kept for history, never shown as awaiting review, and excluded from
 `?status=PENDING`; reviewed (`APPROVED`/`REJECTED`) rows are untouched. The dashboard's
 "Approve"/"Dismiss" buttons call the approve/reject endpoints, which only
-flip the status flag. **Nothing in this system calls a broker API or
+flip the status flag, and only on `PENDING` rows (any other status answers 409). **Nothing in this system calls a broker API or
 executes a trade.** The loop closes when the human, having approved a
 recommendation and manually executed it in Trade Republic, calls
 `POST /portfolio/trades` (or clicks a "mark as executed" action in the UI,
@@ -789,7 +789,9 @@ default — same dialect and models as production, started with
   marker makes a same-day re-run a no-op for that user, so "Re-run jobs" after a red run does not
   charge anyone twice (a user who needs a retry uses Run analysis in the app); it is removed when
   the limit check refuses the run, and a user skipped for no key, the limit or nothing to analyze
-  never gets one. A ticker that always errors or yields no call has no pending call, so it is
+  never gets one. A user with a manual run in progress (their `analysis_active:<user_id>` marker is
+  set) is skipped: the same-day marker is removed and the charge refunded. That marker has a 1 h
+  expiry that is refreshed after every ticker, so a long manual run does not lose it. A ticker that always errors or yields no call has no pending call, so it is
   analyzed again, and counts a run, every weekday. The database session is closed before the run
   starts, so no connection is held for minutes. The step has its own lock
   (`scheduled:analysis-step`), shared by `daily` and `analysis`, so they cannot analyze at the same
@@ -1052,6 +1054,9 @@ and invited users; nobody can sign up on their own.
      `/reset-password`. After a recovery link the route sets a 15-minute `ta_recovery` cookie;
      `/reset-password` shows the new-password form only with that cookie or a
      `PASSWORD_RECOVERY` event, and sends any other signed-in user to `/more/account`.
+  3. **Authentication → Sign In / Providers → Email → "Secure password change": turn ON.** The
+     app asks for the current password before a change, but that is only a UI convenience; this
+     server-side setting is what stops a stolen session token from changing the password.
   **Not yet done:** the real end-to-end invite → accept → login → disable → enable → remove
   walkthrough against a live Supabase project has not been performed — the implementing agent's
   sandboxed environment has no browser or email access. This remains a required manual

@@ -314,3 +314,45 @@ def test_the_marker_is_released_when_create_job_fails_after_claiming():
         await create_job(OTHER_USER_ID, [])
 
     asyncio.run(_run())
+
+
+def test_the_marker_is_released_even_when_marking_the_job_done_fails():
+    async def _run() -> None:
+        job_id = await create_job(OTHER_USER_ID, [])
+        with (
+            patch.object(get_redis().__class__, "hset", AsyncMock(side_effect=OSError)),
+            pytest.raises(OSError),
+        ):
+            await run_job(job_id, OTHER_USER_ID, [])
+        assert await get_redis().get(_active_key(OTHER_USER_ID)) is None
+
+    asyncio.run(_run())
+
+
+def test_the_marker_expiry_is_refreshed_after_each_ticker(session_local, app_session_local):
+    from app.agents.jobs import ACTIVE_TTL_SECONDS, _process_ticker
+
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        redis = get_redis()
+        await redis.expire(_active_key(OTHER_USER_ID), 30)  # nearly expired
+        with patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)):
+            await _process_ticker(job_id, OTHER_USER_ID, tickers[0], asyncio.Semaphore(1))
+        assert await redis.ttl(_active_key(OTHER_USER_ID)) > ACTIVE_TTL_SECONDS - 60
+
+    asyncio.run(_run())
+
+
+def test_the_refresh_does_not_recreate_a_missing_marker(session_local, app_session_local):
+    from app.agents.jobs import _process_ticker
+
+    async def _run() -> None:
+        tickers = [{"ticker": "AAPL", "asset_type": "STOCK", "is_held": False}]
+        job_id = await create_job(OTHER_USER_ID, tickers)
+        await get_redis().delete(_active_key(OTHER_USER_ID))
+        with patch("app.agents.jobs.run_graph_for_ticker", AsyncMock(return_value=FAKE_STATE_SKIP)):
+            await _process_ticker(job_id, OTHER_USER_ID, tickers[0], asyncio.Semaphore(1))
+        assert await get_redis().get(_active_key(OTHER_USER_ID)) is None
+
+    asyncio.run(_run())

@@ -112,13 +112,20 @@ async def check_and_increment_usage(kind: str, user_id: str, limit: int) -> None
         raise UsageLimitExceeded(kind, limit)
 
 
+# Decrements only while the value is above 0 and never creates the key. One atomic step in Redis.
+_REFUND = """
+local v = tonumber(redis.call('get', KEYS[1]))
+if v and v > 0 then
+    return redis.call('decr', KEYS[1])
+end
+return 0
+"""
+
+
 async def refund_usage(kind: str, user_id: str) -> None:
     """Gives back one unit of this month's count (a run that was counted but never started).
-    Never goes below 0."""
-    redis = get_redis()
-    key = _usage_key(kind, user_id)
-    if await redis.decr(key) < 0:
-        await redis.set(key, 0, keepttl=True)
+    Never goes below 0 and never creates the counter."""
+    await get_redis().eval(_REFUND, 1, _usage_key(kind, user_id))
 
 
 async def get_usage(kind: str, user_id: str) -> int:

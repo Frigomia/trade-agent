@@ -254,8 +254,8 @@ def remove_user(
 
     _collect(found, delete_user_data(factory, user.id))
     _upstream("delete", lambda: supabase.delete(user.id))
-    # A running job may have written rows since the first pass. This narrows the window; it does
-    # not close it.
+    # The per-user lock already closes the window for the analysis, chat and backtest writers; this
+    # second pass is a safety net for any row written in between.
     _collect(found, delete_user_data(factory, user.id))
     db.delete(user)
     db.commit()

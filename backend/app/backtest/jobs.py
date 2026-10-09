@@ -105,6 +105,10 @@ async def run_job(job_id: str, user_id: uuid.UUID, ticker: str, start: date, end
             f"backtest_job:{job_id}",
             mapping={"status": "DONE", "backtest_result_id": result_id},
         )
+    except AccountNotActive:
+        # Expected when an account is removed mid-run: no traceback, nothing to investigate.
+        logger.info("Backtest for ticker %s dropped: %s", ticker, AccountNotActive.__name__)
+        await redis.hset(f"backtest_job:{job_id}", "status", "FAILED")
     except Exception:
         logger.exception("Backtest failed for ticker %s", ticker)
         await redis.hset(f"backtest_job:{job_id}", "status", "FAILED")

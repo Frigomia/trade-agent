@@ -106,7 +106,10 @@ async def run_snapshots(summary: Summary) -> None:
                     reason = "no open holdings" if not has_open else "already recorded today"
                     logger.info("Snapshot user %s: skipped (%s)", user_id, reason)
                     continue
-                await record_snapshot(db, user_id)
+                if await record_snapshot(db, user_id) is None:
+                    summary.snapshots_skipped += 1
+                    logger.info("Snapshot user %s: skipped (account not active)", user_id)
+                    continue
                 summary.snapshots_recorded += 1
                 logger.info("Snapshot user %s: recorded", user_id)
         except Exception as exc:
@@ -230,8 +233,9 @@ async def _analyze_user(
             job_id = await create_job(user_id, infos)
         except AnalysisAlreadyRunning:
             # The person has a manual run going: not a failure. Undo the charge and the marker.
-            await _forget_marker(marker)
+            # Refund first: if it raises, the marker stays and nobody is charged twice.
             await refund_usage("analysis_run", str(user_id))
+            await _forget_marker(marker)
             return "skipped"
         async with asyncio.timeout(run_seconds):
             await run_job(job_id, user_id, infos, client=client, source="scheduled")
@@ -243,6 +247,9 @@ async def _analyze_user(
         return "failed"
     errored = status is not None and any("error" in r for r in status["results"])
     with app_db.scoped_session(user_id) as db:
+        current = db.get(AppUser, user_id)
+        if current is None or current.status != "active":
+            return "skipped"  # removed or disabled during the run: not a failure
         rejected = not claude_keys.has_usable_key(db, user_id, role)  # flagged during the run
     return "failed" if errored or rejected else "ran"
 

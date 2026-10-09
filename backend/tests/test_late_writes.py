@@ -14,6 +14,7 @@ from app.backtest.engine import BacktestMetrics
 from app.backtest.jobs import AccountNotActive, _save_result
 from app.db import lock_and_check_active, open_user_session
 from app.models import BacktestResult, ChatMessage, Recommendation
+from app.redis_client import get_redis
 from app.routers.chat import _save_reply
 from app.user_data import delete_user_data
 from tests.auth_support import add_app_user
@@ -66,6 +67,8 @@ def _analyse(app_session_local, user_id: uuid.UUID) -> list[dict]:
             await run_analysis_job(job_id, user_id, TICKERS)
         status = await get_job_status(job_id, user_id)
         assert status is not None
+        # The run ended, so its marker is gone (a skipped write must not leave it behind).
+        assert await get_redis().get(f"analysis_active:{user_id}") is None
         return status["results"]
 
     return asyncio.run(_run())
@@ -76,6 +79,28 @@ def test_analysis_writes_nothing_for_a_blocked_user(session_local, app_session_l
     user_id = _make_user(session_local, status)
     assert _analyse(app_session_local, user_id) == [{"ticker": "AAPL", "skipped": True}]
     assert _count(session_local, Recommendation, user_id) == 0
+
+
+@pytest.mark.parametrize("status", ["disabled"])
+def test_analysis_leaves_a_blocked_users_pending_recommendation_pending(
+    session_local, app_session_local, status
+):
+    user_id = _make_user(session_local, status)
+    with session_local() as session:
+        session.add(
+            Recommendation(
+                user_id=user_id,
+                ticker="AAPL",
+                asset_type="STOCK",
+                action="BUY",
+                reasoning=["old"],
+                status="PENDING",
+            )
+        )
+        session.commit()
+    _analyse(app_session_local, user_id)
+    with session_local() as session:
+        assert session.query(Recommendation).filter_by(user_id=user_id).one().status == "PENDING"
 
 
 def test_analysis_still_writes_for_an_active_user(session_local, app_session_local):
@@ -122,22 +147,50 @@ def test_delete_waits_for_a_writer_holding_the_lock_then_removes_its_row(session
     deleted = threading.Event()
 
     writer = session_local()
-    assert lock_and_check_active(writer, user_id)  # the writer now holds the user's lock
-    writer.add(ChatMessage(user_id=user_id, session_id="s1", role="assistant", content="late"))
-    writer.flush()
+    try:
+        assert lock_and_check_active(writer, user_id)  # the writer now holds the user's lock
+        writer.add(ChatMessage(user_id=user_id, session_id="s1", role="assistant", content="late"))
+        writer.flush()
 
-    def _delete() -> None:
-        delete_user_data(session_local, user_id)
-        deleted.set()
+        def _delete() -> None:
+            delete_user_data(session_local, user_id)
+            deleted.set()
 
-    thread = threading.Thread(target=_delete)
-    thread.start()
-    time.sleep(1)
-    assert not deleted.is_set()  # blocked on the lock, the uncommitted row is not yet visible
+        # daemon: a failing assertion below must not leave a thread that hangs pytest at exit
+        thread = threading.Thread(target=_delete, daemon=True)
+        thread.start()
+        time.sleep(1)
+        assert not deleted.is_set()  # blocked on the lock, the uncommitted row is not yet visible
 
-    writer.commit()  # releases the lock
-    thread.join(timeout=10)
-    writer.close()
+        writer.commit()  # releases the lock
+        thread.join(timeout=10)
+    finally:
+        writer.rollback()  # no-op after the commit; frees the lock if an assertion failed
+        writer.close()
 
     assert deleted.is_set()
     assert _count(session_local, ChatMessage, user_id) == 0
+
+
+@pytest.mark.parametrize("status", BLOCKED)
+def test_a_backtest_for_a_blocked_user_ends_failed_and_releases_its_marker(
+    session_local, app_session_local, status
+):
+    from app.backtest.jobs import _active_key, create_job, get_job_status, run_job
+
+    user_id = _make_user(session_local, status)
+
+    async def _run() -> None:
+        job_id = await create_job(user_id, "AAPL", date(2020, 1, 1), date(2021, 1, 1))
+        with (
+            patch("app.backtest.jobs.fetch_price_history", AsyncMock(return_value=[1.0, 2.0])),
+            patch("app.backtest.jobs.simulate", return_value=METRICS),
+            patch("app.db.SessionLocal", app_session_local),
+        ):
+            await run_job(job_id, user_id, "AAPL", date(2020, 1, 1), date(2021, 1, 1))
+        job = await get_job_status(job_id, user_id)
+        assert job is not None and job["status"] == "FAILED"
+        assert await get_redis().get(_active_key(user_id)) is None
+
+    asyncio.run(_run())
+    assert _count(session_local, BacktestResult, user_id) == 0

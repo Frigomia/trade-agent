@@ -9,6 +9,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_quote_and_history
+from app.db import lock_and_check_active
 from app.models import Holding, PortfolioSnapshot
 
 
@@ -20,7 +21,8 @@ class PriceUnavailable(Exception):
         self.ticker = ticker
 
 
-async def record_snapshot(db: Session, user_id: uuid.UUID) -> PortfolioSnapshot:
+async def record_snapshot(db: Session, user_id: uuid.UUID) -> PortfolioSnapshot | None:
+    """Records one snapshot; None (nothing written) when the account was removed or disabled."""
     holdings = db.query(Holding).filter_by(user_id=user_id).all()
 
     total_market_value = 0.0
@@ -36,6 +38,10 @@ async def record_snapshot(db: Session, user_id: uuid.UUID) -> PortfolioSnapshot:
         total_market_value += float(holding.shares) * price
         total_cost_basis += float(holding.shares) * float(holding.cost_basis)
 
+    # Last step before the write (after the slow quote fetches): take the user's lock and re-check.
+    if not lock_and_check_active(db, user_id):
+        db.rollback()  # release the lock
+        return None
     snapshot = PortfolioSnapshot(
         user_id=user_id,
         total_market_value=total_market_value,
