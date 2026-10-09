@@ -1015,9 +1015,15 @@ and invited users; nobody can sign up on their own.
   first invitation, review Authentication, Users and delete any unconfirmed accounts you did
   not create: inviting an address reuses an existing unconfirmed Supabase user, so an account
   pre-created by someone else while sign-ups were on would keep its password. (ii) Removing a
-  user deletes their data twice (before and after the Supabase delete), but a background job
-  still running for that user can write rows after that. Remove a user after their jobs finish
-  (jobs are short-lived); the residual risk is accepted. (iii) The runtime role can INSERT
+  user deletes their data twice (before and after the Supabase delete). The background writers
+  (the analysis job's recommendation insert, the chat reply, the backtest result) call
+  `lock_and_check_active` first: it takes the user's advisory lock (`lock_user_for_insert`) and
+  checks that the `app_users` row exists with status `active`; a writer that fails the check
+  writes nothing (analysis records the ticker as skipped, chat drops the reply, the backtest ends
+  FAILED). `delete_user_data` takes the same lock before it deletes, so a writer that already
+  holds the lock finishes first and its row is deleted, and one that starts later sees the
+  account disabled or gone. Self-service `DELETE /me/data` leaves the account active, so a row
+  written after it belongs to a live user and is intended. (iii) The runtime role can INSERT
   `app_users` rows with any `role` value (invite hardcodes `"user"`); only UPDATE of `role`,
   `email`, and `id` is denied.
 - ✓ Per-user monthly limits and overrides, monthly usage tracking, and self-service export/deletion (sub-project 2c)

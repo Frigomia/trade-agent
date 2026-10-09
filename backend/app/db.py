@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, select, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, Session, SessionTransaction, sessionmaker
 
@@ -105,3 +105,16 @@ def lock_user_for_insert(db: Session, user_id: uuid.UUID) -> None:
     The lock is held until the transaction ends (the commit) and is Postgres-only; the tests and
     the app both run on Postgres."""
     db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:user_id))"), {"user_id": str(user_id)})
+
+
+def lock_and_check_active(db: Session, user_id: uuid.UUID) -> bool:
+    """For a background writer: take the user's lock, then say whether the account is still active.
+    Call it as the first statement of the write transaction. delete_user_data takes the same lock,
+    so a writer either finishes before the delete (which then removes its row) or sees the user
+    gone or disabled and writes nothing."""
+    # Imported here because models.py imports Base from this module.
+    from app.models import AppUser
+
+    lock_user_for_insert(db, user_id)
+    status = db.scalar(select(AppUser.status).where(AppUser.id == user_id))
+    return status == "active"

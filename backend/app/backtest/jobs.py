@@ -6,7 +6,7 @@ from typing import Any
 
 from app.agents.market_data import fetch_price_history
 from app.backtest.engine import BacktestMetrics, simulate
-from app.db import scoped_session
+from app.db import lock_and_check_active, scoped_session
 from app.models import BacktestResult
 from app.redis_client import get_redis
 
@@ -33,6 +33,10 @@ return 0
 
 class BacktestAlreadyRunning(Exception):
     """The user already has a RUNNING backtest job."""
+
+
+class AccountNotActive(Exception):
+    """The user was removed or disabled while the backtest ran."""
 
 
 def _active_key(user_id: uuid.UUID) -> str:
@@ -67,6 +71,9 @@ def _save_result(
     user_id: uuid.UUID, ticker: str, start: date, end: date, metrics: BacktestMetrics
 ) -> int:
     with scoped_session(user_id) as db:
+        if not lock_and_check_active(db, user_id):
+            # run_job turns this into a FAILED job; no row is written for a removed account.
+            raise AccountNotActive
         result = BacktestResult(
             user_id=user_id,
             ticker=ticker,

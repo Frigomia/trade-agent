@@ -15,7 +15,7 @@ from app.agents.jobs import (
 )
 from app.models import Holding, Recommendation, WatchlistItem
 from app.redis_client import get_redis
-from tests.auth_support import OTHER_USER_ID, USER_ID
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 FAKE_STATE_BUY = {
     "action": "BUY",
@@ -38,6 +38,9 @@ FAKE_STATE_SKIP = {
 
 
 def test_job_lifecycle_completes_and_records_results(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
+
     async def _fake_run_graph(
         user_id, ticker: str, asset_type: str, is_held: bool, client=None
     ) -> dict:
@@ -106,6 +109,9 @@ def test_get_job_status_hides_other_users_jobs():
 def test_a_new_run_supersedes_the_tickers_unreviewed_recommendations(
     session_local, app_session_local
 ):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
+
     def _fake_run_graph(user_id, ticker: str, asset_type: str, is_held: bool, client=None) -> dict:
         return FAKE_STATE_BUY
 
@@ -195,12 +201,16 @@ def _run_one_ticker(app_session_local, source=None):
 
 
 def test_a_scheduled_run_stores_its_recommendations_as_scheduled(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
     _run_one_ticker(app_session_local, source="scheduled")
     with session_local() as db:
         assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "scheduled"
 
 
 def test_a_manual_run_stores_manual(session_local, app_session_local):
+    with session_local() as seed_db:
+        add_app_user(seed_db, OTHER_USER_ID)
     _run_one_ticker(app_session_local)
     with session_local() as db:
         assert db.query(Recommendation).filter_by(user_id=OTHER_USER_ID).one().source == "manual"

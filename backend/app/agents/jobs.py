@@ -8,7 +8,7 @@ from anthropic import Anthropic
 from sqlalchemy.orm import Session
 
 from app.agents.graph import run_graph_for_ticker
-from app.db import scoped_session
+from app.db import lock_and_check_active, scoped_session
 from app.models import Holding, Recommendation, WatchlistItem
 from app.redis_client import get_redis
 
@@ -117,28 +117,32 @@ async def _process_ticker(
                 entry: dict[str, Any] = {"ticker": ticker_info["ticker"], "skipped": True}
             else:
                 with scoped_session(user_id) as db:
-                    # A new run replaces this ticker's earlier unreviewed recommendations, so Today
-                    # never piles up stale duplicates. Marked, not deleted: the history stays.
-                    db.query(Recommendation).filter_by(
-                        user_id=user_id, ticker=ticker_info["ticker"], status="PENDING"
-                    ).update({"status": "SUPERSEDED"})
-                    rec = Recommendation(
-                        user_id=user_id,
-                        ticker=ticker_info["ticker"],
-                        asset_type=ticker_info["asset_type"],
-                        action=state["action"],
-                        reasoning=state["reasoning"],
-                        ai_analysis=state["ai_analysis"],
-                        suggested_position_pct=state["suggested_position_pct"],
-                        price_at_recommendation=state["quote"]["price"],
-                        fundamental_score=state["fundamental_score"],
-                        technical_signal=state["technical_signal"],
-                        source=source,
-                    )
-                    db.add(rec)
-                    db.commit()
-                    db.refresh(rec)
-                    entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
+                    if not lock_and_check_active(db, user_id):
+                        # The account was removed or disabled while the analysis ran: write nothing.
+                        entry = {"ticker": ticker_info["ticker"], "skipped": True}
+                    else:
+                        # A new run replaces this ticker's earlier unreviewed recommendations, so
+                        # Today never piles up stale duplicates. Marked, not deleted: history stays.
+                        db.query(Recommendation).filter_by(
+                            user_id=user_id, ticker=ticker_info["ticker"], status="PENDING"
+                        ).update({"status": "SUPERSEDED"})
+                        rec = Recommendation(
+                            user_id=user_id,
+                            ticker=ticker_info["ticker"],
+                            asset_type=ticker_info["asset_type"],
+                            action=state["action"],
+                            reasoning=state["reasoning"],
+                            ai_analysis=state["ai_analysis"],
+                            suggested_position_pct=state["suggested_position_pct"],
+                            price_at_recommendation=state["quote"]["price"],
+                            fundamental_score=state["fundamental_score"],
+                            technical_signal=state["technical_signal"],
+                            source=source,
+                        )
+                        db.add(rec)
+                        db.commit()
+                        db.refresh(rec)
+                        entry = {"ticker": ticker_info["ticker"], "recommendation_id": rec.id}
         except Exception as exc:
             # Class name only, no traceback: a traceback carries the exception message, which can
             # include key material. Manual runs therefore log no traceback either.
