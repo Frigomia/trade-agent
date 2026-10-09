@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
@@ -85,7 +85,7 @@ function NoTargets() {
 }
 
 /** "This month": the form and the preview, which lives only in this component's state until saved. */
-function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
+function ThisMonth({ initialAmount, active }: { initialAmount: number | null; active: boolean }) {
   const { save, load } = usePlans();
   const [amount, setAmount] = useState(initialAmount !== null ? initialAmount.toFixed(2) : "");
   const [wholeShares, setWholeShares] = useState(false);
@@ -111,11 +111,19 @@ function ThisMonth({ initialAmount }: { initialAmount: number | null }) {
 
   // The saved plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer for a
   // plan no longer shown (a new preview, another save) is dropped.
-  async function reload() {
-    if (plan?.id == null) return;
-    const fresh = await load(plan.id);
-    setPlan((current) => (current?.id === fresh.id ? fresh : current));
+  // A .then, not await: the effect below calls it, and the lint reads code after an await as synchronous.
+  function reload(): Promise<void> {
+    if (plan?.id == null) return Promise.resolve();
+    return load(plan.id).then((fresh) => setPlan((current) => (current?.id === fresh.id ? fresh : current)));
   }
+
+  // This panel stays mounted while hidden, and a line may have been placed on the Orders view since:
+  // back on this view, the saved plan again (a no-op while none is shown). An effect event, so only
+  // `active` re-runs it.
+  const onShown = useEffectEvent(() => void reload().catch(() => {}));
+  useEffect(() => {
+    if (active) onShown();
+  }, [active]);
 
   function toggleWhole(next: boolean) {
     if (plan) request(next);
@@ -206,10 +214,10 @@ export default function PlanPage() {
         )}
         {!summaryError && !ready && <Skeleton variant="rounded" height={72} />}
         {ready && !hasTargets(summary) && <NoTargets />}
-        {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} />}
+        {ready && hasTargets(summary) && <ThisMonth initialAmount={prefs?.monthly_contribution ?? null} active={view === "month"} />}
       </Box>
       <Box hidden={view !== "saved"}>
-        <PlanHistory />
+        <PlanHistory active={view === "saved"} />
       </Box>
       {view === "orders" && <OrdersView />}
 

@@ -124,7 +124,7 @@ describe("OrdersView", () => {
     expect(await screen.findByRole("heading", { name: "October 2026, 2 open" })).toBeInTheDocument();
     expect(headings()).toEqual(["October 2026, 2 open", "September 2026, 1 open", "August 2026, 1 open"]);
     const oct = section("October 2026, 2 open");
-    expect(oct).toHaveTextContent(/Saved 8 Oct 2026, \d\d:\d\d · 600\.00 EUR plan/);
+    expect(oct).toHaveTextContent("Saved 8 Oct · 600.00 EUR plan");
     expect(within(oct).getAllByRole("button", { name: /, not placed,/ }).map((b) => b.getAttribute("aria-label")?.split(",")[0])).toEqual([
       "IWDA.L",
       "NVDA",
@@ -134,7 +134,7 @@ describe("OrdersView", () => {
     expect(screen.queryByText(/of \d placed/)).not.toBeInTheDocument();
     expect(screen.queryByText("Total")).not.toBeInTheDocument();
     expect(screen.getByText("Tap a line to open its order. After Placed, the next open line of that plan opens by itself.")).toBeInTheDocument();
-    expect(await screen.findByRole("img", { name: "4 open orders" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Orders, 4 open orders" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\b(Buy|Sell)\b/i);
   });
 
@@ -147,10 +147,10 @@ describe("OrdersView", () => {
     expect(regions).toHaveLength(2);
     expect(regions[0]).toHaveTextContent("IWDA.L"); // saved 14 days ago to the minute
     expect(regions[0]).not.toHaveTextContent(/Planned/);
-    // Newer ICU spells September "Sept" in en-GB.
     expect(regions[1]).toHaveTextContent(
-      /Planned 24 Sept?\. Prices and weights have moved since; make a new plan if this is no longer what you want\./,
+      "Planned 24 Sep. Prices and weights have moved since; make a new plan if this is no longer what you want.",
     );
+    expect(regions[1]).toHaveTextContent("Saved 24 Sep · 500.00 EUR plan");
   });
 
   it("copies only that plan's lines with its Copy all lines", async () => {
@@ -167,13 +167,47 @@ describe("OrdersView", () => {
   it("after Placed drops the card, lowers the count and the badge, and opens the plan's next line", async () => {
     renderView();
     await screen.findByRole("heading", { name: "October 2026, 2 open" });
-    await screen.findByRole("img", { name: "4 open orders" });
+    await screen.findByRole("link", { name: "Orders, 4 open orders" });
+    const reads = () => apiFetch.mock.calls.filter(([p]) => p === "/plans/orders/open").length;
+    const before = reads();
     await place("IWDA.L", "147.2");
     expect(await screen.findByRole("heading", { name: "October 2026, 1 open" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^IWDA\.L, / })).not.toBeInTheDocument();
     expect(screen.getByText("IWDA.L recorded as placed. Next: NVDA, opened for you.")).toBeInTheDocument();
     expect(card("NVDA")).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByRole("img", { name: "3 open orders" })).toBeInTheDocument();
+    expect(card("NVDA")).toHaveFocus(); // a next line opened: its card keeps the focus
+    expect(await screen.findByRole("link", { name: "Orders, 3 open orders" })).toBeInTheDocument();
+    // One refetch of the open orders per placement, not two (the view's reload is the same read).
+    await new Promise((r) => setTimeout(r, 50));
+    expect(reads() - before).toBe(1);
+  });
+
+  it("still reloads the open orders when the line was already recorded elsewhere (409)", async () => {
+    renderView();
+    await screen.findByRole("heading", { name: "October 2026, 2 open" });
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation((path: string) => {
+      if (path === "/plans/9/lines/2/placed") {
+        open = open.map((p) => (p.id === 9 ? { ...p, lines: p.lines.filter((l) => l.id !== 2) } : p));
+        return Promise.reject(new FakeApiError(409, "This line is already recorded as placed."));
+      }
+      return base(path);
+    });
+    fireEvent.click(card("IWDA.L"));
+    fireEvent.click(screen.getByRole("button", { name: "Placed" }));
+    const sheet = await screen.findByRole("dialog", { name: "Record placed order" });
+    fireEvent.change(within(sheet).getByLabelText("Price per share"), { target: { value: "147.2" } });
+    fireEvent.click(within(sheet).getByRole("button", { name: "Record order" }));
+    expect(await within(sheet).findByText("This line is already recorded as placed.")).toBeInTheDocument();
+    // The sheet stays open (the page behind it is aria-hidden), and the list behind it was reloaded.
+    expect(await screen.findByRole("heading", { name: "October 2026, 1 open", hidden: true })).toBeInTheDocument();
+  });
+
+  it("puts a scroll margin the height of the sticky heading on the cards", async () => {
+    renderView();
+    await screen.findByRole("heading", { name: "October 2026, 2 open" });
+    const item = card("IWDA.L").closest("li")!;
+    expect(getComputedStyle(item).scrollMarginTop).toBe("72px");
   });
 
   it("removes a plan's section when its last line is placed, and says so", async () => {
@@ -181,17 +215,20 @@ describe("OrdersView", () => {
     await screen.findByRole("heading", { name: "August 2026, 1 open" });
     await place("CSSPX.MI", "573.4");
     await waitFor(() => expect(headings()).toEqual(["October 2026, 2 open", "September 2026, 1 open"]));
-    expect(screen.getByText("CSSPX.MI recorded as placed. It was the last open order of August 2026.")).toBeInTheDocument();
-    expect(await screen.findByRole("img", { name: "3 open orders" })).toBeInTheDocument();
+    const status = screen.getByText("CSSPX.MI recorded as placed. It was the last open order of August 2026.");
+    // The section is gone: the focus moves to the message instead of falling to the page.
+    expect(status).toHaveFocus();
+    expect(status).toHaveAttribute("tabindex", "-1");
+    expect(await screen.findByRole("link", { name: "Orders, 3 open orders" })).toBeInTheDocument();
   });
 
   it("shows the empty state, without a badge, once the last open line is placed", async () => {
     open = [SEP];
     renderView();
-    await screen.findByRole("img", { name: "1 open orders" });
+    await screen.findByRole("link", { name: "Orders, 1 open order" });
     await place("EIMI.L", "54.6");
     expect(await screen.findByRole("heading", { name: "No open orders." })).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByRole("img", { name: /open orders/ })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument());
   });
 
   it("explains where orders come from when nothing is open", async () => {
@@ -200,7 +237,7 @@ describe("OrdersView", () => {
     expect(await screen.findByRole("heading", { name: "No open orders." })).toBeInTheDocument();
     expect(screen.getByText(/^Orders come from saving a plan\. Make this month's plan and press Save plan/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Go to This month" })).toHaveAttribute("href", "/portfolio/plan");
-    expect(screen.queryByRole("img", { name: /open orders/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Orders" })).toBeInTheDocument();
   });
 
   it("shows a readable error with Retry", async () => {

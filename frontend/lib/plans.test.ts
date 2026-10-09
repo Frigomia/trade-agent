@@ -17,7 +17,7 @@ const { apiFetch, FakeApiError } = vi.hoisted(() => {
 });
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: FakeApiError }));
 
-import { usePlans, useDrift, useOpenOrders, previewPlan, parseAmount, planMonth, formatRate, type Plan } from "./plans";
+import { usePlans, useDrift, useOpenOrders, previewPlan, parseAmount, planDay, planMonth, formatRate, type Plan } from "./plans";
 
 const wrapper = ({ children }: { children: ReactNode }) =>
   createElement(SWRConfig, { value: { provider: () => new Map(), dedupingInterval: 0 } }, children);
@@ -185,6 +185,14 @@ describe("formatRate", () => {
 describe("planMonth", () => {
   it("names the month and year", () => {
     expect(planMonth("2026-09-15T12:00:00")).toBe("September 2026");
+  });
+});
+
+describe("planDay", () => {
+  it("spells the month in three letters, September included", () => {
+    expect(planDay("2026-09-08T12:00:00")).toBe("8 Sep");
+    expect(planDay("2026-10-08T12:00:00")).toBe("8 Oct");
+    expect(planDay("2026-05-24T12:00:00")).toBe("24 May");
   });
 });
 

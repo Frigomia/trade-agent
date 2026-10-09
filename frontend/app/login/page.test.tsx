@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { SWRConfig } from "swr";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -61,6 +62,32 @@ describe("LoginPage", () => {
       expect(screen.getByText(/email or password is incorrect/i)).toBeInTheDocument(),
     );
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("clears the whole SWR cache before signing in", async () => {
+    const cache = new Map<string, unknown>([
+      ["/plans/orders/open", { data: { open_lines: 3, plans: [] } }],
+      ["/portfolio/summary", { data: { holdings: [] } }],
+    ]);
+    const cached = () => [...cache.values()].map((v) => (v as { data?: unknown }).data);
+    let atSignIn: unknown[] = [];
+    signInWithPassword.mockImplementation(async () => {
+      atSignIn = cached();
+      return { error: null };
+    });
+    apiFetch.mockResolvedValue({});
+    render(
+      <SWRConfig value={{ provider: () => cache as never }}>
+        <LoginPage />
+      </SWRConfig>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/today"));
+    expect(atSignIn).toEqual([undefined, undefined]);
   });
 
   it("links to /reset-password", () => {

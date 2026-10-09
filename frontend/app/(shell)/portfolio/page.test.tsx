@@ -134,7 +134,7 @@ describe("PortfolioPage", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Portfolio" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Portfolio views" });
     expect(within(nav).getByRole("link", { name: "Holdings" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "This month" })).toHaveAttribute("href", "/portfolio/plan");
+    expect(within(nav).getByRole("link", { name: /^This month/ })).toHaveAttribute("href", "/portfolio/plan");
     expect(screen.queryByText(/plan this month's contribution/i)).not.toBeInTheDocument();
   });
 

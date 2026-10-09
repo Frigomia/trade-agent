@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import {
   Alert,
   Box,
@@ -34,13 +34,28 @@ const rowSx = {
 const right = { textAlign: "right" } as const;
 
 /** Saved plans newest first; one opens below the list exactly as saved, and can be deleted after a confirm. */
-export function PlanHistory() {
+export function PlanHistory({ active = true }: { active?: boolean }) {
   const { plans, error, isLoading, load, remove } = usePlans();
   const [opened, setOpened] = useState<Plan | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Kept after the dialog closes so its text does not go blank while it fades out.
   const [deleting, setDeleting] = useState<Plan | null>(null);
   const action = useAction();
+
+  // The opened plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer is
+  // dropped when another plan was opened (or this one deleted) meanwhile.
+  // A .then, not await: the effect below calls it, and the lint reads code after an await as synchronous.
+  function reload(): Promise<void> {
+    if (opened?.id == null) return Promise.resolve();
+    return load(opened.id).then((fresh) => setOpened((current) => (current?.id === fresh.id ? fresh : current)));
+  }
+
+  // The page keeps this view mounted while hidden, and a line may have been placed on the Orders view
+  // since: back on this view, the opened plan again (a no-op when none is open).
+  const onShown = useEffectEvent(() => void reload().catch(() => {}));
+  useEffect(() => {
+    if (active) onShown();
+  }, [active]);
 
   if (error) return <Alert severity="error">Could not load your saved plans.</Alert>;
   if (isLoading || !plans) return <Skeleton variant="rounded" height={160} />;
@@ -61,14 +76,6 @@ export function PlanHistory() {
     action.run(async () => {
       setOpened(await load(summary.id));
     });
-
-  // The opened plan again, e.g. after an ISIN was added, so its tickets carry it. A late answer is
-  // dropped when another plan was opened (or this one deleted) meanwhile.
-  async function reload() {
-    if (opened?.id == null) return;
-    const fresh = await load(opened.id);
-    setOpened((current) => (current?.id === fresh.id ? fresh : current));
-  }
 
   async function confirmDelete() {
     setConfirmOpen(false);

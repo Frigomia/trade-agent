@@ -6,7 +6,7 @@ import { useOpenOrders } from "@/lib/plans";
 
 export type PortfolioView = "holdings" | "month" | "saved" | "orders";
 
-// `short` is the phone label; the full label stays the accessible name.
+// `short` is the phone label.
 const VIEWS: { view: PortfolioView; label: string; short?: string; href: string }[] = [
   { view: "holdings", label: "Holdings", href: "/portfolio" },
   { view: "month", label: "This month", short: "Plan", href: "/portfolio/plan" },
@@ -56,7 +56,8 @@ const SEGMENTED = {
   "& a[aria-current='page'] [data-badge]": { bgcolor: "var(--accent-solid)", color: "var(--on-accent)" },
 } as const;
 
-// Below md the long label is hidden (display only; both stay in the DOM and the link keeps its aria-label).
+// Below md the long label is hidden and the short one shown (display: none drops the hidden one from
+// the accessible name, so the name is the visible text at every width).
 const FULL = { display: { xs: "none", md: "inline" } } as const;
 const SHORT = { display: { xs: "inline", md: "none" } } as const;
 
@@ -71,14 +72,14 @@ export function PortfolioTabs({ current }: { current: PortfolioView }) {
           key={view}
           href={href}
           aria-current={view === current ? "page" : undefined}
-          aria-label={short ? label : undefined}
+          aria-label={view === "orders" && openLines > 0 ? `Orders, ${openLines} open order${openLines === 1 ? "" : "s"}` : undefined}
         >
           {short ? (
             <>
-              <Box component="span" aria-hidden sx={FULL}>
+              <Box component="span" sx={FULL}>
                 {label}
               </Box>
-              <Box component="span" aria-hidden sx={SHORT}>
+              <Box component="span" sx={SHORT}>
                 {short}
               </Box>
             </>
@@ -86,8 +87,8 @@ export function PortfolioTabs({ current }: { current: PortfolioView }) {
             label
           )}
           {view === "orders" && openLines > 0 && (
-            <Box component="span" data-badge role="img" aria-label={`${openLines} open orders`}>
-              <span aria-hidden>{openLines > 99 ? "99+" : openLines}</span>
+            <Box component="span" data-badge aria-hidden>
+              {openLines > 99 ? "99+" : openLines}
             </Box>
           )}
         </Link>

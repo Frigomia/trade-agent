@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { apiFetch } from "@/lib/api/client";
 import { parseDecimal, toTime } from "@/lib/format";
 
@@ -100,9 +100,13 @@ export function planSavedAt(iso: string): string {
   });
 }
 
+// Fixed names: en-GB's short month for September is "Sept" in newer ICU builds, "Sep" in older ones.
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 /** "8 Sep", in the viewer's time zone. */
 export function planDay(iso: string): string {
-  return new Date(toTime(iso)).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const date = new Date(toTime(iso));
+  return `${date.getDate()} ${SHORT_MONTHS[date.getMonth()]}`;
 }
 
 /** A plan saved more than this many days ago carries the "prices have moved" note on the Orders tab. */
@@ -114,6 +118,7 @@ export function isOldPlan(iso: string, now: number): boolean {
 }
 
 const PATH = "/plans";
+const OPEN_ORDERS = `${PATH}/orders/open`;
 const post = (path: string, req: PlanRequest) => apiFetch<Plan>(path, { method: "POST", body: JSON.stringify(req) });
 
 /** Not stored anywhere: the caller keeps the result in its own state. Throws the ApiError. */
@@ -124,15 +129,19 @@ export function previewPlan(req: PlanRequest): Promise<Plan> {
 /** Saved plans. `save`, `remove` and `load` throw the ApiError (run them inside `useAction`). */
 export function usePlans() {
   const { data, error, isLoading, mutate } = useSWR<PlanSummary[]>(PATH, apiFetch);
+  // A saved or deleted plan adds or removes open order lines: the strip's Orders badge follows.
+  const { mutate: globalMutate } = useSWRConfig();
 
   async function save(req: PlanRequest): Promise<Plan> {
     const plan = await post(PATH, req);
+    void globalMutate(OPEN_ORDERS);
     await mutate();
     return plan;
   }
 
   async function remove(id: number): Promise<void> {
     await apiFetch<void>(`${PATH}/${id}`, { method: "DELETE" });
+    void globalMutate(OPEN_ORDERS);
     await mutate();
   }
 
@@ -166,7 +175,7 @@ export interface OpenOrders {
 
 /** The unplaced order lines across the saved plans: one shared read, no polling; a failure shows up in `error`. */
 export function useOpenOrders() {
-  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(`${PATH}/orders/open`, apiFetch, {
+  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(OPEN_ORDERS, apiFetch, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     refreshInterval: 0,

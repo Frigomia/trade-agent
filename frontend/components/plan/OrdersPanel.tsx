@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import { Check, ChevronDown, ChevronUp, Circle, CircleCheck, Copy } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { formatAmount, toTime } from "@/lib/format";
+import { formatAmount } from "@/lib/format";
 import { copyAllText, placedFill, ticketText, unplacedLines } from "@/lib/orders";
-import type { Plan, PlanLine } from "@/lib/plans";
+import { planDay as placedDay, type Plan, type PlanLine } from "@/lib/plans";
 import { IsinRow } from "./IsinRow";
 import { LineWeight, PlanNotes, PlanResult, muted, shares, weightScale } from "./PlanResult";
 
@@ -33,8 +33,8 @@ const stickySx = {
   bgcolor: "var(--bg)",
 } as const;
 
-/** "8 Oct", in the viewer's time zone. */
-const placedDay = (iso: string) => new Date(toTime(iso)).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+/** About the sticky heading's height: a focused card scrolls clear of it instead of under it. */
+const STICKY_HEADING_HEIGHT = 72;
 
 async function writeClipboard(text: string): Promise<boolean> {
   try {
@@ -195,7 +195,16 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
             Amount, EUR
           </Box>
         </Box>
-        <Box component="ul" aria-label="Orders" sx={{ m: 0, p: 0, listStyle: "none" }}>
+        <Box
+          component="ul"
+          aria-label="Orders"
+          sx={{
+            m: 0,
+            p: 0,
+            listStyle: "none",
+            ...(heading && { "& li, & li *": { scrollMarginTop: `${STICKY_HEADING_HEIGHT}px` } }),
+          }}
+        >
           {plan.lines.map((line, i) => (
             <OrderCard
               key={line.ticker}

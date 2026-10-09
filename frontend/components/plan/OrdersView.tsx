@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Alert, Box, Button, Link as MuiLink, Skeleton, Typography } from "@mui/material";
 import { ArrowRight, Check, Clock } from "lucide-react";
 import { formatAmount } from "@/lib/format";
-import { isOldPlan, planDay, planMonth, planSavedAt, useOpenOrders, type Plan } from "@/lib/plans";
+import { isOldPlan, planDay, planMonth, useOpenOrders, type Plan } from "@/lib/plans";
 import { OrdersSection } from "./OrdersSection";
 
 const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
@@ -22,7 +22,7 @@ function PlanHeading({ plan, id }: { plan: Plan; id: string }) {
         </Box>
       </Typography>
       <Typography sx={{ ...muted, fontVariantNumeric: "tabular-nums" }}>
-        Saved {planSavedAt(plan.created_at!)} · {formatAmount(plan.amount_eur)} EUR plan
+        Saved {planDay(plan.created_at!)} · {formatAmount(plan.amount_eur)} EUR plan
       </Typography>
     </Box>
   );
@@ -72,6 +72,12 @@ export function OrdersView() {
   const [now] = useState(() => Date.now());
   // The section of a plan whose last line was placed is gone, so it says so here.
   const [status, setStatus] = useState("");
+  // ...and takes the focus, which would otherwise fall to the page with the section. This parent effect
+  // runs after the recorded card's own focus effect, so it wins.
+  const statusBox = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (status) statusBox.current?.focus();
+  }, [status]);
 
   if (error && plans.length === 0) {
     return (
@@ -99,9 +105,11 @@ export function OrdersView() {
   return (
     <Box>
       <Box
+        ref={statusBox}
         role="status"
         aria-live="polite"
-        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: 14, color: "var(--text2)" } : visuallyHidden}
+        tabIndex={-1}
+        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: 14, color: "var(--text2)", outline: "none" } : visuallyHidden}
       >
         {status && (
           <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--up)", pt: "2px" }}>
@@ -121,6 +129,7 @@ export function OrdersView() {
                 <OrdersSection
                   plan={plan}
                   onChanged={() => mutate()}
+                  fromOpenOrders
                   heading={<PlanHeading plan={plan} id={headingId} />}
                   notice={isOldPlan(plan.created_at!, now) ? <OldNote iso={plan.created_at!} /> : undefined}
                   onPlaced={(line, next) =>
