@@ -84,10 +84,10 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
                 data = await fetch_quote_and_history(ticker)
         except Exception as exc:
             logger.warning("Price lookup failed (%s)", type(exc).__name__)
-            return ticker, f"{ticker} is left out: no price available."
+            return ticker, "No price available."
         price = _positive(data.get("price")) if isinstance(data, dict) else None
         if price is None:
-            return ticker, f"{ticker} is left out: no price available."
+            return ticker, "No price available."
         try:
             async with sem:
                 currency = await fetch_currency(ticker)
@@ -95,9 +95,9 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
             logger.warning("Currency lookup failed (%s)", type(exc).__name__)
             currency = None
         if not currency:
-            return ticker, f"{ticker} is left out: its currency is unknown."
+            return ticker, "Its currency is unknown."
         if currency not in SUPPORTED:
-            return ticker, f"{ticker} is left out: currency {currency[:8]} is not supported."
+            return ticker, f"Currency {currency[:8]} is not supported."
         return ticker, (price, currency)
 
     found = await asyncio.gather(*(one(t) for t in ordered))
@@ -115,11 +115,11 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
         price, currency = result
         rate = rates[currency]
         if rate is None or not MIN_RATE <= rate <= MAX_RATE:
-            skipped[ticker] = f"{ticker} is left out: no exchange rate for {currency}."
+            skipped[ticker] = f"No exchange rate for {currency}."
             continue
         price_eur = price * rate
         if not MIN_PRICE_EUR <= price_eur <= MAX_PRICE_EUR:
-            skipped[ticker] = f"{ticker} is left out: its price is outside the supported range."
+            skipped[ticker] = "Its price is outside the supported range."
             continue
         prices[ticker] = EurPrice(price_eur, currency, rate)
     return prices, skipped

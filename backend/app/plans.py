@@ -28,6 +28,7 @@ from app.models import (
 )
 from app.schemas import (
     DriftItemOut,
+    LeftOutOut,
     OpenOrdersOut,
     PlaceIn,
     PlanIn,
@@ -103,7 +104,7 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
         )
 
     prices, skipped = await eur_prices(set(targets))
-    notes += [skipped[t] for t in sorted(skipped)]
+    unpriced = [planner.LeftOut(t, targets[t][0], "unpriced", skipped[t]) for t in sorted(skipped)]
 
     candidates = []
     for ticker, (name, shares, weight) in targets.items():
@@ -137,6 +138,10 @@ async def compute(db: Session, user_id: uuid.UUID, payload: PlanIn) -> PlanOut:
         leftover_eur=float(result.leftover),
         lines=[PlanLineOut.model_validate(line, from_attributes=True) for line in result.lines],
         notes=notes + result.notes,
+        left_out=[
+            LeftOutOut.model_validate(e, from_attributes=True)
+            for e in sorted(unpriced + result.left_out, key=lambda e: e.ticker)
+        ],
     )
 
 
@@ -204,6 +209,7 @@ def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
             total_before_eur=plan.total_before_eur,
             leftover_eur=plan.leftover_eur,
             notes=plan.notes,
+            left_out=[e.model_dump() for e in plan.left_out],
         )
         db.add(row)
         db.flush()  # assigns row.id for the lines
@@ -221,6 +227,7 @@ def save(db: Session, user_id: uuid.UUID, plan: PlanOut) -> PlanOut:
                 weight_before=line.weight_before,
                 weight_after=line.weight_after,
                 reason=line.reason,
+                target_weight=line.target_weight,
             )
             for line in plan.lines
         )
@@ -295,6 +302,7 @@ def _out(row: ContributionPlan, lines: list[ContributionPlanLine], extras: _Extr
         leftover_eur=float(row.leftover_eur),
         lines=[_line_out(ln, extras) for ln in lines],
         notes=list(row.notes or []),
+        left_out=[LeftOutOut(**e) for e in (row.left_out or [])],
     )
 
 

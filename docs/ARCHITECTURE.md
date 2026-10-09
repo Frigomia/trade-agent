@@ -217,12 +217,12 @@ TelegramLink
 ContributionPlan
   id, user_id, created_at, amount_eur (Numeric(12,2)), whole_shares (bool), total_before_eur
   (Numeric(16,2): the EUR value of the targeted items before the contribution), leftover_eur
-  (Numeric(12,2)), notes (JSON list[str]: what was left out and why)
+  (Numeric(12,2)), notes (JSON list[str]: general sentences only, such as holdings without a target or a price outage), left_out (nullable JSON list of {ticker, name, kind, reason}: each ticker that got no line and why; kind is "excluded_call"|"unusable_price"|"too_small"|"unpriced"; NULL on plans saved before this)
 
 ContributionPlanLine
   id, user_id, plan_id, ticker, name, amount_eur (Numeric(12,2)), shares (Numeric(18,6)), price_eur
   (Numeric(18,6)), currency (the quote currency), rate (Numeric(18,8): EUR per 1 unit of it),
-  weight_before and weight_after (Numeric(7,6), nullable), reason ("new_position"|"favoured"|
+  weight_before, weight_after and target_weight (Numeric(7,6), nullable; target_weight is the normalised target at plan time, NULL on old plans), reason ("new_position"|"favoured"|
   "underweight"|"remainder"), placed_at (nullable timestamp) and placed_trade_id (nullable integer:
   the trade the "Placed" step logged; no foreign key, like every other user table)
   -- The ISIN is not copied onto a line: it is resolved at read time (see Order tickets below).
@@ -430,7 +430,8 @@ holding without a target is outside the pool: it neither receives money nor coun
 1. Targets are normalised to add up to 1 (`weight`).
 2. Each ticker whose price is unusable, or whose newest PENDING recommendation is TRIM or SELL, gets
    no money and a note. If that leaves nobody, the plan is empty, the whole contribution is the
-   leftover, and the notes say why.
+   leftover, and `left_out` says why.
+   Each such ticker is a `left_out` entry (`LeftOutOut`: ticker, name, kind, reason), not a note; a ticker the price source could not price is kind `unpriced`. Notes keep only general sentences. Each line carries `target_weight`. The API returns `left_out: []` and `target_weight: null` for plans saved before this change.
 3. For every other item, `gap = max(weight * pool - current_value, 0)`. A watchlist item or closed
    position has a current value of 0, so it is the furthest below its target. If the newest pending
    call is ADD or BUY the gap is multiplied by `FAVOUR_FACTOR` = 1.25.
@@ -470,7 +471,7 @@ nothing else would be sent, the line alone is the message. There is no separate 
 reminder is only added on the first weekday and the existing per-day marker allows one message a
 day, so it cannot repeat in a month. The line carries no amounts and no tickers.
 
-**The export block.** `GET /me/export` has a `contribution_plans` list; each plan carries its notes
+**The export block.** `GET /me/export` has a `contribution_plans` list; each plan carries its notes, its `left_out` list
 and its lines. `DELETE /me/data` removes both plan tables.
 
 ### Order tickets

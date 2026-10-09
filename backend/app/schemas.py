@@ -326,6 +326,15 @@ REASON_TEXT = {
 }
 
 
+class LeftOutOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    ticker: str
+    name: str
+    kind: str  # "excluded_call" | "unusable_price" | "too_small" | "unpriced"
+    reason: str
+
+
 class PlanLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -344,6 +353,7 @@ class PlanLineOut(BaseModel):
     rate: float
     weight_before: float | None
     weight_after: float | None
+    target_weight: float | None = None  # the normalised target at plan time; None on old plans
     reason: str
 
     @computed_field  # type: ignore[prop-decorator]
@@ -361,6 +371,7 @@ class PlanOut(BaseModel):
     leftover_eur: float
     lines: list[PlanLineOut]
     notes: list[str]
+    left_out: list[LeftOutOut] = Field(default_factory=list)
     disclaimer: str = "Advisory only. Nothing is sent to a broker."
 
 

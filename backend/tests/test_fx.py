@@ -67,28 +67,28 @@ def test_one_rate_lookup_per_currency():
 @pytest.mark.parametrize("price", [None, float("nan"), float("inf"), 0.0, -3.0])
 def test_a_bad_price_leaves_the_ticker_out_with_a_note(price):
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": price}, {"AAPL": "EUR"})
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "No price available."
 
 
 def test_a_failing_quote_leaves_the_ticker_out():
     (prices, skipped), _ = run_prices(["AAPL"], {}, {"AAPL": "EUR"})
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "No price available."
 
 
 def test_a_missing_currency_leaves_the_ticker_out():
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 10.0}, {})
-    assert prices == {} and "currency" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "Its currency is unknown."
 
 
 def test_an_unsupported_currency_leaves_the_ticker_out():
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 10.0}, {"AAPL": "XYZ"})
-    assert prices == {} and "XYZ" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "Currency XYZ is not supported."
 
 
 @pytest.mark.parametrize("rate", [None, float("nan"), 0.0, -1.0, RuntimeError("down")])
 def test_a_bad_rate_leaves_the_ticker_out(rate):
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 10.0}, {"AAPL": "USD"}, {"EURUSD=X": rate})
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "No exchange rate for USD."
 
 
 @pytest.mark.parametrize(
@@ -98,14 +98,19 @@ def test_an_implausible_amount_is_dropped_with_a_note(price, rate):
     (prices, skipped), _ = run_prices(
         ["AAPL"], {"AAPL": price}, {"AAPL": "USD"}, {"EURUSD=X": rate}
     )
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] in {
+        "Its price is outside the supported range.",
+        "No exchange rate for USD.",  # a rate outside the bounds is refused first
+    }
 
 
 def test_one_bad_ticker_leaves_another_priced():
     (prices, skipped), _ = run_prices(
         ["GOOD", "BAD"], {"GOOD": 10.0, "BAD": 1e-9}, {"GOOD": "EUR", "BAD": "EUR"}
     )
-    assert list(prices) == ["GOOD"] and "BAD" in skipped["BAD"]
+    assert (
+        list(prices) == ["GOOD"] and skipped["BAD"] == "Its price is outside the supported range."
+    )
 
 
 def test_gbx_is_treated_like_pence():
@@ -125,7 +130,7 @@ def test_a_failing_currency_lookup_says_the_currency_is_unknown():
         patch("app.fx.fetch_currency", AsyncMock(side_effect=boom)),
     ):
         prices, skipped = run(fx.eur_prices({"AAPL"}))
-    assert prices == {} and "currency" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "Its currency is unknown."
 
 
 def test_a_non_dict_quote_leaves_the_ticker_out():
@@ -134,7 +139,7 @@ def test_a_non_dict_quote_leaves_the_ticker_out():
         patch("app.fx.fetch_currency", AsyncMock(return_value="EUR")),
     ):
         prices, skipped = run(fx.eur_prices({"AAPL"}))
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "No price available."
 
 
 def test_the_unsupported_currency_text_is_truncated():
@@ -144,4 +149,4 @@ def test_the_unsupported_currency_text_is_truncated():
 
 def test_a_price_under_a_hundredth_of_a_cent_is_dropped():
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 0.00009}, {"AAPL": "EUR"})
-    assert prices == {} and "AAPL" in skipped["AAPL"]
+    assert prices == {} and skipped["AAPL"] == "Its price is outside the supported range."
