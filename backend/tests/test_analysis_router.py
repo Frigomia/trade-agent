@@ -181,6 +181,46 @@ def test_cannot_approve_another_users_recommendation(client, db_session):
     assert client.post(f"/analysis/recommendations/{rec.id}/approve").status_code == 404
 
 
+def test_decide_pending_recommendation(client, db_session):
+    for action, expected in (("approve", "APPROVED"), ("reject", "REJECTED")):
+        rec = _rec(USER_ID)
+        db_session.add(rec)
+        db_session.commit()
+        db_session.refresh(rec)
+        response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+        assert response.status_code == 200
+        assert response.json()["status"] == expected
+        db_session.refresh(rec)
+        assert rec.reviewed_at is not None
+
+
+def test_decide_non_pending_recommendation_returns_409_and_leaves_it(client, db_session):
+    for old in ("APPROVED", "REJECTED", "SUPERSEDED"):
+        for action in ("approve", "reject"):
+            rec = _rec(USER_ID)
+            rec.status = old
+            db_session.add(rec)
+            db_session.commit()
+            db_session.refresh(rec)
+            response = client.post(f"/analysis/recommendations/{rec.id}/{action}")
+            assert response.status_code == 409
+            assert "already decided" in response.json()["detail"]
+            db_session.refresh(rec)
+            assert rec.status == old
+            assert rec.reviewed_at is None
+
+
+def test_reject_unknown_or_other_users_recommendation_returns_404(client, db_session):
+    theirs = _rec(OTHER_USER_ID)
+    db_session.add(theirs)
+    db_session.commit()
+    db_session.refresh(theirs)
+    assert client.post(f"/analysis/recommendations/{theirs.id}/reject").status_code == 404
+    assert client.post("/analysis/recommendations/999999/reject").status_code == 404
+    db_session.refresh(theirs)
+    assert theirs.status == "PENDING"
+
+
 def test_run_analysis_builds_the_job_for_the_token_user(client, db_session):
     add_app_user(db_session, OTHER_USER_ID)
     db_session.add(

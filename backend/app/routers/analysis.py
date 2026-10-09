@@ -7,6 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -210,11 +211,28 @@ def reject_recommendation(
 def _set_recommendation_status(
     db: Session, user_id: uuid.UUID, recommendation_id: int, status: str
 ) -> Recommendation:
-    rec = db.query(Recommendation).filter_by(id=recommendation_id, user_id=user_id).one_or_none()
-    if rec is None:
-        raise HTTPException(status_code=404, detail="Recommendation not found")
-    rec.status = status
-    rec.reviewed_at = datetime.now(UTC)
+    # One conditional UPDATE: only a PENDING row of this user changes, so two decisions
+    # (or a decision racing a re-run that supersedes the row) cannot overwrite each other.
+    result = db.execute(
+        update(Recommendation)
+        .where(
+            Recommendation.id == recommendation_id,
+            Recommendation.user_id == user_id,
+            Recommendation.status == "PENDING",
+        )
+        .values(status=status, reviewed_at=datetime.now(UTC))
+    )
+    if result.rowcount == 0:  # type: ignore[attr-defined]
+        db.rollback()
+        exists = (
+            db.query(Recommendation.id)
+            .filter_by(id=recommendation_id, user_id=user_id)
+            .one_or_none()
+        )
+        if exists is None:
+            raise HTTPException(status_code=404, detail="Recommendation not found")
+        raise HTTPException(
+            status_code=409, detail="This recommendation was already decided or replaced."
+        )
     db.commit()
-    db.refresh(rec)
-    return rec
+    return db.query(Recommendation).filter_by(id=recommendation_id, user_id=user_id).one()
