@@ -37,6 +37,7 @@ const line = (o: Partial<PlanLine>): PlanLine => ({
   weight_after: 0.184,
   reason: "underweight",
   reason_text: "Below its target weight",
+  target_weight: null,
   ...o,
 });
 const LINES = [
@@ -52,6 +53,7 @@ const plan = (lines: PlanLine[] = LINES, o: Partial<Plan> = {}): Plan => ({
   total_before_eur: 7710,
   leftover_eur: 0,
   lines,
+  left_out: [],
   notes: ["MSFT is left out: no price available."],
   disclaimer: "Advisory only. Nothing is sent to a broker.",
   ...o,
@@ -381,6 +383,43 @@ describe("OrdersPanel", () => {
     rerender(<OrdersPanel plan={plan()} onChanged={onChanged} openTicker="NVDA" onOpenTickerChange={onOpenTickerChange} />);
     expect(card("NVDA")).toHaveAttribute("aria-expanded", "true");
     expect(card("IWDA.L")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("lists the left-out tickers below the cards, never as a card", () => {
+    const leftOut = [
+      { ticker: "MSFT", name: "Microsoft <b>Corp</b>", kind: "unpriced" as const, reason: "No price available." },
+      { ticker: "AAPL", name: "Apple", kind: "excluded_call" as const, reason: "Its newest pending call is TRIM." },
+    ];
+    renderPanel(plan(LINES, { left_out: leftOut, notes: [] }));
+    expect(within(screen.getByRole("list", { name: "Orders" })).getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: /^MSFT, / })).not.toBeInTheDocument();
+    const list = screen.getByRole("list", { name: "Left out of this plan" });
+    expect(screen.getByText("Left out of this plan")).toBeInTheDocument();
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getByText("MSFT")).toBeInTheDocument();
+    expect(within(list).getByText("Microsoft <b>Corp</b>", { exact: false })).toBeInTheDocument();
+    expect(within(list).getByText("No price available.")).toBeInTheDocument();
+    expect(within(list).getByText("Its newest pending call is TRIM.")).toBeInTheDocument();
+    // Below the cards.
+    expect(screen.getByRole("list", { name: "Orders" }).compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no left-out list when nothing was left out or on the Orders tab", () => {
+    const leftOut = [{ ticker: "MSFT", name: "Microsoft", kind: "unpriced" as const, reason: "No price available." }];
+    const { unmount } = renderPanel(plan(LINES, { left_out: [], notes: [] }));
+    expect(screen.queryByText("Left out of this plan")).not.toBeInTheDocument();
+    unmount();
+    renderPanel(plan(LINES, { left_out: leftOut }), { heading: <h2>October 2026</h2> });
+    expect(screen.queryByText("Left out of this plan")).not.toBeInTheDocument();
+    expect(screen.queryByText("No price available.")).not.toBeInTheDocument();
+  });
+
+  it("shows the target tick and the target in a card's weight line", () => {
+    renderPanel(plan([line({ target_weight: 0.19 }), LINES[1]]));
+    expect(card("EIMI.L")).toHaveTextContent("Weight 17.9% to 18.4% · target 19.0%");
+    expect(within(card("EIMI.L")).getByTestId("target-tick")).toBeInTheDocument();
+    expect(within(card("IWDA.L")).queryByTestId("target-tick")).not.toBeInTheDocument();
+    expect(card("IWDA.L")).not.toHaveTextContent("· target");
   });
 
   it("uses no Buy or Sell wording", () => {

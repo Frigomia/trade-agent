@@ -27,6 +27,15 @@ export interface PlanLine {
   weight_after: number | null;
   reason: string;
   reason_text: string;
+  target_weight: number | null; // the plan-time target, normalised over the priced pool; null on plans saved before
+}
+
+/** A ticker with a target that got no line, and why (a short sentence without the ticker). */
+export interface LeftOut {
+  ticker: string;
+  name: string;
+  kind: "excluded_call" | "unusable_price" | "too_small" | "unpriced";
+  reason: string;
 }
 
 export interface Plan {
@@ -37,6 +46,7 @@ export interface Plan {
   total_before_eur: number;
   leftover_eur: number;
   lines: PlanLine[];
+  left_out: LeftOut[]; // empty on plans saved before, whose ticker sentences are in `notes`
   notes: string[];
   disclaimer: string;
 }

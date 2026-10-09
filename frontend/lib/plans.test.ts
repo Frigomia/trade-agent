@@ -36,6 +36,7 @@ const plan: Plan = {
   total_before_eur: 10000,
   leftover_eur: 3.5,
   lines: [],
+  left_out: [],
   notes: [],
   disclaimer: "Advisory only. Nothing is sent to a broker.",
 };

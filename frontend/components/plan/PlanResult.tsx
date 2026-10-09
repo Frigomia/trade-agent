@@ -3,7 +3,7 @@ import { Box, Typography } from "@mui/material";
 import { AlertTriangle } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
-import { formatRate, type Plan, type PlanLine } from "@/lib/plans";
+import { formatRate, type LeftOut, type Plan, type PlanLine } from "@/lib/plans";
 
 export const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
@@ -12,9 +12,9 @@ const BEFORE = "color-mix(in oklab, var(--accent-solid) 42%, var(--bg))";
 
 const pct = (fraction: number) => `${(fraction * 100).toFixed(1)}%`;
 
-/** The bar scale shared by every line of a plan: the largest weight plus some headroom. */
+/** The bar scale shared by every line of a plan: the largest weight or target plus some headroom, so a target tick is always inside the track. */
 export const weightScale = (plan: Plan) =>
-  Math.max(0.01, ...plan.lines.flatMap((l) => [l.weight_before ?? 0, l.weight_after ?? 0])) * 1.15;
+  Math.max(0.01, ...plan.lines.flatMap((l) => [l.weight_before ?? 0, l.weight_after ?? 0, l.target_weight ?? 0])) * 1.15;
 
 export function shares(line: PlanLine, whole: boolean): string {
   if (whole) return `${line.shares} sh`;
@@ -35,28 +35,38 @@ const wide = { gridColumn: { xs: "1 / -1", md: "auto" } } as const;
 const amountCell = { gridRow: { xs: 1, md: "auto" }, gridColumn: { xs: 2, md: "auto" }, textAlign: "right" } as const;
 const priceCell = { display: { xs: "none", md: "block" }, textAlign: "right" } as const;
 
-/** Before (lighter) and after (solid) on one track scaled to the largest weight in the plan. Spans, so it fits in a button. */
-function WeightBar({ before, after, scale }: { before: number; after: number; scale: number }) {
+const TICK = { width: 2, borderRadius: 2, bgcolor: "var(--text)" } as const;
+
+/**
+ * Before (lighter) and after (solid) on one track scaled to the largest weight or target in the plan,
+ * and the plan-time target as a tick when the line has one. Spans, so it fits in a button.
+ */
+function WeightBar({ before, after, target, scale }: { before: number; after: number; target: number | null; scale: number }) {
+  const at = (value: number) => `${Math.min(value / scale, 1) * 100}%`;
   const seg = (width: number, bg: string) => (
-    <Box component="span" sx={{ position: "absolute", inset: "0 auto 0 0", width: `${Math.min(width / scale, 1) * 100}%`, borderRadius: 999, bgcolor: bg }} />
+    <Box component="span" sx={{ position: "absolute", inset: "0 auto 0 0", width: at(width), borderRadius: 999, bgcolor: bg }} />
   );
   return (
     <Box component="span" aria-hidden sx={{ display: "block", position: "relative", height: 8, borderRadius: 999, bgcolor: "var(--track)", minWidth: 80 }}>
       {seg(after, "var(--accent-solid)")}
       {seg(before, BEFORE)}
+      {target !== null && (
+        <Box component="span" data-testid="target-tick" style={{ left: at(target) }} sx={{ ...TICK, position: "absolute", top: -4, bottom: -4, ml: "-1px" }} />
+      )}
     </Box>
   );
 }
 
-/** The bar and "Weight 17.9% to 18.4%", or "No weight yet". */
+/** The bar and "Weight 17.9% to 18.4% · target 19.0%" (no target on plans saved before), or "No weight yet". */
 export function LineWeight({ line, scale }: { line: PlanLine; scale: number }) {
-  const { weight_before: before, weight_after: after } = line;
+  const { weight_before: before, weight_after: after, target_weight: target } = line;
   if (before === null || after === null) return <Typography component="span" sx={{ ...muted, display: "block" }}>No weight yet</Typography>;
   return (
     <>
-      <WeightBar before={before} after={after} scale={scale} />
+      <WeightBar before={before} after={after} target={target} scale={scale} />
       <Typography component="span" sx={{ ...muted, display: "block", "& b": { color: "var(--text)", fontWeight: 650 } }}>
         Weight <b>{pct(before)}</b> to <b>{pct(after)}</b>
+        {target !== null && ` · target ${pct(target)}`}
       </Typography>
     </>
   );
@@ -94,10 +104,58 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
   );
 }
 
+/** A ticker the plan left out, muted after the funded lines: its reason and 0.00, no weight, not in the total. */
+function LeftOutRow({ entry }: { entry: LeftOut }) {
+  return (
+    <Box role="row" sx={{ ...rowSx, color: "var(--muted)" }}>
+      <Box role="cell" sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 650, fontSize: 14 }}>{entry.ticker}</Typography>
+        <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{entry.name}</Typography>
+      </Box>
+      <Box role="cell" sx={{ ...wide, fontSize: 13 }}>
+        {entry.reason}
+      </Box>
+      <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
+      <Box role="cell" sx={priceCell} />
+      <Box role="cell" sx={{ ...amountCell, fontSize: 15 }}>
+        0.00
+      </Box>
+    </Box>
+  );
+}
+
+/** The tickers the plan left out, as a plain list: ticker, name, then the reason. */
+export function LeftOutList({ entries, title }: { entries: LeftOut[]; title?: string }) {
+  if (entries.length === 0) return null;
+  const label = title ?? "Left out of the plan";
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+      {title && (
+        <Typography aria-hidden sx={{ fontSize: 13, fontWeight: 650, color: "var(--text2)" }}>
+          {title}
+        </Typography>
+      )}
+      <Box component="ul" aria-label={label} sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
+        {entries.map((e) => (
+          <Box component="li" key={e.ticker} sx={{ ...muted, fontSize: 13 }}>
+            <Box component="span" sx={{ fontWeight: 650, color: "var(--text2)" }}>
+              {e.ticker}
+            </Box>{" "}
+            {e.name}
+            <Box component="span" sx={{ display: "block" }}>
+              {e.reason}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 export function PlanNotes({ notes }: { notes: string[] }) {
   if (notes.length === 0) return null;
   return (
-    <Box component="ul" aria-label="Left out of the plan" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
+    <Box component="ul" aria-label="Plan notes" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
       {notes.map((note) => (
         <Box component="li" key={note} sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", fontSize: 13, color: "var(--text2)", lineHeight: 1.5 }}>
           <Box component="span" sx={{ color: "var(--warn)", mt: "2px", display: "flex" }}>
@@ -111,7 +169,7 @@ export function PlanNotes({ notes }: { notes: string[] }) {
 }
 
 function NothingToFund({ plan }: { plan: Plan }) {
-  const wholeSharesTooSmall = plan.whole_shares && plan.notes.some((n) => n.includes("less than one share"));
+  const wholeSharesTooSmall = plan.left_out.some((e) => e.kind === "too_small");
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
       <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650 }}>
@@ -123,6 +181,8 @@ function NothingToFund({ plan }: { plan: Plan }) {
           : "Every ticker with a target is left out, so the plan proposes nothing."}{" "}
         Your {formatAmount(plan.amount_eur)} EUR stays with you.
       </Typography>
+      <LeftOutList entries={plan.left_out} />
+      {/* Plans saved before carry their ticker sentences here, with an empty left_out. */}
       <PlanNotes notes={plan.notes} />
       <Typography sx={muted}>
         A plan comes back when a pending call changes or a price is available again. You can also set a target on
@@ -154,6 +214,9 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
         {plan.lines.map((line) => (
           <Row key={line.ticker} line={line} whole={plan.whole_shares} scale={scale} />
         ))}
+        {plan.left_out.map((entry) => (
+          <LeftOutRow key={entry.ticker} entry={entry} />
+        ))}
         <Box role="row" sx={{ ...rowSx, fontWeight: 650, bgcolor: "var(--tab-bg)" }}>
           <Box role="cell">Total</Box>
           <Box role="cell" sx={{ ...wide, ...muted, gridRow: { xs: 2, md: "auto" } }}>
@@ -178,6 +241,12 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
               {label}
             </Box>
           ))}
+          {plan.lines.some((l) => l.target_weight !== null) && (
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+              <Box component="i" sx={{ ...TICK, height: 12 }} />
+              target
+            </Box>
+          )}
         </Box>
         {footer}
       </Box>

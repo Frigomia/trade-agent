@@ -8,7 +8,7 @@ import { formatAmount } from "@/lib/format";
 import { copyAllText, placedFill, ticketText, unplacedLines } from "@/lib/orders";
 import { planDay as placedDay, type Plan, type PlanLine } from "@/lib/plans";
 import { IsinRow } from "./IsinRow";
-import { LineWeight, PlanNotes, PlanResult, muted, shares, weightScale } from "./PlanResult";
+import { LeftOutList, LineWeight, PlanNotes, PlanResult, muted, shares, weightScale } from "./PlanResult";
 
 const COPY_FAILED = "Could not copy. Select the ticket text and copy it by hand.";
 const COPY_ALL_FAILED = "Could not copy. Open each line and copy its ticket by hand.";
@@ -69,8 +69,8 @@ export interface OrdersPanelProps {
   focusTicker?: string | null;
   /**
    * The Orders tab's plan heading. Given, it replaces the placed count, sticks to the top while the
-   * plan's lines scroll, and the total, the plan notes and the hint row are left out (the tab has one
-   * hint for every plan).
+   * plan's lines scroll, and the total, the left-out list, the plan notes and the hint row are left
+   * out (the tab has one hint for every plan).
    */
   heading?: ReactNode;
   /** Under the heading and the status line, above the cards: the Orders tab's old-plan note. */
@@ -233,6 +233,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
       </Panel>
       {!heading && (
         <>
+          <LeftOutList entries={plan.left_out} title="Left out of this plan" />
           <PlanNotes notes={plan.notes} />
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.75, flexWrap: "wrap" }}>
             <Typography sx={muted}>Tap a line to open its order.</Typography>

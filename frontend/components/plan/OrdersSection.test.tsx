@@ -38,6 +38,7 @@ const line = (o: Partial<PlanLine>): PlanLine => ({
   weight_after: 0.184,
   reason: "underweight",
   reason_text: "Below its target weight",
+  target_weight: null,
   ...o,
 });
 const LINES = [
@@ -53,6 +54,7 @@ const plan = (lines: PlanLine[] = LINES): Plan => ({
   total_before_eur: 7710,
   leftover_eur: 0,
   lines,
+  left_out: [],
   notes: [],
   disclaimer: "Advisory only. Nothing is sent to a broker.",
 });

@@ -69,6 +69,7 @@ const PLAN: Plan = {
       weight_after: 0.184,
       reason: "favoured",
       reason_text: "Below its target, and a pending call favours adding",
+      target_weight: null,
     },
     {
       id: null,
@@ -88,8 +89,10 @@ const PLAN: Plan = {
       weight_after: 0.024,
       reason: "new_position",
       reason_text: "A new position that starts at 0 %",
+      target_weight: null,
     },
   ],
+  left_out: [],
   notes: ["NVDA is left out: no price available."],
   disclaimer: DISCLAIMER,
 };
@@ -475,7 +478,14 @@ describe("Plan page", () => {
     const base = apiFetch.getMockImplementation()!;
     apiFetch.mockImplementation((path: string, init?: RequestInit) =>
       path === "/plans/preview"
-        ? Promise.resolve({ ...PLAN, whole_shares: true, lines: [], leftover_eur: 500, notes: ["MSFT: 40.00 EUR is less than one share (392.18 EUR)."] })
+        ? Promise.resolve({
+            ...PLAN,
+            whole_shares: true,
+            lines: [],
+            leftover_eur: 500,
+            notes: [],
+            left_out: [{ ticker: "MSFT", name: "Microsoft", kind: "too_small", reason: "40.00 EUR is less than one share (392.18 EUR)." }],
+          })
         : base(path, init),
     );
     renderFresh();
