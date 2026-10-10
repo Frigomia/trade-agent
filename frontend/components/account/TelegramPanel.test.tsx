@@ -74,11 +74,9 @@ describe("TelegramPanel", () => {
     expect(screen.getByText("Messages list tickers and actions only, never amounts or reasoning. Advisory only.")).toBeInTheDocument();
     expect(screen.getByText("What a message looks like")).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/app\.example\.com\/today/)).toBeInTheDocument();
-    // the same sections the backend sends: one item per line (getByText collapses the double spaces)
-    expect(screen.getByText("📋 3 new recommendations")).toBeInTheDocument();
-    expect(screen.getByText("• NVDA TRIM")).toBeInTheDocument();
-    expect(screen.getByText("📈 Moved")).toBeInTheDocument();
-    expect(screen.getByText("• AAPL ▼ 6.2%")).toBeInTheDocument();
+    // the same sections the backend sends (getByText flattens the line breaks and double spaces)
+    expect(screen.getByText("📋 3 new recommendations • AAPL ADD • MSFT HOLD • NVDA TRIM")).toBeInTheDocument();
+    expect(screen.getByText("📈 Moved • AAPL ▼ 6.2% • NVDA ▲ 5.4%")).toBeInTheDocument();
     expect(screen.getByText("Advisory only. Nothing is sent to a broker.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /app\.example\.com/ })).not.toBeInTheDocument();
   });

@@ -80,17 +80,8 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
           }}
         >
           {/* Mirrors backend/app/notify.py build_message: sections, one item per line. */}
-          <Box>
-            <div>📋 3 new recommendations</div>
-            <div>• AAPL  ADD</div>
-            <div>• MSFT  HOLD</div>
-            <div>• NVDA  TRIM</div>
-          </Box>
-          <Box>
-            <div>📈 Moved</div>
-            <div>• AAPL  ▼ 6.2%</div>
-            <div>• NVDA  ▲ 5.4%</div>
-          </Box>
+          <div>{"📋 3 new recommendations\n• AAPL  ADD\n• MSFT  HOLD\n• NVDA  TRIM"}</div>
+          <div>{"📈 Moved\n• AAPL  ▼ 6.2%\n• NVDA  ▲ 5.4%"}</div>
           {reminder && <div>🗓 Time to plan this month&apos;s contribution.</div>}
           <Box>
             <div>
