@@ -29,6 +29,7 @@ const THRESHOLD_ERROR = "Enter a number from 1 to 50, one decimal at most.";
 const NEW_TAB = "noopener,noreferrer";
 
 const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
+const linkSx = { color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" } as const;
 const cardSx = { p: "18px 20px", display: "flex", flexDirection: "column", gap: 1.75, minWidth: 0 } as const;
 
 /** One decimal, 1 to 50: the same bounds the backend enforces. */
@@ -74,24 +75,35 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
             lineHeight: 1.55,
             color: "var(--text)",
             display: "grid",
+            gap: 1.25, // the blank line between the message's sections
+            whiteSpace: "pre-wrap", // keeps the two spaces after "Today:" and "Plan:" as sent
           }}
         >
-          <span>3 new: AAPL ADD, MSFT HOLD, NVDA TRIM</span>
-          <span>Moved: AAPL -6.2%, NVDA +5.4%</span>
-          <span>
-            Open Today:{" "}
-            <Box component="span" sx={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" }}>
-              https://app.example.com/today
-            </Box>
-          </span>
-          {reminder && (
-            <span>
-              Plan this month&apos;s contribution:{" "}
-              <Box component="span" sx={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" }}>
-                https://app.example.com/portfolio/plan
-              </Box>
-            </span>
-          )}
+          {/* Mirrors backend/app/notify.py build_message: sections, one item per line. */}
+          <Box>
+            <div>📋 3 new recommendations</div>
+            <div>• AAPL  ADD</div>
+            <div>• MSFT  HOLD</div>
+            <div>• NVDA  TRIM</div>
+          </Box>
+          <Box>
+            <div>📈 Moved</div>
+            <div>• AAPL  ▼ 6.2%</div>
+            <div>• NVDA  ▲ 5.4%</div>
+          </Box>
+          {reminder && <div>🗓 Time to plan this month&apos;s contribution.</div>}
+          <Box>
+            <div>
+              Today:{"  "}
+              <Box component="span" sx={linkSx}>https://app.example.com/today</Box>
+            </div>
+            {reminder && (
+              <div>
+                Plan:{"   "}
+                <Box component="span" sx={linkSx}>https://app.example.com/portfolio/plan</Box>
+              </div>
+            )}
+          </Box>
           <Box component="span" sx={{ color: "var(--muted)", fontSize: 12 }}>
             Advisory only. Nothing is sent to a broker.
           </Box>
