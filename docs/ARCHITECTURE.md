@@ -465,9 +465,10 @@ card reads this route.
 **The reminder.** In the notify step, on the first weekday of the month (UTC: the 1st, or the Monday
 of the 2nd or 3rd when the month starts on a weekend), a person with a linked, `ok` Telegram link,
 `plan_reminder_enabled` on and at least one holding or watchlist item with a target weight above 0
-gets one more line in that day's single message: "Plan this month's contribution:
-<APP_URL>/portfolio/plan" ("Plan this month's contribution in the app." when `APP_URL` is unset). If
-nothing else would be sent, the line alone is the message. There is no separate marker for it: the
+gets one more section in that day's single message: "🗓 Time to plan this month's contribution."
+(with " in the app" before the full stop when `APP_URL` is unset) and, when `APP_URL` is set, a
+`Plan:` link to `<APP_URL>/portfolio/plan` next to the `Today:` link. If nothing else would be sent,
+that section alone is the message. There is no separate marker for it: the
 reminder is only added on the first weekday and the existing per-day marker allows one message a
 day, so it cannot repeat in a month. The line carries no amounts and no tickers.
 
@@ -812,15 +813,17 @@ default — same dialect and models as production, started with
   and does nothing, with one log line, when `TELEGRAM_BOT_TOKEN` is unset. Each user is handled
   inside their own `scoped_session`, so row-level security applies as for a request. A person is
   skipped when they have no connected chat, the link is `blocked`, or they are not active. The
-  message holds up to two lines: "N new: AAPL BUY, ..." for their PENDING recommendations with
-  `source = "scheduled"` created today (UTC), when `digest_enabled`; and "Moved: VWCE +6.2%, ..."
-  for open holdings and watchlist tickers whose last close moved at least `move_threshold_pct` from
-  the close before (largest move first), when `moves_enabled`. Each line lists at most 10 tickers
-  and then "+N more". After the lines come a link to `<APP_URL>/today` (when `APP_URL` is set) and
-  the footer "Advisory only. Nothing is sent to a broker." The message is plain text (no
+  message holds up to two sections, one item per line: "📋 N new recommendations" with
+  "• AAPL  BUY, ..." for their PENDING recommendations with `source = "scheduled"` created today
+  (UTC), when `digest_enabled`; and "📈 Moved" with "• VWCE  ▲ 6.2%, ..." for open holdings and
+  watchlist tickers whose last close moved at least `move_threshold_pct` from the close before
+  (largest move first, ▲ up and ▼ down), when `moves_enabled`. Each section lists at most 10 items
+  and then "• +N more". Sections are separated by a blank line. After them come a `Today:` link to
+  `<APP_URL>/today` (when `APP_URL` is set) and the footer "Advisory only. Nothing is sent to a
+  broker." The message is plain text (no
   `parse_mode`, so nothing can be read as markup) and carries only tickers, actions and
   percentages: never amounts, share counts, portfolio values, reasoning or the person's notes.
-  When both lines would be empty nothing is sent and the person is counted as skipped. Quotes are
+  When both sections would be empty nothing is sent and the person is counted as skipped. Quotes are
   fetched 5 at a time; a ticker whose quote fails only drops out of the message. "Moved" compares
   the last two closes the quote source returns, so on the day after a market holiday the same move
   can be reported again, and if the job runs after the market has opened the last bar may be a

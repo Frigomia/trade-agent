@@ -18,6 +18,8 @@ MONDAY = datetime(2026, 10, 5, 6, 0, tzinfo=UTC)
 TUESDAY_FIRST = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # 1 September 2026 is a Tuesday
 MONDAY_THIRD = datetime(2026, 8, 3, 6, 0, tzinfo=UTC)  # 1 and 2 August 2026 are a weekend
 FOOT = "Advisory only. Nothing is sent to a broker."
+NEW_MSFT = "📋 1 new recommendation\n• MSFT  ADD\n\n"
+MOVED_AAPL = "📈 Moved\n• AAPL  ▼ 6.0%\n\n"
 
 
 def test_build_message_full():
@@ -27,24 +29,33 @@ def test_build_message_full():
         "https://app.example.com/",
     )
     assert text == (
-        "2 new: AAPL ADD, MSFT HOLD\n"
-        "Moved: AAPL -6.2%, NVDA +5.4%\n"
-        "Open Today: https://app.example.com/today\n"
-        "Advisory only. Nothing is sent to a broker."
+        "📋 2 new recommendations\n"
+        "• AAPL  ADD\n"
+        "• MSFT  HOLD\n"
+        "\n"
+        "📈 Moved\n"
+        "• AAPL  ▼ 6.2%\n"
+        "• NVDA  ▲ 5.4%\n"
+        "\n"
+        "Today:  https://app.example.com/today\n"
+        "\n" + FOOT
     )
 
 
 def test_build_message_parts_are_optional_and_nothing_means_none():
     assert notify.build_message([], [], "https://x") is None
     only_moves = notify.build_message([], [("AAPL", -7.0)], None)
-    assert only_moves == "Moved: AAPL -7.0%\nAdvisory only. Nothing is sent to a broker."
+    assert only_moves == "📈 Moved\n• AAPL  ▼ 7.0%\n\n" + FOOT
+    one = notify.build_message([("MSFT", "ADD")], [], None)
+    assert one == "📋 1 new recommendation\n• MSFT  ADD\n\n" + FOOT
 
 
 def test_long_lists_are_cut():
     recs = [(f"T{i}", "ADD") for i in range(13)]
     text = notify.build_message(recs, [], None)
     assert text is not None
-    assert text.splitlines()[0].endswith("+3 more") and "T9 ADD" in text and "T10 ADD" not in text
+    lines = text.splitlines()
+    assert "• +3 more" in lines and "• T9  ADD" in lines and "• T10  ADD" not in lines
 
 
 class FakeBot:
@@ -139,21 +150,21 @@ def test_a_linked_user_gets_todays_scheduled_calls_and_the_big_movers(env):
     _seed_day(env)
     outcome, bot = _notify(quotes=_quotes(QUOTES))
     assert outcome == "sent"
-    assert bot.sent == [(1001, f"1 new: MSFT ADD\nMoved: AAPL -6.0%\n{FOOT}")]
+    assert bot.sent == [(1001, NEW_MSFT + MOVED_AAPL + FOOT)]
 
 
 def test_digest_off_keeps_only_the_moves(env):
     _user(env, digest_enabled=False)
     _seed_day(env)
     _, bot = _notify(quotes=_quotes(QUOTES))
-    assert bot.sent == [(1001, f"Moved: AAPL -6.0%\n{FOOT}")]
+    assert bot.sent == [(1001, MOVED_AAPL + FOOT)]
 
 
 def test_moves_off_keeps_only_the_digest(env):
     _user(env, moves_enabled=False)
     _seed_day(env)
     _, bot = _notify(quotes=_quotes(QUOTES))
-    assert bot.sent == [(1001, f"1 new: MSFT ADD\n{FOOT}")]
+    assert bot.sent == [(1001, NEW_MSFT + FOOT)]
 
 
 def test_nothing_to_say_sends_nothing_and_sets_no_marker(env):
@@ -217,7 +228,7 @@ def test_failing_quotes_still_send_the_digest(env):
     _user(env)
     _seed_day(env)
     outcome, bot = _notify(quotes=AsyncMock(side_effect=RuntimeError("yahoo down")))
-    assert (outcome, bot.sent) == ("sent", [(1001, f"1 new: MSFT ADD\n{FOOT}")])
+    assert (outcome, bot.sent) == ("sent", [(1001, NEW_MSFT + FOOT)])
 
 
 def test_one_users_message_never_contains_another_users_tickers(env):
@@ -255,7 +266,7 @@ def test_open_holdings_and_the_watchlist_are_both_checked_for_moves(env):
     _hold(env, USER_ID, "AAPL")
     env.commit()
     _, bot = _notify(quotes=_quotes({"AAPL": [100.0, 94.0], "NVDA": [100.0, 70.0]}))
-    assert bot.sent == [(1001, f"Moved: NVDA -30.0%, AAPL -6.0%\n{FOOT}")]
+    assert bot.sent == [(1001, "📈 Moved\n• NVDA  ▼ 30.0%\n• AAPL  ▼ 6.0%\n\n" + FOOT)]
 
 
 def test_a_closed_position_is_not_checked(env):
@@ -323,7 +334,7 @@ def test_a_move_of_exactly_the_threshold_is_included(env):
     _user(env, move_threshold_pct=5.0)
     _hold(env, USER_ID, "AAPL")
     outcome, bot = _notify(quotes=_quotes({"AAPL": [110.0, 104.5]}))
-    assert (outcome, bot.sent) == ("sent", [(1001, f"Moved: AAPL -5.0%\n{FOOT}")])
+    assert (outcome, bot.sent) == ("sent", [(1001, "📈 Moved\n• AAPL  ▼ 5.0%\n\n" + FOOT)])
 
 
 def test_a_relink_during_the_send_keeps_the_new_chat_ok(env, session_local):
@@ -360,11 +371,14 @@ def test_is_first_weekday_picks_exactly_one_day_each_month():
 def test_build_message_with_the_reminder():
     text = notify.build_message([], [], "https://app.example.com", reminder=True)
     assert text == (
-        "Plan this month's contribution: https://app.example.com/portfolio/plan\n"
-        "Open Today: https://app.example.com/today\n" + FOOT
+        "🗓 Time to plan this month's contribution.\n"
+        "\n"
+        "Today:  https://app.example.com/today\n"
+        "Plan:   https://app.example.com/portfolio/plan\n"
+        "\n" + FOOT
     )
     assert notify.build_message([], [], None, reminder=True) == (
-        "Plan this month's contribution in the app.\n" + FOOT
+        "🗓 Time to plan this month's contribution in the app.\n\n" + FOOT
     )
     assert notify.build_message([], [], "https://x", reminder=False) is None
 
@@ -381,7 +395,7 @@ def test_the_reminder_alone_is_sent_on_the_first_weekday_to_someone_with_a_targe
     outcome, bot = _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))
     assert outcome == "sent"
     text = bot.sent[0][1]
-    assert text.startswith("Plan this month's contribution")
+    assert text.startswith("🗓 Time to plan this month's contribution")
     # no financial data: no digit outside a URL, no currency, no ticker
     assert not re.search(r"\d", re.sub(r"https?://\S+", "", text))
     assert "EUR" not in text and "AAPL" not in text
@@ -393,7 +407,7 @@ def test_the_reminder_joins_the_days_message_instead_of_a_second_one(env):
     _rec(env, USER_ID, "MSFT", days_old=34)  # a new scheduled recommendation on 1 September
     _, bot = _notify(now=TUESDAY_FIRST, quotes=_quotes({"AAPL": [100.0, 100.0]}))
     assert len(bot.sent) == 1
-    assert "1 new: MSFT ADD" in bot.sent[0][1] and "Plan this month" in bot.sent[0][1]
+    assert "• MSFT  ADD" in bot.sent[0][1] and "plan this month" in bot.sent[0][1]
 
 
 def test_a_month_starting_on_a_weekend_reminds_on_the_following_monday(env):
