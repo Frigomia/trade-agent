@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 from collections.abc import Callable
 from datetime import date
 from typing import Any
@@ -19,6 +20,11 @@ SEARCH_MAX_RESULTS = 8
 
 RETRY_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
+
+
+def _finite(closes: list[float]) -> list[float]:
+    """Yahoo's newest row can have no close (nan, e.g. at the weekend); drop those rows."""
+    return [c for c in closes if math.isfinite(c)]
 
 
 async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
@@ -47,7 +53,7 @@ async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
 
     def _fetch() -> dict[str, Any]:
         history = yf.Ticker(ticker).history(period="1y")
-        closes = history["Close"].tolist()
+        closes = _finite(history["Close"].tolist())
         return {"price": closes[-1] if closes else None, "closes": closes}
 
     result = await _retry_fetch(_fetch)
@@ -90,8 +96,7 @@ async def fetch_price_history(ticker: str, start: date, end: date) -> list[float
 
     def _fetch() -> list[float]:
         history = yf.Ticker(ticker).history(start=start, end=end)
-        closes: list[float] = history["Close"].tolist()
-        return closes
+        return _finite(history["Close"].tolist())
 
     result = await _retry_fetch(_fetch)
     if not result:
