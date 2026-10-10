@@ -25,9 +25,9 @@ QUOTE_CONCURRENCY = 5
 FOOTER = "Advisory only. Nothing is sent to a broker."
 
 
-def _listed(items: list[str]) -> str:
-    shown = ", ".join(items[:MAX_LISTED])
-    return shown + (f", +{len(items) - MAX_LISTED} more" if len(items) > MAX_LISTED else "")
+def _bullets(items: list[str]) -> list[str]:
+    shown = [f"• {item}" for item in items[:MAX_LISTED]]
+    return shown + ([f"• +{len(items) - MAX_LISTED} more"] if len(items) > MAX_LISTED else [])
 
 
 def is_first_weekday(day: date) -> bool:
@@ -42,24 +42,33 @@ def build_message(
     app_url: str | None,
     reminder: bool = False,
 ) -> str | None:
-    lines: list[str] = []
+    """Plain text, one item per line, sections separated by a blank line. No markup, so nothing in
+    it can be read as formatting."""
+    sections: list[list[str]] = []
     if new_recs:
-        lines.append(f"{len(new_recs)} new: {_listed([f'{t} {a}' for t, a in new_recs])}")
+        noun = "recommendation" if len(new_recs) == 1 else "recommendations"
+        sections.append(
+            [f"📋 {len(new_recs)} new {noun}"] + _bullets([f"{t}  {a}" for t, a in new_recs])
+        )
     if moves:
         ordered = sorted(moves, key=lambda m: abs(m[1]), reverse=True)
-        lines.append("Moved: " + _listed([f"{t} {c:+.1f}%" for t, c in ordered]))
-    if reminder:  # no amounts or tickers: just a nudge
-        lines.append(
-            f"Plan this month's contribution: {app_url.rstrip('/')}/portfolio/plan"
-            if app_url
-            else "Plan this month's contribution in the app."
+        sections.append(
+            ["📈 Moved"]
+            + _bullets([f"{t}  {'▲' if c >= 0 else '▼'} {abs(c):.1f}%" for t, c in ordered])
         )
-    if not lines:
+    if reminder:  # no amounts or tickers: just a nudge
+        where = "" if app_url else " in the app"
+        sections.append([f"🗓 Time to plan this month's contribution{where}."])
+    if not sections:
         return None
     if app_url:
-        lines.append(f"Open Today: {app_url.rstrip('/')}/today")
-    lines.append(FOOTER)
-    return "\n".join(lines)
+        base = app_url.rstrip("/")
+        links = [f"Today:  {base}/today"]
+        if reminder:
+            links.append(f"Plan:   {base}/portfolio/plan")
+        sections.append(links)
+    sections.append([FOOTER])
+    return "\n\n".join("\n".join(section) for section in sections)
 
 
 async def _moves(tickers: list[str], threshold: float) -> list[tuple[str, float]]:

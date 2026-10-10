@@ -245,8 +245,8 @@ unknown.") means that lookup failed or the currency is not one of the supported 
 GBp, GBX, CHF, JPY, CAD, AUD, SEK, NOK, DKK, PLN); the ticker is simply not in the plan, nothing is
 guessed. It is usually a passing price-source problem: make the plan again a few minutes later.
 
-The monthly reminder is one extra line in the first weekday's Telegram message ("Plan this month's
-contribution: <APP_URL>/portfolio/plan"), sent only to people with Telegram connected, at least one
+The monthly reminder is one extra section in the first weekday's Telegram message ("🗓 Time to plan
+this month's contribution." and a `Plan:` link to <APP_URL>/portfolio/plan), sent only to people with Telegram connected, at least one
 target weight set, and the third switch ("Monthly plan reminder") on in Account. It has no amounts.
 
 The line is added only on the first weekday of the month (UTC; the 1st, or the Monday of the 2nd or

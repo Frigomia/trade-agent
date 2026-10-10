@@ -74,6 +74,9 @@ describe("TelegramPanel", () => {
     expect(screen.getByText("Messages list tickers and actions only, never amounts or reasoning. Advisory only.")).toBeInTheDocument();
     expect(screen.getByText("What a message looks like")).toBeInTheDocument();
     expect(screen.getByText(/https:\/\/app\.example\.com\/today/)).toBeInTheDocument();
+    // the same sections the backend sends (getByText flattens the line breaks and double spaces)
+    expect(screen.getByText("📋 3 new recommendations • AAPL ADD • MSFT HOLD • NVDA TRIM")).toBeInTheDocument();
+    expect(screen.getByText("📈 Moved • AAPL ▼ 6.2% • NVDA ▲ 5.4%")).toBeInTheDocument();
     expect(screen.getByText("Advisory only. Nothing is sent to a broker.")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /app\.example\.com/ })).not.toBeInTheDocument();
   });
@@ -284,7 +287,7 @@ describe("TelegramPanel", () => {
   });
 
   describe("monthly plan reminder", () => {
-    const line = /Plan this month's contribution:/;
+    const line = /Time to plan this month's contribution\./;
 
     it("is a third switch, on by default, with the schedule hint", () => {
       hook.status = connected;
@@ -318,8 +321,8 @@ describe("TelegramPanel", () => {
       hook.status = connected;
       const { rerender } = render(<TelegramPanel />);
       const reminder = screen.getByText(line);
-      expect(reminder).toHaveTextContent("Plan this month's contribution: https://app.example.com/portfolio/plan");
-      expect(reminder.textContent?.replace("https://app.example.com/portfolio/plan", "")).not.toMatch(/\d/);
+      expect(reminder.textContent).not.toMatch(/\d/);
+      expect(screen.getByText(/https:\/\/app\.example\.com\/portfolio\/plan/)).toBeInTheDocument();
       hook.status = { ...connected, plan_reminder_enabled: false };
       rerender(<TelegramPanel />);
       expect(screen.queryByText(line)).not.toBeInTheDocument();
