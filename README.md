@@ -55,28 +55,69 @@ Each side has its own `CLAUDE.md` with its stack, commands, and conventions:
 
 ## Quick start
 
-### Backend
+Local setup, in order. You need Docker, [uv](https://docs.astral.sh/uv/), Node.js, and a Supabase
+project (the free tier is enough): Supabase Auth holds the sign-ins, so there is no login without
+one.
+
+### 1. Supabase
+
+1. Create a project at supabase.com.
+2. Under Authentication, use asymmetric JWT signing keys (the backend does not verify the old
+   shared-secret tokens).
+3. Note the project URL, the publishable (anon) key, and the secret key. The secret key is for the
+   backend only and never goes in the frontend.
+
+### 2. Backend
 
 ```bash
 cd backend
 uv sync                    # creates .venv, installs everything
-cp .env.example .env       # add ANTHROPIC_API_KEY, SUPABASE_URL, etc.
+cp .env.example .env       # then fill in the values below
 docker compose up -d       # Postgres + Redis
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-### Frontend
+In `backend/.env`, set at least `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `ANTHROPIC_API_KEY`.
+Also set `MIGRATION_DATABASE_URL` to the same value as `DATABASE_URL`: the first-admin command
+below refuses to run without it.
+
+**The database needs no setup.** `docker compose up -d` starts Postgres with user, password and
+database all named `trading_agent`, and `.env.example` already holds the matching
+`DATABASE_URL`. If your `.env` is older than that line, copy it over by hand.
+
+### 3. Frontend
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env.local   # add NEXT_PUBLIC_API_URL, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-npm run dev
+cp .env.example .env.local   # add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
+npm run dev                  # http://localhost:3000
 ```
 
-Full setup details (Supabase project configuration, the first-admin bootstrap command, running
-tests) are in each side's `CLAUDE.md`.
+`NEXT_PUBLIC_API_URL` is already `http://localhost:8000` in the example.
+
+### 4. Create the first admin
+
+A new local database is empty, so nobody can sign in until an admin exists. Sign-ins live in
+Supabase, but a user's role and status live in the `app_users` table of the database the backend
+uses, so this is done once per environment:
+
+1. In the Supabase dashboard, under Authentication, Users, add your user and copy its uid.
+2. From `backend/`:
+
+   ```bash
+   uv run python -m app.auth.bootstrap_admin <email> <supabase-uid>
+   ```
+
+   It refuses to run when an admin already exists.
+3. Sign in at http://localhost:3000. From the admin screen you can invite other people.
+
+Using someone else's Supabase project does not skip this: the Supabase user exists there, but your
+local database still needs its own `app_users` row, so run the same command with that user's uid.
+
+More setup details (row-level security locally, invitations, running the tests) are in each side's
+`CLAUDE.md`.
 
 ### Scheduled jobs
 
