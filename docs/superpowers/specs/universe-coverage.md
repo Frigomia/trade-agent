@@ -4,15 +4,17 @@ Symbols: 600. Passing: 600. Failing: 0. Not checked: 0.
 
 Counts below are for passing symbols. Targets are targets, not quotas.
 
+Freshness: a last close more than 5 calendar days old fails. This is an interim calendar-day proxy, not an exchange-session-aware check.
+
 ### By region
 
-| Region | Target | Checked | Passing |
-|---|---:|---:|---:|
-| asia_pacific | 150 | 150 | 150 |
-| europe | 180 | 180 | 180 |
-| global_etf | 30 | 30 | 30 |
-| north_america | 180 | 180 | 180 |
-| other_emerging | 60 | 60 | 60 |
+| Region | Target | Checked | Passing | Not checked |
+|---|---:|---:|---:|---:|
+| asia_pacific | 150 | 150 | 150 | 0 |
+| europe | 180 | 180 | 180 | 0 |
+| global_etf | 30 | 30 | 30 | 0 |
+| north_america | 180 | 180 | 180 | 0 |
+| other_emerging | 60 | 60 | 60 | 0 |
 
 ### By sector
 
@@ -36,8 +38,8 @@ Counts below are for passing symbols. Targets are targets, not quotas.
 | Value | Count |
 |---|---:|
 | large | 263 |
-| mid | 195 |
-| small | 106 |
+| mid | 193 |
+| small | 108 |
 | unknown | 30 |
 | micro | 6 |
 
@@ -95,8 +97,8 @@ Counts below are for passing symbols. Targets are targets, not quotas.
 | returnOnEquity | 79% | 98% | 98% | 98% |
 | profitMargins | 100% | 99% | 100% | 98% |
 | operatingMargins | 100% | 99% | 100% | 98% |
-| revenueGrowth | 99% | 96% | 100% | 97% |
-| debtToEquity | 91% | 92% | 92% | 90% |
+| revenueGrowth | 99% | 97% | 100% | 97% |
+| debtToEquity | 91% | 93% | 92% | 90% |
 | freeCashflow | 67% | 94% | 96% | 90% |
 | trailingPE | 84% | 87% | 91% | 93% |
 | priceToBook | 91% | 100% | 100% | 100% |
@@ -110,5 +112,6 @@ Counts below are for passing symbols. Targets are targets, not quotas.
 | ETN | country |
 | LIN | country |
 | TT | country |
+| III.L | sector |
 | 1910.HK | country |
 | COMI.CA | asset_type |
