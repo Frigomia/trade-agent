@@ -12,6 +12,7 @@ from app.schemas_discovery import (
     Coverage,
     DimensionScore,
     Exclusion,
+    IdeaOut,
     Mention,
     NegativeDevelopment,
     PeerComparison,
@@ -131,6 +132,7 @@ def test_an_empty_portfolio_is_representable() -> None:
         by_currency=[],
         top_position_weight=None,
         hhi=None,
+        effective_n=None,
         volatility_annualized=None,
         correlation={},
         skipped={},
@@ -233,3 +235,177 @@ def test_an_idea_keeps_the_numeric_and_the_qualitative_parts_apart() -> None:
     assert {score.name for score in idea.scores} <= {"quality", "valuation", "fit"}
     assert isinstance(idea.outlook, str)  # a sentence, never a number
     assert isinstance(idea.risk, RiskProfile)
+
+
+# ---- Review round: plan fields restored and validation gaps closed ---------------------------
+
+
+def test_effective_n_is_part_of_the_portfolio_exposure() -> None:
+    exposure = sample_exposure()
+
+    assert exposure.effective_n == pytest.approx(1 / exposure.hhi)  # type: ignore[operator]
+    data = exposure.model_dump()
+    data["effective_n"] = None
+    assert PortfolioExposure.model_validate(data).effective_n is None
+
+
+def test_style_tags_are_part_of_an_idea() -> None:
+    assert sample_idea().style_tags == ["quality", "defensive"]
+
+
+def test_an_unavailable_pairwise_correlation_is_representable() -> None:
+    data = sample_exposure().model_dump()
+    data["correlation"] = {"SAP.DE": {"AAPL": None}, "AAPL": {"SAP.DE": None}}
+
+    exposure = PortfolioExposure.model_validate(data)
+
+    assert exposure.correlation["SAP.DE"]["AAPL"] is None
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_nonfinite_numbers_are_rejected_not_turned_into_null(bad: float) -> None:
+    data = sample_candidate().model_dump()
+    data["price"] = bad
+    with pytest.raises(ValidationError):
+        CandidateMetrics.model_validate(data)
+
+    data = sample_candidate().model_dump()
+    data["fundamentals"]["trailingPE"] = bad
+    with pytest.raises(ValidationError):
+        CandidateMetrics.model_validate(data)
+
+
+def test_an_unavailable_number_is_still_valid_as_none() -> None:
+    data = sample_candidate().model_dump()
+    data["price"] = None
+    data["fundamentals"]["trailingPE"] = None
+
+    assert CandidateMetrics.model_validate(data).price is None
+
+
+def _idea_data() -> dict:
+    return sample_idea().model_dump()
+
+
+def test_an_idea_with_no_scores_is_rejected() -> None:
+    data = _idea_data()
+    data["scores"] = []
+
+    with pytest.raises(ValidationError, match="quality, valuation and fit"):
+        IdeaOut.model_validate(data)
+
+
+def test_an_idea_with_a_duplicate_dimension_is_rejected() -> None:
+    data = _idea_data()
+    data["scores"][1] = {"name": "quality", "score": 10, "reasons": []}
+
+    with pytest.raises(ValidationError, match="quality, valuation and fit"):
+        IdeaOut.model_validate(data)
+
+
+def test_an_idea_missing_a_dimension_is_rejected() -> None:
+    data = _idea_data()
+    data["scores"] = data["scores"][:2]
+
+    with pytest.raises(ValidationError, match="quality, valuation and fit"):
+        IdeaOut.model_validate(data)
+
+
+def test_an_overall_score_needs_a_quality_or_valuation_score_behind_it() -> None:
+    data = _idea_data()
+    for score in data["scores"]:
+        score["score"] = None
+    data["overall"] = 70
+
+    with pytest.raises(ValidationError, match="overall"):
+        IdeaOut.model_validate(data)
+
+
+def test_an_idea_with_nothing_scored_has_no_overall() -> None:
+    data = _idea_data()
+    for score in data["scores"]:
+        score["score"] = None
+    data["overall"] = None
+
+    assert IdeaOut.model_validate(data).overall is None
+
+
+def test_a_hypothetical_weight_is_bounded_like_every_other_weight() -> None:
+    fit = CandidateFit(
+        ticker="SAP.DE",
+        applicable=True,
+        avg_correlation_to_portfolio=0.3,
+        portfolio_vol_before=0.2,
+        portfolio_vol_after=0.19,
+        hhi_before=0.5,
+        hhi_after=0.4,
+        sector_weight_before=0.5,
+        sector_weight_after=0.52,
+        hypothetical_weight=0.05,
+        notes=[],
+    )
+    data = fit.model_dump()
+    data["hypothetical_weight"] = 2.0
+
+    with pytest.raises(ValidationError):
+        CandidateFit.model_validate(data)
+
+
+def test_coverage_cannot_report_more_present_than_total() -> None:
+    with pytest.raises(ValidationError, match="present"):
+        Coverage(core_metrics_present=12, core_metrics_total=10, missing=[])
+
+
+def test_coverage_missing_list_matches_the_counts() -> None:
+    with pytest.raises(ValidationError, match="missing"):
+        Coverage(core_metrics_present=9, core_metrics_total=10, missing=[])
+    with pytest.raises(ValidationError, match="missing"):
+        Coverage(core_metrics_present=10, core_metrics_total=10, missing=["marketCap"])
+
+    assert Coverage(core_metrics_present=8, core_metrics_total=10, missing=["a", "b"]).missing
+
+
+@pytest.mark.parametrize("citation", ["", "   ", "not a url", "ftp://example.com/file"])
+def test_a_blank_or_non_http_citation_is_rejected_on_an_exclusion(citation: str) -> None:
+    with pytest.raises(ValidationError):
+        Exclusion(
+            ticker="XYZ",
+            name="XYZ Corp",
+            reason="thesis_invalidated",
+            explanation="The regulator withdrew the licence.",
+            evidence=[citation],
+        )
+
+
+def test_a_thesis_exclusion_with_an_http_citation_is_valid() -> None:
+    exclusion = Exclusion(
+        ticker="XYZ",
+        name="XYZ Corp",
+        reason="thesis_invalidated",
+        explanation="The regulator withdrew the licence.",
+        evidence=["https://example.com/notice"],
+    )
+
+    assert exclusion.evidence == ["https://example.com/notice"]
+
+
+def test_every_citation_in_the_contract_must_be_a_usable_url() -> None:
+    claim = sample_claim().model_dump()
+    claim["url"] = ""
+    with pytest.raises(ValidationError):
+        Claim.model_validate(claim)
+
+    development = sample_evidence().negative_developments[0].model_dump()
+    development["evidence"] = ["see the filing"]
+    with pytest.raises(ValidationError):
+        NegativeDevelopment.model_validate(development)
+
+    with pytest.raises(ValidationError):
+        Mention(
+            name="Orange",
+            ticker_hint=None,
+            exchange_hint=None,
+            origin="reddit",
+            reason="r/stocks",
+            url="javascript:alert(1)",
+        )

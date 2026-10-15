@@ -59,6 +59,7 @@ def sample_exposure() -> PortfolioExposure:
         by_currency=[Exposure(label="EUR", weight=0.6), Exposure(label="USD", weight=0.4)],
         top_position_weight=0.6,
         hhi=0.52,
+        effective_n=1 / 0.52,
         volatility_annualized=0.24,
         correlation={"SAP.DE": {"AAPL": 0.42}, "AAPL": {"SAP.DE": 0.42}},
         skipped={},
@@ -176,5 +177,6 @@ def sample_idea() -> IdeaOut:
         community_note=None,
         conclusion="Worth researching further; valuation is not stretched.",
         sources=[sample_claim()],
+        style_tags=["quality", "defensive"],
         data_notes=["Free cash flow unavailable for this issuer."],
     )
