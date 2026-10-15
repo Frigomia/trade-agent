@@ -100,8 +100,7 @@ class Coverage(Contract):
 
     @model_validator(mode="after")
     def _counts_are_consistent(self) -> Self:
-        if self.core_metrics_present > self.core_metrics_total:
-            raise ValueError("core_metrics_present cannot exceed core_metrics_total")
+        # Also rejects present > total: the difference is then negative, never a list length.
         if len(self.missing) != self.core_metrics_total - self.core_metrics_present:
             raise ValueError("missing must list exactly total - present core metrics")
         return self
@@ -218,10 +217,8 @@ class ResearchEvidence(Contract):
 class Exclusion(Contract):
     """A candidate removed from the shortlist, kept visible with the reason.
 
-    What the model enforces: a thesis exclusion lists at least one usable citation. What it does
-    not: that each citation is a claim actually found in the research, and that forum-only
-    evidence is never sufficient. Those are business rules of the Phase 6 thesis check and are
-    tested there.
+    Citations are format-checked here; that they exist in the research and that forum-only
+    evidence never suffices are Phase 6 thesis-check rules, tested there.
     """
 
     ticker: str
@@ -272,16 +269,11 @@ class IdeaOut(Contract):
     data_notes: list[str]  # stale prices, missing metrics, unavailable peers, conflicts
 
     @model_validator(mode="after")
-    def _every_dimension_appears_once(self) -> Self:
+    def _scores_are_complete_and_back_the_overall(self) -> Self:
         # An unavailable dimension is an explicit entry with score None, never an absent one.
         if sorted(score.name for score in self.scores) != ["fit", "quality", "valuation"]:
             raise ValueError("scores must hold exactly one each of quality, valuation and fit")
-        return self
-
-    @model_validator(mode="after")
-    def _overall_needs_a_score_behind_it(self) -> Self:
-        # The overall score is built from quality and valuation (plan 4.4): without either there
-        # is no overall. Fit alone never produces one.
+        # The overall is built from quality and valuation (plan 4.4); fit alone never produces it.
         built_from = [s.score for s in self.scores if s.name in ("quality", "valuation")]
         if self.overall is not None and all(score is None for score in built_from):
             raise ValueError("overall requires a quality or valuation score")
