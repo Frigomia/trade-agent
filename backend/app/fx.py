@@ -26,9 +26,41 @@ RATE_SYMBOLS = {
     "NOK": "EURNOK=X",
     "DKK": "EURDKK=X",
     "PLN": "EURPLN=X",
+    # Global discovery universe (plan 2026-10-14-market-discovery, Phase 1a)
+    "HKD": "EURHKD=X",
+    "CNY": "EURCNY=X",
+    "INR": "EURINR=X",
+    "KRW": "EURKRW=X",
+    "TWD": "EURTWD=X",
+    "SGD": "EURSGD=X",
+    "BRL": "EURBRL=X",
+    "MXN": "EURMXN=X",
+    "ZAR": "EURZAR=X",
+    "NZD": "EURNZD=X",
+    "CZK": "EURCZK=X",
+    "HUF": "EURHUF=X",
+    "TRY": "EURTRY=X",
+    "ILS": "EURILS=X",
+    "SAR": "EURSAR=X",
+    "AED": "EURAED=X",
+    "THB": "EURTHB=X",
+    "IDR": "EURIDR=X",
+    "MYR": "EURMYR=X",
+    "CLP": "EURCLP=X",
+    "COP": "EURCOP=X",
+    "QAR": "EURQAR=X",
+    "KWD": "EURKWD=X",
+    "PHP": "EURPHP=X",
+    "EGP": "EUREGP=X",
 }
-# pence: 1/100 of a pound (yfinance reports either spelling)
-SUBUNITS = {"GBp": ("GBP", Decimal("0.01")), "GBX": ("GBP", Decimal("0.01"))}
+# Minor units: 1/100 of the main unit. Yahoo quotes London in pence (GBp or GBX), Johannesburg
+# in cents (ZAc) and Tel Aviv in agorot (ILA).
+SUBUNITS = {
+    "GBp": ("GBP", Decimal("0.01")),
+    "GBX": ("GBP", Decimal("0.01")),
+    "ZAc": ("ZAR", Decimal("0.01")),
+    "ILA": ("ILS", Decimal("0.01")),
+}
 SUPPORTED = frozenset({"EUR", *RATE_SYMBOLS, *SUBUNITS})
 LOOKUP_CONCURRENCY = 8
 # Bounds that keep amounts inside the plan columns (Numeric 18,6 for prices and 18,8 for rates)
@@ -71,6 +103,11 @@ async def _rate(currency: str) -> Decimal | None:
         return None
     per_eur = _positive(data.get("price")) if isinstance(data, dict) else None
     return factor / per_eur if per_eur is not None else None
+
+
+async def eur_rate(currency: str) -> Decimal | None:
+    """EUR per 1 unit of `currency` (per 1 minor unit for GBp, ZAc, ILA); None when unsupported."""
+    return await _rate(currency)
 
 
 async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, str]]:

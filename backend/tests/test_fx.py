@@ -158,3 +158,66 @@ def test_the_unsupported_currency_text_is_truncated():
 def test_a_price_under_a_hundredth_of_a_cent_is_dropped():
     (prices, skipped), _ = run_prices(["AAPL"], {"AAPL": 0.00009}, {"AAPL": "EUR"})
     assert prices == {} and skipped["AAPL"] == "Its price is outside the supported range."
+
+
+GLOBAL_CURRENCIES = [
+    "HKD",
+    "CNY",
+    "INR",
+    "KRW",
+    "TWD",
+    "SGD",
+    "BRL",
+    "MXN",
+    "ZAR",
+    "NZD",
+    "CZK",
+    "HUF",
+    "TRY",
+    "ILS",
+    "SAR",
+    "AED",
+    "THB",
+    "IDR",
+    "MYR",
+    "CLP",
+    "COP",
+    "QAR",
+    "KWD",
+    "PHP",
+    "EGP",
+]
+
+
+@pytest.mark.parametrize("currency", GLOBAL_CURRENCIES)
+def test_a_global_currency_is_converted_with_its_eur_rate(currency):
+    (prices, skipped), _ = run_prices(
+        ["X.TEST"], {"X.TEST": 100.0}, {"X.TEST": currency}, {f"EUR{currency}=X": 2.0}
+    )
+    assert skipped == {}
+    assert prices["X.TEST"].price_eur == D("50")
+    assert prices["X.TEST"].currency == currency
+
+
+def test_south_african_cents_are_converted_through_rand():
+    (prices, _), _ = run_prices(
+        ["NPN.JO"], {"NPN.JO": 1000.0}, {"NPN.JO": "ZAc"}, {"EURZAR=X": 20.0}
+    )
+    assert prices["NPN.JO"].price_eur == D("0.5")  # 1000 cents = 10 ZAR = 0.5 EUR
+
+
+def test_israeli_agorot_are_converted_through_shekels():
+    (prices, _), _ = run_prices(
+        ["TEVA.TA"], {"TEVA.TA": 500.0}, {"TEVA.TA": "ILA"}, {"EURILS=X": 4.0}
+    )
+    assert prices["TEVA.TA"].price_eur == D("1.25")  # 500 agorot = 5 ILS = 1.25 EUR
+
+
+def test_eur_rate_is_public_and_returns_eur_per_unit():
+    async def quote(symbol):
+        return {"price": 1.25, "closes": [1.25]}
+
+    with patch("app.fx.fetch_quote_and_history", AsyncMock(side_effect=quote)):
+        assert run(fx.eur_rate("USD")) == D("0.8")
+        assert run(fx.eur_rate("EUR")) == D("1")
+        assert run(fx.eur_rate("XXX")) is None
