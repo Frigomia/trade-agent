@@ -11,6 +11,7 @@ from app.discovery.validate_universe import (
     MIN_HISTORY_DAYS,
     STALE_DAYS,
     RawSymbolData,
+    build_rates,
     build_report,
     check_symbol,
     eur_rate_from,
@@ -226,8 +227,19 @@ def test_report_region_table_shows_checked_and_passing_counts() -> None:
 
     report = build_report([good, bad], duplicates=[])
 
-    assert "| asia_pacific | 150 | 1 | 0 |" in report
-    assert "| europe | 180 | 1 | 1 |" in report
+    assert "| asia_pacific | 150 | 1 | 0 | 0 |" in report
+    assert "| europe | 180 | 1 | 1 | 0 |" in report
+
+
+def test_report_region_table_does_not_count_rate_limited_symbols_as_checked() -> None:
+    good = check(SAP_ROW, raw(FULL_INFO))
+    throttled = check(SAP_ROW, YFRateLimitError())
+
+    report = build_report([good, throttled], duplicates=[])
+
+    assert "| Region | Target | Checked | Passing | Not checked |" in report
+    assert "| europe | 180 | 1 | 1 | 1 |" in report
+    assert "Not checked: 1" in report
 
 
 def test_thresholds_fail_when_too_many_symbols_do_not_resolve() -> None:
@@ -308,3 +320,39 @@ def test_fetch_yfinance_raises_the_last_error_after_three_attempts(
         module.fetch_yfinance("SAP.DE")
 
     assert attempts == ["SAP.DE", "SAP.DE", "SAP.DE"]
+
+
+def test_build_rates_keeps_the_other_currencies_when_one_lookup_raises() -> None:
+    def price_of(symbol: str) -> float | None:
+        if symbol == "EURJPY=X":
+            raise ConnectionError("Yahoo is down")
+        return {"EURUSD=X": 1.25}.get(symbol)
+
+    rates, failures = build_rates(["EUR", "USD", "JPY"], price_of)
+
+    assert rates == {"EUR": Decimal(1), "USD": Decimal("0.8")}
+    assert failures == {"JPY": "ConnectionError"}
+
+
+def test_build_rates_reports_a_currency_whose_price_is_missing() -> None:
+    rates, failures = build_rates(["USD"], lambda symbol: None)
+
+    assert rates == {}
+    assert failures == {"USD": "no rate available"}
+
+
+def test_the_report_lists_currencies_whose_conversion_was_unavailable() -> None:
+    good = check(SAP_ROW, raw(FULL_INFO))
+
+    report = build_report([good], duplicates=[], rate_failures={"JPY": "ConnectionError"})
+
+    assert "Market cap conversion unavailable" in report
+    assert "JPY" in report
+    assert "ConnectionError" in report
+
+
+def test_the_report_states_that_the_freshness_check_is_an_interim_calendar_proxy() -> None:
+    report = build_report([check(SAP_ROW, raw(FULL_INFO))], duplicates=[])
+
+    assert "interim" in report
+    assert f"{STALE_DAYS} calendar days" in report

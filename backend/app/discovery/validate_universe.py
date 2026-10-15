@@ -47,6 +47,10 @@ CORE_FIELDS = (
 MIN_CORE_METRICS = 3
 MIN_HISTORY_DAYS = 120
 # A last close older than this many calendar days is an unreliable price (plan section 4.1).
+# INTERIM: a calendar-day proxy, not exchange-session aware (holidays differ by exchange). It is a
+# validation aid for this script and must not become the production freshness rule: Phase 4 has to
+# measure freshness in trading sessions of each security's own exchange. Tracked in
+# docs/superpowers/specs/universe-candidate-audit.md.
 STALE_DAYS = 5
 
 # Region targets from the plan (targets, not quotas).
@@ -164,6 +168,29 @@ def eur_rate_from(currency: str, price_of: PriceFn) -> Decimal | None:
     return rate_from_price(currency, price_of(symbol) if symbol else None)
 
 
+def build_rates(
+    currencies: list[str], price_of: PriceFn
+) -> tuple[dict[str, Decimal], dict[str, str]]:
+    """EUR rates per currency, and why a currency has none.
+
+    One failing lookup must not abort the run: the symbol results are already fetched and the
+    report is the deliverable. A currency without a rate leaves its market caps unconverted.
+    """
+    rates: dict[str, Decimal] = {}
+    failures: dict[str, str] = {}
+    for currency in sorted(currencies):
+        try:
+            rate = eur_rate_from(currency, price_of)
+        except Exception as exc:  # the price lookup is a network call; keep the class only
+            failures[currency] = type(exc).__name__
+            continue
+        if rate is None:
+            failures[currency] = "no rate available"
+        else:
+            rates[currency] = rate
+    return rates, failures
+
+
 def market_cap_to_eur(cap: Any, currency: str, rates: dict[str, Decimal]) -> float | None:
     """EUR value of a market cap quoted for a stock whose price currency is `currency`.
 
@@ -275,17 +302,30 @@ def _counts_table(title: str, counter: Counter[str]) -> str:
 
 
 def _region_table(results: list[SymbolResult]) -> str:
-    """Checked and passing per region, so a region with many failures stays visible."""
-    checked = Counter(region_of(r.row.country, r.row.asset_type) for r in results)
-    passing = Counter(region_of(r.row.country, r.row.asset_type) for r in results if r.ok)
-    lines = ["### By region", "", "| Region | Target | Checked | Passing |", "|---|---:|---:|---:|"]
-    for region in sorted({*REGION_TARGETS, *checked}):
+    """Checked, passing and not-checked per region, so a region with many failures stays visible."""
+
+    def regions(keep: Callable[[SymbolResult], bool]) -> Counter[str]:
+        return Counter(region_of(r.row.country, r.row.asset_type) for r in results if keep(r))
+
+    checked = regions(lambda r: r.failure != "rate_limited")
+    passing = regions(lambda r: r.ok)
+    not_checked = regions(lambda r: r.failure == "rate_limited")
+    lines = ["### By region", ""]
+    lines += ["| Region | Target | Checked | Passing | Not checked |", "|---|---:|---:|---:|---:|"]
+    for region in sorted({*REGION_TARGETS, *checked, *not_checked}):
         target = REGION_TARGETS.get(region, "")
-        lines.append(f"| {region} | {target} | {checked[region]} | {passing[region]} |")
+        lines.append(
+            f"| {region} | {target} | {checked[region]} | {passing[region]} "
+            f"| {not_checked[region]} |"
+        )
     return "\n".join(lines) + "\n"
 
 
-def build_report(results: list[SymbolResult], duplicates: list[tuple[str, ...]]) -> str:
+def build_report(
+    results: list[SymbolResult],
+    duplicates: list[tuple[str, ...]],
+    rate_failures: dict[str, str] | None = None,
+) -> str:
     ok = [r for r in results if r.ok]
     sectors = Counter(r.row.sector or "ETF / n.a." for r in ok)
     sizes = Counter(r.size_bucket for r in ok)
@@ -300,6 +340,9 @@ def build_report(results: list[SymbolResult], duplicates: list[tuple[str, ...]])
         f"Failing: {len(results) - len(ok) - len(unchecked)}. Not checked: {len(unchecked)}.",
         "",
         "Counts below are for passing symbols. Targets are targets, not quotas.",
+        "",
+        f"Freshness: a last close more than {STALE_DAYS} calendar days old fails. This is an "
+        "interim calendar-day proxy, not an exchange-session-aware check.",
         "",
         _region_table(results),
         _counts_table("By sector", sectors),
@@ -322,6 +365,13 @@ def build_report(results: list[SymbolResult], duplicates: list[tuple[str, ...]])
             cells.append(f"{100 * have / len(group):.0f}%" if group else "n/a")
         out.append(f"| {field} | " + " | ".join(cells) + " |")
     out.append("")
+
+    if rate_failures:
+        out += ["### Market cap conversion unavailable", ""]
+        out += ["Market caps in these currencies are unconverted and labelled unknown.", ""]
+        out += ["| Currency | Reason |", "|---|---|"]
+        out += [f"| {currency} | {reason} |" for currency, reason in sorted(rate_failures.items())]
+        out.append("")
 
     if unchecked:
         out += [
@@ -434,14 +484,14 @@ def main(argv: list[str] | None = None) -> int:
         for raw in fetched.values()
         if isinstance(raw, RawSymbolData) and raw.info.get("currency")
     }
-    rates = {c: rate for c in sorted(currencies) if (rate := eur_rate_from(c, _latest_close))}
+    rates, rate_failures = build_rates(sorted(currencies), _latest_close)
 
     today = date.today()
     results = [check_symbol(row, fetched[row.ticker], rates, today) for row in rows]
     duplicates = find_duplicate_listings(
         [(r.row.ticker, r.actual_name) for r in results if r.ok and r.actual_name]
     )
-    report = build_report(results, duplicates)
+    report = build_report(results, duplicates, rate_failures)
     if args.report:
         args.report.write_text(report, encoding="utf-8")
     else:
@@ -455,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not meets_thresholds(results, args.min_ok_ratio):
         return 1
-    return 2 if unchecked else 0
+    return 2 if unchecked or rate_failures else 0
 
 
 if __name__ == "__main__":
