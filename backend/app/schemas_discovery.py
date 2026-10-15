@@ -14,8 +14,9 @@ Conventions:
 
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 AssetType = Literal["STOCK", "ETF"]
 Origin = Literal["universe", "tavily", "reddit", "industry_research"]
@@ -26,8 +27,22 @@ RiskLevel = Literal["low", "medium", "high", "unknown"]
 # A share of the total value: never negative, never above the whole.
 Weight = Annotated[float, Field(ge=0, le=1)]
 
-# A usable citation: a non-blank http(s) address with no whitespace.
-Url = Annotated[str, StringConstraints(pattern=r"^https?://\S+$")]
+
+def _http_url(value: str) -> str:
+    """Accept an http(s) address that has a host, and return it unchanged.
+
+    A prefix test lets through `https:///x`, `https://#f` and `https://?q=1`, which name no host.
+    """
+    if any(character.isspace() for character in value):
+        raise ValueError("a citation must not contain whitespace")
+    parts = urlsplit(value)  # raises ValueError for a malformed address such as an open [ host
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("a citation must be an http(s) address with a host")
+    return value
+
+
+# A usable citation: an http(s) address with a host. The text is kept exactly as given.
+Url = Annotated[str, AfterValidator(_http_url)]
 
 
 class Contract(BaseModel):

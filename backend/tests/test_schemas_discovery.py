@@ -257,7 +257,22 @@ def test_a_hypothetical_weight_is_bounded_like_every_other_weight() -> None:
         CandidateFit.model_validate(data)
 
 
-@pytest.mark.parametrize("citation", ["", "   ", "not a url", "ftp://example.com/file"])
+@pytest.mark.parametrize(
+    "citation",
+    [
+        "",
+        "   ",
+        "not a url",
+        "ftp://example.com/file",
+        "https:///missing-host",
+        "https://#fragment",
+        "https://?query=1",
+        "http://",
+        "https://:8080/path",
+        "https://user@/path",
+        "https://[::1/path",
+    ],
+)
 def test_a_blank_or_non_http_citation_is_rejected_on_an_exclusion(citation: str) -> None:
     with pytest.raises(ValidationError):
         Exclusion(
@@ -301,3 +316,11 @@ def test_every_citation_in_the_contract_must_be_a_usable_url() -> None:
             reason="r/stocks",
             url="javascript:alert(1)",
         )
+
+
+def test_a_valid_citation_keeps_its_exact_text() -> None:
+    url = "https://Example.com:8080/a/b?x=1&y=2#section"
+    data = sample_claim().model_dump()
+    data["url"] = url
+
+    assert Claim.model_validate(data).url == url
