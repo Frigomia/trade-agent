@@ -434,7 +434,7 @@ def fetch_all(
 
 def fetch_yfinance(ticker: str) -> RawSymbolData:
     """Blocking network call. Retries twice: Yahoo drops requests under load."""
-    last_error: Exception | None = None
+    last_error: Exception = RuntimeError("no attempt was made")
     for attempt in range(3):
         try:
             handle = yf.Ticker(ticker)
@@ -447,7 +447,6 @@ def fetch_yfinance(ticker: str) -> RawSymbolData:
                 raise  # fail fast: fetch_all retries throttled symbols after a cooldown
             last_error = exc
             time.sleep(1.0 * (attempt + 1))
-    assert last_error is not None
     raise last_error
 
 

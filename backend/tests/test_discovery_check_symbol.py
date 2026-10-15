@@ -310,3 +310,23 @@ def test_fetch_all_gives_up_after_the_last_pass() -> None:
 
     assert isinstance(results["A"], Exception)
     assert sleeps == [5.0]
+
+
+def test_fetch_yfinance_raises_the_last_error_after_three_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.discovery.validate_universe as module
+
+    attempts: list[str] = []
+
+    def failing_ticker(symbol: str) -> None:
+        attempts.append(symbol)
+        raise ValueError(f"attempt {len(attempts)}")
+
+    monkeypatch.setattr(module.yf, "Ticker", failing_ticker)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(ValueError, match="attempt 3"):
+        module.fetch_yfinance("SAP.DE")
+
+    assert attempts == ["SAP.DE", "SAP.DE", "SAP.DE"]
