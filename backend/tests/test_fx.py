@@ -160,33 +160,10 @@ def test_a_price_under_a_hundredth_of_a_cent_is_dropped():
     assert prices == {} and skipped["AAPL"] == "Its price is outside the supported range."
 
 
-GLOBAL_CURRENCIES = [
-    "HKD",
-    "CNY",
-    "INR",
-    "KRW",
-    "TWD",
-    "SGD",
-    "BRL",
-    "MXN",
-    "ZAR",
-    "NZD",
-    "CZK",
-    "HUF",
-    "TRY",
-    "ILS",
-    "SAR",
-    "AED",
-    "THB",
-    "IDR",
-    "MYR",
-    "CLP",
-    "COP",
-    "QAR",
-    "KWD",
-    "PHP",
-    "EGP",
-]
+GLOBAL_CURRENCIES = (
+    "HKD CNY INR KRW TWD SGD BRL MXN ZAR NZD CZK HUF "  # noqa: SIM905
+    "TRY ILS SAR AED THB IDR MYR CLP COP QAR KWD PHP EGP".split()
+)
 
 
 @pytest.mark.parametrize("currency", GLOBAL_CURRENCIES)
@@ -221,3 +198,18 @@ def test_eur_rate_is_public_and_returns_eur_per_unit():
         assert run(fx.eur_rate("USD")) == D("0.8")
         assert run(fx.eur_rate("EUR")) == D("1")
         assert run(fx.eur_rate("XXX")) is None
+
+
+def test_rate_symbol_names_the_yahoo_cross_rate_for_a_currency():
+    assert fx.rate_symbol("USD") == "EURUSD=X"
+    assert fx.rate_symbol("ZAc") == "EURZAR=X"  # a minor unit uses its main currency's rate
+    assert fx.rate_symbol("EUR") is None
+    assert fx.rate_symbol("XXX") is None
+
+
+def test_rate_from_price_converts_units_per_eur_to_eur_per_unit():
+    assert fx.rate_from_price("USD", 1.25) == D("0.8")
+    assert fx.rate_from_price("ZAc", 20.0) == D("0.0005")
+    assert fx.rate_from_price("EUR", None) == D("1")
+    assert fx.rate_from_price("USD", 0) is None
+    assert fx.rate_from_price("USD", None) is None

@@ -25,7 +25,7 @@ from typing import Any
 import yfinance as yf
 
 from app.discovery.universe import UNIVERSE_PATH, UniverseRow, load_universe, region_of
-from app.fx import RATE_SYMBOLS, SUBUNITS, SUPPORTED
+from app.fx import SUBUNITS, SUPPORTED, rate_from_price, rate_symbol
 
 # Core fundamentals used for the coverage report (plan section 4.3). A field counts as present
 # when it is a finite number: zero is a real value, None and NaN are gaps.
@@ -46,6 +46,8 @@ CORE_FIELDS = (
 # meaningfully; a shorter history cannot give a volatility or a correlation.
 MIN_CORE_METRICS = 3
 MIN_HISTORY_DAYS = 120
+# A last close older than this many calendar days is an unreliable price (plan section 4.1).
+STALE_DAYS = 5
 
 # Region targets from the plan (targets, not quotas).
 REGION_TARGETS = {
@@ -61,30 +63,8 @@ _SIZE_BOUNDS_EUR = ((300e6, "micro"), (2e9, "small"), (10e9, "mid"))
 
 # Corporate-form and filler words that carry no identity ("Toyota Motor Corp" is "Toyota Motor").
 _NAME_NOISE = frozenset(
-    {
-        "ab",
-        "ag",
-        "asa",
-        "bv",
-        "co",
-        "company",
-        "corp",
-        "corporation",
-        "group",
-        "holding",
-        "holdings",
-        "inc",
-        "incorporated",
-        "limited",
-        "ltd",
-        "nv",
-        "oyj",
-        "plc",
-        "sa",
-        "se",
-        "spa",
-        "the",
-    }
+    "ab ag asa bv co company corp corporation group holding holdings inc incorporated limited "  # noqa: SIM905
+    "ltd nv oyj plc sa se spa the".split()
 )
 
 # Yahoo throttles bulk fetching. yfinance raises a class with this name; matching on the name
@@ -112,11 +92,10 @@ class RawSymbolData:
 @dataclass(frozen=True)
 class SymbolResult:
     row: UniverseRow
-    failure: str | None  # unresolved | history_too_short | currency_unsupported | insufficient_data
+    failure: str | None  # unresolved | rate_limited | history_too_short | stale_price | ...
     detail: str | None  # exception class name for an unresolved symbol, never the message
     mismatches: tuple[str, ...]  # name | country | currency | sector | asset_type
     actual_name: str | None
-    history_days: int
     coverage: FieldCoverage
     market_cap_eur: float | None
     size_bucket: str
@@ -179,21 +158,10 @@ def find_duplicate_listings(listings: list[tuple[str, str]]) -> list[tuple[str, 
     return sorted(tuple(sorted(tickers)) for tickers in by_name.values() if len(tickers) > 1)
 
 
-def rate_from_prices(currency: str, price_of: PriceFn) -> Decimal | None:
-    """EUR per 1 unit of `currency` (per 1 minor unit for GBp, ZAc, ILA); None if unsupported.
-
-    Same mapping as `app.fx`, but with the price lookup injected so the script needs no Redis.
-    """
-    if currency == "EUR":
-        return Decimal(1)
-    base, factor = SUBUNITS.get(currency, (currency, Decimal(1)))
-    symbol = RATE_SYMBOLS.get(base)
-    if symbol is None:
-        return None
-    per_eur = price_of(symbol)
-    if per_eur is None or not math.isfinite(per_eur) or per_eur <= 0:
-        return None
-    return factor / Decimal(str(per_eur))
+def eur_rate_from(currency: str, price_of: PriceFn) -> Decimal | None:
+    """EUR per 1 unit of `currency`; the price lookup is injected so the script needs no Redis."""
+    symbol = rate_symbol(currency)
+    return rate_from_price(currency, price_of(symbol) if symbol else None)
 
 
 def market_cap_to_eur(cap: Any, currency: str, rates: dict[str, Decimal]) -> float | None:
@@ -213,17 +181,14 @@ def market_cap_to_eur(cap: Any, currency: str, rates: dict[str, Decimal]) -> flo
     return float(Decimal(str(cap)) * rate)
 
 
-def _failed(
-    row: UniverseRow, failure: str, detail: str | None = None, info: dict[str, Any] | None = None
-) -> SymbolResult:
+def _failed(row: UniverseRow, failure: str, detail: str | None = None) -> SymbolResult:
     return SymbolResult(
         row=row,
         failure=failure,
         detail=detail,
         mismatches=(),
         actual_name=None,
-        history_days=0,
-        coverage=core_coverage(info or {}),
+        coverage=core_coverage({}),
         market_cap_eur=None,
         size_bucket="unknown",
     )
@@ -242,18 +207,19 @@ def _region_differs(file_country: str, live_country: Any) -> bool:
     return "unknown" not in (file_region, live_region) and file_region != live_region
 
 
-def check_symbol(row: UniverseRow, fetch: Fetch, rates: dict[str, Decimal]) -> SymbolResult:
-    try:
-        raw = fetch(row.ticker)
-    except Exception as exc:  # the network layer can raise anything; record the class only
-        reason = "rate_limited" if type(exc).__name__ == RATE_LIMIT_ERROR else "unresolved"
-        return _failed(row, reason, detail=type(exc).__name__)
+def check_symbol(
+    row: UniverseRow, fetched: RawSymbolData | Exception, rates: dict[str, Decimal], today: date
+) -> SymbolResult:
+    if isinstance(fetched, Exception):  # the network layer can raise anything; keep the class only
+        reason = "rate_limited" if type(fetched).__name__ == RATE_LIMIT_ERROR else "unresolved"
+        return _failed(row, reason, detail=type(fetched).__name__)
 
+    raw = fetched
     info = raw.info
     name = info.get("longName") or info.get("shortName")
     quote_type = info.get("quoteType")
     if not name or not quote_type:
-        return _failed(row, "unresolved", info=info)
+        return _failed(row, "unresolved")
 
     currency = str(info.get("currency") or "")
     coverage = core_coverage(info)
@@ -274,6 +240,8 @@ def check_symbol(row: UniverseRow, fetch: Fetch, rates: dict[str, Decimal]) -> S
     failure: str | None = None
     if raw.history_days < MIN_HISTORY_DAYS:
         failure = "history_too_short"
+    elif raw.last_close_date is None or (today - raw.last_close_date).days > STALE_DAYS:
+        failure = "stale_price"
     elif currency not in SUPPORTED:
         failure = "currency_unsupported"
     elif row.asset_type == "STOCK" and coverage.present < MIN_CORE_METRICS:
@@ -285,16 +253,10 @@ def check_symbol(row: UniverseRow, fetch: Fetch, rates: dict[str, Decimal]) -> S
         detail=None,
         mismatches=tuple(mismatches),
         actual_name=str(name),
-        history_days=raw.history_days,
         coverage=coverage,
         market_cap_eur=market_cap_eur,
         size_bucket=size_bucket_for(market_cap_eur),
     )
-
-
-def has_unchecked(results: list[SymbolResult]) -> bool:
-    """True when Yahoo throttled some symbols and the run could not check them."""
-    return any(r.failure == "rate_limited" for r in results)
 
 
 def meets_thresholds(results: list[SymbolResult], min_ok_ratio: float) -> bool:
@@ -472,15 +434,10 @@ def main(argv: list[str] | None = None) -> int:
         for raw in fetched.values()
         if isinstance(raw, RawSymbolData) and raw.info.get("currency")
     }
-    rates = {c: rate for c in sorted(currencies) if (rate := rate_from_prices(c, _latest_close))}
+    rates = {c: rate for c in sorted(currencies) if (rate := eur_rate_from(c, _latest_close))}
 
-    def replay(ticker: str) -> RawSymbolData:
-        raw = fetched[ticker]
-        if isinstance(raw, Exception):
-            raise raw
-        return raw
-
-    results = [check_symbol(row, replay, rates) for row in rows]
+    today = date.today()
+    results = [check_symbol(row, fetched[row.ticker], rates, today) for row in rows]
     duplicates = find_duplicate_listings(
         [(r.row.ticker, r.actual_name) for r in results if r.ok and r.actual_name]
     )
@@ -498,7 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not meets_thresholds(results, args.min_ok_ratio):
         return 1
-    return 2 if has_unchecked(results) else 0
+    return 2 if unchecked else 0
 
 
 if __name__ == "__main__":

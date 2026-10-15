@@ -88,26 +88,37 @@ def _positive(value: object) -> Decimal | None:
     return number if number.is_finite() and number > 0 else None
 
 
-async def _rate(currency: str) -> Decimal | None:
-    """EUR per 1 unit of `currency` (per 1 penny for GBp); None when it cannot be found."""
+def rate_symbol(currency: str) -> str | None:
+    """The Yahoo symbol quoting units of `currency` per 1 EUR; None for EUR or an unsupported one.
+
+    A minor unit (GBp, ZAc, ILA) uses the rate of its main currency.
+    """
+    return RATE_SYMBOLS.get(SUBUNITS.get(currency, (currency, Decimal(1)))[0])
+
+
+def rate_from_price(currency: str, per_eur: object) -> Decimal | None:
+    """EUR per 1 unit of `currency`, from the quoted units of that currency per 1 EUR."""
     if currency == "EUR":
         return Decimal(1)
-    base, factor = SUBUNITS.get(currency, (currency, Decimal(1)))
-    symbol = RATE_SYMBOLS.get(base)
+    price = _positive(per_eur)
+    if price is None:
+        return None
+    return SUBUNITS.get(currency, (currency, Decimal(1)))[1] / price
+
+
+async def eur_rate(currency: str) -> Decimal | None:
+    """EUR per 1 unit of `currency` (per 1 minor unit for GBp, ZAc, ILA); None when not found."""
+    if currency == "EUR":
+        return Decimal(1)
+    symbol = rate_symbol(currency)
     if symbol is None:
         return None
     try:
         data = await fetch_quote_and_history(symbol)
     except Exception as exc:
-        logger.warning("Rate lookup failed for %s (%s)", base, type(exc).__name__)
+        logger.warning("Rate lookup failed for %s (%s)", symbol, type(exc).__name__)
         return None
-    per_eur = _positive(data.get("price")) if isinstance(data, dict) else None
-    return factor / per_eur if per_eur is not None else None
-
-
-async def eur_rate(currency: str) -> Decimal | None:
-    """EUR per 1 unit of `currency` (per 1 minor unit for GBp, ZAc, ILA); None when unsupported."""
-    return await _rate(currency)
+    return rate_from_price(currency, data.get("price") if isinstance(data, dict) else None)
 
 
 async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, str]]:
@@ -140,7 +151,7 @@ async def eur_prices(tickers: set[str]) -> tuple[dict[str, EurPrice], dict[str, 
     found = await asyncio.gather(*(one(t) for t in ordered))
     currencies = sorted({r[1] for _, r in found if not isinstance(r, str)})
     # zip pairs each currency with its rate; strict=True fails loudly if the lengths differ
-    found_rates = await asyncio.gather(*(_rate(c) for c in currencies))
+    found_rates = await asyncio.gather(*(eur_rate(c) for c in currencies))
     rates = dict(zip(currencies, found_rates, strict=True))
 
     prices: dict[str, EurPrice] = {}

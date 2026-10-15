@@ -25,70 +25,27 @@ COLUMNS = (
 ASSET_TYPES = frozenset({"STOCK", "ETF"})
 SIZE_BUCKETS = frozenset({"micro", "small", "mid", "large", "unknown"})
 
-# Region labels used by the coverage report. Targets, not quotas (plan section 6, Phase 3).
-REGIONS = ("north_america", "europe", "asia_pacific", "other_emerging", "global_etf")
-
-_NORTH_AMERICA = frozenset({"United States", "Canada"})
-_EUROPE = frozenset(
-    {
-        "Austria",
-        "Belgium",
-        "Czech Republic",
-        "Denmark",
-        "Finland",
-        "France",
-        "Germany",
-        "Greece",
-        "Hungary",
-        "Ireland",
-        "Italy",
-        "Luxembourg",
-        "Netherlands",
-        "Norway",
-        "Poland",
-        "Portugal",
-        "Spain",
-        "Sweden",
-        "Switzerland",
-        "United Kingdom",
-    }
-)
-_ASIA_PACIFIC = frozenset(
-    {
-        "Australia",
-        "China",
-        "Hong Kong",
-        "India",
-        "Indonesia",
-        "Japan",
-        "Malaysia",
-        "New Zealand",
-        "Philippines",
-        "Singapore",
-        "South Korea",
-        "Taiwan",
-        "Thailand",
-        "Vietnam",
-    }
-)
-_OTHER_EMERGING = frozenset(
-    {
-        "Argentina",
-        "Brazil",
-        "Chile",
-        "Colombia",
-        "Egypt",
-        "Israel",
-        "Kuwait",
-        "Mexico",
-        "Peru",
-        "Qatar",
-        "Saudi Arabia",
-        "South Africa",
-        "Turkey",
-        "United Arab Emirates",
-    }
-)
+_COUNTRIES_BY_REGION = {
+    "north_america": "United States, Canada",
+    "europe": (
+        "Austria, Belgium, Czech Republic, Denmark, Finland, France, Germany, Greece, Hungary, "
+        "Ireland, Italy, Luxembourg, Netherlands, Norway, Poland, Portugal, Spain, Sweden, "
+        "Switzerland, United Kingdom"
+    ),
+    "asia_pacific": (
+        "Australia, China, Hong Kong, India, Indonesia, Japan, Malaysia, New Zealand, "
+        "Philippines, Singapore, South Korea, Taiwan, Thailand, Vietnam"
+    ),
+    "other_emerging": (
+        "Argentina, Brazil, Chile, Colombia, Egypt, Israel, Kuwait, Mexico, Peru, Qatar, "
+        "Saudi Arabia, South Africa, Turkey, United Arab Emirates"
+    ),
+}
+_REGION_BY_COUNTRY = {
+    country: region
+    for region, names in _COUNTRIES_BY_REGION.items()
+    for country in names.split(", ")
+}
 
 
 class UniverseFileError(ValueError):
@@ -113,15 +70,7 @@ def region_of(country: str, asset_type: str) -> str:
     """The reporting region of a security; ETFs are one global group whatever their domicile."""
     if asset_type == "ETF":
         return "global_etf"
-    if country in _NORTH_AMERICA:
-        return "north_america"
-    if country in _EUROPE:
-        return "europe"
-    if country in _ASIA_PACIFIC:
-        return "asia_pacific"
-    if country in _OTHER_EMERGING:
-        return "other_emerging"
-    return "unknown"
+    return _REGION_BY_COUNTRY.get(country, "unknown")
 
 
 def load_universe(path: Path = UNIVERSE_PATH) -> list[UniverseRow]:
