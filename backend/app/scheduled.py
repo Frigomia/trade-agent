@@ -136,7 +136,7 @@ async def run_discovery_snapshot(summary: Summary) -> None:
     )
     for ticker, reason in sorted(report.failed.items()):
         logger.warning("Discovery snapshot: %s failed (%s)", ticker, reason)
-    if len(report.failed) > MAX_FAILED_SHARE * len(tickers):
+    if not tickers or len(report.failed) > MAX_FAILED_SHARE * len(tickers):  # empty: no universe
         summary.failures += 1
 
 

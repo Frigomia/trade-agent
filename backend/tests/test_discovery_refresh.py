@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Coroutine
 from datetime import date
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +14,7 @@ from app.discovery.refresh import (
     load_snapshot,
     refresh_snapshot,
 )
+from app.discovery.snapshot import to_snapshot
 from app.redis_client import get_redis
 
 
@@ -134,3 +136,37 @@ def test_load_skips_missing_and_corrupt_entries_and_keeps_the_order() -> None:
 def test_an_empty_universe_is_not_an_error() -> None:
     assert refresh([], Fetcher()) == RefreshReport(cached=0, fetched=0, failed={})
     assert load([]) == []
+
+
+def test_a_symbol_stored_in_an_earlier_run_is_fetched_again() -> None:
+    fetcher = Fetcher()
+    refresh(["A"], fetcher)
+    run(get_redis().expire("discovery:symbol:A", SNAPSHOT_TTL_SECONDS - 2 * 24 * 3600))
+
+    report = refresh(["A"], fetcher)
+
+    assert (report.cached, report.fetched) == (0, 1)
+
+
+def test_an_unreadable_stored_entry_is_fetched_again() -> None:
+    run(get_redis().set("discovery:symbol:A", '{"ticker": "A"}', ex=SNAPSHOT_TTL_SECONDS))
+
+    report = refresh(["A"], Fetcher())
+
+    assert (report.cached, report.fetched) == (0, 1)
+    assert [s.ticker for s in load(["A"])] == ["A"]
+
+
+def test_a_symbol_that_cannot_be_stored_fails_alone() -> None:
+    real = to_snapshot
+
+    def broken(ticker: str, raw: RawSymbolData):  # type: ignore[no-untyped-def]
+        if ticker == "B":
+            raise ValueError("bad record")
+        return real(ticker, raw)
+
+    with patch("app.discovery.refresh.to_snapshot", broken):
+        report = refresh(["A", "B", "C"], Fetcher())
+
+    assert (report.fetched, report.failed) == (2, {"B": "ValueError"})
+    assert [s.ticker for s in load(["A", "B", "C"])] == ["A", "C"]

@@ -88,7 +88,7 @@ class SymbolSnapshot:
         return json.dumps(asdict(self))
 
     @classmethod
-    def from_json(cls, text: str) -> "SymbolSnapshot":
+    def from_json(cls, text: str | bytes) -> "SymbolSnapshot":
         return cls(**json.loads(text))
 
 
@@ -155,7 +155,7 @@ def check_freshness(
     uncertain: dict[str, str] = {}
     for exchange, group in by_exchange.items():
         label = exchange or "unknown exchange"
-        week = weeks.get(exchange, MON_FRI)
+        week = weeks.get(exchange) or MON_FRI  # an empty week would never reach a cutoff
         cutoff = _cutoff(today, week)
         usable = [s for s in group if s.dates]
         stale.update({s.ticker: "no price history" for s in group if not s.dates})

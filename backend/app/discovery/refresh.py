@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 SNAPSHOT_TTL_SECONDS = 8 * 24 * 3600  # a weekly refresh, plus a day of slack
 BATCH_SIZE = 50  # what a dying run can lose
 WORKERS = 2  # Yahoo throttles beyond two or three
+RESUME_WINDOW_SECONDS = 24 * 3600  # a run that died is resumed within a day; after that, refetch
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,14 @@ def _key(ticker: str) -> str:
     return f"discovery:symbol:{ticker}"
 
 
+def _readable(value: str | bytes) -> bool:
+    try:
+        SymbolSnapshot.from_json(value)
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
 async def refresh_snapshot(
     tickers: list[str],
     *,
@@ -43,19 +52,33 @@ async def refresh_snapshot(
 ) -> RefreshReport:
     redis = get_redis()
     unique = list(dict.fromkeys(tickers))
-    stored = await redis.mget([_key(t) for t in unique]) if unique else []
-    missing = [t for t, value in zip(unique, stored, strict=True) if value is None]
+    keys = [_key(t) for t in unique]
+    stored = await redis.mget(keys) if unique else []
+    async with redis.pipeline() as pipe:
+        for key in keys:
+            pipe.ttl(key)
+        left = await pipe.execute() if unique else []
+    # Present, readable and written in this run: a resume. An older entry (the TTL outlives the
+    # weekly period) or one that no longer reads is fetched again.
+    min_left = SNAPSHOT_TTL_SECONDS - RESUME_WINDOW_SECONDS
+    missing = [
+        t
+        for t, value, ttl in zip(unique, stored, left, strict=True)
+        if value is None or ttl < min_left or not _readable(value)
+    ]
 
     failed: dict[str, str] = {}
     for start in range(0, len(missing), batch_size):
         batch = missing[start : start + batch_size]
         results = await asyncio.to_thread(fetch_all, batch, fetch, workers, sleep=sleep)
         for ticker, outcome in results.items():
-            if isinstance(outcome, RawSymbolData):
+            try:
+                if not isinstance(outcome, RawSymbolData):
+                    raise outcome
                 snapshot = to_snapshot(ticker, outcome)
                 await redis.set(_key(ticker), snapshot.to_json(), ex=SNAPSHOT_TTL_SECONDS)
-            else:
-                failed[ticker] = type(outcome).__name__
+            except Exception as exc:  # one bad record must not lose the rest of the batch
+                failed[ticker] = type(exc).__name__
     return RefreshReport(len(unique) - len(missing), len(missing) - len(failed), failed)
 
 

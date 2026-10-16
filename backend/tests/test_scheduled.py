@@ -1392,7 +1392,10 @@ def _run_discovery_snapshot(report, universe=None):
     refresh = AsyncMock(return_value=RefreshReport(*report))
     with (
         patch("app.scheduled.refresh_snapshot", refresh),
-        patch("app.scheduled.load_universe", return_value=universe or _universe(10)),
+        patch(
+            "app.scheduled.load_universe",
+            return_value=_universe(10) if universe is None else universe,
+        ),
     ):
         code = _arun(scheduled.run_command("discovery_snapshot"))
     return code, refresh
@@ -1417,6 +1420,12 @@ def test_most_symbols_failing_fails_the_job():
     failed = {f"T{i}": "YFRateLimitError" for i in range(5)}
 
     code, _ = _run_discovery_snapshot((0, 5, failed))
+
+    assert code == 1
+
+
+def test_an_empty_universe_fails_the_job():
+    code, _ = _run_discovery_snapshot((0, 0, {}), universe=[])
 
     assert code == 1
 

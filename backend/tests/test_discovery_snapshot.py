@@ -380,3 +380,11 @@ def test_a_classification_that_is_not_text_is_dropped() -> None:
     s = to_snapshot("X", fetched({"sector": 12, "exchange": "", "marketCap": float("nan")}, [], []))
 
     assert (s.sector, s.exchange, s.market_cap) == (None, None, None)
+
+
+def test_an_exchange_with_no_trading_days_listed_falls_back_to_monday_to_friday() -> None:
+    group = exchange([TODAY.isoformat()] * 5 + [days_ago(9)])
+
+    result = check_freshness(group, TODAY, trading_weekdays={"GER": ()})
+
+    assert list(result.stale) == ["GER5"]
