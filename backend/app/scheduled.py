@@ -22,6 +22,8 @@ from app.agents.jobs import (
 )
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
+from app.discovery.refresh import refresh_snapshot
+from app.discovery.universe import load_universe
 from app.memory.outcomes import evaluate_due_outcomes
 from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot
 from app.notify import notify_user
@@ -115,6 +117,27 @@ async def run_snapshots(summary: Summary) -> None:
         except Exception as exc:
             summary.failures += 1
             logger.warning("Snapshot failed for user %s: %s", user_id, type(exc).__name__)
+
+
+# A static universe ages: some names are delisted or renamed, so a few failures are normal. More
+# than this share failing means Yahoo is blocking or down, and the job should say so.
+MAX_FAILED_SHARE = 0.2
+
+
+async def run_discovery_snapshot(summary: Summary) -> None:
+    """Refresh the symbols of the global universe that are missing or expired in the cache."""
+    tickers = [row.ticker for row in load_universe()]
+    report = await refresh_snapshot(tickers)
+    logger.info(
+        "Discovery snapshot: cached=%d fetched=%d failed=%d",
+        report.cached,
+        report.fetched,
+        len(report.failed),
+    )
+    for ticker, reason in sorted(report.failed.items()):
+        logger.warning("Discovery snapshot: %s failed (%s)", ticker, reason)
+    if len(report.failed) > MAX_FAILED_SHARE * len(tickers):
+        summary.failures += 1
 
 
 async def run_outcomes(summary: Summary) -> None:
@@ -360,7 +383,7 @@ async def run_notify(
         logger.warning("Notify: %d users not reached, time budget used up", not_reached)
 
 
-COMMANDS = ("daily", "snapshots", "outcomes", "analysis", "notify")
+COMMANDS = ("daily", "snapshots", "outcomes", "analysis", "notify", "discovery_snapshot")
 
 
 async def run_command(command: str) -> int:
@@ -379,6 +402,8 @@ async def run_command(command: str) -> int:
     started = time.monotonic()
     summary = Summary()
     try:
+        if command == "discovery_snapshot":
+            await run_discovery_snapshot(summary)
         if command in ("daily", "snapshots"):
             await run_snapshots(summary)
         if command in ("daily", "outcomes"):

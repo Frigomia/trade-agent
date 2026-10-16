@@ -1375,3 +1375,51 @@ def test_a_failed_refund_keeps_the_same_day_marker(env):
     assert summary.analysis_failures == 1
     marker = scheduled._ran_marker_key(USER_ID, MONDAY)
     assert _arun(get_redis().get(marker)) == "1"  # kept: the charge was not given back
+
+
+# ---- discovery_snapshot: the weekly refresh of the global universe ---------------------------
+
+
+def _universe(count):
+    from types import SimpleNamespace
+
+    return [SimpleNamespace(ticker=f"T{i}") for i in range(count)]
+
+
+def _run_discovery_snapshot(report, universe=None):
+    from app.discovery.refresh import RefreshReport
+
+    refresh = AsyncMock(return_value=RefreshReport(*report))
+    with (
+        patch("app.scheduled.refresh_snapshot", refresh),
+        patch("app.scheduled.load_universe", return_value=universe or _universe(10)),
+    ):
+        code = _arun(scheduled.run_command("discovery_snapshot"))
+    return code, refresh
+
+
+def test_discovery_snapshot_refreshes_every_universe_symbol_and_releases_the_lock():
+    code, refresh = _run_discovery_snapshot((0, 10, {}))
+
+    assert code == 0
+    assert refresh.await_args.args[0] == [f"T{i}" for i in range(10)]
+    assert _arun(_lock_exists("scheduled:discovery_snapshot")) is False
+
+
+def test_a_few_failed_symbols_do_not_fail_the_job():
+    # delisted and renamed names are normal: one in ten is within what a static list ages by
+    code, _ = _run_discovery_snapshot((0, 9, {"T3": "ValueError"}))
+
+    assert code == 0
+
+
+def test_most_symbols_failing_fails_the_job():
+    failed = {f"T{i}": "YFRateLimitError" for i in range(5)}
+
+    code, _ = _run_discovery_snapshot((0, 5, failed))
+
+    assert code == 1
+
+
+def test_discovery_snapshot_is_a_command_of_its_own():
+    assert "discovery_snapshot" in scheduled.COMMANDS
