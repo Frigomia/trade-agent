@@ -5,6 +5,7 @@ the reader, proposed defaults, not eligibility rules.
 """
 
 import math
+from collections.abc import Callable
 from decimal import Decimal
 from statistics import stdev
 from typing import Any
@@ -22,16 +23,39 @@ SIZE_BOUNDS_EUR: tuple[tuple[float, SizeBucket], ...] = (
 LEVELS: tuple[RiskLevel, RiskLevel, RiskLevel] = ("low", "medium", "high")  # by number of flags
 THIN_LIQUIDITY_EUR = 1e6  # average daily traded value (approved)
 HIGH_VOLATILITY = 0.40  # annualized
-HIGH_LEVERAGE = 2.0  # debt as a multiple of equity; judged for non-financial companies only
+HIGH_LEVERAGE = 2.0  # debt as a multiple of equity
+
+# Where a stability measure means something else, and why. Revenue and equity count everywhere.
+NOT_JUDGED: dict[str, frozenset[str]] = {
+    # Banks and insurers owe deposits and policy reserves; REITs and utilities fund assets with
+    # debt by design. Debt to equity is not comparable with non-financial companies.
+    "high_leverage": frozenset({"bank", "insurer", "financial_other", "reit", "utility"}),
+    # For banks, insurers and other financials, operating cash flow includes deposits, premiums
+    # and trading flows, so it is not free cash in the usual sense.
+    "negative_fcf": frozenset({"bank", "insurer", "financial_other"}),
+}
+STABILITY: tuple[tuple[str, str, Callable[[float], bool], str], ...] = (
+    ("high_leverage", "debtToEquity", lambda v: v > HIGH_LEVERAGE, "debt is {:.1f}x equity"),
+    ("negative_fcf", "fcfMargin", lambda v: v < 0, "free cash flow is {:.0%} of revenue"),
+    ("shrinking_revenue", "revenueGrowth", lambda v: v < 0, "revenue growth is {:.0%}"),
+)
 
 
-def _number(value: Any) -> float | None:
+def _number(
+    value: Any, *, above: float | None = None, atleast: float | None = None
+) -> float | None:
+    """A finite number within the bounds, else None: an invalid input is not a measurement."""
     ok = isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
-    return float(value) if ok else None
+    if not ok:
+        return None
+    number = float(value)
+    if (above is not None and number <= above) or (atleast is not None and number < atleast):
+        return None
+    return number
 
 
 def size_bucket_for(market_cap_eur: float | None) -> SizeBucket:
-    cap = _number(market_cap_eur)
+    cap = _number(market_cap_eur, above=0)
     if cap is None:
         return "unknown"
     return next((label for bound, label in SIZE_BOUNDS_EUR if cap < bound), "large")
@@ -42,10 +66,11 @@ def market_cap_to_eur(cap: Any, currency: str, rates: dict[str, Decimal]) -> flo
 
     Yahoo reports the market cap in the major unit even when the price is in a minor unit (a
     London stock is priced in pence, GBp, but its market cap is in pounds), so a minor-unit
-    rate is scaled back up to the main currency first.
+    rate is scaled back up to the main currency first. A cap or a rate that is not positive
+    converts nothing.
     """
-    value, rate = _number(cap), rates.get(currency)
-    if value is None or rate is None:
+    value, rate = _number(cap, above=0), rates.get(currency)
+    if value is None or rate is None or rate <= 0:
         return None
     if currency in SUBUNITS:
         rate = rate / SUBUNITS[currency][1]
@@ -76,9 +101,10 @@ def build_risk_profile(
     metrics: dict[str, Any],
 ) -> RiskProfile:
     cap_eur = market_cap_to_eur(market_cap, currency, rates)
-    volume, px, rate = _number(avg_volume), _number(price), rates.get(currency)
-    # price is in the quote unit (pence included), so the quote-unit rate converts it directly
-    daily = volume * px * float(rate) if volume is not None and px is not None and rate else None
+    volume, px, rate = _number(avg_volume, atleast=0), _number(price, above=0), rates.get(currency)
+    # price is in the quote unit (pence included), so the quote-unit rate converts it directly;
+    # zero volume is a real observation of illiquidity, a negative one is invalid
+    daily = volume * px * float(rate) if volume is not None and px and rate and rate > 0 else None
     size = size_bucket_for(cap_eur)
     volatility, drawdown = _price_risk(closes)
 
@@ -89,21 +115,25 @@ def build_risk_profile(
         flags.append(f"thin_liquidity: {daily / 1e6:.1f}M EUR traded a day")
     if volatility is not None and volatility > HIGH_VOLATILITY:
         flags.append(f"high_volatility: {volatility:.0%} a year")
-    debt, book, fcf, growth = (
-        _number(metrics.get(key))
-        for key in ("debtToEquity", "priceToBook", "fcfMargin", "revenueGrowth")
-    )
-    if (book is not None and book <= 0) or (debt is not None and debt < 0):
-        flags.append("negative_equity: book value is zero or negative")
-    if group == "general":  # banks, insurers, REITs and utilities are leveraged by design
-        if debt is not None and debt > HIGH_LEVERAGE:
-            flags.append(f"high_leverage: debt is {debt:.1f}x equity")
-        if fcf is not None and fcf < 0:
-            flags.append(f"negative_fcf: free cash flow is {fcf:.0%} of revenue")
-        if growth is not None and growth < 0:
-            flags.append(f"shrinking_revenue: revenue growth is {growth:.0%}")
-
     measured = cap_eur is not None or daily is not None or volatility is not None
+
+    # Negative equity: the sign of debt to equity says so on its own. A negative price to book
+    # does too, but only for a valid positive price, and a zero ratio proves nothing.
+    equity = [
+        _number(metrics.get("debtToEquity")),
+        _number(metrics.get("priceToBook")) if px else None,
+    ]
+    measured = measured or any(value is not None for value in equity)
+    if any(value is not None and value < 0 for value in equity):
+        flags.append("negative_equity: book value is negative")
+    for flag, key, is_problem, text in STABILITY:
+        value = _number(metrics.get(key))
+        if value is None or group in NOT_JUDGED.get(flag, ()):
+            continue
+        measured = True
+        if is_problem(value):
+            flags.append(f"{flag}: {text.format(value)}")
+
     level: RiskLevel = LEVELS[min(len(flags), 2)] if measured else "unknown"
     return RiskProfile(
         market_cap_eur=cap_eur,
