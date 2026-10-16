@@ -11,11 +11,9 @@ import argparse
 import math
 import re
 import sys
-import time
 import unicodedata
 from collections import Counter, defaultdict
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
@@ -24,24 +22,11 @@ from typing import Any
 
 import yfinance as yf
 
+from app.discovery.fetching import RATE_LIMIT_ERROR, RawSymbolData, fetch_all, fetch_yfinance
 from app.discovery.risk import MIN_HISTORY_DAYS, market_cap_to_eur, size_bucket_for
+from app.discovery.snapshot import CORE_FIELDS
 from app.discovery.universe import UNIVERSE_PATH, UniverseRow, load_universe, region_of
 from app.fx import SUPPORTED, rate_from_price, rate_symbol
-
-# Core fundamentals used for the coverage report (plan section 4.3). A field counts as present
-# when it is a finite number: zero is a real value, None and NaN are gaps.
-CORE_FIELDS = (
-    "returnOnEquity",
-    "profitMargins",
-    "operatingMargins",
-    "revenueGrowth",
-    "debtToEquity",
-    "freeCashflow",
-    "trailingPE",
-    "priceToBook",
-    "enterpriseToEbitda",
-    "marketCap",
-)
 
 # Proposed defaults, confirmed in Phase 0. A stock below MIN_CORE_METRICS cannot be analysed
 # meaningfully; a shorter history cannot give a volatility or a correlation.
@@ -68,10 +53,6 @@ _NAME_NOISE = frozenset(
     "ltd nv oyj plc sa se spa the".split()
 )
 
-# Yahoo throttles bulk fetching. yfinance raises a class with this name; matching on the name
-# keeps this module free of an import that can change between yfinance versions.
-RATE_LIMIT_ERROR = "YFRateLimitError"
-
 # yfinance quoteType -> the universe file's asset_type
 _QUOTE_TYPES = {"EQUITY": "STOCK", "ETF": "ETF"}
 
@@ -81,13 +62,6 @@ class FieldCoverage:
     present: int
     total: int
     missing: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class RawSymbolData:
-    info: dict[str, Any]
-    history_days: int
-    last_close_date: date | None
 
 
 @dataclass(frozen=True)
@@ -106,7 +80,6 @@ class SymbolResult:
         return self.failure is None
 
 
-Fetch = Callable[[str], RawSymbolData]
 PriceFn = Callable[[str], float | None]
 
 
@@ -375,62 +348,6 @@ def build_report(
         out += [f"- {', '.join(group)}" for group in duplicates]
         out.append("")
     return "\n".join(out)
-
-
-def fetch_all(
-    tickers: list[str],
-    fetch: Fetch,
-    workers: int,
-    passes: int = 3,
-    cooldown: float = 60.0,
-    sleep: Callable[[float], None] = time.sleep,
-) -> dict[str, RawSymbolData | Exception]:
-    """Fetch every ticker; symbols Yahoo throttled are retried after a cooldown.
-
-    Each later pass runs single-threaded, which is what Yahoo tolerates best.
-    """
-
-    def attempt(ticker: str) -> RawSymbolData | Exception:
-        try:
-            return fetch(ticker)
-        except Exception as exc:  # kept as a value; check_symbol classifies it later
-            return exc
-
-    results: dict[str, RawSymbolData | Exception] = {}
-    pending = list(tickers)
-    for pass_number in range(passes):
-        if pass_number > 0:
-            sleep(cooldown)
-        pool_size = workers if pass_number == 0 else 1
-        with ThreadPoolExecutor(max_workers=pool_size) as pool:
-            for ticker, outcome in zip(pending, pool.map(attempt, pending), strict=True):
-                results[ticker] = outcome
-        pending = [
-            t
-            for t in pending
-            if isinstance(results[t], Exception) and type(results[t]).__name__ == RATE_LIMIT_ERROR
-        ]
-        if not pending:
-            break
-    return results
-
-
-def fetch_yfinance(ticker: str) -> RawSymbolData:
-    """Blocking network call. Retries twice: Yahoo drops requests under load."""
-    last_error: Exception = RuntimeError("no attempt was made")
-    for attempt in range(3):
-        try:
-            handle = yf.Ticker(ticker)
-            info = dict(handle.info or {})
-            closes = handle.history(period="1y")["Close"].dropna()
-            last = closes.index[-1].date() if len(closes) else None
-            return RawSymbolData(info=info, history_days=len(closes), last_close_date=last)
-        except Exception as exc:  # recorded by the caller as "unresolved" with the class name
-            if type(exc).__name__ == RATE_LIMIT_ERROR:
-                raise  # fail fast: fetch_all retries throttled symbols after a cooldown
-            last_error = exc
-            time.sleep(1.0 * (attempt + 1))
-    raise last_error
 
 
 def _latest_close(symbol: str) -> float | None:

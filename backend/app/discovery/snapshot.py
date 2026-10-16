@@ -12,9 +12,24 @@ from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from typing import Any
 
+from app.discovery.fetching import RawSymbolData
 from app.discovery.peers import finite_number
-from app.discovery.validate_universe import CORE_FIELDS
 from app.schemas_discovery import Coverage
+
+# Core fundamentals counted for coverage (plan section 4.3). A field counts as present when it is
+# a finite number: zero is a real value, None and NaN are gaps.
+CORE_FIELDS = (
+    "returnOnEquity",
+    "profitMargins",
+    "operatingMargins",
+    "revenueGrowth",
+    "debtToEquity",
+    "freeCashflow",
+    "trailingPE",
+    "priceToBook",
+    "enterpriseToEbitda",
+    "marketCap",
+)
 
 # Taken as they are from Yahoo.
 _PLAIN = (
@@ -192,3 +207,26 @@ def _closure_explains(
     """True when every trading day after `last` up to the cutoff is a verified closure."""
     gap = (last + timedelta(days=n) for n in range(1, (cutoff - last).days + 1))
     return all(day.weekday() not in week or day in closed for day in gap)
+
+
+def _text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def to_snapshot(ticker: str, raw: RawSymbolData) -> SymbolSnapshot:
+    info = raw.info
+    return SymbolSnapshot(
+        ticker=ticker,
+        asset_type="ETF" if info.get("quoteType") == "ETF" else "STOCK",
+        name=_text(info.get("longName")) or _text(info.get("shortName")) or ticker,
+        exchange=_text(info.get("exchange")),
+        sector=_text(info.get("sector")),
+        industry=_text(info.get("industry")),
+        currency=_text(info.get("currency")),
+        price=raw.closes[-1] if raw.closes else None,
+        market_cap=finite_number(info.get("marketCap")),
+        avg_volume=finite_number(info.get("averageVolume")),
+        metrics=normalize_metrics(info),
+        closes=raw.closes,
+        dates=raw.dates,
+    )
