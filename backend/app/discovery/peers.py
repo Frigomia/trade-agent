@@ -112,19 +112,19 @@ def metric_group(sector: str | None, industry: str | None, asset_type: str) -> s
     return "financial_other" if sector == "Financial Services" else "general"
 
 
-def _number(value: Any) -> float | None:
+def finite_number(value: Any) -> float | None:
     ok = isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
     return float(value) if ok else None
 
 
 def _usable(spec: MetricSpec, metrics: dict[str, Any]) -> float | None:
-    value = _number(metrics.get(spec.name))
+    value = finite_number(metrics.get(spec.name))
     if value is None:
         return None
     if (spec.domain == "positive" and value <= 0) or (spec.domain == "nonnegative" and value < 0):
         return None
     if spec.requires_positive is not None:
-        base = _number(metrics.get(spec.requires_positive))
+        base = finite_number(metrics.get(spec.requires_positive))
         if base is None or base <= 0:
             return None  # validity cannot be established, so the value is not used
     return value
