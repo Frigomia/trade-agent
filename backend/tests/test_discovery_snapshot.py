@@ -4,9 +4,10 @@ import pytest
 
 from app.discovery.snapshot import (
     METRIC_KEYS,
+    Freshness,
     SymbolSnapshot,
+    check_freshness,
     coverage_of,
-    find_stale,
     normalize_metrics,
 )
 
@@ -113,69 +114,141 @@ def test_a_record_survives_a_json_round_trip() -> None:
     assert SymbolSnapshot.from_json(s.to_json()) == s
 
 
-# ---- freshness measured in the exchange's own sessions ---------------------------------------
+# ---- freshness: current bars, peers, and verified closures ----------------------------------
+
+
+def weekdays(last: date, count: int = 10) -> list[str]:
+    return sessions(last, count)
 
 
 def exchange(last_dates: list[str], name: str = "GER") -> list[SymbolSnapshot]:
     return [
-        snap(f"{name}{i}", sessions(date.fromisoformat(d)), name) for i, d in enumerate(last_dates)
+        snap(f"{name}{i}", weekdays(date.fromisoformat(d)), name) for i, d in enumerate(last_dates)
     ]
 
 
-def test_a_symbol_far_behind_its_exchange_is_stale() -> None:
-    latest = TODAY.isoformat()
-    behind = (TODAY - timedelta(days=9)).isoformat()  # about 7 sessions back
-    group = exchange([latest] * 5 + [behind])
-
-    stale = find_stale(group, TODAY)
-
-    assert list(stale) == ["GER5"]
-    assert "GER" in stale["GER5"]
+def days_ago(days: int) -> str:
+    return (TODAY - timedelta(days=days)).isoformat()
 
 
-def test_a_missed_session_or_two_is_not_stale() -> None:
-    two_back = sessions(TODAY)[-3]  # still within the latest three sessions
-    group = exchange([TODAY.isoformat()] * 5 + [two_back])
+def test_a_symbol_far_behind_current_peers_is_stale() -> None:
+    group = exchange([TODAY.isoformat()] * 5 + [days_ago(9)])  # about 7 sessions back
 
-    assert find_stale(group, TODAY) == {}
+    result = check_freshness(group, TODAY)
 
-
-def test_a_holiday_shared_by_the_whole_exchange_is_not_stale() -> None:
-    # Everyone's last bar is 7 calendar days old (a week-long holiday): a calendar rule of 5 days
-    # would flag the whole exchange, a session-aware rule does not.
-    holiday_end = (TODAY - timedelta(days=7)).isoformat()
-    group = exchange([holiday_end] * 6)
-
-    assert find_stale(group, TODAY) == {}
+    assert list(result.stale) == ["GER5"]
+    assert "GER" in result.stale["GER5"]
+    assert result.uncertain == {}
 
 
-def test_an_exchange_with_no_recent_bars_at_all_is_stale() -> None:
-    old = (TODAY - timedelta(days=30)).isoformat()
+def test_a_close_in_the_latest_three_weekdays_is_current_without_any_peer() -> None:
+    group = exchange([TODAY.isoformat()] * 5 + [days_ago(2)])  # Wednesday: still within three
 
-    assert set(find_stale(exchange([old] * 6), TODAY)) == {f"GER{i}" for i in range(6)}
+    assert check_freshness(group, TODAY) == Freshness({}, {})
+    assert check_freshness(
+        [snap("ALONE", weekdays(TODAY - timedelta(days=2)))], TODAY
+    ) == Freshness({}, {})
+
+
+def test_old_records_do_not_make_current_symbols_stale() -> None:
+    # Three records end 30 days ago and two end today: the current two are demonstrably current.
+    group = exchange([days_ago(30)] * 3 + [TODAY.isoformat()] * 2)
+
+    result = check_freshness(group, TODAY)
+
+    assert set(result.stale) == {"GER0", "GER1", "GER2"}
+    assert "GER3" not in result.uncertain and "GER4" not in result.uncertain
+    assert all("no bar since" not in reason for reason in result.stale.values())
+
+
+def test_a_shared_old_age_is_uncertain_not_proof_of_freshness() -> None:
+    # Six records all end a week ago: a holiday, a provider outage or an outdated cache all look
+    # the same from the data alone. It must not be reported as fresh.
+    result = check_freshness(exchange([days_ago(7)] * 6), TODAY)
+
+    assert result.stale == {}
+    assert set(result.uncertain) == {f"GER{i}" for i in range(6)}
+    assert "cannot" in result.uncertain["GER0"]
+
+
+def test_a_verified_closure_explains_the_gap() -> None:
+    group = exchange([days_ago(7)] * 6)  # last bar Friday 9 October
+    holiday = {date(2026, 10, 12), date(2026, 10, 13), date(2026, 10, 14)}
+
+    assert check_freshness(group, TODAY, {"GER": holiday}) == Freshness({}, {})
+
+
+def test_a_closure_verified_for_another_exchange_or_only_in_part_does_not_count() -> None:
+    group = exchange([days_ago(7)] * 6)
+
+    other = check_freshness(group, TODAY, {"JPX": {date(2026, 10, 12), date(2026, 10, 13)}})
+    partial = check_freshness(group, TODAY, {"GER": {date(2026, 10, 12)}})
+
+    assert len(other.uncertain) == len(partial.uncertain) == 6
+
+
+def test_an_ordinary_trading_week_with_a_shared_outage_is_not_fresh() -> None:
+    # Nothing is known to have closed the exchange, so a week of silence cannot be a holiday.
+    result = check_freshness(exchange([days_ago(7)] * 6), TODAY, {"GER": set()})
+
+    assert len(result.uncertain) == 6 and result.stale == {}
+
+
+def test_an_exchange_with_nothing_for_over_two_weeks_is_stale_as_a_whole() -> None:
+    result = check_freshness(exchange([days_ago(30)] * 6), TODAY)
+
+    assert set(result.stale) == {f"GER{i}" for i in range(6)}
+    assert result.uncertain == {}
+
+
+def test_a_holiday_seen_in_its_peers_bars_is_not_a_missed_session() -> None:
+    # The exchange was closed Wednesday and Thursday: peers have no bars on those days, so a symbol
+    # whose last bar is Monday missed only two sessions (Tuesday and Friday).
+    dates = [d for d in weekdays(TODAY) if d not in ("2026-10-14", "2026-10-15")]
+    peers = [snap(f"P{i}", dates) for i in range(5)]
+    monday = snap("MON", [d for d in dates if d <= "2026-10-12"])
+
+    assert check_freshness([*peers, monday], TODAY) == Freshness({}, {})
 
 
 def test_a_small_exchange_falls_back_to_calendar_days() -> None:
     fresh = [
-        snap("A", sessions(TODAY - timedelta(days=4)), "SES"),
-        snap("B", sessions(TODAY), "SES"),
+        snap("A", weekdays(TODAY - timedelta(days=4)), "SES"),
+        snap("B", weekdays(TODAY), "SES"),
     ]
-    old = snap("C", sessions(TODAY - timedelta(days=6)), "SES")
+    old = snap("C", weekdays(TODAY - timedelta(days=6)), "SES")
 
-    stale = find_stale([*fresh, old], TODAY)
+    result = check_freshness([*fresh, old], TODAY)
 
-    assert list(stale) == ["C"]  # A is 4 calendar days old, C is 7
-    assert "calendar" in stale["C"]
+    assert list(result.stale) == ["C"]  # A is 4 calendar days old, C is 7
+    assert "calendar" in result.stale["C"]
 
 
-def test_a_symbol_with_no_bars_is_stale_and_not_counted_as_a_session() -> None:
-    group = [*exchange([TODAY.isoformat()] * 5), snap("EMPTY", [])]
+def test_a_small_exchange_also_accepts_a_verified_closure() -> None:
+    old = snap("C", weekdays(date(2026, 10, 9)), "SES")
+    closed = {date(2026, 10, 12), date(2026, 10, 13), date(2026, 10, 14)}
 
-    assert set(find_stale(group, TODAY)) == {"EMPTY"}
+    assert check_freshness([old], TODAY, {"SES": closed}) == Freshness({}, {})
+
+
+def test_records_without_bars_are_stale_and_do_not_count_toward_the_minimum() -> None:
+    week_old = snap("LONE", weekdays(TODAY - timedelta(days=7)))
+    empties = [snap(f"E{i}", []) for i in range(4)]
+
+    alone = check_freshness([week_old], TODAY)
+    padded = check_freshness([week_old, *empties], TODAY)
+
+    assert list(alone.stale) == ["LONE"]
+    assert set(padded.stale) == {"LONE", "E0", "E1", "E2", "E3"}  # still stale, not promoted
+    assert padded.stale["E0"] == "no price history"
+    assert padded.uncertain == {}
 
 
 def test_exchanges_are_judged_separately() -> None:
-    japan = exchange([(TODAY - timedelta(days=7)).isoformat()] * 6, "JPX")  # on holiday
-    germany = exchange([TODAY.isoformat()] * 5 + [(TODAY - timedelta(days=9)).isoformat()], "GER")
+    japan = exchange([days_ago(7)] * 6, "JPX")  # silent: cannot tell holiday from outage
+    germany = exchange([TODAY.isoformat()] * 5 + [days_ago(9)], "GER")
 
-    assert list(find_stale([*japan, *germany], TODAY)) == ["GER5"]
+    result = check_freshness([*japan, *germany], TODAY)
+
+    assert list(result.stale) == ["GER5"]
+    assert set(result.uncertain) == {f"JPX{i}" for i in range(6)}
