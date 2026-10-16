@@ -24,8 +24,9 @@ from typing import Any
 
 import yfinance as yf
 
+from app.discovery.risk import MIN_HISTORY_DAYS, market_cap_to_eur, size_bucket_for
 from app.discovery.universe import UNIVERSE_PATH, UniverseRow, load_universe, region_of
-from app.fx import SUBUNITS, SUPPORTED, rate_from_price, rate_symbol
+from app.fx import SUPPORTED, rate_from_price, rate_symbol
 
 # Core fundamentals used for the coverage report (plan section 4.3). A field counts as present
 # when it is a finite number: zero is a real value, None and NaN are gaps.
@@ -45,7 +46,6 @@ CORE_FIELDS = (
 # Proposed defaults, confirmed in Phase 0. A stock below MIN_CORE_METRICS cannot be analysed
 # meaningfully; a shorter history cannot give a volatility or a correlation.
 MIN_CORE_METRICS = 3
-MIN_HISTORY_DAYS = 120
 # A last close older than this many calendar days is an unreliable price (plan section 4.1).
 # INTERIM: a calendar-day proxy, not exchange-session aware (holidays differ by exchange). It is a
 # validation aid for this script and must not become the production freshness rule: Phase 4 has to
@@ -61,9 +61,6 @@ REGION_TARGETS = {
     "other_emerging": 60,
     "global_etf": 30,
 }
-
-# Display labels only, never an eligibility rule (plan section 4.2): size is shown as risk.
-_SIZE_BOUNDS_EUR = ((300e6, "micro"), (2e9, "small"), (10e9, "mid"))
 
 # Corporate-form and filler words that carry no identity ("Toyota Motor Corp" is "Toyota Motor").
 _NAME_NOISE = frozenset(
@@ -124,15 +121,6 @@ def core_coverage(info: dict[str, Any]) -> FieldCoverage:
     )
 
 
-def size_bucket_for(market_cap_eur: float | None) -> str:
-    if market_cap_eur is None or not math.isfinite(market_cap_eur):
-        return "unknown"
-    for upper_bound, label in _SIZE_BOUNDS_EUR:
-        if market_cap_eur < upper_bound:
-            return label
-    return "large"
-
-
 def _name_tokens(name: str) -> frozenset[str]:
     # NFKD splits "é" into "e" plus an accent mark, which the ASCII filter then drops.
     ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
@@ -189,23 +177,6 @@ def build_rates(
         else:
             rates[currency] = rate
     return rates, failures
-
-
-def market_cap_to_eur(cap: Any, currency: str, rates: dict[str, Decimal]) -> float | None:
-    """EUR value of a market cap quoted for a stock whose price currency is `currency`.
-
-    Yahoo reports the market cap in the major unit even when the price is in a minor unit (a
-    London stock is priced in pence, GBp, but its market cap is in pounds), so a minor-unit
-    rate is scaled back up to the main currency first.
-    """
-    if not _is_number(cap):
-        return None
-    rate = rates.get(currency)
-    if rate is None:
-        return None
-    if currency in SUBUNITS:
-        rate = rate / SUBUNITS[currency][1]
-    return float(Decimal(str(cap)) * rate)
 
 
 def _failed(row: UniverseRow, failure: str, detail: str | None = None) -> SymbolResult:
