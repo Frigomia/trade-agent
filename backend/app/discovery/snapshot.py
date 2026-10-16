@@ -42,6 +42,17 @@ CALENDAR_FALLBACK_DAYS = 5  # for an exchange with too few symbols to compare
 MAX_EXCHANGE_GAP_DAYS = 14  # an exchange silent for longer than any holiday is stale as a whole
 
 
+# The days of the week an exchange trades (Monday is 0). Monday to Friday unless listed. Only
+# exchanges whose week is documented are listed; pass `trading_weekdays` for others, for example
+# Egypt, Kuwait and Qatar, which are not listed until verified.
+MON_FRI = (0, 1, 2, 3, 4)
+TRADING_WEEKDAYS: Mapping[str | None, tuple[int, ...]] = {
+    # Saudi Exchange: Sunday to Thursday
+    # https://fi.saudiexchange.sa/wps/portal/international/general-information?locale=en
+    "SAU": (6, 0, 1, 2, 3),
+}
+
+
 @dataclass(frozen=True)
 class SymbolSnapshot:
     ticker: str
@@ -100,45 +111,55 @@ def check_freshness(
     snapshots: Sequence[SymbolSnapshot],
     today: date,
     closed_days: Mapping[str | None, Collection[date]] | None = None,
+    trading_weekdays: Mapping[str | None, Collection[int]] | None = None,
 ) -> Freshness:
     """Judge each last close against what is known about its own exchange.
 
-    A close within the latest three weekdays is current. An older one is fresh only when the days
-    in between are weekends or `closed_days` for its exchange (independently verified closures,
-    supplied by the caller). Otherwise:
-    - peers on the same exchange are current: it is behind them, and stale once it has missed
-      three of the sessions those peers traded;
-    - nobody on the exchange is current: a holiday, a provider outage and an outdated cache look
-      the same, so it is uncertain, or stale once the whole exchange has been silent for over two
-      weeks;
-    - too few usable histories to compare: calendar days decide.
+    `closed_days` are independently verified closures per exchange and `trading_weekdays` the
+    days of the week it trades (Monday to Friday unless listed); both are supplied by the caller.
+    For each symbol with bars:
+    1. A close within the latest three trading days is current.
+    2. Behind its peers: with at least five usable histories on the exchange, a symbol that missed
+       three or more of the sessions its peers actually traded since its last close is stale. This
+       holds whether or not the peers are current themselves, and no closure can erase it.
+    3. Every trading day since its last close, up to the current window, is a verified closure:
+       fresh.
+    4. Peers are current and it missed fewer than three sessions: fresh.
+    5. Nobody on the exchange is current: a holiday, a provider outage and an outdated cache look
+       the same, so it is uncertain, or stale once the exchange has been silent over two weeks.
+    6. Too few usable histories to compare: calendar days decide.
     Records without bars are stale and never count as histories.
     """
     closed = closed_days or {}
+    weeks: dict[str | None, Collection[int]] = {**TRADING_WEEKDAYS, **(trading_weekdays or {})}
     by_exchange: dict[str | None, list[SymbolSnapshot]] = defaultdict(list)
     for snapshot in snapshots:
         by_exchange[snapshot.exchange].append(snapshot)
 
-    cutoff = _cutoff(today)
     stale: dict[str, str] = {}
     uncertain: dict[str, str] = {}
     for exchange, group in by_exchange.items():
         label = exchange or "unknown exchange"
+        week = weeks.get(exchange, MON_FRI)
+        cutoff = _cutoff(today, week)
         usable = [s for s in group if s.dates]
         stale.update({s.ticker: "no price history" for s in group if not s.dates})
         latest = max((s.dates[-1] for s in usable), default="")
         enough = len(usable) >= MIN_SYMBOLS
         for s in usable:
             last = date.fromisoformat(s.dates[-1])
-            if last >= cutoff or _closure_explains(last, cutoff, closed.get(exchange, ())):
+            if last >= cutoff:
                 continue
-            if enough and date.fromisoformat(latest) >= cutoff:
-                missed = len({d for p in usable for d in p.dates if s.dates[-1] < d <= latest})
-                if missed >= SESSIONS_FRESH:
-                    stale[s.ticker] = (
-                        f"last close {last} is behind the {label} exchange, which traded "
-                        f"{missed} sessions since"
-                    )
+            missed = len({d for p in usable for d in p.dates if s.dates[-1] < d <= latest})
+            if enough and missed >= SESSIONS_FRESH:
+                stale[s.ticker] = (
+                    f"last close {last} is behind the {label} exchange, which traded "
+                    f"{missed} sessions since"
+                )
+            elif _closure_explains(last, cutoff, closed.get(exchange, ()), week):
+                continue
+            elif enough and date.fromisoformat(latest) >= cutoff:
+                continue  # its peers are current and it missed fewer than three sessions
             elif enough and (today - date.fromisoformat(latest)).days <= MAX_EXCHANGE_GAP_DAYS:
                 uncertain[s.ticker] = (
                     f"no {label} symbol has a bar since {latest}: a holiday cannot be told from a "
@@ -154,18 +175,20 @@ def check_freshness(
     return Freshness(stale, uncertain)
 
 
-def _cutoff(today: date) -> date:
-    """The oldest date still counted as current: the third most recent weekday up to today."""
+def _cutoff(today: date, week: Collection[int]) -> date:
+    """The oldest date still counted as current: the third most recent trading day up to today."""
     day, found = today, 0
     while True:
-        if day.weekday() < 5:
+        if day.weekday() in week:
             found += 1
             if found == SESSIONS_FRESH:
                 return day
         day -= timedelta(days=1)
 
 
-def _closure_explains(last: date, cutoff: date, closed: Collection[date]) -> bool:
-    """True when every weekday after `last` up to the cutoff is a verified closure."""
+def _closure_explains(
+    last: date, cutoff: date, closed: Collection[date], week: Collection[int]
+) -> bool:
+    """True when every trading day after `last` up to the cutoff is a verified closure."""
     gap = (last + timedelta(days=n) for n in range(1, (cutoff - last).days + 1))
-    return all(day.weekday() >= 5 or day in closed for day in gap)
+    return all(day.weekday() not in week or day in closed for day in gap)

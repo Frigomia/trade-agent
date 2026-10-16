@@ -252,3 +252,82 @@ def test_exchanges_are_judged_separately() -> None:
 
     assert list(result.stale) == ["GER5"]
     assert set(result.uncertain) == {f"JPX{i}" for i in range(6)}
+
+
+# ---- sessions peers demonstrably traded, and exchanges with their own trading week ------------
+
+
+def test_sessions_peers_traded_make_a_symbol_stale_even_when_the_peers_are_old_too() -> None:
+    # Five peers end on 9 October and one symbol on 16 September. The shared gap since 9 October
+    # may be a holiday or an outage, but the symbol missed ten sessions the peers did trade.
+    peers = [snap(f"P{i}", weekdays(date(2026, 10, 9))) for i in range(5)]
+    behind = snap("BEHIND", weekdays(date(2026, 9, 16)))
+
+    result = check_freshness([*peers, behind], TODAY)
+
+    assert list(result.stale) == ["BEHIND"]
+    assert set(result.uncertain) == {f"P{i}" for i in range(5)}  # the shared gap stays uncertain
+
+
+def test_a_verified_closure_cannot_erase_sessions_the_peers_traded() -> None:
+    peers = [snap(f"P{i}", weekdays(TODAY)) for i in range(5)]
+    behind = snap("BEHIND", weekdays(date(2026, 10, 7)))  # Wednesday: seven sessions back
+    everything_closed = {date(2026, 10, d) for d in (8, 9, 12, 13, 14, 15, 16)}
+
+    result = check_freshness([*peers, behind], TODAY, {"GER": everything_closed})
+
+    assert list(result.stale) == ["BEHIND"]
+
+
+SAUDI_TODAY = date(2026, 10, 20)  # a Tuesday; the Saudi Exchange trades Sunday to Thursday
+SAUDI_DAYS = [
+    "2026-10-11",  # Sunday
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14",
+    "2026-10-15",  # Thursday
+    "2026-10-18",  # Sunday
+    "2026-10-19",
+    "2026-10-20",
+]
+
+
+def saudi(count: int, dates: list[str]) -> list[SymbolSnapshot]:
+    return [snap(f"S{i}", dates, "SAU") for i in range(count)]
+
+
+def test_a_sunday_to_thursday_market_is_judged_on_its_own_sessions() -> None:
+    peers = saudi(5, SAUDI_DAYS)
+    lagging = snap("LAG", [d for d in SAUDI_DAYS if d <= "2026-10-15"], "SAU")
+
+    without = check_freshness([*peers, lagging], SAUDI_TODAY)
+    friday_closure = check_freshness([*peers, lagging], SAUDI_TODAY, {"SAU": {date(2026, 10, 16)}})
+
+    # Sunday, Monday and Tuesday were traded by the peers: three missed sessions
+    assert list(without.stale) == ["LAG"]
+    assert list(friday_closure.stale) == ["LAG"]  # a verified Friday closure erases nothing
+
+
+def test_a_closure_on_a_day_the_market_never_trades_explains_nothing() -> None:
+    quiet = saudi(6, [d for d in SAUDI_DAYS if d <= "2026-10-15"])  # all end on Thursday
+
+    friday = check_freshness(quiet, SAUDI_TODAY, {"SAU": {date(2026, 10, 16)}})
+    sunday = check_freshness(quiet, SAUDI_TODAY, {"SAU": {date(2026, 10, 18)}})
+
+    assert len(friday.uncertain) == 6  # Friday is not a trading day: nothing to explain
+    assert sunday == Freshness({}, {})  # Sunday is: its verified closure explains the gap
+
+
+def test_the_trading_week_can_be_supplied_for_any_exchange() -> None:
+    quiet = [snap(f"G{i}", [d for d in SAUDI_DAYS if d <= "2026-10-15"], "GER") for i in range(6)]
+
+    default_week = check_freshness(quiet, SAUDI_TODAY, {"GER": {date(2026, 10, 16)}})
+    sunday_week = check_freshness(
+        quiet,
+        SAUDI_TODAY,
+        {"GER": {date(2026, 10, 18)}},
+        trading_weekdays={"GER": (6, 0, 1, 2, 3)},
+    )
+
+    assert default_week == Freshness({}, {})  # Monday to Friday: the Friday closure explains it
+    assert sunday_week == Freshness({}, {})  # Sunday to Thursday: the Sunday closure does
