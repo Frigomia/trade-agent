@@ -444,6 +444,7 @@ class CandidateMetrics(BaseModel):
     risk: RiskProfile
     origin: Literal["universe", "tavily", "reddit", "industry_research"]
     origin_note: str | None         # why it was found; zero scoring weight
+    data_notes: list[str]           # what the reader should know: uncertain price date, unscored dimension
 
 class Mention(BaseModel):            # produced by lane B discovery, consumed by lane A admission
     name: str

@@ -16,7 +16,14 @@ from datetime import date, datetime
 from typing import Annotated, Literal, Self
 from urllib.parse import urlsplit
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_validator,
+)
 
 AssetType = Literal["STOCK", "ETF"]
 Origin = Literal["universe", "tavily", "reddit", "industry_research"]
@@ -26,6 +33,9 @@ RiskLevel = Literal["low", "medium", "high", "unknown"]
 
 # A share of the total value: never negative, never above the whole.
 Weight = Annotated[float, Field(ge=0, le=1)]
+
+# One line of disclosure for the reader: not blank, not a page.
+Note = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 def _http_url(value: str) -> str:
@@ -162,6 +172,9 @@ class CandidateMetrics(Contract):
     risk: RiskProfile
     origin: Origin
     origin_note: str | None  # why it was found; carries zero scoring weight
+    # What the reader should know about the data: an uncertain price date, a dimension that could
+    # not be scored. Disclosure only; it never changes a score.
+    data_notes: list[Note]
 
 
 class Mention(Contract):
