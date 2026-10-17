@@ -107,6 +107,8 @@ def test_a_complete_record_is_eligible() -> None:
         ({"price": 0.0}, "unreliable_price"),
         ({"price": float("nan")}, "unreliable_price"),
         ({"closes": [], "dates": []}, "unreliable_price"),
+        ({"closes": [10.0, float("nan")]}, "unreliable_price"),
+        ({"closes": [10.0, 0.0]}, "unreliable_price"),
     ],
 )
 def test_each_safeguard_excludes_with_its_reason(over: dict[str, object], reason: str) -> None:
@@ -193,7 +195,8 @@ def test_a_candidate_with_no_peer_comparison_is_not_ranked_not_scored_as_zero() 
     result = screen([snap(i) for i in range(12)] + [lonely], size=20)
 
     assert "ODD" not in [c.ticker for c in result.candidates]
-    assert result.excluded == []
+    assert [(e.ticker, e.reason) for e in result.excluded] == [("ODD", "insufficient_data")]
+    assert "peer" in result.excluded[0].explanation
 
 
 def test_equal_scores_break_by_lower_risk_then_ticker() -> None:
@@ -222,3 +225,23 @@ def test_an_empty_universe_is_an_empty_shortlist() -> None:
     result = screen([])
 
     assert (result.candidates, result.excluded) == ([], [])
+
+
+def test_holdings_and_avoided_sectors_match_regardless_of_case() -> None:
+    result = screen(
+        [snap(i) for i in range(12)], holdings={"s11"}, avoid_sectors={"TECHNOLOGY"}, size=20
+    )
+
+    assert result.candidates == []
+
+
+@pytest.mark.parametrize("size", [0, -1])
+def test_a_size_below_one_returns_nothing(size: int) -> None:
+    assert screen([snap(i) for i in range(12)], size=size).candidates == []
+
+
+def test_the_price_date_is_an_explicit_utc_day() -> None:
+    top = screen([snap(i) for i in range(12)], size=1).candidates[0]
+
+    assert top.price_as_of is not None
+    assert (top.price_as_of.isoformat()) == "2026-10-15T00:00:00+00:00"

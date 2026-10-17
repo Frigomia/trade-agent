@@ -41,8 +41,8 @@ def is_eligible(
     price = snap.price
     if price is None or not math.isfinite(price) or price <= 0:
         return _out(snap, "unreliable_price", "the price is missing or not a positive number")
-    if not snap.closes:
-        return _out(snap, "unreliable_price", "no price history")
+    if not snap.closes or not all(math.isfinite(c) and c > 0 for c in snap.closes):
+        return _out(snap, "unreliable_price", "no price history, or it holds an invalid close")
     if stale:
         return _out(snap, "unreliable_price", f"the price is out of date: {stale}")
     present = coverage_of(snap.metrics).core_metrics_present

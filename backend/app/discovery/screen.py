@@ -7,7 +7,7 @@ peers. Price history feeds the risk profile and nothing else, and `risk_level` o
 
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from statistics import mean
 
@@ -38,26 +38,39 @@ def shortlist_for_user(
 ) -> Shortlist:
     """Held tickers and avoided sectors are the user's choice and are simply left out.
 
-    A candidate with no valid peer comparison has no score and is not ranked (never scored as 0).
+    A candidate with no valid peer comparison has no score: it is listed as excluded for
+    insufficient data, never scored as 0.
     `uncertain` freshness stays eligible: the price is shown, not distrusted.
     """
+    held = {t.casefold() for t in holdings}
+    avoided = {s.casefold() for s in avoid_sectors}
     records = [
         PeerRecord(s.ticker, s.asset_type, s.sector, s.industry, s.metrics) for s in snapshots
     ]
     excluded: list[Exclusion] = []
     ranked: list[tuple[float, int, str, CandidateMetrics]] = []
     for snap, record in zip(snapshots, records, strict=True):
-        if snap.ticker in holdings or snap.sector in avoid_sectors:
+        if snap.ticker.casefold() in held or (snap.sector or "").casefold() in avoided:
             continue
         ok, why = is_eligible(snap, freshness.stale.get(snap.ticker))
         if why is not None:
             excluded.append(why)
         if not ok:
             continue
+        # ponytail: recomputed per call (about 1 s for 600 symbols); cache per snapshot if needed
         peers = compare_to_peers(record, records)
         scores = [dimension_score(peers, record.group, d) for d in ("quality", "valuation")]
         have = [s for s in scores if s is not None]
-        if not have:
+        if not have:  # eligible, but nothing to rank it on: say so rather than lose it
+            excluded.append(
+                Exclusion(
+                    ticker=snap.ticker,
+                    name=snap.name,
+                    reason="insufficient_data",
+                    explanation="no valid peer comparison, so it cannot be scored or ranked",
+                    evidence=[],
+                )
+            )
             continue
         risk = build_risk_profile(
             group=record.group,
@@ -79,7 +92,9 @@ def shortlist_for_user(
             industry=snap.industry,
             currency=snap.currency,
             price=snap.price,
-            price_as_of=datetime.fromisoformat(snap.dates[-1]) if snap.dates else None,
+            price_as_of=datetime.fromisoformat(snap.dates[-1]).replace(tzinfo=UTC)
+            if snap.dates
+            else None,
             fundamentals=snap.metrics,
             coverage=coverage_of(snap.metrics),
             peers=peers,
@@ -89,4 +104,4 @@ def shortlist_for_user(
         )
         ranked.append((-mean(have), RISK_ORDER[risk.risk_level], snap.ticker, candidate))
     ranked.sort(key=lambda row: row[:3])
-    return Shortlist([row[3] for row in ranked[:size]], excluded)
+    return Shortlist([row[3] for row in ranked[: max(size, 0)]], excluded)
