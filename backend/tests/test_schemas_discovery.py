@@ -338,3 +338,11 @@ def test_data_notes_are_required_and_must_be_text() -> None:
 
     noted = CandidateMetrics.model_validate({**data, "data_notes": ["price date uncertain"]})
     assert noted.data_notes == ["price date uncertain"]
+
+
+@pytest.mark.parametrize("note", ["", "   ", "x" * 501])
+def test_a_data_note_must_be_real_and_short(note: str) -> None:
+    data = sample_candidate().model_dump()
+
+    with pytest.raises(ValidationError):
+        CandidateMetrics.model_validate({**data, "data_notes": [note]})
