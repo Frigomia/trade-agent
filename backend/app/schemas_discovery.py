@@ -162,6 +162,9 @@ class CandidateMetrics(Contract):
     risk: RiskProfile
     origin: Origin
     origin_note: str | None  # why it was found; carries zero scoring weight
+    # What the reader should know about the data: an uncertain price date, a dimension that could
+    # not be scored. Disclosure only; it never changes a score.
+    data_notes: list[str]
 
 
 class Mention(Contract):

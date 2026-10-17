@@ -101,6 +101,7 @@ def shortlist_for_user(
             risk=risk,
             origin="universe",
             origin_note=None,
+            data_notes=[],  # filled in with the 4d follow-up
         )
         ranked.append((-mean(have), RISK_ORDER[risk.risk_level], snap.ticker, candidate))
     ranked.sort(key=lambda row: row[:3])
