@@ -148,6 +148,16 @@ def test_a_symbol_stored_in_an_earlier_run_is_fetched_again() -> None:
     assert (report.cached, report.fetched) == (0, 1)
 
 
+def test_a_failed_refresh_keeps_the_previous_entry() -> None:
+    refresh(["A"], Fetcher())
+    run(get_redis().expire("discovery:symbol:A", SNAPSHOT_TTL_SECONDS - 2 * 86400))
+
+    report = refresh(["A"], Fetcher(fail={"A"}))
+
+    assert (report.fetched, report.failed) == (0, {"A": "ValueError"})
+    assert [s.ticker for s in load(["A"])] == ["A"]  # the older record still serves
+
+
 def test_an_unreadable_stored_entry_is_fetched_again() -> None:
     run(get_redis().set("discovery:symbol:A", '{"ticker": "A"}', ex=SNAPSHOT_TTL_SECONDS))
 

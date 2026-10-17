@@ -43,12 +43,37 @@ def test_fetch_returns_the_dated_closes_without_the_gaps(monkeypatch: pytest.Mon
     assert (raw.history_days, raw.last_close_date) == (3, date(2026, 10, 15))
 
 
-def test_a_symbol_with_no_bars_has_empty_series(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_history_with_no_bars_is_a_failure_not_an_empty_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # yfinance returns an empty frame when the chart request failed; storing it would replace a
+    # good cached history with nothing
     monkeypatch.setattr(fetching.yf, "Ticker", fake_ticker({}, [], []))
+    monkeypatch.setattr(fetching.time, "sleep", lambda seconds: None)
 
-    raw = fetch_yfinance("GONE")
+    with pytest.raises(ValueError, match="GONE"):
+        fetch_yfinance("GONE")
 
-    assert (raw.closes, raw.dates, raw.history_days, raw.last_close_date) == ([], [], 0, None)
+
+def test_yfinance_is_told_to_raise_chart_errors_instead_of_hiding_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[bool] = []
+
+    class Spy:
+        def __init__(self, symbol: str) -> None:
+            self.info: dict[str, Any] = {}
+
+        def history(self, period: str) -> pd.DataFrame:
+            seen.append(fetching.yf.config.debug.hide_exceptions)
+            return pd.DataFrame({"Close": [1.0]}, index=pd.to_datetime(["2026-10-15"]))
+
+    monkeypatch.setattr(fetching.yf, "Ticker", Spy)
+    monkeypatch.setattr(fetching.yf.config.debug, "hide_exceptions", True)
+
+    fetch_yfinance("SAP.DE")
+
+    assert seen == [False]
 
 
 def test_fetch_raises_the_last_error_after_three_attempts(monkeypatch: pytest.MonkeyPatch) -> None:

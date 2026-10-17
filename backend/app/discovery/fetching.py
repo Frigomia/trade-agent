@@ -74,9 +74,14 @@ def fetch_yfinance(ticker: str) -> RawSymbolData:
     last_error: Exception = RuntimeError("no attempt was made")
     for attempt in range(3):
         try:
+            # By default yfinance hides chart errors and returns an empty frame, which would look
+            # like a successful fetch (and bypass the retries). Process-wide, set on every call.
+            yf.config.debug.hide_exceptions = False
             handle = yf.Ticker(ticker)
             info = dict(handle.info or {})
             closes = handle.history(period="1y")["Close"].dropna()
+            if closes.empty:  # unavailable history is a failure, so a cached one is kept
+                raise ValueError(f"{ticker}: no price history returned")
             return RawSymbolData(
                 info=info,
                 history_days=len(closes),
