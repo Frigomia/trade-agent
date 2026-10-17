@@ -409,6 +409,13 @@ has 1 GB of memory (the app machine stays at 512 MB). It is headroom for the pip
 concurrent tickers plus pandas and yfinance across many users in one long-lived process; the 512 MB
 app machine only ever runs one user's run at a time.
 
+The same workflow also runs `python -m app.scheduled discovery_snapshot` on Sundays at 04:00 UTC. It
+refreshes the global-universe snapshot (about 600 symbols from Yahoo) into Redis, one key per symbol with
+an 8-day expiry, and takes about three minutes. It fails when more than 20% of the symbols fail or the
+universe is empty; failed symbols are logged by name and retried the next time. To run it by hand, start
+the workflow from the Actions tab with `job` set to `discovery_snapshot`. Whether Yahoo throttles the Fly
+machine harder than a laptop is unknown until the first run, so check that run's log.
+
 When it finishes it logs one summary line, for example:
 
 ```
