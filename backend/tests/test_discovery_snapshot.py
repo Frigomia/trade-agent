@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from app.discovery.fetching import RawSymbolData
 from app.discovery.snapshot import (
     METRIC_KEYS,
     Freshness,
@@ -9,6 +10,7 @@ from app.discovery.snapshot import (
     check_freshness,
     coverage_of,
     normalize_metrics,
+    to_snapshot,
 )
 
 TODAY = date(2026, 10, 16)  # a Friday
@@ -331,3 +333,58 @@ def test_the_trading_week_can_be_supplied_for_any_exchange() -> None:
 
     assert default_week == Freshness({}, {})  # Monday to Friday: the Friday closure explains it
     assert sunday_week == Freshness({}, {})  # Sunday to Thursday: the Sunday closure does
+
+
+# ---- from a fetched record to the stored one -------------------------------------------------
+
+
+def fetched(info: dict[str, object], closes: list[float], dates: list[str]) -> RawSymbolData:
+    last = date.fromisoformat(dates[-1]) if dates else None
+    return RawSymbolData(info, len(closes), last, closes, dates)
+
+
+def test_a_fetched_record_becomes_a_snapshot() -> None:
+    info = {
+        "longName": "SAP SE",
+        "quoteType": "EQUITY",
+        "exchange": "GER",
+        "sector": "Technology",
+        "industry": "Software - Application",
+        "currency": "EUR",
+        "marketCap": 2.3e11,
+        "averageVolume": 2.5e6,
+        "debtToEquity": 22.0,
+    }
+
+    s = to_snapshot("SAP.DE", fetched(info, [100.0, 101.0], ["2026-10-14", "2026-10-15"]))
+
+    assert (s.ticker, s.asset_type, s.name, s.exchange) == ("SAP.DE", "STOCK", "SAP SE", "GER")
+    assert (s.sector, s.industry, s.currency) == ("Technology", "Software - Application", "EUR")
+    assert (s.price, s.market_cap, s.avg_volume) == (101.0, 2.3e11, 2.5e6)
+    assert s.metrics["debtToEquity"] == pytest.approx(0.22)
+    assert (s.closes, s.dates) == ([100.0, 101.0], ["2026-10-14", "2026-10-15"])
+
+
+def test_an_etf_keeps_its_type() -> None:
+    assert to_snapshot("VT", fetched({"quoteType": "ETF"}, [], [])).asset_type == "ETF"
+
+
+def test_missing_fields_stay_missing_and_the_name_falls_back_to_the_ticker() -> None:
+    s = to_snapshot("XYZ", fetched({}, [], []))
+
+    assert (s.name, s.exchange, s.sector, s.currency) == ("XYZ", None, None, None)
+    assert (s.price, s.market_cap, s.avg_volume, s.closes) == (None, None, None, [])
+
+
+def test_a_classification_that_is_not_text_is_dropped() -> None:
+    s = to_snapshot("X", fetched({"sector": 12, "exchange": "", "marketCap": float("nan")}, [], []))
+
+    assert (s.sector, s.exchange, s.market_cap) == (None, None, None)
+
+
+def test_an_exchange_with_no_trading_days_listed_falls_back_to_monday_to_friday() -> None:
+    group = exchange([TODAY.isoformat()] * 5 + [days_ago(9)])
+
+    result = check_freshness(group, TODAY, trading_weekdays={"GER": ()})
+
+    assert list(result.stale) == ["GER5"]

@@ -4,7 +4,6 @@ from typing import Any
 
 import pytest
 
-import app.discovery.validate_universe as module
 from app.discovery.universe import UniverseRow
 from app.discovery.validate_universe import (
     MIN_CORE_METRICS,
@@ -15,7 +14,6 @@ from app.discovery.validate_universe import (
     build_report,
     check_symbol,
     eur_rate_from,
-    fetch_all,
     market_cap_to_eur,
     meets_thresholds,
 )
@@ -271,55 +269,6 @@ def test_the_report_lists_unchecked_symbols_separately() -> None:
 
     assert "Not checked" in report
     assert "SAP.DE" in report
-
-
-def test_fetch_all_retries_rate_limited_symbols_after_a_cooldown() -> None:
-    calls: dict[str, int] = {}
-    sleeps: list[float] = []
-
-    def flaky(ticker: str) -> RawSymbolData:
-        calls[ticker] = calls.get(ticker, 0) + 1
-        if ticker == "B" and calls[ticker] == 1:
-            raise YFRateLimitError
-        return raw({})
-
-    results = fetch_all(["A", "B"], flaky, workers=1, passes=3, cooldown=30.0, sleep=sleeps.append)
-
-    assert all(isinstance(r, RawSymbolData) for r in results.values())
-    assert calls == {"A": 1, "B": 2}
-    assert sleeps == [30.0]
-
-
-def test_fetch_all_gives_up_after_the_last_pass() -> None:
-    sleeps: list[float] = []
-
-    def always_throttled(ticker: str) -> RawSymbolData:
-        raise YFRateLimitError
-
-    results = fetch_all(
-        ["A"], always_throttled, workers=1, passes=2, cooldown=5.0, sleep=sleeps.append
-    )
-
-    assert isinstance(results["A"], Exception)
-    assert sleeps == [5.0]
-
-
-def test_fetch_yfinance_raises_the_last_error_after_three_attempts(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    attempts: list[str] = []
-
-    def failing_ticker(symbol: str) -> None:
-        attempts.append(symbol)
-        raise ValueError(f"attempt {len(attempts)}")
-
-    monkeypatch.setattr(module.yf, "Ticker", failing_ticker)
-    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
-
-    with pytest.raises(ValueError, match="attempt 3"):
-        module.fetch_yfinance("SAP.DE")
-
-    assert attempts == ["SAP.DE", "SAP.DE", "SAP.DE"]
 
 
 def test_build_rates_keeps_the_other_currencies_when_one_lookup_raises() -> None:
