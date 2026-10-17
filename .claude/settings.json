@@ -1,6 +1,25 @@
 {
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-review.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/require-ponytail.sh"
+          }
+        ]
+      },
       {
         "matcher": "Edit|MultiEdit|Write",
         "hooks": [
@@ -12,6 +31,15 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/mark-ponytail.sh"
+          }
+        ]
+      },
       {
         "matcher": "Edit|MultiEdit|Write",
         "hooks": [
