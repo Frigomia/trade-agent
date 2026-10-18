@@ -131,6 +131,20 @@ def test_env_vars_drive_the_guard(monkeypatch):
     assert Settings(_env_file=None).app_env == "production"
 
 
+@pytest.mark.parametrize("key", [None, "", "tavily-test-only-not-a-real-credential"])
+def test_tavily_configuration_is_optional_and_hidden_from_repr(monkeypatch, key):
+    # Exercise environment loading: a real backend binding must not leak via Settings repr.
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    if key is not None:
+        monkeypatch.setenv("TAVILY_API_KEY", key)
+    settings = _settings(app_env="development")
+
+    assert settings.tavily_api_key == key
+    assert "tavily_api_key" not in repr(settings)
+    if key:
+        assert key not in repr(settings)
+
+
 @pytest.mark.parametrize("scheme", ["postgresql", "postgres"])
 @pytest.mark.parametrize("env", ["development", "production"])
 def test_plain_postgres_schemes_are_rewritten_to_psycopg(scheme, env):

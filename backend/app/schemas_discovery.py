@@ -144,7 +144,7 @@ class PeerComparison(Contract):
 
 
 class RiskProfile(Contract):
-    """Measured and displayed. It does not exclude or rank in the MVP (plan 4.2)."""
+    """Measured and displayed. No eligibility gate or score penalty; risk breaks score ties."""
 
     market_cap_eur: float | None
     avg_daily_value_eur: float | None
