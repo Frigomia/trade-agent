@@ -14,7 +14,7 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 2: research | Not implemented; evidence models alone do not perform research. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
-| 5: dynamic admission | Not implemented. |
+| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates; the research that produces mentions (Phase 2) is not. |
 | 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |

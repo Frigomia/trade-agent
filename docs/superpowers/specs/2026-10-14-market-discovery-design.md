@@ -36,7 +36,8 @@ company fundamentals.
 | Curated universe and coverage evidence | Implemented: 600 symbols, validator, [coverage report](universe-coverage.md), and [candidate-pool audit](universe-candidate-audit.md). |
 | Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable Redis refresh and the weekly `discovery_snapshot` command exist. |
 | Provider setting | Phase 0 adds optional backend `TAVILY_API_KEY` and documents its ownership and absence behavior. No request is made. |
-| Research, dynamic admission, evaluation graph | Future Phases 2, 5, and 6. Contract models are not implementations of these workflows. |
+| Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Nothing produces mentions yet. |
+| Research, evaluation graph | Future Phases 2 and 6. Contract models are not implementations of these workflows. |
 | Scan persistence, API, and scheduled user scans | Future Phases 6 and 7; no discovery scan endpoint or `ScanRun` table exists yet. |
 | Easy onboarding and discovery UI | Future Phases 8 and 9. |
 
@@ -61,7 +62,7 @@ not new environment-variable settings or a new user configuration system.
 | Dimension coverage | `MIN_SCORED=2` valid peer comparisons per dimension; otherwise that dimension is `None`. | `discovery/scoring.py`, implemented |
 | Price freshness | Use the exchange-aware rules below. The old blanket `STALE_DAYS=5` proposal is superseded; 5 calendar days remains only the sparse-exchange fallback. | `discovery/snapshot.py`, implemented |
 | Research shortlist | `SHORTLIST_SIZE=8`. | `discovery/screen.py`, implemented |
-| Dynamic admission | `DISCOVERY_MAX_DYNAMIC=10` per scan; all remaining mentions carry `cap_reached` or another rejection reason. | Phase 5 |
+| Dynamic admission | `DISCOVERY_MAX_DYNAMIC=10` per scan; all remaining mentions carry `cap_reached` or another rejection reason. | `discovery/admit.py`, implemented (at most 30 mentions are looked up at all) |
 | Overall score | Equal-weight mean of available quality and valuation scores; `None` when neither exists. Fit never contributes to this mean. Serialize the final integer using Python `round`, matching current dimension scoring. | Phase 6 |
 | Ranking | Descending overall, then lower risk (`low`, `medium`, `high`, `unknown`), then better available fit when applicable, then ticker for deterministic ordering. Current screening has no fit yet and uses ticker after risk. Missing overall is unrankable. | Phases 4 and 6 |
 | Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` and confidence at least `medium`; otherwise persist `outcome="none"` with nearest misses. | Phase 6 |
