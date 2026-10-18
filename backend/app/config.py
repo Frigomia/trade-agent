@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     voyage_api_key: str | None = None
-    # Optional owner-funded discovery research; no provider calls are wired until Phase 2.
+    # Optional owner-funded discovery research; existing analysis works without it.
     tavily_api_key: str | None = Field(default=None, repr=False)
     supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
     migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only

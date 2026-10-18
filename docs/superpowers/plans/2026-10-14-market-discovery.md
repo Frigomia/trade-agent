@@ -7,14 +7,14 @@ defaults and reconciles this original plan with the existing implementation. Use
 `app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
 historical guidance. No end-to-end discovery scan has shipped yet.
 
-| Phase | Implementation status at the Phase 0 handoff |
+| Phase | Implementation status (updated through Phase 2 research) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
 | 1: analytics and FX | Partial: global FX support exists; portfolio analytics, dated history API and candidate fit remain. |
-| 2: research | Not implemented; evidence models alone do not perform research. |
+| 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Scan integration and scheduling remain Phases 6 and 7; live Reddit/provider coverage is unverified. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
-| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates; the research that produces mentions (Phase 2) is not. |
+| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
 | 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |
@@ -685,6 +685,11 @@ in `yfinance`: **VERIFY** what the installed version returns; if there is no loo
 an ETF as one bucket labelled by its category and flag it.
 
 ### Phase 2: Research module (B, L)
+
+Implemented in `app/agents/research.py` with provider-shaped fixtures and mocked Tavily/Claude
+tests in `tests/test_agents_research.py`. The [design's implementation notes](../specs/2026-10-14-market-discovery-design.md#phase-2-implementation)
+record the fixed budgets, failure behavior, provider-contract verification and remaining live
+coverage check. This module does not expose or schedule scans; those integrations are later phases.
 
 **Goal:** structured, cited, dated, materiality-tagged evidence per candidate, and the daily
 global discovery of mentions.
