@@ -96,7 +96,7 @@ def shortlist_for_user(
             name=snap.name,
             asset_type=snap.asset_type,  # type: ignore[arg-type]  # checked by is_eligible
             exchange=snap.exchange,
-            country=None,  # not in the snapshot; the universe row has it
+            country=snap.country,
             sector=snap.sector,
             industry=snap.industry,
             currency=snap.currency,

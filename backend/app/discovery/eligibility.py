@@ -34,6 +34,12 @@ def is_eligible(
         return _out(
             snap, "ambiguous_identity", "name, exchange or asset type is missing or unknown"
         )
+    if snap.asset_type == "ETF":
+        return _out(
+            snap,
+            "insufficient_data",
+            "an ETF needs separate criteria; company fundamentals do not describe it",
+        )
     if snap.currency not in SUPPORTED:
         return _out(
             snap, "currency_unsupported", f"quote currency {snap.currency} cannot be converted"

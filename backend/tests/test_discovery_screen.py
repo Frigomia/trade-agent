@@ -28,6 +28,7 @@ def snap(i: int, **over: object) -> SymbolSnapshot:
         asset_type="STOCK",
         name=f"Stock {i}",
         exchange="NMS",
+        country="United States",
         sector="Technology",
         industry="Software",
         currency="USD",
@@ -268,3 +269,38 @@ def test_a_dimension_that_could_not_be_scored_is_named() -> None:
     half = next(c for c in screen(snaps, size=20).candidates if c.ticker == "HALF")
 
     assert half.data_notes == ["valuation not scored: no valid peer comparison"]
+
+
+def test_an_etf_is_excluded_with_an_explicit_reason_even_with_full_data() -> None:
+    etf = snap(30, ticker="VT", asset_type="ETF")
+
+    ok, why = is_eligible(etf)
+
+    assert not ok
+    assert why is not None
+    assert (why.reason, why.ticker) == ("insufficient_data", "VT")
+    assert "ETF" in why.explanation
+    assert "separate criteria" in why.explanation
+
+
+def test_an_etf_never_reaches_the_shortlist_and_is_listed_as_excluded() -> None:
+    result = screen(
+        [snap(i) for i in range(12)] + [snap(30, ticker="VT", asset_type="ETF")], size=20
+    )
+
+    assert "VT" not in [c.ticker for c in result.candidates]
+    assert [e.ticker for e in result.excluded] == ["VT"]
+
+
+def test_the_listing_country_is_carried_into_the_candidate() -> None:
+    top = screen([snap(i) for i in range(12)], size=1).candidates[0]
+
+    assert top.country == "United States"
+
+
+def test_an_etf_is_reported_as_an_etf_whatever_else_is_wrong() -> None:
+    ok, why = is_eligible(snap(30, ticker="VT", asset_type="ETF", currency="XXX"))
+
+    assert not ok
+    assert why is not None
+    assert "ETF" in why.explanation

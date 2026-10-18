@@ -74,6 +74,7 @@ class SymbolSnapshot:
     asset_type: str
     name: str
     exchange: str | None
+    country: str | None  # the listing country, from the universe row (Yahoo's own is the domicile)
     sector: str | None
     industry: str | None
     currency: str | None
@@ -213,13 +214,14 @@ def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def to_snapshot(ticker: str, raw: RawSymbolData) -> SymbolSnapshot:
+def to_snapshot(ticker: str, raw: RawSymbolData, country: str | None = None) -> SymbolSnapshot:
     info = raw.info
     return SymbolSnapshot(
         ticker=ticker,
         asset_type="ETF" if info.get("quoteType") == "ETF" else "STOCK",
         name=_text(info.get("longName")) or _text(info.get("shortName")) or ticker,
         exchange=_text(info.get("exchange")),
+        country=country,
         sector=_text(info.get("sector")),
         industry=_text(info.get("industry")),
         currency=_text(info.get("currency")),

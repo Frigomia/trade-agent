@@ -32,6 +32,7 @@ def snap(ticker: str, dates: list[str], exchange: str | None = "GER") -> SymbolS
         asset_type="STOCK",
         name=ticker,
         exchange=exchange,
+        country="Germany",
         sector="Technology",
         industry="Software",
         currency="EUR",
@@ -388,3 +389,10 @@ def test_an_exchange_with_no_trading_days_listed_falls_back_to_monday_to_friday(
     result = check_freshness(group, TODAY, trading_weekdays={"GER": ()})
 
     assert list(result.stale) == ["GER5"]
+
+
+def test_the_listing_country_is_kept_and_defaults_to_none() -> None:
+    raw = fetched({}, [1.0], ["2026-10-15"])
+
+    assert to_snapshot("SAP.DE", raw, country="Germany").country == "Germany"
+    assert to_snapshot("SAP.DE", raw).country is None
