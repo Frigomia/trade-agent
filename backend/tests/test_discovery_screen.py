@@ -21,6 +21,7 @@ def snap(i: int, **over: object) -> SymbolSnapshot:
         "operatingMargins": 0.01 * i,
         "trailingPE": 40.0 - i,
         "priceToBook": 10.0 - 0.5 * i,
+        "priceToSalesTrailing12Months": 20.0 - i,
     }
     base = SymbolSnapshot(
         ticker=f"S{i:02d}",
@@ -245,3 +246,25 @@ def test_the_price_date_is_an_explicit_utc_day() -> None:
 
     assert top.price_as_of is not None
     assert (top.price_as_of.isoformat()) == "2026-10-15T00:00:00+00:00"
+
+
+def test_an_uncertain_price_date_is_disclosed_with_its_reason() -> None:
+    freshness = Freshness(stale={}, uncertain={"S10": "holiday or outage"})
+
+    candidates = {c.ticker: c for c in screen([snap(i) for i in range(12)], freshness).candidates}
+
+    assert candidates["S10"].data_notes == ["price date uncertain: holiday or outage"]
+    assert candidates["S11"].data_notes == []
+
+
+def test_a_dimension_that_could_not_be_scored_is_named() -> None:
+    metrics = dict.fromkeys(METRIC_KEYS) | {
+        "returnOnEquity": 0.3,
+        "operatingMargins": 0.2,
+        "revenueGrowth": 0.1,
+    }
+    snaps = [snap(i) for i in range(12)] + [snap(20, ticker="HALF", metrics=metrics)]
+
+    half = next(c for c in screen(snaps, size=20).candidates if c.ticker == "HALF")
+
+    assert half.data_notes == ["valuation not scored: no valid peer comparison"]

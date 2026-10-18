@@ -113,6 +113,7 @@ def sample_candidate() -> CandidateMetrics:
         ),
         origin="universe",
         origin_note=None,
+        data_notes=[],
     )
 
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from statistics import mean
+from typing import Literal
 
 from app.discovery.eligibility import is_eligible
 from app.discovery.peers import PeerRecord, compare_to_peers
@@ -59,7 +60,8 @@ def shortlist_for_user(
             continue
         # ponytail: recomputed per call (about 1 s for 600 symbols); cache per snapshot if needed
         peers = compare_to_peers(record, records)
-        scores = [dimension_score(peers, record.group, d) for d in ("quality", "valuation")]
+        dimensions: tuple[Literal["quality", "valuation"], ...] = ("quality", "valuation")
+        scores = [dimension_score(peers, record.group, d) for d in dimensions]
         have = [s for s in scores if s is not None]
         if not have:  # eligible, but nothing to rank it on: say so rather than lose it
             excluded.append(
@@ -72,6 +74,13 @@ def shortlist_for_user(
                 )
             )
             continue
+        notes = [
+            f"{name} not scored: no valid peer comparison"
+            for name, score in zip(dimensions, scores, strict=True)
+            if score is None
+        ]
+        if reason := freshness.uncertain.get(snap.ticker):
+            notes.insert(0, f"price date uncertain: {reason}")
         risk = build_risk_profile(
             group=record.group,
             market_cap=snap.market_cap,
@@ -101,6 +110,7 @@ def shortlist_for_user(
             risk=risk,
             origin="universe",
             origin_note=None,
+            data_notes=notes,
         )
         ranked.append((-mean(have), RISK_ORDER[risk.risk_level], snap.ticker, candidate))
     ranked.sort(key=lambda row: row[:3])
