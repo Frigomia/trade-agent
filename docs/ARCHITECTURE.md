@@ -311,6 +311,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 |---|---|---|---|
 | GET | `/health` | — | Liveness check |
 | GET | `/portfolio/holdings` | — | List all holdings |
+| GET | `/portfolio/analytics` | — | EUR exposure, concentration, aligned-history volatility/correlations and data notes (`PortfolioExposure`); caller's open holdings only, no-store, 5 requests/minute; no Claude key or paid research needed |
 | POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker (a full replace: an omitted `target_weight` resets it to `null`); at most 100 holdings per user (`409` beyond that) |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
@@ -556,8 +557,8 @@ corrected on the holding form, since a SELL does not restore the average cost).
 The [market-discovery design](superpowers/specs/2026-10-14-market-discovery-design.md)
 records the shared contracts, selected MVP defaults and the remaining work. The contracts in
 `app/schemas_discovery.py`, global FX support, curated universe, snapshot refresh, peer/risk
-calculations and shortlist are implemented. The research module, evaluation graph, scan API,
-scan persistence, portfolio analytics and discovery UI are future phases; no user discovery
+calculations, shortlist and Phase 1 portfolio analytics are implemented. The research module,
+evaluation graph, scan API, scan persistence and discovery UI are future phases; no user discovery
 scan is exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
@@ -566,6 +567,63 @@ content has no scoring weight and cannot establish a confirmed thesis-invalidati
 ETFs remain in the universe but are explicitly excluded from discovery scoring until separate
 criteria exist. `TAVILY_API_KEY` is an optional backend setting reserved for Phase 2, not a new
 requirement for startup, tests, snapshots or the existing analysis flow.
+
+### Portfolio analytics (Phase 1)
+
+`GET /portfolio/analytics` reads only open positions in the caller's scoped session. The thin
+router delegates to `app/portfolio_analytics.py`, which releases its read transaction before
+network work, uses `fx.eur_prices` for validated currency conversion, and loads profiles and
+dated histories with at most eight concurrent detail lookups. Pure analytics runs through
+`asyncio.to_thread` so the correlation matrix cannot block the request event loop. The matrix
+computes each unordered pair once and mirrors it. A failed history/profile lookup
+does not drop a priced position; its limitation is returned in `PortfolioExposure.notes`.
+Unpriced/unsupported-currency positions appear in `skipped`; weights cover the priced subset.
+
+`agents/market_data.py` adds `fetch_dated_closes(ticker, period="1y")` (5-minute cache, separate
+key per ticker/period, finite positive closes by ISO date) and `fetch_profile(ticker)` (24-hour
+cache of name, sector, industry, country, quote type, exchange and ETF category). Empty results
+and exhausted provider failures are negative-cached for 5 minutes, after the existing retries;
+exception class names alone are logged. Both use the existing thread pattern. Profile strings
+are capped at 100 characters on fresh and cached reads. Profiles are read-only here; holding auto-fill and
+nullable cost basis remain Phase 8. No schema migration or provider dependency is introduced.
+Successful dated closes retain quote-level freshness because Yahoo daily history can contain
+an in-progress intraday bar used for valuation. The `dated_closes:v2` namespace bypasses entries
+written under the earlier 24-hour policy; profile metadata keeps its 24-hour cache.
+
+The pure functions in `analysis/portfolio.py` value each position with its last usable dated
+close and the current EUR conversion rate. Thus price and `price_as_of` describe the same
+observation (a daily date represented as midnight UTC). If history is unavailable, the validated
+EUR quote is retained with an unknown timestamp and `stale=true`. Future bars are ignored.
+Freshness reuses the exchange-aware discovery rules; uncertain freshness is flagged and explained.
+
+Exposure is partitioned by sector, industry, country and quote currency; missing metadata stays
+`Unclassified`; an all-null profile also emits the missing-profile note. A manual holding sector
+overrides the profile sector for stocks. Sector case/whitespace and common aliases (Tech,
+Financials/Finance, Health Care) normalize into Yahoo's canonical buckets; unknown free text is
+grouped case-insensitively while preserving its display spelling. A literal "unclassified"
+joins the canonical `Unclassified` bucket. Country is the
+profile's issuer domicile, not a verified listing-country map. ETFs use one category bucket for
+sector/industry and are explicitly flagged as having no constituent look-through; their country,
+if provided, is fund domicile. Their underlying country/sector mix is not inferred.
+
+Concentration is the top weight, `HHI=sum(w²)` and `effective_n=1/HHI`. Risk uses local-currency log
+returns and current EUR value weights, excluding historical FX moves. Return keys include both
+start and end dates; at least 60 matching intervals are required. Pairwise correlations use each
+pair's common sample; constant series have undefined correlation (`null`). Portfolio volatility
+uses one common sample across every valued position (`sqrt(w' covariance w) * sqrt(252)`). A
+position lacking enough history keeps its weight/value while whole-portfolio volatility becomes
+unavailable; usable positions are never silently reweighted for risk. No forward fill is used.
+
+`marginal_effect(exposure, candidate_returns, candidate_sector, hypothetical_weight=0.05, *,
+ticker, portfolio_returns)` returns `CandidateFit`. Callers retain interval-keyed returns from
+`log_returns` alongside the public exposure summary, which contains no raw histories. Existing
+weights shrink by `1-weight`; the new candidate gets `weight`. Before/after volatility uses the
+same common sample, average correlation is value-weighted, and HHI/sector effects are explicit.
+Fewer than two valued holdings, insufficient common history or an already-held candidate yields
+`applicable=false` with notes. Fit is context, never an automatic buy signal or a baseline target.
+Labels and notes can include untrusted provider or user text; any Phase 6 prompt consuming exposure
+or fit must place that text inside an untrusted-data block. The response and fit notes carry this
+disclosure, and bounded labels prevent a provider string from inflating the response.
 
 ### Existing holdings and watchlist analysis
 

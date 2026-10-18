@@ -139,6 +139,72 @@ async def search_symbols(query: str) -> list[dict[str, str]]:
 
 
 CURRENCY_CACHE_TTL = 86400
+ANALYTICS_NEGATIVE_CACHE_TTL = 300
+PROFILE_TEXT_CHARS = 100
+
+
+def _profile_text(value: object) -> str | None:
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    return text[:PROFILE_TEXT_CHARS] or None
+
+
+async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
+    """Positive finite daily closes with their actual dates; no forward fill across markets."""
+    redis = get_redis()
+    # New namespace ignores entries written with the former 24-hour valuation TTL.
+    cache_key = f"dated_closes:v2:{ticker}:{period}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        return dict(json.loads(cached))
+
+    def _fetch() -> dict[str, float]:
+        closes = yf.Ticker(ticker).history(period=period)["Close"]
+        return {
+            stamp.date().isoformat(): float(value)
+            for stamp, value in closes.items()
+            if math.isfinite(value) and value > 0
+        }
+
+    try:
+        result = await _retry_fetch(_fetch)
+    except Exception as exc:
+        logger.warning("Dated history unavailable (%s)", type(exc).__name__)
+        result = {}
+    ttl = QUOTE_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
+    await redis.set(cache_key, json.dumps(result), ex=ttl)
+    return result
+
+
+async def fetch_profile(ticker: str) -> dict[str, str | None]:
+    """Read-only metadata for analytics; holding auto-fill remains a separate phase."""
+    redis = get_redis()
+    cache_key = f"profile:{ticker}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        # Bound old cached entries too; a rollout must not preserve oversized provider strings.
+        return {field: _profile_text(value) for field, value in dict(json.loads(cached)).items()}
+
+    def _fetch() -> dict[str, str | None]:
+        info = yf.Ticker(ticker).info or {}
+        keys = {
+            "name": "longName",
+            "sector": "sector",
+            "industry": "industry",
+            "country": "country",
+            "quote_type": "quoteType",
+            "exchange": "exchange",
+            "category": "category",
+        }
+        return {field: _profile_text(info.get(key)) for field, key in keys.items()}
+
+    try:
+        result = await _retry_fetch(_fetch)
+    except Exception as exc:
+        logger.warning("Profile unavailable (%s)", type(exc).__name__)
+        result = {}
+    ttl = CURRENCY_CACHE_TTL if any(result.values()) else ANALYTICS_NEGATIVE_CACHE_TTL
+    await redis.set(cache_key, json.dumps(result), ex=ttl)
+    return result
 
 
 async def fetch_currency(ticker: str) -> str | None:
