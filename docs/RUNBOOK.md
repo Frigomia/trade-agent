@@ -557,8 +557,10 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
   so up to 24 hours of data can be lost.
 - CORS allows all methods and headers for the one configured origin. With a single trusted origin
   this does not widen access.
-- The scheduled job's failure is visible only in the GitHub run and Fly logs, and whether the
-  GitHub run turns red when the job fails is unverified (see the required check in section 3).
+- A scheduled job that fails turns its GitHub run red: the workflow waits for the one-off machine, prints
+  its log, and fails on a non-zero exit code or an out-of-memory kill. It was checked against the
+  production app with commands that exit 0 and 3. A job that runs longer than an hour is stopped
+  waiting and reported as failed; the machine is then removed.
 - 512 MB may be tight. Watch for out-of-memory restarts in `fly logs -a <app-name>` and raise
   `memory` in `backend/fly.toml` if they appear.
 - A deploy token can deploy, but whether it can create one-off machines is unverified (section 3).
