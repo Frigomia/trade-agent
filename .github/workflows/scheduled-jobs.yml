@@ -72,8 +72,18 @@ jobs:
           # GitHub runs this step with `bash -e`, so any later failure ends it: the trap still removes
           # the machine then.
           trap 'flyctl machine destroy "$ID" --app "$APP" --force || echo "could not remove machine $ID" >&2' EXIT
-          # One hour is the job lock's lifetime (LOCK_SECONDS in app/scheduled.py).
-          flyctl machine wait "$ID" --app "$APP" --state stopped --wait-timeout 1h || echo "timed out waiting for the job" >&2
+          # Poll, because `flyctl machine wait` gives up after about a minute whatever its timeout says.
+          # 240 x 15 s is one hour, the job lock's lifetime (LOCK_SECONDS in app/scheduled.py).
+          STATE=started
+          for _ in $(seq 240); do
+            STATE=$(flyctl machine list --app "$APP" --json \
+              | jq -r --arg id "$ID" '[.[] | select(.id == $id) | .state][0] // "gone"') || STATE=unknown
+            case "$STATE" in stopped | failed | destroyed | gone) break ;; esac
+            sleep 15
+          done
+          if [ "$STATE" != "stopped" ]; then
+            echo "the job did not stop within an hour (machine state: $STATE)" >&2
+          fi
           flyctl logs --app "$APP" --machine "$ID" --no-tail || true
           EXIT=$(flyctl machine list --app "$APP" --json \
             | jq -r --arg id "$ID" '[.[] | select(.id == $id) | .events[] | select(.type == "exit")][0] | if . == null then "no exit event" else "\(.request.exit_event.exit_code // 0) \(.request.exit_event.oom_killed // false)" end')
