@@ -344,3 +344,47 @@ def test_a_failure_while_building_one_candidate_does_not_lose_the_others() -> No
 
     assert [c.ticker for c in admitted] == ["BETA"]
     assert [r.reason for r in rejected] == ["insufficient_data"]
+
+
+def test_an_accented_name_matches_its_unaccented_mention_even_with_a_ticker_hint() -> None:
+    world = World({"l'oreal": [hit("OR.PA", "L'Oréal S.A.", "Paris")]})
+
+    admitted, rejected = admit(world, [mention("L'Oreal", ticker_hint="OR.PA")])
+
+    assert rejected == []
+    assert [c.ticker for c in admitted] == ["OR.PA"]
+
+
+def test_a_non_latin_name_is_compared_not_dropped() -> None:
+    name = "東京エレクトロン"
+    world = World({name: [hit("8035.T", name, "Tokyo")]})
+
+    admitted, rejected = admit(world, [mention(name)])
+
+    assert rejected == []
+    assert [c.ticker for c in admitted] == ["8035.T"]
+
+
+def test_two_different_non_latin_names_do_not_match() -> None:
+    world = World({"東京エレクトロン": [hit("6758.T", "ソニーグループ", "Tokyo")]})
+
+    _, rejected = admit(world, [mention("東京エレクトロン")])
+
+    assert [r.reason for r in rejected] == ["unresolved"]
+
+
+def test_a_ticker_hint_in_the_other_share_class_notation_still_matches() -> None:
+    world = World({"berkshire hathaway": [hit("BRK-B", "Berkshire Hathaway Inc.", "NYSE")]})
+
+    admitted, rejected = admit(world, [mention("Berkshire Hathaway", ticker_hint="BRK.B")])
+
+    assert rejected == []
+    assert [c.ticker for c in admitted] == ["BRK-B"]
+
+
+def test_a_short_accented_name_matches_only_if_accents_are_folded() -> None:
+    world = World({"elan": [hit("ELN.PA", "Élan SA", "Paris")]})
+
+    admitted, _ = admit(world, [mention("Elan")])
+
+    assert [c.ticker for c in admitted] == ["ELN.PA"]

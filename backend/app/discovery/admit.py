@@ -46,8 +46,10 @@ _REASON_FOR = {  # eligibility exclusion -> why the mention is rejected
 
 
 def _normal(name: str) -> str:
-    text = name.casefold().replace(".", "").replace("&", " and ")
-    words = re.sub(r"[^a-z0-9]+", " ", text).split()
+    """A name as comparable words: accents folded, any script kept, legal suffixes dropped."""
+    text = unicodedata.normalize("NFKD", name).casefold().replace(".", "").replace("&", " and ")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    words = re.sub(r"[\W_]+", " ", text).split()
     while words and words[-1] in _LEGAL:
         words.pop()
     return " ".join(words)
@@ -81,7 +83,7 @@ def _pick(mention: Mention, hits: list[dict[str, str]]) -> dict[str, str] | str:
     if mention.exchange_hint:
         matches = [h for h in matches if _on_exchange(h["exchange"], mention.exchange_hint)]
     if mention.ticker_hint:
-        matches = [h for h in matches if h["symbol"].casefold() == mention.ticker_hint.casefold()]
+        matches = [h for h in matches if _key(h["symbol"]) == _key(mention.ticker_hint)]
     return matches[0] if len(matches) == 1 else ("unresolved" if not matches else "ambiguous")
 
 
