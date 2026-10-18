@@ -96,6 +96,7 @@ class PortfolioExposure(Contract):
     # None: fewer than 60 overlapping days, so the pair cannot be estimated
     correlation: dict[str, dict[str, float | None]]
     skipped: dict[str, str]  # ticker -> why it could not be valued
+    notes: list[str]  # partial valuation, history/FX limitations and ETF proxy exposures
 
 
 class CandidateFit(Contract):

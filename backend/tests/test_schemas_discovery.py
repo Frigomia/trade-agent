@@ -124,6 +124,7 @@ def test_an_empty_portfolio_is_representable() -> None:
         volatility_annualized=None,
         correlation={},
         skipped={},
+        notes=[],
     )
     fit = CandidateFit(
         ticker="SAP.DE",

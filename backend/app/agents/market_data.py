@@ -141,6 +141,61 @@ async def search_symbols(query: str) -> list[dict[str, str]]:
 CURRENCY_CACHE_TTL = 86400
 
 
+async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
+    """Positive finite daily closes with their actual dates; no forward fill across markets."""
+    redis = get_redis()
+    cache_key = f"dated_closes:{ticker}:{period}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        return dict(json.loads(cached))
+
+    def _fetch() -> dict[str, float]:
+        closes = yf.Ticker(ticker).history(period=period)["Close"]
+        return {
+            stamp.date().isoformat(): float(value)
+            for stamp, value in closes.items()
+            if math.isfinite(value) and value > 0
+        }
+
+    result = await _retry_fetch(_fetch)
+    if result:
+        await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
+    return result
+
+
+async def fetch_profile(ticker: str) -> dict[str, str | None]:
+    """Read-only metadata for analytics; holding auto-fill remains a separate phase."""
+    redis = get_redis()
+    cache_key = f"profile:{ticker}"
+    cached = await redis.get(cache_key)
+    if cached is not None:
+        return dict(json.loads(cached))
+
+    def _fetch() -> dict[str, str | None]:
+        info = yf.Ticker(ticker).info or {}
+        keys = {
+            "name": "longName",
+            "sector": "sector",
+            "industry": "industry",
+            "country": "country",
+            "currency": "currency",
+            "quote_type": "quoteType",
+            "exchange": "exchange",
+            "category": "category",
+        }
+        return {
+            field: value.strip()
+            if isinstance(value := info.get(key), str) and value.strip()
+            else None
+            for field, key in keys.items()
+        }
+
+    result = await _retry_fetch(_fetch)
+    if any(value is not None for value in result.values()):
+        await redis.set(cache_key, json.dumps(result), ex=CURRENCY_CACHE_TTL)
+    return result
+
+
 async def fetch_currency(ticker: str) -> str | None:
     """The currency a ticker is quoted in (for example "EUR", "USD", "GBp"), or None if unknown."""
     redis = get_redis()
