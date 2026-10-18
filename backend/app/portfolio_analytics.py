@@ -44,7 +44,8 @@ async def load_analytics(db: Session, user_id: uuid.UUID) -> PortfolioExposure:
         return ticker, history, profile
 
     loaded = await asyncio.gather(*(details(ticker) for ticker in sorted(prices)))
-    return analyze_portfolio(
+    return await asyncio.to_thread(
+        analyze_portfolio,
         holdings,
         prices,
         {ticker: history for ticker, history, _ in loaded},

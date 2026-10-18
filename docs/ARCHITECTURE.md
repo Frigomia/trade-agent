@@ -568,14 +568,18 @@ requirement for startup, tests, snapshots or the existing analysis flow.
 `GET /portfolio/analytics` reads only open positions in the caller's scoped session. The thin
 router delegates to `app/portfolio_analytics.py`, which releases its read transaction before
 network work, uses `fx.eur_prices` for validated currency conversion, and loads profiles and
-dated histories with at most eight concurrent detail lookups. A failed history/profile lookup
+dated histories with at most eight concurrent detail lookups. Pure analytics runs through
+`asyncio.to_thread` so the correlation matrix cannot block the request event loop. The matrix
+computes each unordered pair once and mirrors it. A failed history/profile lookup
 does not drop a priced position; its limitation is returned in `PortfolioExposure.notes`.
 Unpriced/unsupported-currency positions appear in `skipped`; weights cover the priced subset.
 
-`agents/market_data.py` adds `fetch_dated_closes(ticker, period="1y")` (5-minute cache, separate
+`agents/market_data.py` adds `fetch_dated_closes(ticker, period="1y")` (24-hour cache, separate
 key per ticker/period, finite positive closes by ISO date) and `fetch_profile(ticker)` (24-hour
-cache of name, sector, industry, country, currency, quote type, exchange and ETF category). Both
-use the existing retry/thread pattern. Profiles are read-only here; holding auto-fill and
+cache of name, sector, industry, country, quote type, exchange and ETF category). Empty results
+and exhausted provider failures are negative-cached for 5 minutes, after the existing retries;
+exception class names alone are logged. Both use the existing thread pattern. Profile strings
+are capped at 100 characters on fresh and cached reads. Profiles are read-only here; holding auto-fill and
 nullable cost basis remain Phase 8. No schema migration or provider dependency is introduced.
 
 The pure functions in `analysis/portfolio.py` value each position with its last usable dated
@@ -585,7 +589,10 @@ EUR quote is retained with an unknown timestamp and `stale=true`. Future bars ar
 Freshness reuses the exchange-aware discovery rules; uncertain freshness is flagged and explained.
 
 Exposure is partitioned by sector, industry, country and quote currency; missing metadata stays
-`Unclassified`. A manual holding sector overrides the profile sector for stocks. Country is the
+`Unclassified`; an all-null profile also emits the missing-profile note. A manual holding sector
+overrides the profile sector for stocks. Sector case/whitespace and common aliases (Tech,
+Financials/Finance, Health Care) normalize into Yahoo's canonical buckets; unknown free text is
+case-normalized without guessing its sector. Country is the
 profile's issuer domicile, not a verified listing-country map. ETFs use one category bucket for
 sector/industry and are explicitly flagged as having no constituent look-through; their country,
 if provided, is fund domicile. Their underlying country/sector mix is not inferred.
@@ -605,6 +612,9 @@ weights shrink by `1-weight`; the new candidate gets `weight`. Before/after vola
 same common sample, average correlation is value-weighted, and HHI/sector effects are explicit.
 Fewer than two valued holdings, insufficient common history or an already-held candidate yields
 `applicable=false` with notes. Fit is context, never an automatic buy signal or a baseline target.
+Labels and notes can include untrusted provider or user text; any Phase 6 prompt consuming exposure
+or fit must place that text inside an untrusted-data block. The response and fit notes carry this
+disclosure, and bounded labels prevent a provider string from inflating the response.
 
 ### Existing holdings and watchlist analysis
 

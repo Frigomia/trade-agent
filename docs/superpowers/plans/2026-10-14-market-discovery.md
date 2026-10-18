@@ -664,6 +664,12 @@ Implementation details that make the original interface sketch concrete:
   come from the pure `log_returns` helper. Before/after volatility uses identical observations.
   Identical equal-volatility candidate returns do not create a diversification benefit; perfect
   correlation alone does not imply equal volatility.
+- PR review follow-up: offload pure analytics from the async route and compute the symmetric
+  correlation matrix once per pair. Successful dated histories/profiles cache for 24 hours;
+  empty results and exhausted failures cache for 5 minutes. Bound profile strings at 100
+  characters, disclose all-null profiles, normalize sector labels/aliases and treat provider
+  labels/notes as untrusted in future prompts. Whole-portfolio risk remains unavailable when a
+  valued holding lacks history; the API does not substitute an unlabeled partial-risk estimate.
 
 Validation: synthetic math/interval/empty/partial-data tests, mocked provider cache/retry tests,
 authenticated API tests with real local Postgres/RLS and Redis (including no-store and rate

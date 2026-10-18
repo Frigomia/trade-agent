@@ -139,6 +139,13 @@ async def search_symbols(query: str) -> list[dict[str, str]]:
 
 
 CURRENCY_CACHE_TTL = 86400
+ANALYTICS_NEGATIVE_CACHE_TTL = 300
+PROFILE_TEXT_CHARS = 100
+
+
+def _profile_text(value: object) -> str | None:
+    text = " ".join(value.split()) if isinstance(value, str) else ""
+    return text[:PROFILE_TEXT_CHARS] or None
 
 
 async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
@@ -157,9 +164,13 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
             if math.isfinite(value) and value > 0
         }
 
-    result = await _retry_fetch(_fetch)
-    if result:
-        await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
+    try:
+        result = await _retry_fetch(_fetch)
+    except Exception as exc:
+        logger.warning("Dated history unavailable (%s)", type(exc).__name__)
+        result = {}
+    ttl = HISTORY_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
+    await redis.set(cache_key, json.dumps(result), ex=ttl)
     return result
 
 
@@ -169,7 +180,8 @@ async def fetch_profile(ticker: str) -> dict[str, str | None]:
     cache_key = f"profile:{ticker}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        return dict(json.loads(cached))
+        # Bound old cached entries too; a rollout must not preserve oversized provider strings.
+        return {field: _profile_text(value) for field, value in dict(json.loads(cached)).items()}
 
     def _fetch() -> dict[str, str | None]:
         info = yf.Ticker(ticker).info or {}
@@ -178,21 +190,19 @@ async def fetch_profile(ticker: str) -> dict[str, str | None]:
             "sector": "sector",
             "industry": "industry",
             "country": "country",
-            "currency": "currency",
             "quote_type": "quoteType",
             "exchange": "exchange",
             "category": "category",
         }
-        return {
-            field: value.strip()
-            if isinstance(value := info.get(key), str) and value.strip()
-            else None
-            for field, key in keys.items()
-        }
+        return {field: _profile_text(info.get(key)) for field, key in keys.items()}
 
-    result = await _retry_fetch(_fetch)
-    if any(value is not None for value in result.values()):
-        await redis.set(cache_key, json.dumps(result), ex=CURRENCY_CACHE_TTL)
+    try:
+        result = await _retry_fetch(_fetch)
+    except Exception as exc:
+        logger.warning("Profile unavailable (%s)", type(exc).__name__)
+        result = {}
+    ttl = CURRENCY_CACHE_TTL if any(result.values()) else ANALYTICS_NEGATIVE_CACHE_TTL
+    await redis.set(cache_key, json.dumps(result), ex=ttl)
     return result
 
 

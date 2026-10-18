@@ -1,11 +1,15 @@
 import asyncio
+import threading
 from datetime import date
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
+from app.analysis.portfolio import analyze_portfolio
 from app.fx import EurPrice
 from app.models import Holding
-from tests.auth_support import OTHER_USER_ID, add_app_user
+from app.portfolio_analytics import load_analytics
+from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 from tests.test_portfolio_analytics_math import curve
 
 
@@ -170,3 +174,31 @@ def test_detail_fetches_stay_bounded_for_a_large_portfolio(client):
     assert response.status_code == 200
     assert len(response.json()["positions"]) == 20
     assert 1 < peak <= 8
+
+
+def test_slow_math_does_not_block_the_request_event_loop():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = [
+        SimpleNamespace(ticker="A", name="A", shares=1, asset_type="STOCK", sector=None)
+    ]
+    started, released = threading.Event(), threading.Event()
+
+    def slow_math(*args):
+        started.set()
+        # The event-loop task must be able to release the computation while it is running.
+        assert released.wait(2), "analytics blocked the event loop"
+        return analyze_portfolio(*args)
+
+    async def exercise():
+        task = asyncio.create_task(load_analytics(db, USER_ID))
+        while not started.is_set():
+            await asyncio.sleep(0)
+        released.set()
+        return await task
+
+    with (
+        patch("app.portfolio_analytics.fx.eur_prices", AsyncMock(return_value=({}, {}))),
+        patch("app.portfolio_analytics.analyze_portfolio", side_effect=slow_math),
+    ):
+        result = asyncio.run(asyncio.wait_for(exercise(), timeout=5))
+    assert result.positions == []

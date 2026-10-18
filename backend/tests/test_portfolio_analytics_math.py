@@ -124,7 +124,37 @@ def test_profile_metadata_supplies_industry_and_country_without_storing_it():
 
     assert any(group.label == "Japan" for group in exposure.by_country)
     assert any(group.label == "Banks" for group in exposure.by_industry)
-    assert any(group.label == "Finance" for group in exposure.by_sector)
+    assert any(group.label == "Financial Services" for group in exposure.by_sector)
+
+
+def test_all_none_profile_still_explains_unclassified_exposures():
+    exposure = analysis(profiles={"A": {"sector": None, "country": None, "category": None}})
+    assert any("A: profile unavailable" in note for note in exposure.notes)
+
+
+def test_manual_and_provider_sector_names_share_one_normalized_bucket():
+    exposure = analysis(
+        holdings=[
+            PositionInput("A", "Alpha", 1, "STOCK", "  tech  "),
+            PositionInput("B", "Beta", 1, "STOCK"),
+        ],
+        profiles={"B": {"sector": "Technology"}},
+    )
+    assert [(group.label, group.weight) for group in exposure.by_sector] == [("Technology", 1)]
+
+
+def test_provider_labels_stay_bounded_and_the_untrusted_note_survives_candidate_fit():
+    exposure = analysis(profiles={"A": {"sector": "s" * 5000, "country": "c" * 5000}})
+    assert all(len(group.label) <= 100 for group in exposure.by_sector + exposure.by_country)
+    result = marginal_effect(exposure, {}, None, ticker="C", portfolio_returns={})
+    assert any("untrusted provider text" in note for note in result.notes)
+
+
+def test_correlation_matrix_is_symmetric_with_undefined_values_preserved():
+    exposure = analysis(histories={"A": curve(), "B": dict.fromkeys(curve(), 100.0)})
+    assert exposure.correlation["A"]["B"] is None
+    assert exposure.correlation["B"]["A"] is None
+    assert exposure.correlation["A"]["A"] == pytest.approx(1)
 
 
 def test_portfolio_volatility_matches_the_covariance_matrix_formula():

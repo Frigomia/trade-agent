@@ -25,7 +25,7 @@ def test_dated_history_preserves_dates_when_dropping_invalid_closes():
     ticker.history.assert_called_once_with(period="6mo")
     assert redis.get.call_args.args == ("dated_closes:A:6mo",)
     assert json.loads(redis.set.call_args.args[1]) == result
-    assert redis.set.call_args.kwargs["ex"] == 300
+    assert redis.set.call_args.kwargs["ex"] == 86400
 
 
 def test_dated_history_cache_hit_avoids_yahoo():
@@ -39,7 +39,7 @@ def test_dated_history_cache_hit_avoids_yahoo():
     ticker.assert_not_called()
 
 
-def test_dated_history_retries_and_does_not_cache_an_empty_result():
+def test_dated_history_retries_then_short_caches_an_empty_result():
     redis, ticker = AsyncMock(), MagicMock()
     redis.get.return_value = None
     ticker.history.side_effect = [RuntimeError("unavailable"), pd.DataFrame({"Close": []})]
@@ -51,7 +51,8 @@ def test_dated_history_retries_and_does_not_cache_an_empty_result():
         assert asyncio.run(fetch_dated_closes("A")) == {}
     assert ticker.history.call_count == 2
     sleep.assert_awaited_once()
-    redis.set.assert_not_called()
+    assert redis.set.call_args.args[1] == "{}"
+    assert redis.set.call_args.kwargs["ex"] == 300
 
 
 def test_profile_is_read_only_typed_metadata_with_category_and_cached():
@@ -87,3 +88,59 @@ def test_profile_cache_hit_avoids_yahoo():
     ):
         assert asyncio.run(fetch_profile("A")) == {"country": "Japan"}
     ticker.assert_not_called()
+
+
+def test_profiles_bound_provider_strings_including_old_cache_entries():
+    redis, ticker = AsyncMock(), MagicMock()
+    ticker.info = {"sector": "s" * 5000, "country": "c" * 5000}
+    for cached in (None, json.dumps(ticker.info)):
+        redis.get.return_value = cached
+        with (
+            patch("app.agents.market_data.get_redis", return_value=redis),
+            patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+        ):
+            result = asyncio.run(fetch_profile("A"))
+        assert result["sector"] == "s" * 100
+        assert result["country"] == "c" * 100
+
+
+def test_empty_profiles_are_negative_cached_for_five_minutes():
+    redis, ticker = AsyncMock(), MagicMock()
+    redis.get.return_value = None
+    ticker.info = {}
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+    ):
+        result = asyncio.run(fetch_profile("A"))
+    assert not any(result.values())
+    assert redis.set.call_args.kwargs["ex"] == 300
+
+
+def test_exhausted_yahoo_errors_are_sanitized_and_negative_cached(caplog):
+    for fetch in (fetch_dated_closes, fetch_profile):
+        redis = AsyncMock()
+        redis.get.return_value = None
+        with (
+            patch("app.agents.market_data.get_redis", return_value=redis),
+            patch(
+                "app.agents.market_data.yf.Ticker", side_effect=RuntimeError("private-token")
+            ) as ticker,
+            patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+        ):
+            assert asyncio.run(fetch("A")) == {}
+        assert ticker.call_count == 3
+        assert redis.set.call_args.kwargs["ex"] == 300
+        assert "private-token" not in caplog.text
+
+
+def test_negative_cache_hits_skip_all_yahoo_retries():
+    for fetch in (fetch_dated_closes, fetch_profile):
+        redis = AsyncMock()
+        redis.get.return_value = "{}"
+        with (
+            patch("app.agents.market_data.get_redis", return_value=redis),
+            patch("app.agents.market_data.yf.Ticker") as ticker,
+        ):
+            assert asyncio.run(fetch("A")) == {}
+        ticker.assert_not_called()
