@@ -546,6 +546,24 @@ corrected on the holding form, since a SELL does not restore the average cost).
 
 ## 6. Multi-agent orchestration design
 
+### Market discovery: Phase 0 contracts and target design
+
+The [market-discovery design](superpowers/specs/2026-10-14-market-discovery-design.md)
+records the shared contracts, selected MVP defaults and the remaining work. The contracts in
+`app/schemas_discovery.py`, global FX support, curated universe, snapshot refresh, peer/risk
+calculations and shortlist are implemented. The research module, evaluation graph, scan API,
+scan persistence, portfolio analytics and discovery UI are future phases; no user discovery
+scan is exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
+
+Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
+available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
+content has no scoring weight and cannot establish a confirmed thesis-invalidating event.
+ETFs remain in the universe but are explicitly excluded from discovery scoring until separate
+criteria exist. `TAVILY_API_KEY` is an optional backend setting reserved for Phase 2, not a new
+requirement for startup, tests, snapshots or the existing analysis flow.
+
+### Existing holdings and watchlist analysis
+
 Target graph structure (`backend/app/agents/graph.py`) — this is the exact
 shape to build, expressible directly as a LangGraph `StateGraph`:
 
@@ -696,6 +714,7 @@ DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/tra
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
+TAVILY_API_KEY=                             # optional backend-only key for future discovery research; no calls wired in Phase 0
 KEY_ENCRYPTION_SECRET=                      # base64 of 32 random bytes (openssl rand -base64 32); encrypts users' saved Claude keys; required when APP_ENV=production
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
@@ -709,6 +728,14 @@ TELEGRAM_WEBHOOK_SECRET=                    # long random string (openssl rand -
 TELEGRAM_BOT_USERNAME=                      # the bot's username without the @, used to build the t.me connect link
 APP_URL=                                    # the frontend origin; the message links to <APP_URL>/today (no link when unset)
 ```
+
+`TAVILY_API_KEY` belongs to the environment owner and must be stored only in backend secret
+configuration (future HTTPS destination: `api.tavily.com`), never in a `NEXT_PUBLIC_*` variable.
+It is optional and omitted from the settings object's repr. Phase 0 only declares the setting;
+it does not call Tavily, add an SDK, or change existing analysis behavior. Phase 2 will handle
+missing/empty keys and provider failures as research unavailable, preserving quant-only results
+with an explicit data limitation. The owning environment funds Tavily; a user scan still uses
+that user's Claude client and one existing `analysis_run` quota unit (when Phase 7 lands).
 
 Without `TELEGRAM_BOT_TOKEN`, `POST /me/telegram/link` answers `503`, `GET /me/telegram` reports
 `configured: false` and the notify step logs "not set up" and does nothing. Nothing else in the app
