@@ -1,8 +1,28 @@
 # Market discovery: implementation plan and handoff brief
 
-Status: revision 2, 2026-10-14. Incorporates the review decisions on PR #105 (see Section 1.3).
-Two people execute it in two lanes. Phase 0 turns this document into a spec under
-`docs/superpowers/specs/`. **No implementation has started.**
+Status: revision 3, 2026-10-18. Incorporates the review decisions on PR #105 (see Section 1.3)
+and the discovery foundation already merged into master. Two people execute it in two lanes.
+The [Phase 0 design spec](../specs/2026-10-14-market-discovery-design.md) records the selected
+defaults and reconciles this original plan with the existing implementation. Use the spec and
+`app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
+historical guidance. No end-to-end discovery scan has shipped yet.
+
+| Phase | Implementation status at the Phase 0 handoff |
+| --- | --- |
+| 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
+| 1: analytics and FX | Partial: global FX support exists; portfolio analytics, dated history API and candidate fit remain. |
+| 2: research | Not implemented; evidence models alone do not perform research. |
+| 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
+| 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
+| 5: dynamic admission | Not implemented. |
+| 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
+| 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
+| 8: easy onboarding | Not implemented. |
+| 9: frontend | Not implemented for discovery. |
+| 10: deferred | Still deferred; separate specs and decisions required. |
+
+I1–I3 integration checkpoints remain outstanding. See the design spec for freshness, ETF,
+peer-statistic and ranking decisions that supersede the initial proposals below.
 
 **Audience.** An engineer, and the coding LLM that engineer drives, who knows this repo only from
 the code. Everything the work depends on is stated here: the product goal, the hard rules, what
@@ -599,14 +619,25 @@ pitfalls. Branch per phase: `feature/<phase>-<name>`.
 
 ### Phase 0: Spec and contracts (both, S)
 
-- Commit `app/schemas_discovery.py` with the Section 4.5 models and write the spec in
-  `docs/superpowers/specs/2026-10-14-market-discovery-design.md` from this document.
-- Add `tavily_api_key` to `config.py` and `.env.example` (no value). Document it in
-  `docs/ARCHITECTURE.md` §11.
-- Confirm the proposed defaults: `MIN_PEERS=8`, `MIN_CORE_METRICS=3`, `STALE_DAYS=5`,
-  `DISCOVERY_MAX_DYNAMIC=10`, shortlist size 8, `NO_OPPORTUNITY_MIN_OVERALL=60`, the display-only
-  size and liquidity labels in 4.2, and the ranking tie-break in 4.4. Quota: one scan counts as one
-  `"analysis_run"` against the existing monthly limit (no new kind, no new columns).
+- [x] Shared contracts already committed in `app/schemas_discovery.py`, with fixtures and tests
+  in `tests/discovery_fixtures.py` and `tests/test_schemas_discovery.py`. Preserve their stricter
+  validation, nullable correlations, listing country and required `data_notes`.
+- [x] Write `docs/superpowers/specs/2026-10-14-market-discovery-design.md` from this plan,
+  separating implemented foundations from future workflows.
+- [x] Add optional `tavily_api_key` to `config.py` and `TAVILY_API_KEY=` to `.env.example` (no
+  value), with backend-only ownership, secret repr protection and §11 documentation. No request
+  or SDK is introduced.
+- [x] Record selected defaults: `MIN_PEERS=8`, `MIN_CORE_METRICS=3`, `MIN_SCORED=2`,
+  `DISCOVERY_MAX_DYNAMIC=10`, shortlist size 8, `NO_OPPORTUNITY_MIN_OVERALL=60`, display-only
+  risk labels, equal-weight quality/valuation and risk/fit/ticker tie-breaks. One scan counts as
+  one existing `analysis_run` unit. Adopt the implemented exchange-aware freshness rules, with
+  5 days only as the sparse-exchange fallback, instead of reinstating blanket `STALE_DAYS=5`.
+- [x] Record implemented ETF exclusions and percentile-based peer statistics explicitly, rather
+  than silently changing scoring while documenting it. ETF discovery needs its own criteria.
+
+Validation for this handoff: contract/configuration tests, full backend tests with real local
+Postgres and Redis, lint, formatting and strict type checking. Real-provider checkpoints remain
+the responsibility of their later implementing phases.
 
 ### Phase 1: Portfolio analytics and FX coverage (A, M)
 
@@ -783,8 +814,8 @@ fundamentals-first.
 - `eligibility.py`: the single function `is_eligible(candidate, profile="broad") -> (bool, reason)`
   that implements 4.1; `profile` exists for the future and has no effect now (1.4).
 
-**Rule:** `risk_level` and `size_bucket` are computed here and carried on `CandidateMetrics` but do
-not filter or rank.
+**Rule:** `risk_level` and `size_bucket` do not filter candidates or change numeric scores.
+`risk_level` breaks equal-score ties per Section 4.4; size has no independent ranking weight.
 
 **Acceptance:** the snapshot is deterministic for fixed inputs; a symbol with missing data is
 recorded with its coverage and excluded only per 4.1, never scored as zero; with fewer than

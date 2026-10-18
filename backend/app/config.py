@@ -1,7 +1,7 @@
 import re
 from urllib.parse import parse_qs, urlparse
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _STRICT_SSLMODES = {"require", "verify-ca", "verify-full"}
@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     voyage_api_key: str | None = None
+    # Optional owner-funded discovery research; no provider calls are wired until Phase 2.
+    tavily_api_key: str | None = Field(default=None, repr=False)
     supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
     migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only
     supabase_secret_key: str | None = None  # backend-only secret for Supabase Auth admin calls
