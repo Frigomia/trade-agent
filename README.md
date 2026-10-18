@@ -48,10 +48,12 @@ frontend/   Next.js + TypeScript + MUI — the dashboard
 docs/       Design spec (ARCHITECTURE.md) and the brainstorming/spec/plan trail for every cycle
 ```
 
-Each side has its own `CLAUDE.md` with its stack, commands, and conventions:
-[backend/CLAUDE.md](backend/CLAUDE.md), [frontend/CLAUDE.md](frontend/CLAUDE.md). Repo-wide rules
+Each side has its own `AGENTS.md` with its stack, commands, and conventions:
+[backend/AGENTS.md](backend/AGENTS.md), [frontend/AGENTS.md](frontend/AGENTS.md). Repo-wide rules
 (branch naming, commit conventions, the never-place-a-trade constraint) live in the root
-[CLAUDE.md](CLAUDE.md).
+[AGENTS.md](AGENTS.md). Claude Code imports the same rules through its `CLAUDE.md` files.
+The [agent workflow](docs/AGENT_WORKFLOW.md) covers the vendored Ponytail skills, migration
+protection, Ruff and required reviews for Codex, Claude Code and instruction-only agents.
 
 ## Quick start
 
@@ -117,7 +119,7 @@ Using someone else's Supabase project does not skip this: the Supabase user exis
 local database still needs its own `app_users` row, so run the same command with that user's uid.
 
 More setup details (row-level security locally, invitations, running the tests) are in each side's
-`CLAUDE.md`.
+`AGENTS.md`.
 
 ### Scheduled jobs
 
@@ -147,6 +149,6 @@ What it does, its exit codes, and copy-paste triggers are in
 
 ## Contributing
 
-Personal project; not currently open to outside contributions. If that changes, `CLAUDE.md`
+Personal project; not currently open to outside contributions. If that changes, `AGENTS.md`
 documents the conventions this codebase follows (Conventional Commits, branch naming, path-filtered
 CI per side).
