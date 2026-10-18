@@ -61,18 +61,21 @@ jobs:
           # The machine gets the app's secrets. Flags first, then `--`: flyctl's `-m` means --metadata,
           # so without the `--` it would swallow the `-m` of `python -m app.scheduled`.
           OUT=$(flyctl machine run --app "$APP" --region fra --restart no --vm-memory 1024 \
-            --env APP_ENV=production "$IMAGE" -- python -m app.scheduled "$COMMAND" 2>&1)
+            --env APP_ENV=production "$IMAGE" -- python -m app.scheduled "$COMMAND" 2>&1) || RUN_STATUS=$?
           echo "$OUT"
+          echo "machine run exit status: ${RUN_STATUS:-0}"
           ID=$(echo "$OUT" | awk '/Machine ID:/ {print $NF; exit}')
           if [ -z "$ID" ]; then
             echo "the machine was not created" >&2
             exit 1
           fi
+          # GitHub runs this step with `bash -e`, so any later failure ends it: the trap still removes
+          # the machine then.
+          trap 'flyctl machine destroy "$ID" --app "$APP" --force || echo "could not remove machine $ID" >&2' EXIT
           # One hour is the job lock's lifetime (LOCK_SECONDS in app/scheduled.py).
           flyctl machine wait "$ID" --app "$APP" --state stopped --wait-timeout 1h || echo "timed out waiting for the job" >&2
           flyctl logs --app "$APP" --machine "$ID" --no-tail || true
           EXIT=$(flyctl machine list --app "$APP" --json \
             | jq -r --arg id "$ID" '[.[] | select(.id == $id) | .events[] | select(.type == "exit")][0] | if . == null then "no exit event" else "\(.request.exit_event.exit_code // 0) \(.request.exit_event.oom_killed // false)" end')
-          flyctl machine destroy "$ID" --app "$APP" --force || echo "could not remove machine $ID" >&2
           echo "exit code and out-of-memory kill: $EXIT"
           [ "$EXIT" = "0 false" ]
