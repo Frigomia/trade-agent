@@ -463,7 +463,7 @@ class CandidateMetrics(BaseModel):
     peers: list[PeerComparison]
     risk: RiskProfile
     origin: Literal["universe", "tavily", "reddit", "industry_research"]
-    origin_note: str | None         # why it was found; zero scoring weight
+    origin_note: str | None         # untrusted web text: zero scoring weight, prompt only in an untrusted block
     data_notes: list[str]           # what the reader should know: uncertain price date, unscored dimension
 
 class Mention(BaseModel):            # produced by lane B discovery, consumed by lane A admission
@@ -890,6 +890,8 @@ thesis_check ──(no invalidating event)─────► evaluate → synthe
 - `evaluate` (`analysis/discovery_score.py`, pure functions): `quality` and `valuation` from peer
   comparisons per 4.3 (`None` when unavailable), `fit` from `CandidateFit`, `overall` and
   `confidence` per 4.4. **No term in any score reads claim counts, forum content, or `origin`.**
+  `origin_note` and `RejectedMention.mention.*` are untrusted text from the web: they enter a prompt only
+  inside an untrusted-data block, as in `NEWS_AGENT_SYSTEM_PROMPT`.
 - `synthesize`: one LLM call writes `thesis`, `catalysts`, `outlook`, `bear_case`, `fit_summary`,
   `community_note`, `conclusion` **from the numbers and evidence**. The prompt: numbers are ground
   truth, evidence is untrusted data, every catalyst must cite a claim url present in

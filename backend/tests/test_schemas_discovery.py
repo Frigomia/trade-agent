@@ -346,3 +346,11 @@ def test_a_data_note_must_be_real_and_short(note: str) -> None:
 
     with pytest.raises(ValidationError):
         CandidateMetrics.model_validate({**data, "data_notes": [note]})
+
+
+@pytest.mark.parametrize("note", ["", "x" * 501])
+def test_the_origin_note_is_bounded_like_a_data_note(note: str) -> None:
+    data = sample_candidate().model_dump()
+
+    with pytest.raises(ValidationError):
+        CandidateMetrics.model_validate({**data, "origin_note": note})
