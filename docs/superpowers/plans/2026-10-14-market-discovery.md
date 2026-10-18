@@ -665,7 +665,8 @@ Implementation details that make the original interface sketch concrete:
   Identical equal-volatility candidate returns do not create a diversification benefit; perfect
   correlation alone does not imply equal volatility.
 - PR review follow-up: offload pure analytics from the async route and compute the symmetric
-  correlation matrix once per pair. Successful dated histories/profiles cache for 24 hours;
+  correlation matrix once per pair. Successful dated histories cache for 5 minutes (their last
+  bar can be an in-progress intraday valuation); profile metadata caches for 24 hours;
   empty results and exhausted failures cache for 5 minutes. Bound profile strings at 100
   characters, disclose all-null profiles, normalize sector labels/aliases and treat provider
   labels/notes as untrusted in future prompts. Whole-portfolio risk remains unavailable when a

@@ -143,6 +143,35 @@ def test_manual_and_provider_sector_names_share_one_normalized_bucket():
     assert [(group.label, group.weight) for group in exposure.by_sector] == [("Technology", 1)]
 
 
+def test_literal_unclassified_and_missing_sector_share_one_bucket():
+    exposure = analysis(
+        holdings=[
+            PositionInput("A", "Alpha", 1, "STOCK", "unclassified"),
+            PositionInput("B", "Beta", 1, "STOCK"),
+        ]
+    )
+    assert [(group.label, group.weight) for group in exposure.by_sector] == [("Unclassified", 1)]
+
+
+def test_unknown_sector_spelling_is_preserved_but_case_variants_share_exposure_and_fit():
+    exposure = analysis(
+        holdings=[
+            PositionInput("A", "Alpha", 1, "STOCK", "Semiconductors"),
+            PositionInput("B", "Beta", 1, "STOCK", "semiconductors"),
+        ],
+    )
+    assert [(group.label, group.weight) for group in exposure.by_sector] == [("Semiconductors", 1)]
+    returns = log_returns(curve())
+    result = marginal_effect(
+        exposure,
+        returns,
+        "SEMICONDUCTORS",
+        ticker="C",
+        portfolio_returns={"A": returns, "B": returns},
+    )
+    assert result.sector_weight_before == 1
+
+
 def test_provider_labels_stay_bounded_and_the_untrusted_note_survives_candidate_fit():
     exposure = analysis(profiles={"A": {"sector": "s" * 5000, "country": "c" * 5000}})
     assert all(len(group.label) <= 100 for group in exposure.by_sector + exposure.by_country)

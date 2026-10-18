@@ -574,13 +574,16 @@ computes each unordered pair once and mirrors it. A failed history/profile looku
 does not drop a priced position; its limitation is returned in `PortfolioExposure.notes`.
 Unpriced/unsupported-currency positions appear in `skipped`; weights cover the priced subset.
 
-`agents/market_data.py` adds `fetch_dated_closes(ticker, period="1y")` (24-hour cache, separate
+`agents/market_data.py` adds `fetch_dated_closes(ticker, period="1y")` (5-minute cache, separate
 key per ticker/period, finite positive closes by ISO date) and `fetch_profile(ticker)` (24-hour
 cache of name, sector, industry, country, quote type, exchange and ETF category). Empty results
 and exhausted provider failures are negative-cached for 5 minutes, after the existing retries;
 exception class names alone are logged. Both use the existing thread pattern. Profile strings
 are capped at 100 characters on fresh and cached reads. Profiles are read-only here; holding auto-fill and
 nullable cost basis remain Phase 8. No schema migration or provider dependency is introduced.
+Successful dated closes retain quote-level freshness because Yahoo daily history can contain
+an in-progress intraday bar used for valuation. The `dated_closes:v2` namespace bypasses entries
+written under the earlier 24-hour policy; profile metadata keeps its 24-hour cache.
 
 The pure functions in `analysis/portfolio.py` value each position with its last usable dated
 close and the current EUR conversion rate. Thus price and `price_as_of` describe the same
@@ -592,7 +595,8 @@ Exposure is partitioned by sector, industry, country and quote currency; missing
 `Unclassified`; an all-null profile also emits the missing-profile note. A manual holding sector
 overrides the profile sector for stocks. Sector case/whitespace and common aliases (Tech,
 Financials/Finance, Health Care) normalize into Yahoo's canonical buckets; unknown free text is
-case-normalized without guessing its sector. Country is the
+grouped case-insensitively while preserving its display spelling. A literal "unclassified"
+joins the canonical `Unclassified` bucket. Country is the
 profile's issuer domicile, not a verified listing-country map. ETFs use one category bucket for
 sector/industry and are explicitly flagged as having no constituent look-through; their country,
 if provided, is fund domicile. Their underlying country/sector mix is not inferred.

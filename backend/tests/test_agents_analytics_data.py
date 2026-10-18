@@ -23,9 +23,9 @@ def test_dated_history_preserves_dates_when_dropping_invalid_closes():
 
     assert result == {"2026-10-01": 100, "2026-10-03": 102}
     ticker.history.assert_called_once_with(period="6mo")
-    assert redis.get.call_args.args == ("dated_closes:A:6mo",)
+    assert redis.get.call_args.args == ("dated_closes:v2:A:6mo",)
     assert json.loads(redis.set.call_args.args[1]) == result
-    assert redis.set.call_args.kwargs["ex"] == 86400
+    assert redis.set.call_args.kwargs["ex"] == 300
 
 
 def test_dated_history_cache_hit_avoids_yahoo():
@@ -37,6 +37,40 @@ def test_dated_history_cache_hit_avoids_yahoo():
     ):
         assert asyncio.run(fetch_dated_closes("A")) == {"2026-10-01": 100}
     ticker.assert_not_called()
+
+
+def test_intraday_valuation_refreshes_after_five_minutes_and_ignores_old_day_cache():
+    now = 0
+    cache = {"dated_closes:A:1y": ('{"2026-10-01": 42.0}', 86400)}
+    redis, ticker = AsyncMock(), MagicMock()
+    ticker.history.side_effect = [
+        pd.DataFrame({"Close": [value]}, index=pd.date_range("2026-10-01", periods=1))
+        for value in (100.0, 120.0)
+    ]
+
+    async def get(key):
+        value, expires = cache.get(key, (None, 0))
+        return value if now < expires else None
+
+    async def set_value(key, value, ex):
+        cache[key] = (value, now + ex)
+
+    redis.get.side_effect, redis.set.side_effect = get, set_value
+
+    async def exercise():
+        nonlocal now
+        assert await fetch_dated_closes("A") == {"2026-10-01": 100.0}
+        now = 299
+        assert await fetch_dated_closes("A") == {"2026-10-01": 100.0}
+        now = 301
+        assert await fetch_dated_closes("A") == {"2026-10-01": 120.0}
+
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+    ):
+        asyncio.run(exercise())
+    assert ticker.history.call_count == 2
 
 
 def test_dated_history_retries_then_short_caches_an_empty_result():

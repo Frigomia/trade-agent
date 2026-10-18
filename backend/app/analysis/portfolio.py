@@ -45,6 +45,7 @@ SECTOR_ALIASES.update(
         "financials": "Financial Services",
         "finance": "Financial Services",
         "health care": "Healthcare",
+        "unclassified": UNCLASSIFIED,
     }
 )
 
@@ -127,13 +128,19 @@ def portfolio_volatility(
     return stdev(daily) * math.sqrt(TRADING_DAYS)
 
 
-def _exposures(labels: Mapping[str, str], positions: Sequence[PositionValue]) -> list[Exposure]:
+def _exposures(
+    labels: Mapping[str, str], positions: Sequence[PositionValue], *, case_sensitive: bool = True
+) -> list[Exposure]:
     weights: dict[str, float] = defaultdict(float)
+    display: dict[str, str] = {}
     for position in positions:
-        weights[labels[position.ticker]] += position.weight
+        label = labels[position.ticker]
+        key = label if case_sensitive else label.casefold()
+        display.setdefault(key, label)
+        weights[key] += position.weight
     return [
-        Exposure(label=label, weight=min(1.0, weight))
-        for label, weight in sorted(weights.items(), key=lambda item: (-item[1], item[0]))
+        Exposure(label=display[key], weight=min(1.0, weight))
+        for key, weight in sorted(weights.items(), key=lambda item: (-item[1], display[item[0]]))
     ]
 
 
@@ -143,10 +150,8 @@ def _label(value: str | None) -> str:
 
 def _sector(value: str | None) -> str:
     label = _label(value)
-    # Known names/aliases share one bucket; unknown free text is case-normalized, never guessed.
-    return (
-        SECTOR_ALIASES.get(label.casefold(), label.casefold()) if label != UNCLASSIFIED else label
-    )
+    # Unknown labels keep their spelling; sector grouping still compares them case-insensitively.
+    return SECTOR_ALIASES.get(label.casefold(), label)
 
 
 def analyze_portfolio(
@@ -268,7 +273,7 @@ def analyze_portfolio(
         as_of=as_of,
         total_value_eur=total if positions else None,
         positions=positions,
-        by_sector=_exposures(sector, positions),
+        by_sector=_exposures(sector, positions, case_sensitive=False),
         by_industry=_exposures(industry, positions),
         by_country=_exposures(country, positions),
         by_currency=_exposures(currency, positions),
@@ -351,7 +356,9 @@ def marginal_effect(
     )
     fit.hhi_after += hypothetical_weight**2
     fit.sector_weight_before = math.fsum(
-        group.weight for group in exposure.by_sector if group.label == _sector(candidate_sector)
+        group.weight
+        for group in exposure.by_sector
+        if group.label.casefold() == _sector(candidate_sector).casefold()
     )
     fit.sector_weight_after = (
         1 - hypothetical_weight

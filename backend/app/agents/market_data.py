@@ -151,7 +151,8 @@ def _profile_text(value: object) -> str | None:
 async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
     """Positive finite daily closes with their actual dates; no forward fill across markets."""
     redis = get_redis()
-    cache_key = f"dated_closes:{ticker}:{period}"
+    # New namespace ignores entries written with the former 24-hour valuation TTL.
+    cache_key = f"dated_closes:v2:{ticker}:{period}"
     cached = await redis.get(cache_key)
     if cached is not None:
         return dict(json.loads(cached))
@@ -169,7 +170,7 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
     except Exception as exc:
         logger.warning("Dated history unavailable (%s)", type(exc).__name__)
         result = {}
-    ttl = HISTORY_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
+    ttl = QUOTE_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
     await redis.set(cache_key, json.dumps(result), ex=ttl)
     return result
 
