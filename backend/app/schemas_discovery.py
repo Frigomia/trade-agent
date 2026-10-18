@@ -171,7 +171,9 @@ class CandidateMetrics(Contract):
     peers: list[PeerComparison]
     risk: RiskProfile
     origin: Origin
-    origin_note: str | None  # why it was found; carries zero scoring weight
+    # Why it was found. Untrusted text from the web: zero scoring weight, and a prompt may only
+    # carry it inside an untrusted-data block.
+    origin_note: Note | None
     # What the reader should know about the data: an uncertain price date, a dimension that could
     # not be scored. Disclosure only; it never changes a score.
     data_notes: list[Note]

@@ -17,7 +17,7 @@ from app.discovery.peers import PeerRecord, compare_to_peers
 from app.discovery.risk import build_risk_profile
 from app.discovery.scoring import dimension_score
 from app.discovery.snapshot import Freshness, SymbolSnapshot, coverage_of
-from app.schemas_discovery import CandidateMetrics, Exclusion
+from app.schemas_discovery import CandidateMetrics, Exclusion, Origin
 
 SHORTLIST_SIZE = 8  # proposed default
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "unknown": 3}
@@ -27,6 +27,65 @@ RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "unknown": 3}
 class Shortlist:
     candidates: list[CandidateMetrics]  # best first
     excluded: list[Exclusion]  # failed a safeguard, with the reason
+
+
+def build_candidate(
+    snap: SymbolSnapshot,
+    record: PeerRecord,
+    records: Sequence[PeerRecord],
+    rates: Mapping[str, Decimal],
+    uncertain: str | None = None,
+    origin: Origin = "universe",
+    origin_note: str | None = None,
+) -> tuple[CandidateMetrics, list[int | None]]:
+    """The candidate for one eligible symbol, and its quality and valuation scores (None: unscored).
+
+    Peers are `records`; the symbol itself is skipped by `compare_to_peers`, so an entrant that is
+    not in `records` is compared against them without joining them.
+    """
+    # ponytail: recomputed per call (about 1 s for 600 symbols); cache per snapshot if needed
+    peers = compare_to_peers(record, records)
+    dimensions: tuple[Literal["quality", "valuation"], ...] = ("quality", "valuation")
+    scores = [dimension_score(peers, record.group, d) for d in dimensions]
+    notes = [
+        f"{name} not scored: no valid peer comparison"
+        for name, score in zip(dimensions, scores, strict=True)
+        if score is None
+    ]
+    if uncertain:
+        notes.insert(0, f"price date uncertain: {uncertain}")
+    risk = build_risk_profile(
+        group=record.group,
+        market_cap=snap.market_cap,
+        currency=snap.currency or "",
+        rates=dict(rates),
+        avg_volume=snap.avg_volume,
+        price=snap.price,
+        closes=snap.closes,
+        metrics=snap.metrics,
+    )
+    candidate = CandidateMetrics(
+        ticker=snap.ticker,
+        name=snap.name,
+        asset_type=snap.asset_type,  # type: ignore[arg-type]  # checked by is_eligible
+        exchange=snap.exchange,
+        country=snap.country,
+        sector=snap.sector,
+        industry=snap.industry,
+        currency=snap.currency,
+        price=snap.price,
+        price_as_of=datetime.fromisoformat(snap.dates[-1]).replace(tzinfo=UTC)
+        if snap.dates
+        else None,
+        fundamentals=snap.metrics,
+        coverage=coverage_of(snap.metrics),
+        peers=peers,
+        risk=risk,
+        origin=origin,
+        origin_note=origin_note,
+        data_notes=notes,
+    )
+    return candidate, scores
 
 
 def shortlist_for_user(
@@ -58,10 +117,9 @@ def shortlist_for_user(
             excluded.append(why)
         if not ok:
             continue
-        # ponytail: recomputed per call (about 1 s for 600 symbols); cache per snapshot if needed
-        peers = compare_to_peers(record, records)
-        dimensions: tuple[Literal["quality", "valuation"], ...] = ("quality", "valuation")
-        scores = [dimension_score(peers, record.group, d) for d in dimensions]
+        candidate, scores = build_candidate(
+            snap, record, records, rates, freshness.uncertain.get(snap.ticker)
+        )
         have = [s for s in scores if s is not None]
         if not have:  # eligible, but nothing to rank it on: say so rather than lose it
             excluded.append(
@@ -74,44 +132,6 @@ def shortlist_for_user(
                 )
             )
             continue
-        notes = [
-            f"{name} not scored: no valid peer comparison"
-            for name, score in zip(dimensions, scores, strict=True)
-            if score is None
-        ]
-        if reason := freshness.uncertain.get(snap.ticker):
-            notes.insert(0, f"price date uncertain: {reason}")
-        risk = build_risk_profile(
-            group=record.group,
-            market_cap=snap.market_cap,
-            currency=snap.currency or "",
-            rates=dict(rates),
-            avg_volume=snap.avg_volume,
-            price=snap.price,
-            closes=snap.closes,
-            metrics=snap.metrics,
-        )
-        candidate = CandidateMetrics(
-            ticker=snap.ticker,
-            name=snap.name,
-            asset_type=snap.asset_type,  # type: ignore[arg-type]  # checked by is_eligible
-            exchange=snap.exchange,
-            country=snap.country,
-            sector=snap.sector,
-            industry=snap.industry,
-            currency=snap.currency,
-            price=snap.price,
-            price_as_of=datetime.fromisoformat(snap.dates[-1]).replace(tzinfo=UTC)
-            if snap.dates
-            else None,
-            fundamentals=snap.metrics,
-            coverage=coverage_of(snap.metrics),
-            peers=peers,
-            risk=risk,
-            origin="universe",
-            origin_note=None,
-            data_notes=notes,
-        )
-        ranked.append((-mean(have), RISK_ORDER[risk.risk_level], snap.ticker, candidate))
+        ranked.append((-mean(have), RISK_ORDER[candidate.risk.risk_level], snap.ticker, candidate))
     ranked.sort(key=lambda row: row[:3])
     return Shortlist([row[3] for row in ranked[: max(size, 0)]], excluded)
