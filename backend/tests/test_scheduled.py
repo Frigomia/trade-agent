@@ -1383,7 +1383,7 @@ def test_a_failed_refund_keeps_the_same_day_marker(env):
 def _universe(count):
     from types import SimpleNamespace
 
-    return [SimpleNamespace(ticker=f"T{i}") for i in range(count)]
+    return [SimpleNamespace(ticker=f"T{i}", country=f"Country{i}") for i in range(count)]
 
 
 def _run_discovery_snapshot(report, universe=None):
@@ -1406,6 +1406,7 @@ def test_discovery_snapshot_refreshes_every_universe_symbol_and_releases_the_loc
 
     assert code == 0
     assert refresh.await_args.args[0] == [f"T{i}" for i in range(10)]
+    assert refresh.await_args.kwargs["countries"] == {f"T{i}": f"Country{i}" for i in range(10)}
     assert _arun(_lock_exists("scheduled:discovery_snapshot")) is False
 
 

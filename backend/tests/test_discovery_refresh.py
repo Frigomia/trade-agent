@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import Coroutine
 from datetime import date
 from typing import Any
@@ -170,13 +171,30 @@ def test_an_unreadable_stored_entry_is_fetched_again() -> None:
 def test_a_symbol_that_cannot_be_stored_fails_alone() -> None:
     real = to_snapshot
 
-    def broken(ticker: str, raw: RawSymbolData):  # type: ignore[no-untyped-def]
+    def broken(ticker: str, raw: RawSymbolData, country: str | None = None):  # type: ignore[no-untyped-def]
         if ticker == "B":
             raise ValueError("bad record")
-        return real(ticker, raw)
+        return real(ticker, raw, country)
 
     with patch("app.discovery.refresh.to_snapshot", broken):
         report = refresh(["A", "B", "C"], Fetcher())
 
     assert (report.fetched, report.failed) == (2, {"B": "ValueError"})
     assert [s.ticker for s in load(["A", "B", "C"])] == ["A", "C"]
+
+
+def test_the_universe_listing_country_is_stored_with_each_symbol() -> None:
+    refresh(["A", "B"], Fetcher(), countries={"A": "Germany"})
+
+    assert [(s.ticker, s.country) for s in load(["A", "B"])] == [("A", "Germany"), ("B", None)]
+
+
+def test_an_entry_stored_before_the_country_field_is_fetched_again() -> None:
+    refresh(["A"], Fetcher())
+    old = json.loads(run(get_redis().get("discovery:symbol:A")))
+    del old["country"]
+    run(get_redis().set("discovery:symbol:A", json.dumps(old), ex=SNAPSHOT_TTL_SECONDS))
+
+    report = refresh(["A"], Fetcher())
+
+    assert (report.cached, report.fetched) == (0, 1)

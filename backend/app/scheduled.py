@@ -126,8 +126,11 @@ MAX_FAILED_SHARE = 0.2
 
 async def run_discovery_snapshot(summary: Summary) -> None:
     """Refresh the symbols of the global universe that are missing or expired in the cache."""
-    tickers = [row.ticker for row in load_universe()]
-    report = await refresh_snapshot(tickers)
+    universe = load_universe()
+    tickers = [row.ticker for row in universe]
+    report = await refresh_snapshot(
+        tickers, countries={row.ticker: row.country for row in universe}
+    )
     logger.info(
         "Discovery snapshot: cached=%d fetched=%d failed=%d",
         report.cached,
