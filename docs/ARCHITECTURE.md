@@ -26,13 +26,18 @@ either, different lifecycle):
 ```
 trading-agent/                 (monorepo)
   ARCHITECTURE.md              this doc, single source of truth for design
-  CLAUDE.md                    navigational guide for Claude Code (repo-wide rules)
+  AGENTS.md                    shared rules for every coding agent
+  CLAUDE.md                    Claude Code import of AGENTS.md
+  .agents/skills/              pinned Ponytail coding and review instructions
+  .agents/security-review.md   shared security review checklist
   .claude/agents/
     security-reviewer.md       subagent for auth/RLS/prompt-injection review
   backend/                     FastAPI + LangGraph + MCP server
-    CLAUDE.md                  Python-specific commands, conventions, security rules
+    AGENTS.md                  Python-specific commands, conventions, security rules
+    CLAUDE.md                  Claude Code import of AGENTS.md
   frontend/                    Next.js dashboard
-    CLAUDE.md                  TypeScript/Next.js-specific commands and conventions
+    AGENTS.md                  TypeScript/Next.js-specific commands and conventions
+    CLAUDE.md                  Claude Code import of AGENTS.md
   .github/workflows/
     backend-ci.yml             every pull request; a `changes` job skips the jobs unless backend/** changed
     frontend-ci.yml            every pull request; a `changes` job skips the jobs unless frontend/** changed
@@ -41,13 +46,13 @@ trading-agent-skills/          separate repo — Claude Skill package,
                                 no dependency on the monorepo
 ```
 
-The `CLAUDE.md` files are Claude Code's persistent context, distinct from
-this doc: `ARCHITECTURE.md` is the design spec (read for *what* to build
-and *why*), the `CLAUDE.md` files are working conventions (commands, code
-style, non-negotiable rules) that load into every session automatically.
-Keep the root one navigational and short; put stack-specific detail in
-`backend/CLAUDE.md` and `frontend/CLAUDE.md` instead of duplicating it at
-the root.
+The root and scoped `AGENTS.md` files are the shared working conventions: commands, code style,
+Ponytail, migration protection, Ruff and required reviews. `CLAUDE.md` imports them for Claude
+Code; other hosts discover `AGENTS.md` or read it explicitly. `docs/ARCHITECTURE.md` remains the
+design spec for what to build and why. See [AGENT_WORKFLOW.md](AGENT_WORKFLOW.md) for the portable
+commands, vendored skill provenance and host-specific hook limitations. The existing Claude
+hooks are preserved; their automatic execution is not assumed on other agents. Keep scoped
+details in `backend/AGENTS.md` and `frontend/AGENTS.md` rather than duplicating them at the root.
 
 Why a monorepo here specifically: this is a solo project built with Claude
 Code, and most non-trivial changes touch both sides (a new API field needs
