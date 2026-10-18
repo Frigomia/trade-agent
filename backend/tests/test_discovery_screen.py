@@ -4,8 +4,9 @@ from decimal import Decimal
 import pytest
 
 from app.discovery.eligibility import MIN_CORE_METRICS, is_eligible
+from app.discovery.peers import PeerRecord
 from app.discovery.scoring import dimension_score
-from app.discovery.screen import shortlist_for_user
+from app.discovery.screen import PEER_DATA_NOTE, build_candidate, shortlist_for_user
 from app.discovery.snapshot import METRIC_KEYS, Freshness, SymbolSnapshot
 from app.schemas_discovery import PeerComparison
 
@@ -254,8 +255,11 @@ def test_an_uncertain_price_date_is_disclosed_with_its_reason() -> None:
 
     candidates = {c.ticker: c for c in screen([snap(i) for i in range(12)], freshness).candidates}
 
-    assert candidates["S10"].data_notes == ["price date uncertain: holiday or outage"]
-    assert candidates["S11"].data_notes == []
+    assert candidates["S10"].data_notes == [
+        "price date uncertain: holiday or outage",
+        PEER_DATA_NOTE,
+    ]
+    assert candidates["S11"].data_notes == [PEER_DATA_NOTE]
 
 
 def test_a_dimension_that_could_not_be_scored_is_named() -> None:
@@ -268,7 +272,72 @@ def test_a_dimension_that_could_not_be_scored_is_named() -> None:
 
     half = next(c for c in screen(snaps, size=20).candidates if c.ticker == "HALF")
 
-    assert half.data_notes == ["valuation not scored: no valid peer comparison"]
+    assert half.data_notes == [PEER_DATA_NOTE, "valuation not scored: no valid peer comparison"]
+
+
+def entrant(snaps: list[SymbolSnapshot], **over: object):  # type: ignore[no-untyped-def]
+    outside = snap(15, ticker="OUTSIDE", **over)
+    record = PeerRecord(
+        outside.ticker, outside.asset_type, outside.sector, outside.industry, outside.metrics
+    )
+    records = [PeerRecord(s.ticker, s.asset_type, s.sector, s.industry, s.metrics) for s in snaps]
+    return build_candidate(outside, record, records, RATES, origin="reddit", origin_note="found")
+
+
+def test_admitted_candidates_compete_for_the_same_shortlist_places_without_changing_peers() -> None:
+    snaps = [snap(i) for i in range(12)]
+    outside, _ = entrant(snaps)
+    before = screen(snaps, size=20)
+
+    result = screen(snaps, mentions_admitted=[outside], size=3)
+
+    assert [c.ticker for c in result.candidates] == ["OUTSIDE", "S11", "S10"]
+    assert result.candidates[0] == outside
+    assert result.candidates[1].peers == before.candidates[0].peers
+    assert outside.peers[0].peer_count == 12
+    assert outside.data_notes == [PEER_DATA_NOTE]
+
+
+@pytest.mark.parametrize(
+    "preference", [{"holdings": {"outside"}}, {"avoid_sectors": {"technology"}}]
+)
+def test_user_preferences_apply_to_admitted_candidates(preference):  # type: ignore[no-untyped-def]
+    snaps = [snap(i) for i in range(12)]
+    outside, _ = entrant(snaps)
+
+    result = screen(snaps, mentions_admitted=[outside], size=20, **preference)
+
+    assert "OUTSIDE" not in [c.ticker for c in result.candidates]
+    assert result.excluded == []
+
+
+def test_admitted_duplicates_do_not_replace_universe_candidates_or_fill_multiple_places() -> None:
+    snaps = [snap(i) for i in range(12)]
+    outside, _ = entrant(snaps)
+    duplicate = outside.model_copy(update={"ticker": "S11"})
+
+    result = screen(snaps, mentions_admitted=[duplicate, outside, outside], size=20)
+
+    tickers = [c.ticker for c in result.candidates]
+    assert len(tickers) == len(set(tickers)) == 13
+    assert next(c for c in result.candidates if c.ticker == "S11").origin == "universe"
+
+
+def test_admission_origin_does_not_change_rank_or_hide_unscorable_candidates() -> None:
+    snaps = [snap(i) for i in range(12)]
+    outside, _ = entrant(snaps)
+    unscorable = outside.model_copy(update={"ticker": "NOPEERS", "peers": []})
+    tavily = outside.model_copy(update={"origin": "tavily"})
+
+    reddit_result = screen(snaps, mentions_admitted=[outside, unscorable], size=20)
+    tavily_result = screen(snaps, mentions_admitted=[tavily], size=20)
+
+    assert [c.ticker for c in reddit_result.candidates] == [
+        c.ticker for c in tavily_result.candidates
+    ]
+    assert [(e.ticker, e.reason) for e in reddit_result.excluded] == [
+        ("NOPEERS", "insufficient_data")
+    ]
 
 
 def test_an_etf_is_excluded_with_an_explicit_reason_even_with_full_data() -> None:
