@@ -32,14 +32,22 @@ company fundamentals.
 | Area | State at this handoff |
 | --- | --- |
 | Shared Pydantic contracts and fixtures | Implemented in `app/schemas_discovery.py`, `tests/discovery_fixtures.py`, and `tests/test_schemas_discovery.py`. Reuse them without changing their shape in Phase 0. |
-| Global FX coverage | Implemented in `app/fx.py`, including supported quote subunits. Portfolio analytics remains Phase 1. |
+| Global FX and portfolio analytics | Implemented: `app/fx.py` plus Phase 1 pure analytics/candidate fit and `/portfolio/analytics`. Read-only profile/dates support exposure; holding auto-fill stays Phase 8. |
 | Curated universe and coverage evidence | Implemented: 600 symbols, validator, [coverage report](universe-coverage.md), and [candidate-pool audit](universe-candidate-audit.md). |
 | Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable Redis refresh and the weekly `discovery_snapshot` command exist. |
 | Provider setting | Optional backend `TAVILY_API_KEY`; Phase 2 uses it only when research is explicitly invoked. Startup and existing analysis do not call Tavily. |
 | Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Phase 2 produces mentions; scan integration remains later work. |
 | Research, evaluation graph | Phase 2 research implemented in `agents/research.py`; evaluation graph remains Phase 6. |
 | Scan persistence, API, and scheduled user scans | Future Phases 6 and 7; no discovery scan endpoint or `ScanRun` table exists yet. |
-| Portfolio analytics, easy onboarding, discovery UI | Future Phases 1, 8, and 9. |
+| Easy onboarding and discovery UI | Future Phases 8 and 9. |
+
+Phase 1 adds required `PortfolioExposure.notes` for partial valuation, FX/history limitations and
+ETF proxy exposures; its producer and fixtures are updated together. The new endpoint has no
+existing public response to break. `marginal_effect` takes keyword-only `ticker` and
+`portfolio_returns` alongside the original inputs because the public summary does not contain raw
+returns. See [architecture §6](../../ARCHITECTURE.md#portfolio-analytics-phase-1) for the exact
+valuation, aligned-interval and missing-data rules. The live I1 checkpoint remains outstanding;
+Phase 2 research is now implemented, but the combined live flow has not been verified.
 
 ## Decisions and defaults
 

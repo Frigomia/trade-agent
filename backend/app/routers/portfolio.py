@@ -12,6 +12,7 @@ from app.db import lock_user_for_insert
 from app.http_headers import no_store
 from app.limits import MAX_HOLDINGS, cap_message
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
+from app.portfolio_analytics import load_analytics
 from app.rate_limit import rate_limiter
 from app.schemas import (
     HoldingIn,
@@ -27,6 +28,7 @@ from app.schemas import (
     WatchlistItemOut,
     WatchlistSummaryOut,
 )
+from app.schemas_discovery import PortfolioExposure
 from app.snapshots import record_snapshot
 from app.trades import TOO_LARGE, TradeRefused, apply_trade
 
@@ -44,6 +46,17 @@ router = APIRouter(
 MAX_WATCHLIST = 100
 WRITE_LIMIT_PER_MINUTE = 60  # per user, per route: the holdings/watchlist upserts
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
+
+
+@router.get(
+    "/analytics",
+    response_model=PortfolioExposure,
+    dependencies=[Depends(rate_limiter("portfolio_analytics", limit=5))],
+)
+async def portfolio_analytics(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> PortfolioExposure:
+    return await load_analytics(db, user.id)
 
 
 @router.get("/holdings", response_model=list[HoldingOut])

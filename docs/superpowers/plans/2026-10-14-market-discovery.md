@@ -10,7 +10,7 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | Phase | Implementation status (updated through Phase 2 research) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
-| 1: analytics and FX | Partial: global FX support exists; portfolio analytics, dated history API and candidate fit remain. |
+| 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
 | 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Scan integration and scheduling remain Phases 6 and 7; live Reddit/provider coverage is unverified. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
@@ -408,6 +408,7 @@ class PortfolioExposure(BaseModel):
     volatility_annualized: float | None
     correlation: dict[str, dict[str, float]]
     skipped: dict[str, str]         # ticker -> reason
+    notes: list[str]                # Phase 1: partial valuation, FX/history limits and ETF proxies
 
 class CandidateFit(BaseModel):
     ticker: str
@@ -640,6 +641,41 @@ Postgres and Redis, lint, formatting and strict type checking. Real-provider che
 the responsibility of their later implementing phases.
 
 ### Phase 1: Portfolio analytics and FX coverage (A, M)
+
+**Completed in the Phase 1 PR (2026-10-18).** `analysis/portfolio.py` contains pure valuation,
+exposure, concentration, volatility/correlation and `marginal_effect` functions;
+`portfolio_analytics.py` loads scoped holdings and bounded market data; `/portfolio/analytics`
+returns the shared contract. Global FX conversions/subunits were already implemented and retain
+their per-currency tests. No new FX symbols or credentials are needed.
+
+Implementation details that make the original interface sketch concrete:
+
+- `PortfolioExposure.notes` is a required additive disclosure field, with producer and fixture
+  updates. `fetch_profile` is read-only metadata needed for exposures; auto-fill remains Phase 8.
+- Valuation uses dated closes with the existing helper's conversion rates, so the displayed
+  timestamp belongs to the actual valued close. Without history, keep the EUR quote and mark
+  its timestamp unknown/stale. Unpriced positions are skipped explicitly.
+- Returns are keyed by `(start_date, end_date)` to avoid comparing different intervals around
+  exchange holidays. At least 60 matching return intervals (61 matching closes) are needed.
+  Whole-portfolio risk requires all valued holdings on a common sample; do not silently drop
+  weights when history is missing. Country exposure uses profile domicile with no ETF look-through.
+- `marginal_effect` additionally takes keyword-only `ticker` and `portfolio_returns`: a public
+  exposure summary alone cannot reconstruct covariance with the candidate. Both return inputs
+  come from the pure `log_returns` helper. Before/after volatility uses identical observations.
+  Identical equal-volatility candidate returns do not create a diversification benefit; perfect
+  correlation alone does not imply equal volatility.
+- PR review follow-up: offload pure analytics from the async route and compute the symmetric
+  correlation matrix once per pair. Successful dated histories cache for 5 minutes (their last
+  bar can be an in-progress intraday valuation); profile metadata caches for 24 hours;
+  empty results and exhausted failures cache for 5 minutes. Bound profile strings at 100
+  characters, disclose all-null profiles, normalize sector labels/aliases and treat provider
+  labels/notes as untrusted in future prompts. Whole-portfolio risk remains unavailable when a
+  valued holding lacks history; the API does not substitute an unlabeled partial-risk estimate.
+
+Validation: synthetic math/interval/empty/partial-data tests, mocked provider cache/retry tests,
+authenticated API tests with real local Postgres/RLS and Redis (including no-store and rate
+limits), existing global FX tests, backend lint/format/type checks and the full backend suite.
+Phase 2 research is now implemented; the combined live I1 checkpoint remains outstanding.
 
 **Goal:** deterministic portfolio math from holdings plus history, and currency support for a
 global universe.
