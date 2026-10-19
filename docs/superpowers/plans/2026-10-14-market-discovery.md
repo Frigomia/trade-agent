@@ -735,10 +735,11 @@ global discovery of mentions.
 ```python
 async def research_candidate(
     ticker: str, name: str, sector: str | None, country: str | None,
-    client: Anthropic | None,
+    client: Anthropic,
+    *, official_hosts: Collection[str] = (),  # independently verified internal metadata only
 ) -> ResearchEvidence: ...
 
-async def discover_mentions(themes: list[str], client: Anthropic | None) -> list[Mention]: ...
+async def discover_mentions() -> list[Mention] | None: ...
 ```
 
 **Tavily access.** Context7 docs for `/tavily-ai/tavily-python` and `/websites/tavily` confirm
@@ -766,15 +767,23 @@ event; include `url` and `published_at` only when present in the source; list di
 `conflicts` and missing information in `gaps`. Company names mentioned that are not the subject
 go to `mentions`, never into claims.
 
-**Post-processing in code (not by the LLM):** drop claims with no URL; dedupe by normalized URL;
-cluster by `event_id` so one story reported by ten outlets is one event; never let a
-`source_tier="forum"` claim populate `NegativeDevelopment.status="confirmed"`.
+**Post-processing in code (not by the LLM):** require fetched URLs and short verbatim claim text
+in that URL's source snippet; dedupe by normalized URL, event id and text, preserving different
+claims in one article. Classify authority by trusted hostname policy, not model labels; only
+authoritative facts can confirm a development and invalidation additionally needs high
+materiality. Recognize community hosts and explicit comment pages as forum sources. Cluster by
+`event_id` without treating repetition or distinct hostnames as proof of independent reporting.
 
 **Theme discovery** (`discover_mentions`): runs in the global daily batch, not per user. Themes
 come from a small committed list (for example AI infrastructure, semiconductors, energy
 transition, healthcare, cybersecurity, industrial automation, robotics, plus rotating sector
 themes). For each theme run industry-research and Reddit queries and extract `Mention`s. Output
-is cached as `discovery:mentions:{date}`. Mentions carry zero scoring weight.
+is cached as `discovery:mentions:v2:{date}`; the original unversioned daily lock remains to prevent
+repeat spending after a cache-version change. `[]` is a completed empty batch and `None` is
+unavailable/in progress. The function selects committed themes and the server client internally;
+per-candidate research requires an explicit user client and never falls back to the server key.
+Mentions carry zero scoring weight. Live Claude tool-schema and Tavily coverage remain unverified
+integration checkpoints; automated tests make no paid provider calls.
 
 **Quota and cost:** `tavily_api_key` is the server's, so the owner pays. Per-candidate research is
 gated by the existing monthly counter at the route (Phase 7); the daily theme batch has its own

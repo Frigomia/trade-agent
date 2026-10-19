@@ -573,26 +573,35 @@ requirement for startup, tests, snapshots or the existing analysis flow.
 news, bull, bear, Reddit; five results each) and one Claude extraction with SDK retries disabled.
 Bull and bear use equal budgets. Local news terms cover selected home markets; unknown markets
 retain English terms. Source snippets are bounded to 1,500 characters. Every extraction prompt
-treats fetched content and metadata as untrusted data. Code validates citation membership,
-normalizes/deduplicates URLs, takes publication dates only from source metadata, and groups
-claims by event id while retaining their distinct citations for Phase 6 corroboration.
-Forum claims are forced to forum kind/tier; forum-only developments cannot be confirmed or
-invalidate a thesis. Model-provided source tiers and confirmation flags still need Phase 6's
-independent verification before any exclusion. No score or exclusion is computed here.
+treats fetched content and metadata as untrusted data. `Claim.text` must be a short verbatim
+excerpt found in its own cited source content after whitespace/case normalization; an unrelated
+fetched URL cannot support invented text. Distinct claims from one article are preserved;
+deduplication uses URL, event id and text. Dates come only from source metadata.
+`discovery/sources.py` derives authority from a conservative regulatory/reporting hostname
+policy; unknown hosts stay `other`, never model-assigned authority. Verified issuer hosts may
+be supplied only by trusted internal callers. Community hosts and explicit comment pages are
+forced to forum kind/tier without relabelling non-Reddit mentions as Reddit. Confirmation needs
+an authoritative fact, and invalidation additionally needs high materiality. Phase 6 still
+reassesses thesis impact before deciding any exclusion. Text is bounded and cleaned of control
+characters; model notes are labelled separately from code-written coverage gaps.
 
-`discover_mentions(DISCOVERY_THEMES, client=None)` is global owner-funded work, using the existing
-server Claude client; it never reads user keys or portfolio data. At most seven themes each get
+`discover_mentions()` is global owner-funded work, selecting the existing server Claude client
+internally and using only committed `DISCOVERY_THEMES`; it accepts no user client or theme input.
+At most seven themes each get
 one industry and one Reddit search (14 total), one extraction and at most 30 cited mentions.
-Results, including empty results, are cached at `discovery:mentions:YYYY-MM-DD` for 24 hours.
+Results, including empty results and unavailable (`null`) outcomes, are cached at
+`discovery:mentions:v2:YYYY-MM-DD` for 24 hours; the new namespace ignores older unverified data.
 A separate atomic daily budget claim prevents concurrent calls, crashes or cache-write failures
 from repeating paid work that UTC day. A failed batch waits until tomorrow; unavailable Redis
-means no paid batch. Scheduling this function remains Phase 7.
+means no paid batch. The original `discovery:mentions:YYYY-MM-DD:lock` key survives the cache
+version change, preventing a second paid attempt after deployment. `[]` means completed with no
+mentions; `None` means unavailable or still running. Scheduling this function remains Phase 7.
 
 Missing/empty Tavily configuration or a missing Claude client raises `ResearchUnavailable`,
 which future callers handle as quant-only. Provider failures return empty/partial evidence with
-explicit gaps (or an empty daily mention list with a safe log). Candidate callers must resolve
-the user's Claude client and enforce quota first; as in `news.py`, `client=None` means the
-server key for admin/global work only. There is no user endpoint for this module yet. Tavily
+explicit gaps (or `None` for unavailable daily discovery with a safe log). Candidate callers
+must resolve the user's Claude client and enforce quota first; `None` is rejected before any
+paid work and never falls back to the server key. There is no user endpoint for this module yet. Tavily
 REST details were checked against the official Python client's source; live Reddit coverage
 and provider billing/availability are unverified without a configured integration smoke test.
 
