@@ -9,10 +9,10 @@
     "ticker": "EXM.DE",
     "claims": [
       {"text": "Revenue increased.", "kind": "fact", "stance": "bull", "materiality": "high", "source_tier": "reliable_reporting", "event_id": "earnings", "url": "https://reporting.example/earnings", "published_at": "1999-01-01"},
-      {"text": "The same earnings report again.", "kind": "fact", "stance": "bull", "materiality": "high", "source_tier": "reliable_reporting", "event_id": "earnings", "url": "https://reporting.example/earnings?utm_medium=duplicate", "published_at": null},
-      {"text": "Automation demand may grow.", "kind": "forecast", "stance": "bull", "materiality": "medium", "source_tier": "other", "event_id": "automation-demand", "url": "https://reporting.example/growth", "published_at": "2026-10-09"},
-      {"text": "Competition may affect margins.", "kind": "opinion", "stance": "bear", "materiality": "high", "source_tier": "reliable_reporting", "event_id": "competition", "url": "https://reporting.example/risks", "published_at": null},
-      {"text": "A factory is closing.", "kind": "fact", "stance": "bear", "materiality": "high", "source_tier": "official", "event_id": "factory-closure", "url": "https://www.reddit.com/r/stocks/comments/example", "published_at": "2026-10-01"},
+      {"text": "Revenue increased.", "kind": "fact", "stance": "bull", "materiality": "high", "source_tier": "reliable_reporting", "event_id": "earnings", "url": "https://reporting.example/earnings?utm_medium=duplicate", "published_at": null},
+      {"text": "Factory automation demand may grow.", "kind": "forecast", "stance": "bull", "materiality": "medium", "source_tier": "other", "event_id": "automation-demand", "url": "https://reporting.example/growth", "published_at": "2026-10-09"},
+      {"text": "Competition and a disputed allegation may affect margins.", "kind": "opinion", "stance": "bear", "materiality": "high", "source_tier": "reliable_reporting", "event_id": "competition", "url": "https://reporting.example/risks", "published_at": null},
+      {"text": "An anonymous poster claims a factory is closing.", "kind": "fact", "stance": "bear", "materiality": "high", "source_tier": "official", "event_id": "factory-closure", "url": "https://www.reddit.com/r/stocks/comments/example", "published_at": "2026-10-01"},
       {"text": "Invented source.", "kind": "fact", "stance": "bull", "materiality": "high", "source_tier": "official", "event_id": "fake", "url": "https://not-fetched.example/story", "published_at": null},
       {"text": "No source.", "kind": "fact", "stance": "bull", "materiality": "high", "source_tier": "other", "event_id": "missing", "published_at": null}
     ],

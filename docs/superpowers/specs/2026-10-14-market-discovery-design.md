@@ -242,25 +242,38 @@ used only on general searches. Unknown/multilingual markets retain English terms
 contributes at most 1,500 content characters. There are no automatic Tavily retries and only one
 Claude extraction attempt (60-second timeout, SDK retries disabled).
 
-Post-processing accepts only fetched HTTP(S) citations, removes tracking/fragment differences,
-deduplicates by URL and groups claims by normalized event id. Ten reports of one event remain
-one event with ten citations, preserving the inputs needed for independent corroboration later.
+Post-processing accepts only fetched HTTP(S) citations and checks each `Claim.text` as a short
+verbatim excerpt in that citation's source content after whitespace/case normalization. It
+removes tracking/fragment differences and deduplicates by URL, event id and text, preserving
+different claims from one article. Ten reports of one event retain their citations; neither
+URL counts nor distinct hostnames alone prove independent corroboration.
 Publication dates come from parseable source metadata only; unknown dates stay null. Proposed
 negative-development dates survive only if present in cited source metadata; content-only dates
-remain unavailable. Forum kind/tier are enforced from Reddit/query provenance, and confirmed
-developments cannot cite forum claims. Forum-only developments become unverified and cannot
-invalidate a thesis. Mentions require a fetched citation and a name present in its supplied text;
-admission still resolves identity separately. Model source tiers and confirmation are not proof
-of authority; Phase 6 must verify its exclusion rules in code.
+remain unavailable. `discovery/sources.py` derives authority from regulatory/reporting hostname
+allowlists; unknown publishers remain `other` and cannot confirm a development. Trusted internal
+callers may supply independently verified issuer hosts. Actual community hosts, forum-query
+provenance and explicit Seeking Alpha comment/blog URLs force forum kind/tier; editorial article
+URLs are not all treated as forums. Confirmation requires an authoritative fact and invalidation
+also requires high materiality. Phase 6 verifies the final exclusion rules in code. Mentions need
+a fetched citation and a name present in its supplied text; unsupported ticker/exchange hints
+are cleared. Short legitimate names remain valid. Extracted text is cleaned and capped using
+the existing 300-character admission helper; oversized claim excerpts are rejected rather than
+silently cut. Model notes are prefixed so they cannot masquerade as code-written coverage gaps.
 
-The committed seven `DISCOVERY_THEMES` are the default input for the future global daily job.
-The function caps any supplied list at seven themes, with one industry and one Reddit search
+The committed seven `DISCOVERY_THEMES` are the only input for `discover_mentions()`, which
+accepts no client or theme arguments and resolves the server's Claude client internally.
+There is one industry and one Reddit search
 each (14 searches total), one extraction and at most 30 mentions. Mentions have zero scoring
-weight. Redis stores `discovery:mentions:YYYY-MM-DD` for 24 hours, including empty batches. An
+weight. Redis stores `discovery:mentions:v2:YYYY-MM-DD` for 24 hours, including empty batches and
+unavailable (`null`) results. The version change ignores older unverified cache entries. An
 atomic daily budget claim is deliberately retained even if a worker fails or the result cannot
 be cached, preventing paid repeats that day. Unavailable Redis means no paid work. A failed or
 interrupted batch waits until the next UTC date; there is no in-day retry. This batch uses only
-explicit global/server Claude authentication, never a stored user's key. Nothing schedules it yet.
+explicit global/server Claude authentication, never a stored user's key. The original unversioned
+daily lock key is retained across cache upgrades, so deployments cannot repeat paid work that
+day. `[]` means a completed empty batch; `None` means unavailable or in progress. Nothing schedules
+it yet. Per-candidate research requires an explicit user client and rejects `None`, even when a
+server key is configured.
 
 The REST endpoint, bearer authentication and search options were verified on 2026-10-18 against
 [Tavily's official Python client at `46505f1`](https://github.com/tavily-ai/tavily-python/blob/46505f119e6ac0f30d63a4dce0ed9f923705ad97/tavily/tavily.py).

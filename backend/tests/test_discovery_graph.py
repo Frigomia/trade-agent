@@ -460,7 +460,7 @@ def test_task_cancellation_is_not_swallowed(providers, stage):
     async def scenario():
         started = asyncio.Event()
 
-        async def pending(*args):
+        async def pending(*args, **kwargs):
             started.set()
             await asyncio.Future()
 
