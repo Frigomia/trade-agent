@@ -7,7 +7,7 @@ defaults and reconciles this original plan with the existing implementation. Use
 `app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
 historical guidance. No end-to-end discovery scan has shipped yet.
 
-| Phase | Implementation status (updated through Phase 2 research) |
+| Phase | Implementation status (updated through Phase 6 evaluation) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
 | 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
@@ -15,14 +15,16 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
 | 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
-| 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
+| 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Full scan orchestration remains Phase 7. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
 
-I1–I3 integration checkpoints remain outstanding. See the design spec for freshness, ETF,
-peer-statistic and ranking decisions that supersede the initial proposals below.
+I1 and I3 live integration checkpoints remain outstanding. Phase 4 completion and its live I2
+checkpoint are tracked separately in PR #132; this Phase 6 branch is stacked on Phase 2 PR #131.
+See the design spec for freshness, ETF, peer-statistic and ranking decisions that supersede
+the initial proposals below. Phase 6 tests use mocked providers, not paid live calls.
 
 **Audience.** An engineer, and the coding LLM that engineer drives, who knows this repo only from
 the code. Everything the work depends on is stated here: the product goal, the hard rules, what
@@ -906,6 +908,33 @@ carries a reason; a mention matching a universe symbol is a `duplicate`, not a s
 ### Phase 6: Evaluation graph, thesis check, scoring, output (B, L)
 
 **Goal:** one LangGraph run per candidate producing an `IdeaOut` or an `Exclusion`.
+
+**Implementation handoff (2026-10-19):** `agents/discovery_graph.py` now implements this
+per-candidate flow. It consumes the existing `CandidateMetrics` and optional precomputed
+Phase 1 `CandidateFit`; no history is fetched twice. Quant and research join explicitly before
+evidence normalization. One unresolved development can receive one targeted Tavily follow-up
+and extraction, followed by one total thesis reassessment. There is no recursive retry loop.
+Missing user client or unavailable research produces a disclosed quantitative result with low
+confidence, never a fallback to the server's Claude key.
+
+`discovery/thesis.py` reclassifies authority by exact hostname/subdomain against a small explicit
+reporting/regulatory policy; unknown hosts remain `other`. Trusted internal callers may supply
+independently verified issuer hosts. An exclusion needs a confirmed invalidating development,
+a high-materiality official/reporting fact, its actual fetched citation, and a reassessment
+quoting that fact. Repetition is not an alternative authority check. A valid reassessment that
+retains the company replaces that development's thesis impact; unresolved impact is disclosed
+without changing confirmed underlying event facts. `discovery/citations.py` accepts plain-text
+absolute HTTP(S) citations from fetched evidence only; Markdown/HTML links are rejected.
+
+`analysis/discovery_score.py` defines the fixture-tested overall, fit, confidence and style
+rules in the design spec. It ranks overall, risk, available fit, then ticker. Only overall at
+least 60 with medium/high confidence qualifies for a persisted idea. `discovery/persistence.py`
+atomically saves qualifying recommendations and one completed `ScanRun`, including explicit
+`none` outcomes with up to three nearest misses. Writes lock/recheck the active account; a
+failure rolls back both parts. Generated revision `ffbf99d3adba` adds nullable recommendation
+ideas and owner-only scan RLS/grants in the same transaction. Export and account deletion cover
+scans. User endpoints, the shortlist-to-graph scan runner, scheduling and notifications remain
+Phase 7; this service layer does not start scans itself.
 
 **Create** `backend/app/agents/discovery_graph.py` (own state; reuse existing node functions such
 as `fetch_data` where they fit; no nested graphs, no new agents):

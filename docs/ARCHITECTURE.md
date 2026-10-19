@@ -168,12 +168,24 @@ Recommendation
       when the job created this row),
   outcome_forward_return_pct (Numeric(8,4), nullable -- set once a
       lookback-window price fetch evaluates the outcome),
-  source ("manual"|"scheduled", not null, default "manual" -- whether a person
-      started the run or the weekday automatic analysis did; the Today screen
-      tags "scheduled" calls as Automatic),
+  source ("manual"|"scheduled"|"discovery", not null, default "manual" -- whether a person
+      started holdings analysis, the weekday job did, or a discovery scan produced the idea;
+      the Today screen tags "scheduled" calls as Automatic),
+  idea (nullable JSON -- complete validated IdeaOut for discovery; null for older and
+      holdings-analysis recommendations),
   outcome_evaluated_at (nullable -- when the outcome was last evaluated),
   embedding (pgvector Vector(1024), nullable -- Voyage embedding of the
       recommendation's situation text, for similarity recall)
+
+ScanRun
+  id, user_id, created_at, status ("completed"),
+  universe_size, eligible, shortlisted, researched (integer counts),
+  outcome ("ideas"|"none"), summary (text),
+  excluded (JSON list of Exclusion), rejected_mentions (JSON list of RejectedMention),
+  coverage_summary (JSON object -- includes up to three ranked nearest misses when outcome is
+      "none", each with ticker, overall and confidence)
+  -- Forced owner-only RLS, runtime table/sequence grants, USER_TABLES registration, export and
+  -- deletion coverage ship together. An empty shortlist still produces a completed scan row.
 
 ChatMessage
   id, user_id, created_at, session_id, role ("user"|"assistant"), content
@@ -261,6 +273,16 @@ AppSettings
 The order-ticket columns (`isin` on holdings and watchlist items, `placed_at` and `placed_trade_id` on
 plan lines) come from one hand-written migration, `e7b2c4d91a35_add_order_tickets.py`, on top of
 `d5f3a9b72e18`. Existing migrations are never edited.
+
+Discovery migration `ffbf99d3adba` adds `Recommendation.idea` and creates `scan_runs` with its
+RLS policy and runtime grants in the same transaction. `discovery/persistence.py::save_scan`
+uses a short user-scoped session after provider work, takes the existing per-user write lock,
+and rechecks that the account is active. It saves the scan and qualifying ideas atomically,
+with explicit rollback on failure. Qualifying ideas have overall at least 60 and confidence
+`medium` or `high`; recommendations are `BUY`, `PENDING`, `source="discovery"`, with the existing
+position-sizing rule (maximum position percentage at overall >= 80, half otherwise). Only older
+pending discovery recommendations for the same ticker are superseded; manual/scheduled holdings
+analyses and reviewed decisions are preserved. This stores advisory recommendations, never trades.
 
 ### Migrations — Alembic
 
@@ -352,7 +374,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
 | POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
-| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list, each line with its `id`, resolved `isin` and placed fields; holdings and watchlist items carry their `isin`; the `telegram` block includes `plan_reminder_enabled`) |
+| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list, each line with its `id`, resolved `isin` and placed fields; holdings and watchlist items carry their `isin`; the `telegram` block includes `plan_reminder_enabled`). Includes complete discovery `idea` JSON on recommendations and the caller's `scan_runs` list with counts, exclusions, rejected mentions and coverage summary |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
@@ -397,6 +419,12 @@ calls unbounded) and writes results as it goes; `GET` polls status. This is
 also where quote/fundamentals caching belongs (5–15 min TTL in Redis) —
 it cuts both the yfinance rate-limit risk and the latency of overlapping
 tickers between holdings and watchlist.
+
+`RecommendationOut` adds optional `idea: IdeaOut | None = None`, so existing holdings-analysis
+and older recommendation responses remain valid. The existing recommendation list/detail and
+export expose stored discovery ideas when present. `GET /me/export` adds `scan_runs` (an empty
+list when none exist), and `DELETE /me/data` removes those rows through the shared user-table
+registry. Starting, polling and listing discovery scans through dedicated endpoints is Phase 7.
 
 ### Contribution planner
 
@@ -552,15 +580,16 @@ corrected on the holding form, since a SELL does not restore the average cost).
 
 ## 6. Multi-agent orchestration design
 
-### Market discovery: contracts and research
+### Market discovery: contracts, research and evaluation
 
 The [market-discovery design](superpowers/specs/2026-10-14-market-discovery-design.md)
 records the shared contracts, selected MVP defaults and the remaining work. The contracts in
 `app/schemas_discovery.py`, global FX support, curated universe, snapshot refresh, peer/risk
 calculations, shortlist and Phase 1 portfolio analytics are implemented. Phase 2 adds
-`agents/research.py` for cited candidate research and globally cached theme mentions. The evaluation
-graph, scan API, scan persistence and discovery UI are future phases; no user discovery
-scan is exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
+`agents/research.py` for cited candidate research and globally cached theme mentions. Phase 6 adds
+the per-candidate evaluation graph, deterministic scoring and atomic scan persistence. The scan
+API and scheduling remain Phase 7; the discovery UI remains Phase 9. No user discovery scan is
+exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
@@ -575,10 +604,10 @@ Bull and bear use equal budgets. Local news terms cover selected home markets; u
 retain English terms. Source snippets are bounded to 1,500 characters. Every extraction prompt
 treats fetched content and metadata as untrusted data. Code validates citation membership,
 normalizes/deduplicates URLs, takes publication dates only from source metadata, and groups
-claims by event id while retaining their distinct citations for Phase 6 corroboration.
+claims by event id while retaining their distinct citations for evaluation.
 Forum claims are forced to forum kind/tier; forum-only developments cannot be confirmed or
-invalidate a thesis. Model-provided source tiers and confirmation flags still need Phase 6's
-independent verification before any exclusion. No score or exclusion is computed here.
+invalidate a thesis. This research module computes no scores or exclusions; the Phase 6 graph
+independently checks source authority and thesis-invalidation requirements below.
 
 `discover_mentions(DISCOVERY_THEMES, client=None)` is global owner-funded work, using the existing
 server Claude client; it never reads user keys or portfolio data. At most seven themes each get
@@ -589,12 +618,54 @@ from repeating paid work that UTC day. A failed batch waits until tomorrow; unav
 means no paid batch. Scheduling this function remains Phase 7.
 
 Missing/empty Tavily configuration or a missing Claude client raises `ResearchUnavailable`,
-which future callers handle as quant-only. Provider failures return empty/partial evidence with
-explicit gaps (or an empty daily mention list with a safe log). Candidate callers must resolve
-the user's Claude client and enforce quota first; as in `news.py`, `client=None` means the
-server key for admin/global work only. There is no user endpoint for this module yet. Tavily
-REST details were checked against the official Python client's source; live Reddit coverage
+which the evaluation graph handles as quant-only. Provider failures return empty/partial evidence
+with explicit gaps (or an empty daily mention list with a safe log). Candidate callers must resolve
+the user's Claude client and enforce quota first. The research module's direct `client=None`
+behavior uses the server key for admin/global work only; the per-candidate graph treats `None`
+as quant-only and never falls back to a server key. There is no user endpoint for this module yet.
+Tavily REST details were checked against the official Python client's source; live Reddit coverage
 and provider billing/availability are unverified without a configured integration smoke test.
+
+**Evaluation (Phase 6).** `agents/discovery_graph.py::run_discovery_graph` accepts an eligible
+`CandidateMetrics`, the caller's resolved Claude client or `None`, and optional precomputed
+Phase 1 `CandidateFit`. The caller supplies peers, risk and fit; the graph does not fetch raw
+price histories or build another portfolio. It runs quant and research in parallel, joins both,
+normalizes evidence, then performs at most one targeted follow-up for an unresolved development.
+One total thesis reassessment follows any follow-up. A verified invalidation ends with an
+`Exclusion`; otherwise deterministic evaluation and synthesis return an `IdeaOut`. There are no
+nested graphs or follow-up loops.
+
+The per-candidate ceiling is four initial Tavily searches plus one follow-up search, and four
+Claude calls: initial extraction, follow-up extraction, thesis reassessment and synthesis. Each
+Claude call has a 60-second timeout with SDK retries disabled. Missing clients/configuration,
+provider errors and invalid output retain available numbers and disclose gaps; an absent client
+does no paid work. Cancellation propagates instead of being converted into a result.
+
+`discovery/thesis.py` assigns source tiers from explicit regulator/reporting hostname allowlists;
+optional issuer hosts must come from independently verified metadata supplied by trusted callers.
+Unknown hosts stay `other`, and forum claims stay unverified. An exclusion requires a confirmed
+thesis-invalidating development backed by a high-materiality factual claim from an official or
+reliable reporting host, and a reassessment that quotes that claim and cites its supplied URL.
+Repeated stories or model-provided source labels cannot establish authority. Exclusions include
+what happened, when (or an unavailable date), the thesis impact and supporting URLs. Retained
+developments preserve a validated non-invalidating reassessment; unresolved invalidation stays
+disclosed as unverified for human review.
+
+`analysis/discovery_score.py` reuses the existing peer-dimension calculations. Overall is the
+rounded equal-weight mean of available quality and valuation scores, or `None` if neither can
+be scored. Fit is a bounded measurement of correlation, volatility and concentration effects;
+it does not enter overall. Rank uses overall, then lower risk, then available fit, then ticker.
+Confidence uses coverage, available peer dimensions, price availability/uncertainty and research
+gaps/conflicts; no research or forum-only research yields `low`. Neither forum popularity, claim
+counts nor discovery origin changes a score. The LLM supplies prose only; identity, scores,
+confidence, risk and style tags come from code.
+
+Every synthesis catalyst must cite a claim URL from the validated evidence. `discovery/citations.py`
+checks all prose URLs and requires plain text with absolute HTTP(S) citations; Markdown links,
+reference links and HTML are rejected. Invalid synthesis falls back to explicit quantitative
+screening prose with a disclosure. Forum discussion is labelled unverified, fit stays absent for
+an empty/inapplicable portfolio, and the conclusion carries the human-review/advisor disclaimer.
+No live-provider integration checkpoint is claimed by this implementation.
 
 ### Portfolio analytics (Phase 1)
 

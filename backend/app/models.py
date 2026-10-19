@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -88,8 +89,9 @@ class Recommendation(Base):
     # PENDING | APPROVED | REJECTED | SUPERSEDED (a newer run replaced an unreviewed one; exactly
     # 10 characters, so it fits String(10))
     status: Mapped[str] = mapped_column(String(10), default="PENDING")
-    # "manual" (Run analysis) | "scheduled" (the weekday job); shown as an Automatic tag on Today.
+    # "manual" (Run analysis) | "scheduled" (weekday job) | "discovery" (market scan).
     source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
+    idea: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     fundamental_score: Mapped[int | None] = mapped_column(nullable=True)
@@ -97,6 +99,26 @@ class Recommendation(Base):
     outcome_forward_return_pct: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     outcome_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
+
+
+class ScanRun(Base):
+    """One completed discovery scan, including results that found no opportunity."""
+
+    __tablename__ = "scan_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    status: Mapped[str] = mapped_column(String(10))
+    universe_size: Mapped[int]
+    eligible: Mapped[int]
+    shortlisted: Mapped[int]
+    researched: Mapped[int]
+    outcome: Mapped[str] = mapped_column(String(5))  # "ideas" | "none"
+    summary: Mapped[str] = mapped_column(Text)
+    excluded: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    rejected_mentions: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    coverage_summary: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 
 class ChatMessage(Base):
