@@ -13,7 +13,7 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
 | 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Scan integration and scheduling remain Phases 6 and 7; live Reddit/provider coverage is unverified. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
-| 4: refresh and screening | Implemented foundation: Redis refresh, peers, risk, eligibility, shortlist and weekly snapshot command. Full scan integration remains. |
+| 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. User scan wiring remains Phases 6 and 7. |
 | 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
 | 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Full scan orchestration remains Phase 7. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
@@ -21,8 +21,8 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
 
-I1 and I3 live integration checkpoints remain outstanding. Phase 4 completion and its live I2
-checkpoint are tracked separately in PR #132; this Phase 6 branch is stacked on Phase 2 PR #131.
+I2 passed locally on 2026-10-18 (see Phase 4); I1 and I3 remain outstanding.
+This Phase 6 branch is stacked on Phase 2 PR #131.
 See the design spec for freshness, ETF, peer-statistic and ranking decisions that supersede
 the initial proposals below. Phase 6 tests use mocked providers, not paid live calls.
 
@@ -601,7 +601,8 @@ should start it immediately and run Phase 1 beside it, or hand Phase 1's FX piec
   (below). If `yfinance` coverage is inadequate for important markets, **document the limitations
   in the spec before anyone proposes another provider.** A provider decision needs that document.
 - **I1** (after 1 and 2): run both on three real tickers end to end. Check currency, stale flags.
-- **I2** (after 4 and 5): shortlist plus a dynamic admission against real data. Record runtime.
+- **I2** (after 4 and 5): completed locally on 2026-10-18; the 600-symbol snapshot plus three
+  real admissions produced a combined shortlist. Runtime and limits are recorded under Phase 4.
 - **I3** (after 7): full scan on a real account and on an empty account.
 
 ### Migration order (never two open migration branches)
@@ -843,6 +844,37 @@ reproducible from the file.
 Never scrape constituent lists at runtime; the file is static and reviewed quarterly.
 
 ### Phase 4: Global data refresh, peer scoring, shortlist (A, L)
+
+**Implementation complete (2026-10-18).** `refresh_snapshot` and `load_snapshot` use per-symbol
+Redis entries, an 8-day TTL and a 24-hour resume window; failed refreshes preserve older entries.
+The weekly GitHub schedule invokes `discovery_snapshot` and observes its machine exit status.
+Inclusive peer quartiles and the existing score scale follow the selected defaults in the
+design spec, superseding the original winsorization proposal below.
+
+`shortlist_for_user(..., mentions_admitted=admitted)` ranks the Phase 5 output alongside the
+universe, with one shared size limit and the same holdings/sector preferences. Pass candidates
+admitted against this snapshot and current holdings. Their peers are retained rather than
+recomputed with entrants in the population. Duplicate universe/admitted symbols appear once;
+provenance has no ranking weight. Unscorable candidates remain explained exclusions. Both
+sources carry the fiscal-period/accounting-standard disclosure through `data_notes`.
+The existing pure-function interfaces intentionally replace the original sketch below; no new
+endpoint, user scan orchestration or schema migration is part of this phase.
+
+**I2 live validation (2026-10-18, local Windows machine).** Yahoo provided all 600 universe
+symbols in 155.546 seconds with zero failures. All 600 records loaded from isolated local Redis
+database 15. A second refresh took 0.485 seconds, reused all 600 and made zero symbol fetches.
+Exchange-aware freshness found zero stale and zero uncertain prices; every quote currency had
+an EUR conversion rate. The universe shortlist took 3.406 seconds and returned eight candidates;
+39 symbols were excluded as `insufficient_data` (including the ETFs).
+
+Three manually selected, non-universe names (Duolingo/DUOL, Datadog/DDOG, AppLovin/APP) passed
+real Yahoo search, identity/data validation and admission in 2.078 seconds. Combined screening
+took 5.938 seconds, kept the eight-place limit and preserved universe peer comparisons.
+None of these three displaced a top-eight universe candidate. Total runtime, including FX,
+was 169.766 seconds. The check used `refresh_snapshot`, `load_snapshot`, `check_freshness`,
+`fx.eur_rate`, `admit_mentions` and `shortlist_for_user` directly; it made no Tavily/Claude calls
+and wrote no production data. These are one machine's observed timings, not a throughput promise.
+The temporary test harness selected the mentions manually; research generation remains Phase 2.
 
 **Goal:** a cached weekly snapshot with peer statistics, and a per-user shortlist, all
 fundamentals-first.
