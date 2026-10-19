@@ -13,7 +13,7 @@ from statistics import mean
 from typing import Literal
 
 from app.discovery.eligibility import is_eligible
-from app.discovery.peers import PeerRecord, compare_to_peers
+from app.discovery.peers import PeerRecord, compare_to_peers, metric_group
 from app.discovery.risk import build_risk_profile
 from app.discovery.scoring import dimension_score
 from app.discovery.snapshot import Freshness, SymbolSnapshot, coverage_of
@@ -21,6 +21,10 @@ from app.schemas_discovery import CandidateMetrics, Exclusion, Origin
 
 SHORTLIST_SIZE = 8  # proposed default
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "unknown": 3}
+PEER_DATA_NOTE = (
+    "Peer fundamentals may use different fiscal periods and accounting standards; "
+    "no adjustments are made."
+)
 
 
 @dataclass(frozen=True)
@@ -47,11 +51,12 @@ def build_candidate(
     peers = compare_to_peers(record, records)
     dimensions: tuple[Literal["quality", "valuation"], ...] = ("quality", "valuation")
     scores = [dimension_score(peers, record.group, d) for d in dimensions]
-    notes = [
+    notes = [PEER_DATA_NOTE]
+    notes.extend(
         f"{name} not scored: no valid peer comparison"
         for name, score in zip(dimensions, scores, strict=True)
         if score is None
-    ]
+    )
     if uncertain:
         notes.insert(0, f"price date uncertain: {uncertain}")
     risk = build_risk_profile(
@@ -95,12 +100,16 @@ def shortlist_for_user(
     holdings: Collection[str] = (),
     avoid_sectors: Collection[str] = (),
     size: int = SHORTLIST_SIZE,
+    *,
+    mentions_admitted: Sequence[CandidateMetrics] = (),
 ) -> Shortlist:
     """Held tickers and avoided sectors are the user's choice and are simply left out.
 
     A candidate with no valid peer comparison has no score: it is listed as excluded for
     insufficient data, never scored as 0.
     `uncertain` freshness stays eligible: the price is shown, not distrusted.
+    `mentions_admitted` have already passed admission against this snapshot. They compete for
+    the same places, without joining the peer distribution or receiving an origin bonus.
     """
     held = {t.casefold() for t in holdings}
     avoided = {s.casefold() for s in avoid_sectors}
@@ -108,7 +117,7 @@ def shortlist_for_user(
         PeerRecord(s.ticker, s.asset_type, s.sector, s.industry, s.metrics) for s in snapshots
     ]
     excluded: list[Exclusion] = []
-    ranked: list[tuple[float, int, str, CandidateMetrics]] = []
+    candidates: list[CandidateMetrics] = []
     for snap, record in zip(snapshots, records, strict=True):
         if snap.ticker.casefold() in held or (snap.sector or "").casefold() in avoided:
             continue
@@ -117,21 +126,35 @@ def shortlist_for_user(
             excluded.append(why)
         if not ok:
             continue
-        candidate, scores = build_candidate(
+        candidate, _ = build_candidate(
             snap, record, records, rates, freshness.uncertain.get(snap.ticker)
         )
+        candidates.append(candidate)
+    universe = {snap.ticker.casefold() for snap in snapshots}
+    candidates.extend(c for c in mentions_admitted if c.ticker.casefold() not in universe)
+    ranked: list[tuple[float, int, str, CandidateMetrics]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        ticker = candidate.ticker.casefold()
+        if ticker in seen or ticker in held or (candidate.sector or "").casefold() in avoided:
+            continue
+        seen.add(ticker)
+        group = metric_group(candidate.sector, candidate.industry, candidate.asset_type)
+        scores = [dimension_score(candidate.peers, group, d) for d in ("quality", "valuation")]
         have = [s for s in scores if s is not None]
         if not have:  # eligible, but nothing to rank it on: say so rather than lose it
             excluded.append(
                 Exclusion(
-                    ticker=snap.ticker,
-                    name=snap.name,
+                    ticker=candidate.ticker,
+                    name=candidate.name,
                     reason="insufficient_data",
                     explanation="no valid peer comparison, so it cannot be scored or ranked",
                     evidence=[],
                 )
             )
             continue
-        ranked.append((-mean(have), RISK_ORDER[candidate.risk.risk_level], snap.ticker, candidate))
+        ranked.append(
+            (-mean(have), RISK_ORDER[candidate.risk.risk_level], candidate.ticker, candidate)
+        )
     ranked.sort(key=lambda row: row[:3])
     return Shortlist([row[3] for row in ranked[: max(size, 0)]], excluded)

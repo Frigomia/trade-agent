@@ -8,6 +8,8 @@ import pytest
 
 from app.discovery.admit import MAX_EXAMINED, admit_mentions
 from app.discovery.fetching import RawSymbolData
+from app.discovery.screen import shortlist_for_user
+from app.discovery.snapshot import check_freshness
 from app.schemas_discovery import Mention
 from tests.test_discovery_screen import snap
 
@@ -111,6 +113,35 @@ def test_a_clear_match_is_admitted_with_its_origin_and_reason() -> None:
     assert (candidate.ticker, candidate.origin) == ("ACME", "reddit")
     assert candidate.origin_note == "named in an analyst note"
     assert candidate.peers  # compared against the universe
+
+
+def test_admission_and_shortlisting_share_one_ranked_pool_without_expanding_peers() -> None:
+    world = World(
+        {"acme": [hit("ACME", "Acme Corp")]},
+        {
+            "ACME": raw(
+                {
+                    "returnOnEquity": 0.5,
+                    "operatingMargins": 0.4,
+                    "revenueGrowth": 0.5,
+                    "trailingPE": 5.0,
+                    "priceToSalesTrailing12Months": 1.0,
+                }
+            )
+        },
+    )
+    admitted, rejected = admit(world, [mention("Acme", origin="reddit")])
+    freshness = check_freshness(UNIVERSE, TODAY)
+    baseline = shortlist_for_user(UNIVERSE, freshness, RATES)
+
+    result = shortlist_for_user(UNIVERSE, freshness, RATES, size=3, mentions_admitted=admitted)
+
+    assert rejected == []
+    assert [c.ticker for c in result.candidates] == ["ACME", "S11", "S10"]
+    assert result.candidates[0].origin == "reddit"
+    assert result.candidates[0].origin_note == "named in an analyst note"
+    assert result.candidates[0].peers[0].peer_count == len(UNIVERSE)
+    assert result.candidates[1].peers == baseline.candidates[0].peers
 
 
 def test_an_ambiguous_name_is_rejected_not_guessed() -> None:

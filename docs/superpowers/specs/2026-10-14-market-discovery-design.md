@@ -34,7 +34,7 @@ company fundamentals.
 | Shared Pydantic contracts and fixtures | Implemented in `app/schemas_discovery.py`, `tests/discovery_fixtures.py`, and `tests/test_schemas_discovery.py`. Reuse them without changing their shape in Phase 0. |
 | Global FX and portfolio analytics | Implemented: `app/fx.py` plus Phase 1 pure analytics/candidate fit and `/portfolio/analytics`. Read-only profile/dates support exposure; holding auto-fill stays Phase 8. |
 | Curated universe and coverage evidence | Implemented: 600 symbols, validator, [coverage report](universe-coverage.md), and [candidate-pool audit](universe-candidate-audit.md). |
-| Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable Redis refresh and the weekly `discovery_snapshot` command exist. |
+| Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable weekly Redis refresh and one ranked pool for universe and already-admitted candidates. User scan orchestration remains Phases 6 and 7. |
 | Provider setting | Optional backend `TAVILY_API_KEY`; Phase 2 uses it only when research is explicitly invoked. Startup and existing analysis do not call Tavily. |
 | Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Phase 2 produces mentions; scan integration remains later work. |
 | Research, evaluation graph | Phase 2 research implemented in `agents/research.py`; evaluation graph remains Phase 6. |
@@ -111,6 +111,13 @@ below p25 to one IQR above p75, clamped to 0..1 and reversed where lower is bett
 scores are the rounded mean times 100. The dimension is unavailable with fewer than two valid
 comparisons. An eligible symbol with no scored dimensions is retained as an explained
 `insufficient_data` exclusion instead of disappearing.
+
+`shortlist_for_user` accepts Phase 5's validated output as `mentions_admitted`. Admission must
+use the same snapshot and current holdings. Entrants retain their peer comparisons and never
+become peers for one another or for universe symbols. Universe candidates win duplicate ticker
+matches; otherwise the same quality/valuation, risk and ticker order selects up to eight total
+ideas, with holdings and avoided sectors applied to both sources. Provenance never affects rank.
+Both sources disclose fiscal-period and accounting-standard differences in `data_notes`.
 
 ## Data flow
 
@@ -302,8 +309,10 @@ forum-only allegations, bounded follow-up, quant-only degradation, no-opportunit
 quota refunds, owner isolation, removed users and empty portfolios. Existing Phase 1–9 acceptance
 criteria in the plan remain required.
 
-Integration checkpoints remain outstanding: I1 runs analytics and research on three real
-tickers; I2 exercises shortlist plus dynamic admission and records runtime; I3 runs a full scan
-for both populated and empty real accounts. The universe reports are evidence for the limited
+I2 passed locally on 2026-10-18: all 600 Yahoo symbols refreshed, the cache-only repeat made no
+symbol fetches, three real names passed dynamic admission, and combined screening preserved
+universe peer comparisons. Runtime and limitations are recorded in the plan's Phase 4 completion
+notes. I1 (analytics and research on three real tickers) and I3 (full scans for populated and empty
+real accounts) remain outstanding. The universe reports are evidence for the limited
 G1 data-coverage gate, not evidence that these end-to-end checks have happened. No future phase
 is marked complete by the existence of its contract alone.

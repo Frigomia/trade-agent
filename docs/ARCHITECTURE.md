@@ -605,6 +605,18 @@ paid work and never falls back to the server key. There is no user endpoint for 
 REST details were checked against the official Python client's source; live Reddit coverage
 and provider billing/availability are unverified without a configured integration smoke test.
 
+**Discovery screening (Phase 4).** The weekly `discovery_snapshot` command refreshes per-symbol
+Redis entries (8-day TTL, 24-hour resume window); the GitHub schedule runs it on Sundays at
+04:00 UTC. `shortlist_for_user` accepts the cached snapshots and optional `mentions_admitted`
+from Phase 5. Both sources compete for the same eight places using the mean of available quality
+and valuation scores, then risk and ticker to break ties. Held tickers, avoided sectors and
+duplicates are omitted. Admission must use the same snapshot and current holdings first;
+entrants retain its validated peers, risk, provenance and data notes and never join the peer
+distribution. An entrant's origin has no ranking weight. Candidates without a scored dimension
+remain explained exclusions. Data notes disclose uncertain prices, unscored dimensions and
+differences in fiscal periods/accounting standards. The evaluation graph and user scan wiring
+remain Phases 6 and 7.
+
 ### Portfolio analytics (Phase 1)
 
 `GET /portfolio/analytics` reads only open positions in the caller's scoped session. The thin
