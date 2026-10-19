@@ -61,7 +61,7 @@ def prose(url=URL):
 def providers(monkeypatch):
     initial = evidence()
     research_mock = AsyncMock(return_value=initial)
-    follow_up = AsyncMock(side_effect=lambda candidate, current, client, query: current)
+    follow_up = AsyncMock(side_effect=lambda candidate, current, client, query, **kwargs: current)
     extraction = AsyncMock(return_value=prose())
     monkeypatch.setattr(research, "research_candidate", research_mock)
     monkeypatch.setattr(research, "follow_up_candidate", follow_up)
@@ -355,6 +355,49 @@ def test_independently_verified_issuer_host_can_support_an_exclusion(providers):
     assert isinstance(result, Exclusion)
     assert result.evidence == [developed.claims[0].url]
     follow_up.assert_not_awaited()
+    assert initial.await_args.kwargs["official_hosts"] == ("issuer.example",)
+
+
+def test_ambiguous_article_citation_does_not_assign_retained_impact_to_an_arbitrary_event(
+    providers,
+):
+    initial, _, extraction = providers
+    developed = evidence(negative=True)
+    developed.negative_developments.append(
+        developed.negative_developments[0].model_copy(
+            update={"summary": "A separate material event."}
+        )
+    )
+    initial.return_value = developed
+    assessment = {
+        **reassessment(developed),
+        "invalidates_thesis": False,
+        "explanation": f'"{developed.claims[0].text}" does not invalidate this thesis.',
+    }
+    extraction.side_effect = [assessment, prose()]
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert len(result.negative_developments) == 2
+    assert all(item.status == "confirmed" for item in result.negative_developments)
+    assert all("unverified" in item.thesis_impact for item in result.negative_developments)
+    assert any("not verified" in note for note in result.data_notes)
+
+
+@pytest.mark.parametrize(
+    "url", ["https://stocktwits.com/symbol/EXM", "https://news.ycombinator.com/item?id=1"]
+)
+def test_community_research_from_general_search_never_raises_confidence(providers, url):
+    initial, follow_up, extraction = providers
+    developed = evidence(negative=True, url=url)
+    initial.return_value = developed
+    extraction.side_effect = [reassessment(developed), prose(url)]
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.confidence == "low"
+    assert result.sources[0].kind == result.sources[0].source_tier == "forum"
+    assert "Unverified" in result.community_note
+    assert not result.negative_developments[0].invalidates_thesis
+    follow_up.assert_awaited_once()
 
 
 def test_follow_up_confirmation_is_rechecked_before_single_reassessment(providers):

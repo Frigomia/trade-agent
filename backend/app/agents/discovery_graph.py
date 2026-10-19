@@ -121,6 +121,7 @@ async def research_node(state: DiscoveryState) -> dict[str, Any]:
             candidate.sector,
             candidate.country,
             client,
+            official_hosts=state["official_hosts"],
         )
         if evidence.ticker != candidate.ticker:
             raise ValueError("Research identity does not match the candidate")
@@ -150,7 +151,9 @@ async def follow_up_search(state: DiscoveryState) -> dict[str, Any]:
         f"{development.summary[:500]} official confirmation"
     )
     try:
-        combined = await research.follow_up_candidate(candidate, evidence, client, query)
+        combined = await research.follow_up_candidate(
+            candidate, evidence, client, query, official_hosts=state["official_hosts"]
+        )
         if combined.ticker != candidate.ticker:
             raise ValueError("Follow-up identity does not match the candidate")
         evidence = normalize_evidence(combined, state["official_hosts"])
@@ -217,14 +220,13 @@ def _retained_developments(
             for claim in evidence.claims
         )
         if cited and quoted:
-            matched = next(
-                (
-                    index
-                    for index, development in enumerate(evidence.negative_developments)
-                    if cited <= set(development.evidence)
-                ),
-                None,
-            )
+            matches = [
+                index
+                for index, development in enumerate(evidence.negative_developments)
+                if cited <= set(development.evidence)
+            ]
+            # A shared article can cover multiple events; do not assign its impact arbitrarily.
+            matched = matches[0] if len(matches) == 1 else None
     developments = []
     unresolved = False
     for index, development in enumerate(evidence.negative_developments):

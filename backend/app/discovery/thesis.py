@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from app.agents.research import _normalize_url
 from app.discovery.citations import validate_citations
+from app.discovery.sources import source_tier
 from app.schemas_discovery import (
     CandidateMetrics,
     Claim,
@@ -17,14 +18,6 @@ from app.schemas_discovery import (
     NegativeDevelopment,
     ResearchEvidence,
 )
-
-# Small explicit policy, not a model-supplied reputation score. Unknown publishers stay "other".
-REPORTING_HOSTS = frozenset({"reuters.com", "apnews.com", "ft.com", "wsj.com", "bloomberg.com"})
-OFFICIAL_HOSTS = frozenset({"sec.gov", "fca.org.uk", "justice.gov", "ec.europa.eu"})
-
-
-def _under(host: str, domains: Collection[str]) -> bool:
-    return any(host == domain or host.endswith("." + domain) for domain in domains)
 
 
 def normalize_evidence(
@@ -35,25 +28,28 @@ def normalize_evidence(
     Additional issuer hosts must come from independently verified metadata supplied by trusted
     callers, never from a model, web mention, or public request parameter. No citation is fetched.
     """
-    claims: dict[str, Claim] = {}
+    claims: list[Claim] = []
+    by_url: dict[str, list[Claim]] = {}
+    seen: set[tuple[str, str, str]] = set()
     gaps = list(evidence.gaps)
-    verified_hosts = OFFICIAL_HOSTS | {h.lower().strip().rstrip(".") for h in official_hosts if h}
     for claim in evidence.claims:
         url = _normalize_url(claim.url)
-        if url is None or url in claims:
+        if url is None:
             continue
+        identity = (url, claim.event_id, claim.text)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        tier = source_tier(claim.url, official_hosts)
         host = (urlsplit(url).hostname or "").lower().rstrip(".")
-        if claim.kind == "forum" or claim.source_tier == "forum" or _under(host, {"reddit.com"}):
+        if claim.kind == "forum" or claim.source_tier == "forum" or tier == "forum":
             cleaned = claim.model_copy(update={"url": url, "kind": "forum", "source_tier": "forum"})
-        elif _under(host, verified_hosts):
-            cleaned = claim.model_copy(update={"url": url, "source_tier": "official"})
-        elif _under(host, REPORTING_HOSTS):
-            cleaned = claim.model_copy(update={"url": url, "source_tier": "reliable_reporting"})
         else:
-            cleaned = claim.model_copy(update={"url": url, "source_tier": "other"})
-            if claim.source_tier in {"official", "reliable_reporting"}:
+            cleaned = claim.model_copy(update={"url": url, "source_tier": tier})
+            if tier == "other" and claim.source_tier in {"official", "reliable_reporting"}:
                 gaps.append(f"Source authority not verified for {host}; treated as other.")
-        claims[url] = cleaned
+        claims.append(cleaned)
+        by_url.setdefault(url, []).append(cleaned)
 
     developments: list[NegativeDevelopment] = []
     for development in evidence.negative_developments:
@@ -61,18 +57,21 @@ def normalize_evidence(
             dict.fromkeys(
                 url
                 for raw in development.evidence
-                if (url := _normalize_url(raw)) and url in claims
+                if (url := _normalize_url(raw)) and url in by_url
             )
         )
         updates: dict[str, Any] = {"evidence": urls}
-        if development.status == "confirmed" and not any(_trusted_fact(claims[u]) for u in urls):
+        supporting = [claim for url in urls for claim in by_url[url] if _trusted_fact(claim)]
+        if development.status == "confirmed" and not supporting:
             updates.update(status="unverified", invalidates_thesis=False)
-        elif development.status != "confirmed":
+        elif development.status != "confirmed" or not any(
+            claim.materiality == "high" for claim in supporting
+        ):
             updates["invalidates_thesis"] = False
         developments.append(development.model_copy(update=updates))
     return evidence.model_copy(
         update={
-            "claims": list(claims.values()),
+            "claims": claims,
             "negative_developments": developments,
             "gaps": list(dict.fromkeys(gaps)),
         }
@@ -107,19 +106,23 @@ def exclusion_for(
     urls = [_normalize_url(raw) for raw in cited]
     if not urls or any(url is None for url in urls):
         return None
-    claims = {c.url: c for c in evidence.claims}
+    claim_urls = {claim.url for claim in evidence.claims}
     for development in evidence.negative_developments:
         if development.status != "confirmed" or not development.invalidates_thesis:
             continue
-        allowed = {
-            u
-            for u in development.evidence
-            if u in claims and _trusted_fact(claims[u]) and claims[u].materiality == "high"
-        }
+        supporting = [
+            claim
+            for claim in evidence.claims
+            if claim.url in development.evidence
+            and _trusted_fact(claim)
+            and claim.materiality == "high"
+        ]
+        allowed = {claim.url for claim in supporting}
         if not set(urls) <= allowed:
             continue
         if not any(
-            claims[u].text.strip() and claims[u].text in explanation for u in allowed & set(urls)
+            claim.url in urls and claim.text.strip() and claim.text in explanation
+            for claim in supporting
         ):
             continue
         occurred = (
@@ -130,7 +133,7 @@ def exclusion_for(
             f"{explanation.strip()} Thesis impact: {development.thesis_impact}"
         )
         try:
-            validate_citations(full_explanation, claims)
+            validate_citations(full_explanation, claim_urls)
         except ValueError:
             continue
         return Exclusion(

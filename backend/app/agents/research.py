@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import re
+from collections.abc import Collection
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
 from email.utils import parsedate_to_datetime
@@ -443,6 +444,8 @@ async def follow_up_candidate(
     evidence: ResearchEvidence,
     client: Anthropic,
     query: str,
+    *,
+    official_hosts: Collection[str] = (),
 ) -> ResearchEvidence:
     """One targeted search and extraction; the graph may invoke this at most once.
 
@@ -454,7 +457,7 @@ async def follow_up_candidate(
     key, resolved = _credentials(client)
     if evidence.ticker != candidate.ticker:
         raise ValueError("Evidence belongs to another candidate")
-    sources, gaps = await _gather(
+    sources, gaps, _ = await _gather(
         [("follow-up", {"query": query[:500], "topic": "general"})], key, "tavily"
     )
     if not sources:
@@ -473,7 +476,9 @@ async def follow_up_candidate(
             },
             ResearchEvidence.model_json_schema(),
         )
-        fresh = _evidence(candidate.ticker, candidate.name, data, sources, gaps)
+        fresh = _evidence(
+            candidate.ticker, candidate.name, data, sources, gaps, official_hosts=official_hosts
+        )
     except Exception as exc:
         logger.warning("Research follow-up unavailable: %s", type(exc).__name__)
         return evidence.model_copy(
@@ -481,11 +486,11 @@ async def follow_up_candidate(
                 "gaps": [
                     *evidence.gaps,
                     *gaps,
-                    f"Follow-up extraction unavailable ({type(exc).__name__}).",
+                    "Follow-up extraction unavailable; quantitative evidence retained.",
                 ]
             }
         )
-    claims = {c.url: c for c in [*evidence.claims, *fresh.claims]}
+    claims = {(c.url, c.event_id, c.text): c for c in [*evidence.claims, *fresh.claims]}
     developments = {
         " ".join(d.summary.split()).casefold(): d
         for d in [*evidence.negative_developments, *fresh.negative_developments]

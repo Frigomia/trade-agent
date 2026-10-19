@@ -171,3 +171,49 @@ def test_plain_text_fetched_citation_is_allowed_in_exclusion_explanation() -> No
     decision = assessment(url)
     decision["explanation"] = str(decision["explanation"]) + f" See {url}."
     assert exclusion_for(sample_candidate(), normalized, decision) is not None
+
+
+@pytest.mark.parametrize("bear_first", [True, False])
+def test_distinct_facts_in_one_article_survive_and_the_quoted_bear_fact_can_exclude(
+    bear_first: bool,
+) -> None:
+    raw = evidence()
+    bear = raw.claims[0]
+    bull = bear.model_copy(
+        update={"text": "Revenue increased ten percent.", "event_id": "earnings", "stance": "bull"}
+    )
+    raw.claims = [bear, bull] if bear_first else [bull, bear]
+    normalized = normalize_evidence(raw)
+    assert len(normalized.claims) == 2
+    assert exclusion_for(sample_candidate(), normalized, assessment(bear.url)) is not None
+
+
+def test_quote_of_low_materiality_fact_cannot_borrow_another_claims_high_materiality() -> None:
+    raw = evidence()
+    high = raw.claims[0]
+    low = high.model_copy(
+        update={
+            "text": "The filing was published today.",
+            "event_id": "filing",
+            "materiality": "low",
+        }
+    )
+    raw.claims = [high, low]
+    normalized = normalize_evidence(raw)
+    decision = {**assessment(high.url), "explanation": f'"{low.text}" invalidates the thesis.'}
+    assert exclusion_for(sample_candidate(), normalized, decision) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://stocktwits.com/symbol/EXM",
+        "https://news.ycombinator.com/item?id=123",
+        "https://seekingalpha.com/article/123#comments",
+    ],
+)
+def test_other_community_sources_are_forum_evidence(url: str) -> None:
+    normalized = normalize_evidence(evidence(url))
+    assert normalized.claims[0].kind == normalized.claims[0].source_tier == "forum"
+    assert normalized.negative_developments[0].status == "unverified"
+    assert not normalized.negative_developments[0].invalidates_thesis
