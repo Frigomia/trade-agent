@@ -39,6 +39,7 @@ async def run_discovery(
     try:
         client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
         db.close()
+        uses_saved_key = client is not None
         if client is None:
             # resolve_client permits the server key only for an admin without a saved key.
             if user.role != "admin":
@@ -55,7 +56,9 @@ async def run_discovery(
     except Exception:
         await refund_usage("analysis_run", str(user.id))
         raise
-    _track_background_task(asyncio.create_task(run_job(job_id, user.id, client)))
+    _track_background_task(
+        asyncio.create_task(run_job(job_id, user.id, client, uses_saved_key=uses_saved_key))
+    )
     return {"job_id": job_id}
 
 

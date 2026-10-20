@@ -185,8 +185,25 @@ def test_later_rejection_retires_the_earlier_pending_buy(
         )
         scan = save_scan(USER_ID, ideas, excluded=excluded, **COUNTS)
     assert scan is not None and scan.outcome == "none"
-    assert db_session.query(Recommendation).one().status == "SUPERSEDED"
+    expected = "PENDING" if outcome == "low_confidence" else "SUPERSEDED"
+    assert db_session.query(Recommendation).one().status == expected
     assert db_session.query(ScanRun).count() == 2
+
+
+@pytest.mark.parametrize("reason", ["unreliable_price", "insufficient_data", "ambiguous_identity"])
+def test_screening_failure_preserves_previous_researched_buy(db_session, app_session_local, reason):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        save_scan(USER_ID, [_idea()], **COUNTS)
+        exclusion = Exclusion(
+            ticker="NESN.SW",
+            name="Nestle",
+            reason=reason,
+            explanation="Snapshot unavailable for screening.",
+            evidence=[],
+        )
+        save_scan(USER_ID, [], excluded=[exclusion], **COUNTS)
+    assert db_session.query(Recommendation).one().status == "PENDING"
 
 
 def test_failed_scan_rolls_back_recommendations_and_supersession(db_session, app_session_local):

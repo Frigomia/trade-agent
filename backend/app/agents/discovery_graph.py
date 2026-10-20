@@ -128,6 +128,7 @@ async def research_node(state: DiscoveryState) -> dict[str, Any]:
         if evidence.ticker != candidate.ticker:
             raise ValueError("Research identity does not match the candidate")
     except Exception as exc:
+        research._raise_if_key_problem(exc)
         logger.warning("Discovery research unavailable: %s", type(exc).__name__)
         evidence = _empty_evidence(candidate, f"Research unavailable ({type(exc).__name__}).")
     return {"evidence": evidence}
@@ -160,6 +161,7 @@ async def follow_up_search(state: DiscoveryState) -> dict[str, Any]:
             raise ValueError("Follow-up identity does not match the candidate")
         evidence = normalize_evidence(combined, state["official_hosts"])
     except Exception as exc:
+        research._raise_if_key_problem(exc)
         logger.warning("Discovery follow-up unavailable: %s", type(exc).__name__)
         evidence = evidence.model_copy(
             update={"gaps": [*evidence.gaps, f"Follow-up unavailable ({type(exc).__name__})."]}
@@ -195,6 +197,7 @@ async def thesis_check(state: DiscoveryState) -> dict[str, Any]:
                 state["candidate"], evidence, reassessment.model_dump(mode="json")
             )
         except Exception as exc:
+            research._raise_if_key_problem(exc)
             logger.warning("Discovery thesis reassessment unavailable: %s", type(exc).__name__)
             reassessment = None
             evidence = evidence.model_copy(
@@ -303,6 +306,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
     fit, client = state["fit"], state["client"]
     notes = [*candidate.data_notes, *evidence.gaps, *evidence.conflicts]
     prose = _quant_only(state)
+    synthesis_available = False
     if client is not None and evidence.claims:
         try:
             raw = await research._extract(
@@ -325,7 +329,9 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
             proposed = _Synthesis.model_validate(raw)
             _validate_synthesis(proposed, evidence)
             prose = proposed
+            synthesis_available = True
         except Exception as exc:
+            research._raise_if_key_problem(exc)
             logger.warning("Discovery synthesis unavailable: %s", type(exc).__name__)
             notes.append(
                 f"Synthesis unavailable ({type(exc).__name__}); quantitative screening only."
@@ -349,7 +355,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         origin=candidate.origin,
         scores=evaluation.scores,
         overall=evaluation.overall,
-        confidence=evaluation.confidence,
+        confidence=evaluation.confidence if synthesis_available else "low",
         risk=candidate.risk,
         peers=candidate.peers,
         thesis=prose.thesis,

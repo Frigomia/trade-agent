@@ -14,6 +14,7 @@ from pydantic import TypeAdapter
 from app import fx
 from app.agents.discovery_graph import run_discovery_graph
 from app.agents.market_data import fetch_dated_closes
+from app.agents.research import ResearchKeyRejected
 from app.analysis.discovery_score import rank_ideas
 from app.analysis.portfolio import PositionInput, clean_history, log_returns, marginal_effect
 from app.db import scoped_session
@@ -153,6 +154,8 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
                         excluded.append(output)
                     else:
                         ideas.append(output)
+                except ResearchKeyRejected:
+                    raise
                 except Exception as exc:
                     logger.warning("Discovery candidate failed (%s)", type(exc).__name__)
                     failures.append(candidate.ticker)
@@ -160,7 +163,10 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
                 await progress("researching", len(candidates), done)
 
         await progress("researching", len(candidates), 0)
-        await asyncio.gather(*(evaluate(i) for i in range(len(candidates))))
+        # Failures outside candidate fallback (key rejection or progress loss) cancel siblings.
+        async with asyncio.TaskGroup() as group:
+            for i in range(len(candidates)):
+                group.create_task(evaluate(i))
         if len(failures) == len(candidates):
             raise CandidateEvaluationUnavailable
     await progress("evaluating", len(candidates), done)

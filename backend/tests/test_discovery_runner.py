@@ -175,3 +175,42 @@ def test_holding_fit_context_drops_future_bars(monkeypatch):
         )
     )
     assert histories == {"OWN": {today.isoformat(): 100.0}}
+
+
+@pytest.mark.parametrize("failure", ["key", "progress"])
+def test_fatal_errors_cancel_all_sibling_evaluations(scan_inputs, failure):
+    from app.agents.research import ResearchKeyRejected
+
+    _, client, graph, _, _ = scan_inputs
+
+    async def scenario():
+        active = set()
+        all_started = asyncio.Event()
+
+        async def evaluate(candidate, user_client, *, fit):
+            ticker = candidate.ticker
+            active.add(ticker)
+            if len(active) == runner.MAX_CONCURRENT_CANDIDATES:
+                all_started.set()
+            try:
+                if ticker == "S12":
+                    await all_started.wait()
+                    if failure == "key":
+                        raise ResearchKeyRejected()
+                    return sample_idea().model_copy(update={"ticker": ticker})
+                await asyncio.Event().wait()
+            finally:
+                active.remove(ticker)
+
+        async def progress(stage, total, done):
+            if done:
+                raise RuntimeError("progress storage failed")
+
+        graph.side_effect = evaluate
+        with pytest.raises(ExceptionGroup) as caught:
+            await runner.evaluate_scan(USER_ID, client, progress)
+        assert not active
+        if failure == "key":
+            assert caught.value.subgroup(ResearchKeyRejected) is not None
+
+    asyncio.run(scenario())

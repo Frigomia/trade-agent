@@ -607,17 +607,36 @@ failure of every shortlisted graph is a failed job, never a no-opportunity claim
 
 Portfolio fit reuses the analytics loader, retaining dated holding histories and removing future
 bars from both holding and candidate returns. An empty/inapplicable portfolio leaves fit absent.
-All provider work finishes before atomic `save_scan`; rejected or no-longer-qualifying evaluated
-tickers supersede earlier pending discovery BUYs, including thesis exclusions. Manual, scheduled,
-already reviewed and other users' recommendations are preserved.
+All provider work finishes before atomic `save_scan`. Medium/high-confidence evaluations may
+supersede earlier pending discovery BUYs even if their new numeric score no longer qualifies;
+confirmed thesis invalidations also retire prior advice. Low-confidence fallbacks and screening
+exclusions (including stale prices and insufficient snapshots) preserve earlier researched ideas.
+Failed synthesis always yields low confidence. Manual, scheduled, already reviewed and other
+users' recommendations are preserved.
 
 `discovery/jobs.py` stores private progress/results at `discovery:job:{job_id}` for one hour and
-claims `discovery_active:{user_id}` with `SET NX` for the same TTL as analysis jobs. Cleanup uses
+claims `discovery_active:{user_id}` with `SET NX` for 20 minutes (15-minute provider timeout plus
+five minutes of slack). It renews only its own marker before persistence; losing the marker
+prevents a write, and polling a job with an expired marker reports interruption. Cleanup uses
 `_RELEASE_IF_MINE`, so an old job cannot delete a newer marker. Cancellation waits for an already
-started database write before releasing the marker. Persistence rechecks the account's active
-status under the existing user lock. Redis and provider exceptions expose class names only in
+started database write and records DONE if it committed before releasing the marker. Missing
+snapshots refund the monthly unit because no paid work began. Persistence rechecks the account's
+active status under the existing user lock. Redis and provider exceptions expose class names only in
 logs and fixed messages in job responses. As with analysis, background work is in-process; a hard
 process loss leaves an expiring job/marker, and no durable worker queue is claimed.
+
+Rejected, revoked or out-of-credit Claude credentials escape research fallback and abort the scan.
+A `TaskGroup` cancels sibling candidate work on key errors or lost progress storage. The job flags
+the matching saved credential as `needs_attention` and returns a fixed reconnect message; an old
+in-flight request cannot flag a newly replaced key. An admin's server fallback never flags a saved
+user credential. Already-dispatched external requests may still consume provider budget.
+
+All Tavily searches, including candidate searches, follow-ups and daily theme searches, first
+claim one atomic Redis budget unit at `discovery:tavily:YYYY-MM-DD`. The owner-wide
+`TAVILY_DAILY_SEARCH_LIMIT` defaults to 200 attempts per UTC day; zero disables searches. Denied
+claims or unavailable Redis prevent the HTTP request and disclose degraded research. Attempts
+remain counted on provider failure; date-keyed counters expire after two days. This budget is
+independent of the existing per-user monthly analysis allowance and the daily theme-batch lock.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
@@ -931,6 +950,7 @@ REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
 TAVILY_API_KEY=                             # optional backend-only key for discovery research
+TAVILY_DAILY_SEARCH_LIMIT=200               # owner-wide search attempts per UTC day; 0 disables
 KEY_ENCRYPTION_SECRET=                      # base64 of 32 random bytes (openssl rand -base64 32); encrypts users' saved Claude keys; required when APP_ENV=production
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it

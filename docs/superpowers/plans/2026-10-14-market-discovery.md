@@ -1047,10 +1047,19 @@ failure of every shortlisted graph are explicit failed jobs. Partial failures an
 limitations are disclosed; quant-only output still cannot create BUY recommendations.
 
 Manual scans consume only cached daily mentions; they never trigger owner-funded theme searches.
-Progress is owner-only and expires after one hour. Single-flight claims/refunds and marker release
-follow analysis jobs, with cancellation waiting for any already-started database write. The
-active-account guard remains at persistence. Previously pending discovery BUYs for evaluated or
-excluded tickers are superseded even when a new scan no longer qualifies them.
+Progress is owner-only and expires after one hour. The active marker lasts 20 minutes and is
+renewed only by its owner before writing. Cancellation waits for persistence and records a
+committed scan as DONE. Missing snapshots refund the monthly unit. Key rejection aborts sibling
+work, flags only the matching saved credential, and returns a fixed reconnect message; admin
+server fallback cannot flag a user's key. TaskGroup cancellation also prevents orphaned candidate
+work after progress-storage failure. The active-account guard remains at persistence.
+
+Medium/high-confidence evaluations and confirmed thesis invalidations may supersede pending
+discovery BUYs. Low-confidence fallbacks, failed synthesis and screening exclusions preserve
+earlier researched advice. Owner-funded Tavily requests share an atomic, fail-closed daily Redis
+budget: `TAVILY_DAILY_SEARCH_LIMIT=200` attempts across users, follow-ups and themes per UTC day.
+Zero disables searches; attempts are not refunded on provider failure. The existing per-user
+monthly analysis allowance still applies.
 
 Remaining Phase 7 work: daily mentions command/scheduling, automated per-user scans and Telegram
 ideas. Live provider checks (I1 and I3) are still outstanding; mocked tests do not establish them.

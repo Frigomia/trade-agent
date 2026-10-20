@@ -3,10 +3,11 @@ import copy
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
+from anthropic import AuthenticationError, BadRequestError, PermissionDeniedError
 from httpx import AsyncClient
 
 from app.agents import research
@@ -97,6 +98,67 @@ def test_balanced_bounded_searches_and_one_extraction(providers):
     assert forum["include_domains"] == ["reddit.com"]
     client.messages.create.assert_called_once()
     client.with_options.assert_called_once_with(timeout=60.0, max_retries=0)
+
+
+@pytest.mark.parametrize(
+    "error_type", [AuthenticationError, PermissionDeniedError, BadRequestError]
+)
+def test_key_rejections_escape_research_extraction(providers, error_type, caplog):
+    client, requests = providers
+    client.messages.create.side_effect = error_type(
+        "credit balance private-token",
+        response=httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com")),
+        body={},
+    )
+    with pytest.raises(research.ResearchKeyRejected, match="key needs attention"):
+        asyncio.run(candidate(client))
+    assert len(requests) == 4
+    assert "private-token" not in caplog.text
+
+
+def test_owner_search_budget_is_atomic_across_concurrent_callers(monkeypatch):
+    monkeypatch.setattr(settings, "tavily_daily_search_limit", 3)
+
+    async def run():
+        claims = await asyncio.gather(*(research._claim_search_budget() for _ in range(20)))
+        assert sum(claims) == 3
+        key = f"discovery:tavily:{datetime.now(UTC).date().isoformat()}"
+        assert await get_redis().get(key) == "3"
+        assert 0 < await get_redis().ttl(key) <= 172800
+
+    asyncio.run(run())
+
+
+def test_candidate_and_theme_searches_share_owner_budget(monkeypatch, providers):
+    client, requests = providers
+    monkeypatch.setattr(settings, "tavily_daily_search_limit", 2)
+
+    async def run():
+        result = await candidate(client)
+        assert any("budget" in note for note in result.gaps)
+        assert len(requests) == 2
+        await research.discover_mentions()
+        assert len(requests) == 2
+        await research._gather([("follow-up", {"query": "test"})], "test-key", "tavily")
+        assert len(requests) == 2
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("unavailable", ["disabled", "redis_failure"])
+def test_no_search_without_durable_owner_budget(monkeypatch, providers, unavailable):
+    client, requests = providers
+    if unavailable == "disabled":
+        monkeypatch.setattr(settings, "tavily_daily_search_limit", 0)
+    else:
+        from redis.exceptions import ConnectionError
+
+        redis = MagicMock()
+        redis.eval = AsyncMock(side_effect=ConnectionError("private-token"))
+        monkeypatch.setattr(research, "get_redis", lambda: redis)
+    result = asyncio.run(candidate(client))
+    assert requests == [] and result.claims == []
+    assert any("budget" in note for note in result.gaps)
 
 
 def test_citations_dates_forums_conflicts_and_subject_filtering(providers):

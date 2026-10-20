@@ -54,8 +54,10 @@ def save_scan(
         try:
             if not lock_and_check_active(db, user_id):
                 return None
-            # Retire earlier advice when re-evaluation no longer supports an opportunity.
-            evaluated = {idea.ticker for idea in ranked} | {item["ticker"] for item in exclusions}
+            # Low-confidence fallbacks and snapshot failures cannot withdraw researched advice.
+            evaluated = {
+                idea.ticker for idea in ranked if idea.confidence in ("medium", "high")
+            } | {item["ticker"] for item in exclusions if item["reason"] == "thesis_invalidated"}
             if evaluated:
                 db.query(Recommendation).filter(
                     Recommendation.user_id == user_id,

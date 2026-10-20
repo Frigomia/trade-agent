@@ -64,6 +64,21 @@ def test_follow_up_failure_preserves_original_evidence_and_sanitizes_errors(
     assert "private-token" not in caplog.text
 
 
+def test_follow_up_key_rejection_is_not_swallowed(monkeypatch):
+    monkeypatch.setattr(settings, "tavily_api_key", "test-key")
+    previous = evidence()
+    url = previous.claims[0].url
+    sources = {url: research._Source(url, "Licence", FACT, None, "tavily")}
+    with (
+        patch.object(research, "_gather", AsyncMock(return_value=(sources, [], True))),
+        patch.object(research, "_extract", AsyncMock(side_effect=research.ResearchKeyRejected())),
+        pytest.raises(research.ResearchKeyRejected),
+    ):
+        asyncio.run(
+            research.follow_up_candidate(sample_candidate(), previous, MagicMock(), "licence")
+        )
+
+
 def test_follow_up_never_falls_back_to_the_server_key() -> None:
     with (
         patch.object(research, "_get_client") as fallback,

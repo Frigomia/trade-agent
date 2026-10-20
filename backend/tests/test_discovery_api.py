@@ -29,6 +29,7 @@ def test_manual_scan_accepts_empty_portfolio_and_passes_explicit_user_client(cli
     assert response.status_code == 202
     assert len(response.json()["job_id"]) == 36
     assert job.call_args.args[1:] == (USER_ID, user_client)
+    assert job.call_args.kwargs == {"uses_saved_key": True}
     assert client.portal.call(get_usage, "analysis_run", str(USER_ID)) == 1
 
 
@@ -58,6 +59,7 @@ def test_admin_server_client_is_explicit(admin_client):
         response = admin_client.post("/discovery/run")
     assert response.status_code == 202
     assert job.call_args.args[1:] == (ADMIN_ID, owner_client)
+    assert job.call_args.kwargs == {"uses_saved_key": False}
 
 
 def test_missing_admin_server_configuration_refunds_usage(admin_client):

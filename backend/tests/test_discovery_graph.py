@@ -4,7 +4,9 @@ import asyncio
 from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
+from anthropic import AuthenticationError
 
 from app.agents import discovery_graph, research
 from app.analysis.discovery_score import evaluate
@@ -235,6 +237,37 @@ def test_financial_comparisons_and_numeric_markers_preserve_valid_synthesis(prov
     assert result.thesis == thesis
     assert result.catalysts == [catalyst]
     assert not any("Synthesis unavailable" in note for note in result.data_notes)
+
+
+@pytest.mark.parametrize("stage", ["research", "follow_up", "reassessment", "synthesis"])
+def test_rejected_key_aborts_every_graph_provider_stage(providers, stage, caplog):
+    initial, follow_up, extraction = providers
+    error = AuthenticationError(
+        "private-token",
+        response=httpx.Response(401, request=httpx.Request("POST", "https://api.anthropic.com")),
+        body={},
+    )
+    if stage == "research":
+        initial.side_effect = error
+    elif stage in {"follow_up", "reassessment"}:
+        initial.return_value = evidence(negative=True, status="disputed")
+        if stage == "follow_up":
+            follow_up.side_effect = error
+        else:
+            extraction.side_effect = error
+    else:
+        extraction.side_effect = error
+    with pytest.raises(research.ResearchKeyRejected):
+        run(MagicMock())
+    assert "private-token" not in caplog.text
+
+
+def test_failed_synthesis_cannot_replace_researched_advice_or_create_buy(providers):
+    _, _, extraction = providers
+    extraction.side_effect = RuntimeError("provider down")
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.confidence == "low" and result.catalysts == []
 
 
 @pytest.mark.parametrize(
