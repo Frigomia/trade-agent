@@ -19,8 +19,9 @@ function V2Phone(inner, { search = true } = {}) {
   <div class="tabbar">${tabs.map(([k, l, on]) => `<div class="${on ? 'on' : ''}">${ic(k)}${l}</div>`).join('')}</div></div>`;
 }
 
-const confW = (c) => `${meter(c, 'confidence')}${cap1(c)} confidence`;
-const riskW = (r) => `${meter(r, 'risk')}${cap1(r)} risk`;
+const quiet = (h) => h.replace(/role="img" aria-label="[^"]*"/, 'aria-hidden="true"'); // the words follow, so the meter is not read twice
+const confW = (c) => `${quiet(meter(c, 'confidence'))}${cap1(c)} confidence`;
+const riskW = (r) => `${quiet(meter(r, 'risk'))}${cap1(r)} risk`;
 const idChips = (i) => `<span class="chips"><span class="chip">${ic('globe', 'xs')}${i.country}</span><span class="chip">${ic('layers', 'xs')}${i.sector}</span></span>`;
 const priceBlock = (i) => `<div class="pr"><span class="num">${i.cur} ${i.price}</span><small>${chg(i.chg)}</small></div>`;
 const asOfNote = `<span class="asof">Prices at ${DATA.ideas[0].asOf.replace('close', '')}close</span>`;
@@ -32,7 +33,7 @@ const scanbar = (state) => {
   if (state === 'failed' || state === 'failedKey') return `<div class="panel scanbar">${lead}<span class="tx"><b>Last scan did not finish</b></span><span class="sp"></span><button class="ibtn">${ic('refresh', 'xs')}Try again</button></div>`;
   const n = state === 'none' ? 0 : S.opportunities;
   return `<div class="panel scanbar">${lead}<span class="tx"><b>Latest AI scan</b> · Updated today ${S.when.replace('Today ', '')} · ${n} opportunit${n === 1 ? 'y' : 'ies'}${n ? ` · <span title="Researched, but not recommended">${DATA.set_aside} set aside</span>` : ''}</span><span class="sp"></span>
-    <button class="ibtn" aria-label="Refresh scan. Costs 1 run; ${S.budget.used} of ${S.budget.limit} monthly runs used.">${ic('refresh', 'xs')}<small>${S.budget.used} of ${S.budget.limit} runs</small></button><button class="ibtn" aria-label="Scan history">${ic('history', 'xs')}</button></div>`;
+    <button class="ibtn" aria-label="Refresh scan, ${S.budget.used} of ${S.budget.limit} runs used this month. Costs 1 run.">${ic('refresh', 'xs')}<small>${S.budget.used} of ${S.budget.limit} runs</small></button><button class="ibtn" aria-label="Scan history">${ic('history', 'xs')}</button></div>`;
 };
 
 /* AI text lives in the dashed box, apart from computed numbers */

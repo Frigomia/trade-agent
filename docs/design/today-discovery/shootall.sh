@@ -1,9 +1,9 @@
 #!/bin/bash
 # usage: shootall.sh  -> shots/<dir>-<section>-<theme>.png at each section's real height
 cd "$(cd "$(dirname "$0")" && pwd)"
-CH="/c/Program Files/Google/Chrome/Application/chrome.exe"
-W="$(pwd -W)"; mkdir -p shots; [ -x "$CH" ] || { echo "Chrome not found: $CH" >&2; exit 1; }
-PAGES="${@:-a-gallery:a b-pulse:b c-ledger:c}"
+CH="${CHROME:-/c/Program Files/Google/Chrome/Application/chrome.exe}"
+W="$(pwd -W 2>/dev/null || pwd)"; mkdir -p shots; [ -x "$CH" ] || { echo "Chrome not found: $CH" >&2; exit 1; }
+PAGES="${@:-v2-a-lean:v2a v2-b-soft:v2b v2-c-evidence:v2c}"  # first round: a-gallery:a b-pulse:b c-ledger:c; v3-evidence:v3 needs WIN=1500
 for f in $PAGES; do
   page=${f%%:*}; key=${f##*:}
   for sec in desk phones states; do

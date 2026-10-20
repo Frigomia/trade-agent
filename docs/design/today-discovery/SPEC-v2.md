@@ -2,7 +2,7 @@
 
 Status: option 2 (Soft) chosen as-is on 2026-10-20 (see `direction-approved.md`). Written 2026-10-20. Supersedes the first round (`a-gallery`, `b-pulse`, `c-ledger`, see `SPEC.md`), whose backend mapping (gaps 1 to 9) still applies. Nothing here is implemented in `frontend/`. All companies are fictional and logos are monogram placeholders.
 
-Only the chosen option's screenshots (`shots/v2b-*`) are committed; the others regenerate with `WIN=1500 ./shootall.sh` (see the script).
+Only the chosen option's screenshots (`shots/v2b-*`) are committed; the others regenerate with `./shootall.sh` (the three v2 options) or `WIN=1500 ./shootall.sh v3-evidence:v3`; `shots/.gitignore` keeps the rest out of git. Set `CHROME` if Chrome is not at the default Windows path.
 
 Open `v2-a-lean.html`, `v2-b-soft.html` or `v2-c-evidence.html` (add `?theme=light` or `?theme=dark`, and `?only=desk|phones|states`). Screenshots are in `shots/` (`v2a|v2b|v2c` + `desk|phones|states` + `dark|light`); `./shootall.sh v2-a-lean:v2a v2-b-soft:v2b v2-c-evidence:v2c` regenerates them. Shared code: `lib.css`, `lib.js`, `v2.css`, `v2.js`.
 
@@ -58,7 +58,7 @@ New or sharper in this round:
 
 ## Archived: visual brief applied to option 3 (`v3-evidence.html`)
 
-Not the chosen direction: the choice moved to option 2 as it was. Kept in case the visual brief is applied to the chosen design later.
+Not the chosen direction: the choice moved to option 2 as it was. Kept in case the visual brief is applied to the chosen design later. It defines its own navigation and phone tabs; do not reuse the shared `navItems()` and `Phone()` helpers in `lib.js`, which still include the Discover item.
 
 The chosen option was restyled to the "Visual Redesign Only" brief. Where the brief and the earlier content brief disagreed, the visual brief won:
 

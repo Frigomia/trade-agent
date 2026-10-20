@@ -65,7 +65,7 @@ const ADV = "Advisory research for human review, not investment advice. Saving o
 const adv = () => `<p class="adv">${ADV}</p>`;
 const initials = (n) => n.split(' ').map((w) => w[0]).slice(0, 2).join('');
 /* Logo placeholder: the backend carries no logo or website field yet (see SPEC.md, gap 1). */
-const logo = (n, sz = 40, cls = '') => `<span class="logo ${cls}" style="--sz:${sz}px" role="img" aria-label="${n} logo placeholder">${initials(n)}</span>`;
+const logo = (n, sz = 40, cls = '') => `<span class="logo ${cls}" style="--sz:${sz}px" aria-hidden="true">${initials(n)}</span>`;
 const money = (i) => `${i.cur} ${i.price}`;
 
 function navItems(active) {
@@ -89,10 +89,11 @@ document.body.insertAdjacentHTML('beforeend', '<div class="sample">Sample data �
 
 window.addEventListener("load", () => {
   const only = q.get("only");
-  if (only) { // 0-1 description and desktop, 2-3 phones, 4-5 states
-    const kids = [...document.body.children].filter((e) => !e.classList.contains("sample"));
-    const keep = { desk: [0, 1], phones: [2, 3], states: [4, 5] }[only] || [];
-    kids.forEach((e, n) => { if (!keep.includes(n)) e.style.display = "none"; });
+  if (only) { // hide the other sections (and the caption before each) by id
+    ['desk', 'phones', 'states'].filter((k) => k !== only).forEach((k) => {
+      const el = document.getElementById(k);
+      if (el) { el.style.display = 'none'; if (el.previousElementSibling) el.previousElementSibling.style.display = 'none'; }
+    });
   }
   setTimeout(() => { document.body.dataset.h = document.documentElement.scrollHeight; }, 400);
 });
@@ -116,5 +117,5 @@ DATA.watchlist = [
   { ticker: 'PLMN', name: 'Pellman Stores', text: 'Entered your target price range.', action: 'Watch' },
   { ticker: 'QSMC', name: 'Quade Semiconductors', text: 'A filing suggests the regulatory overhang is easing.', action: 'Monitor' },
 ];
-const chg = (v) => `<span class="chg ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%${ic(v >= 0 ? 'up' : 'down', 'xs')}</span>`;
+const chg = (v) => v == null ? '' : `<span class="chg ${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}%${ic(v >= 0 ? 'up' : 'down', 'xs')}</span>`;
 I.cal = '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>';
