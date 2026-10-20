@@ -4,24 +4,26 @@ on:
   schedule:
     - cron: "30 5 * * *" # daily, UTC: portfolio snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages
     - cron: "0 4 * * 0" # weekly, Sunday UTC: refresh the global-universe snapshot in Redis (discovery_snapshot)
+    - cron: "30 4 * * *" # daily, UTC: one global theme-mentions batch
+    - cron: "0 5 * * 1-5" # weekdays, UTC: opted-in user discovery before the morning digest
   workflow_dispatch:
     inputs:
       job:
         description: Which scheduled command to run
         type: choice
-        options: [daily, discovery_snapshot]
+        options: [daily, discovery_snapshot, discovery_mentions, discovery]
         default: daily
 
 permissions:
   contents: read
 
 concurrency:
-  group: scheduled-jobs
+  group: scheduled-jobs-${{ github.event.schedule || inputs.job || 'daily' }}
   cancel-in-progress: false
 
 jobs:
   daily:
-    name: python -m app.scheduled (daily, or discovery_snapshot on the weekly schedule)
+    name: python -m app.scheduled
     runs-on: ubuntu-latest
     # Scheduled runs are always master; a manual dispatch from another branch must not use the production token.
     if: github.ref == 'refs/heads/master'
@@ -39,8 +41,8 @@ jobs:
       - name: Run the scheduled command in a one-off Fly machine
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # Sunday 04:00 runs the weekly snapshot, a manual run takes its input, anything else is the daily job.
-          COMMAND: ${{ github.event.schedule == '0 4 * * 0' && 'discovery_snapshot' || inputs.job || 'daily' }}
+          # Redis locks prevent dispatch/cron overlap for the same command; other commands may overlap.
+          COMMAND: ${{ github.event.schedule == '0 4 * * 0' && 'discovery_snapshot' || github.event.schedule == '30 4 * * *' && 'discovery_mentions' || github.event.schedule == '0 5 * * 1-5' && 'discovery' || inputs.job || 'daily' }}
         # `machine run` returns once the machine has started, not when the command ends, and with
         # `--rm` the exit code is gone with the machine. So the machine is kept, waited for, its exit
         # code read from its exit event, its log printed, and then it is destroyed. The step fails on a

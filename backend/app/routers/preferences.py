@@ -27,21 +27,31 @@ async def _out(
     db: Session, user: CurrentUser, pref: InvestmentPreferences | None
 ) -> PreferencesOut:
     out = PreferencesOut.model_validate(pref) if pref is not None else PreferencesOut()
-    if out.auto_analysis:
+    if out.auto_analysis or out.auto_discovery:
         row = await run_in_threadpool(db.get, AppUser, user.id)
         defaults = await run_in_threadpool(load_limit_defaults, db, settings)
         if row is not None:
-            # One short key lookup runs on the loop inside pause_state; the usage read is async.
-            try:
-                pause = await pause_state(db, row, defaults, datetime.now(UTC).date())
-            except RedisError as exc:
-                # The usage counter is unreadable: report "unknown" instead of failing the screen.
-                logger.warning("Preferences: usage read failed (%s)", type(exc).__name__)
-                return out
-            if pause is not None:
-                out.auto_analysis_paused = AutoAnalysisPaused(
-                    reason=pause.reason, limit=pause.limit, resumes_on=pause.resumes_on
-                )
+            for field, enabled, reserve in (
+                ("auto_analysis_paused", out.auto_analysis, False),
+                ("auto_discovery_paused", out.auto_discovery, True),
+            ):
+                if not enabled:
+                    continue
+                try:
+                    pause = await pause_state(
+                        db, row, defaults, datetime.now(UTC).date(), reserve_last_run=reserve
+                    )
+                except RedisError as exc:
+                    logger.warning("Preferences: usage read failed (%s)", type(exc).__name__)
+                    return out
+                if pause is not None:
+                    setattr(
+                        out,
+                        field,
+                        AutoAnalysisPaused(
+                            reason=pause.reason, limit=pause.limit, resumes_on=pause.resumes_on
+                        ),
+                    )
     return out
 
 
@@ -57,6 +67,7 @@ def _save(db: Session, user: CurrentUser, payload: PreferencesIn) -> InvestmentP
     # Only the fields the client actually sent; the rest keep their stored values.
     values = payload.model_dump(exclude_unset=True)
     auto = values.pop("auto_analysis", None)  # an explicit null is ignored (the column is not null)
+    discovery = values.pop("auto_discovery", None)
     drift = values.pop("drift_threshold_pct", None)  # same: the column is not null
     pref = _load(db, user)
     if pref is None:
@@ -67,6 +78,8 @@ def _save(db: Session, user: CurrentUser, payload: PreferencesIn) -> InvestmentP
             setattr(pref, field, value)
     if auto is not None:
         pref.auto_analysis = auto
+    if discovery is not None:
+        pref.auto_discovery = discovery
     if drift is not None:
         pref.drift_threshold_pct = drift
     try:

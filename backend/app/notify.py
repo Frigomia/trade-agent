@@ -9,12 +9,17 @@ import logging
 import uuid
 from datetime import date, datetime
 
+from pydantic import TypeAdapter, ValidationError
+
 from app import db as app_db
 from app.agents.jobs import default_ticker_infos
 from app.agents.market_data import fetch_quote_and_history
+from app.analysis.discovery_score import is_opportunity, rank_ideas
 from app.config import settings
 from app.models import AppUser, Holding, Recommendation, TelegramLink, WatchlistItem
 from app.redis_client import get_redis
+from app.schemas import Ticker
+from app.schemas_discovery import IdeaOut
 from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUncertain
 
 logger = logging.getLogger(__name__)
@@ -23,6 +28,7 @@ MAX_LISTED = 10
 MARKER_SECONDS = 90000  # outlives the UTC day so a late retry cannot send twice
 QUOTE_CONCURRENCY = 5
 FOOTER = "Advisory only. Nothing is sent to a broker."
+_TICKER: TypeAdapter[str] = TypeAdapter(Ticker)
 
 
 def _bullets(items: list[str]) -> list[str]:
@@ -41,6 +47,8 @@ def build_message(
     moves: list[tuple[str, float]],
     app_url: str | None,
     reminder: bool = False,
+    *,
+    discovery_idea: str | None = None,
 ) -> str | None:
     """Plain text, one item per line, sections separated by a blank line. No markup, so nothing in
     it can be read as formatting."""
@@ -50,6 +58,8 @@ def build_message(
         sections.append(
             [f"📋 {len(new_recs)} new {noun}"] + _bullets([f"{t}  {a}" for t, a in new_recs])
         )
+    if discovery_idea is not None:
+        sections.append([f"Discovery idea: {discovery_idea} (high confidence). Review in the app."])
     if moves:
         ordered = sorted(moves, key=lambda m: abs(m[1]), reverse=True)
         sections.append(
@@ -103,6 +113,7 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
         chat_id, digest, moves_on = link.chat_id, link.digest_enabled, link.moves_enabled
         threshold = float(link.move_threshold_pct)
         new_recs: list[tuple[str, str]] = []
+        discovery_idea: str | None = None
         if digest:
             rows = (
                 db.query(Recommendation.ticker, Recommendation.action)
@@ -116,6 +127,24 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
                 .all()
             )
             new_recs = [(t, a) for t, a in rows]
+            candidates: list[IdeaOut] = []
+            for rec in db.query(Recommendation).filter(
+                Recommendation.user_id == user_id,
+                Recommendation.source == "discovery",
+                Recommendation.status == "PENDING",
+                Recommendation.action == "BUY",
+                Recommendation.created_at >= today,
+                Recommendation.created_at <= now.replace(tzinfo=None),
+            ):
+                try:
+                    idea = IdeaOut.model_validate(rec.idea)
+                    ticker = _TICKER.validate_python(idea.ticker)
+                except (ValidationError, TypeError):
+                    continue
+                if ticker == rec.ticker and idea.confidence == "high" and is_opportunity(idea):
+                    candidates.append(idea.model_copy(update={"ticker": ticker}))
+            if candidates:
+                discovery_idea = rank_ideas(candidates)[0].ticker
         tickers: list[str] = []
         if moves_on:
             tickers = [i["ticker"] for i in default_ticker_infos(db, user_id, open_only=True)]
@@ -134,7 +163,30 @@ async def notify_user(user_id: uuid.UUID, now: datetime, bot: TelegramBot) -> st
                 )
                 remind = remind or has_target is not None
     moved = await _moves(tickers, threshold) if tickers else []
-    text = build_message(new_recs, moved, settings.app_url, reminder=remind)
+    # Quotes may take seconds; honor a disconnect, relink, opt-out or account removal meanwhile.
+    with app_db.scoped_session(user_id) as db:
+        current_link = db.query(TelegramLink).filter_by(user_id=user_id).one_or_none()
+        current_user = db.get(AppUser, user_id)
+        if (
+            current_link is None
+            or current_link.status != "ok"
+            or current_link.chat_id != chat_id
+            or current_user is None
+            or current_user.status != "active"
+        ):
+            return "skipped"
+        if not current_link.digest_enabled:
+            new_recs, discovery_idea = [], None
+        if not current_link.moves_enabled:
+            moved = []
+        remind = remind and current_link.plan_reminder_enabled
+    text = build_message(
+        new_recs,
+        moved,
+        settings.app_url,
+        reminder=remind,
+        discovery_idea=discovery_idea,
+    )
     if text is None:
         return "skipped"
     marker = f"telegram:sent:{user_id}:{now.strftime('%Y-%m-%d')}"

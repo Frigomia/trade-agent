@@ -13,6 +13,7 @@ from app.models import Holding, Recommendation, TelegramLink, WatchlistItem
 from app.redis_client import get_redis
 from app.telegram import TelegramBlocked, TelegramBot, TelegramError, TelegramUncertain
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
+from tests.discovery_fixtures import sample_idea
 
 MONDAY = datetime(2026, 10, 5, 6, 0, tzinfo=UTC)
 TUESDAY_FIRST = datetime(2026, 9, 1, 6, 0, tzinfo=UTC)  # 1 September 2026 is a Tuesday
@@ -240,6 +241,103 @@ def test_one_users_message_never_contains_another_users_tickers(env):
     _, bot = _notify(USER_ID, quotes=_quotes({"NVDA": [100.0, 80.0]}))
     text = bot.sent[0][1]
     assert "MSFT" in text and "TSLA" not in text and "NVDA" not in text
+
+
+def _discovery_rec(db, ticker, *, user_id=USER_ID, confidence="high", overall=70, **kwargs):
+    _rec(db, user_id, ticker, "BUY", source="discovery", **kwargs)
+    rec = db.query(Recommendation).filter_by(user_id=user_id, ticker=ticker).one()
+    data = sample_idea().model_dump(mode="json")
+    data.update(ticker=ticker, confidence=confidence, overall=overall, thesis="PRIVATE RESEARCH")
+    for dimension in data["scores"]:
+        if dimension["name"] != "fit":
+            dimension["score"] = overall
+    rec.idea = data
+    db.commit()
+
+
+def test_discovery_adds_one_high_confidence_line_and_no_private_prose(env):
+    _user(env, moves_enabled=False)
+    _user(env, OTHER_USER_ID, chat_id=1002, moves_enabled=False)
+    _discovery_rec(env, "TOP", overall=90)
+    _discovery_rec(env, "LOWER", overall=70)
+    _discovery_rec(env, "MEDIUM", confidence="medium", overall=99)
+    _discovery_rec(env, "OLD", days_old=1, overall=100)
+    _discovery_rec(env, "DECIDED", status="APPROVED", overall=100)
+    _discovery_rec(env, "PRIVATE", user_id=OTHER_USER_ID, overall=100)
+    outcome, bot = _notify()
+    assert outcome == "sent"
+    text = bot.sent[0][1]
+    assert "Discovery idea: TOP (high confidence). Review in the app." in text
+    assert all(word not in text for word in ["LOWER", "MEDIUM", "OLD", "DECIDED", "PRIVATE"])
+    assert text.endswith(FOOT)
+
+
+@pytest.mark.parametrize("confidence", ["medium", "low"])
+def test_nonhigh_discovery_confidence_does_not_notify(env, confidence):
+    _user(env, moves_enabled=False)
+    _discovery_rec(env, "IDEA", confidence=confidence)
+    assert _notify()[0] == "skipped"
+
+
+def test_discovery_obeys_existing_digest_opt_out(env):
+    _user(env, digest_enabled=False, moves_enabled=False)
+    _discovery_rec(env, "IDEA")
+    outcome, bot = _notify()
+    assert outcome == "skipped" and bot.sent == []
+
+
+def test_malformed_or_mismatched_discovery_records_do_not_notify(env):
+    _user(env, moves_enabled=False)
+    _discovery_rec(env, "IDEA")
+    rec = env.query(Recommendation).one()
+    rec.idea = {**rec.idea, "ticker": "OTHER"}
+    env.commit()
+    assert _notify()[0] == "skipped"
+    rec.idea = {"confidence": "high"}
+    env.commit()
+    assert _notify()[0] == "skipped"
+
+
+def test_discovery_displays_the_validated_canonical_ticker(env):
+    _user(env, moves_enabled=False)
+    _discovery_rec(env, "IDEA")
+    rec = env.query(Recommendation).one()
+    rec.idea = {**rec.idea, "ticker": "idea\n"}
+    env.commit()
+    outcome, bot = _notify()
+    assert outcome == "sent"
+    assert "Discovery idea: IDEA (high confidence)." in bot.sent[0][1]
+
+
+def test_discovery_only_message_reuses_the_daily_send_marker(env):
+    _user(env, moves_enabled=False)
+    _discovery_rec(env, "IDEA")
+    outcome, bot = _notify()
+    assert outcome == "sent"
+    assert _notify(bot=bot)[0] == "skipped" and len(bot.sent) == 1
+
+
+@pytest.mark.parametrize("change", ["disabled", "relinked", "opted_out"])
+def test_private_notification_rechecks_account_and_link_after_quotes(env, change):
+    from app.models import AppUser
+
+    _user(env)
+    _hold(env, USER_ID, "AAPL")
+    _discovery_rec(env, "IDEA")
+
+    async def quotes(ticker):
+        if change == "disabled":
+            env.get(AppUser, USER_ID).status = "disabled"
+        elif change == "relinked":
+            env.query(TelegramLink).one().chat_id = 9009
+        else:
+            env.query(TelegramLink).one().digest_enabled = False
+            env.query(TelegramLink).one().moves_enabled = False
+        env.commit()
+        return {"closes": [100.0, 90.0]}
+
+    outcome, bot = _notify(quotes=AsyncMock(side_effect=quotes))
+    assert outcome == "skipped" and bot.sent == []
 
 
 def test_the_threshold_is_the_users_own(env):

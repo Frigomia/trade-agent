@@ -3,7 +3,7 @@ import { parseDecimal } from "@/lib/format";
 export type RiskTolerance = "conservative" | "moderate" | "aggressive";
 
 export interface AutoAnalysisPaused {
-  reason: "no_key" | "limit";
+  reason: "no_key" | "limit" | "reserved";
   limit: number | null;
   resumes_on: string | null; // YYYY-MM-DD
 }
@@ -13,9 +13,11 @@ export interface Preferences {
   sector_avoid_list: string[];
   notes: string | null;
   auto_analysis: boolean;
+  auto_discovery: boolean;
   monthly_contribution: number | null; // send null to clear
   drift_threshold_pct: number;
   auto_analysis_paused: AutoAnalysisPaused | null; // only set while auto_analysis is on
+  auto_discovery_paused: AutoAnalysisPaused | null; // only set while auto_discovery is on
 }
 
 export const NOTES_MAX = 2000; // matches PreferencesIn.notes max_length

@@ -162,6 +162,9 @@ class InvestmentPreferences(Base):
     auto_analysis: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=expression.false()
     )
+    auto_discovery: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=expression.false()
+    )
     monthly_contribution: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     drift_threshold_pct: Mapped[float] = mapped_column(
         Numeric(4, 1), default=5.0, server_default="5.0"

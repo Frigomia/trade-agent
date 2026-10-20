@@ -237,6 +237,53 @@ describe("PreferencesPage", () => {
     });
   });
 
+  describe("automatic discovery", () => {
+    const label = "Discover new ideas automatically each weekday";
+
+    it("keeps existing analysis consent separate and explains the additional cost", async () => {
+      let server = { ...LOADED, auto_analysis: true, auto_discovery: false };
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") server = { ...server, ...JSON.parse(String(init.body)) };
+        return server;
+      });
+      renderFresh();
+      const discovery = await screen.findByRole("switch", { name: label });
+      expect(discovery).not.toBeChecked();
+      expect(screen.getByText(/Uses your Claude key to research up to 8 candidates/)).toHaveTextContent(
+        "Counts as one additional run of your monthly limit; portfolio analysis uses a separate run.",
+      );
+      fireEvent.click(discovery);
+      await waitFor(() => expect(discovery).toBeChecked());
+      const posts = apiFetch.mock.calls.filter((c) => c[1]?.method === "POST");
+      expect(JSON.parse(posts[0][1].body)).toEqual({ auto_discovery: true });
+      expect(server.auto_analysis).toBe(true);
+      fireEvent.click(discovery);
+      await waitFor(() => expect(discovery).not.toBeChecked());
+      expect(server.auto_analysis).toBe(true);
+    });
+
+    it("shows discovery's own reserved-run pause without pausing portfolio analysis", async () => {
+      apiFetch.mockResolvedValue({ ...LOADED, auto_analysis: true, auto_discovery: true,
+        auto_discovery_paused: { reason: "reserved", limit: 20, resumes_on: "2026-11-01" } });
+      renderFresh();
+      const status = await screen.findByRole("status");
+      expect(status).toHaveTextContent("your last monthly run is kept available for portfolio analysis or a manual run");
+      expect(screen.getByRole("switch", { name: label })).toBeChecked();
+    });
+
+    it("rolls back discovery consent when saving fails", async () => {
+      renderFresh();
+      const discovery = await screen.findByRole("switch", { name: label });
+      apiFetch.mockImplementation(async (_p: string, init?: RequestInit) => {
+        if (init?.method === "POST") throw new FakeApiError(500, "Could not save discovery");
+        return LOADED;
+      });
+      fireEvent.click(discovery);
+      expect(await screen.findByText("Could not save discovery")).toBeInTheDocument();
+      expect(discovery).not.toBeChecked();
+    });
+  });
+
   describe("contribution plan fields", () => {
     const posts = () => apiFetch.mock.calls.filter((c) => c[1]?.method === "POST");
     const body = () => JSON.parse(posts()[0][1].body);

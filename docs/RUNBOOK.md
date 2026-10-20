@@ -416,10 +416,27 @@ universe is empty; failed symbols are logged by name and retried the next time. 
 the workflow from the Actions tab with `job` set to `discovery_snapshot`. Whether Yahoo throttles the Fly
 machine harder than a laptop is unknown until the first run, so check that run's log.
 
+Two discovery commands use the same production workflow with separate concurrency groups: `discovery_mentions`
+runs daily at 04:30 UTC and fills the fixed-theme global cache using the owner's server Claude
+and Tavily keys; `discovery` runs weekdays at 05:00 UTC for active users who enabled
+`auto_discovery` (off by default, independent of portfolio analysis). Empty portfolios are supported.
+The Preferences switch explains Claude costs and the additional monthly run. User scans use their own saved Claude client
+(only admins without a saved key use the server client), reuse the manual scan safeguards and
+consume one monthly analysis unit independently of holdings analysis. A completed scan that day,
+a prior automatic attempt, a missing/paused key, fewer than two monthly units left or fewer than
+40 Tavily searches remaining skips the
+user. The owner cap remains `TAVILY_DAILY_SEARCH_LIMIT=200` per UTC day across all searches.
+Missing owner configuration makes the mentions command a no-op; a configured failed batch exits 1.
+Both commands are selectable in the workflow's `job` dispatch input. They do not send Telegram
+messages themselves; the existing 05:30 daily job includes at most one high-confidence idea in
+the digest when opted in. Different commands may overlap; their Redis locks prevent duplicate
+work for the same command. Late discovery may miss that day's digest. Daily mentions intentionally
+also serve weekend manual scans. Apply the consent migration before running the new application.
+
 When it finishes it logs one summary line, for example:
 
 ```
-users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0 analysis_runs=2 analysis_skipped=1 analysis_failures=0 notify_sent=2 notify_skipped=2 notify_failures=0
+users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0 analysis_runs=2 analysis_skipped=1 analysis_failures=0 discovery_runs=0 discovery_skipped=0 discovery_failures=0 mentions_found=0 mentions_skipped=0 notify_sent=2 notify_skipped=2 notify_failures=0
 ```
 
 - `users`: active users seen.
@@ -438,8 +455,15 @@ users=4 snapshots_recorded=3 snapshots_skipped=1 outcomes_evaluated=5 failures=0
 - `notify_sent` / `notify_skipped` / `notify_failures`: Telegram messages sent, users not messaged
   (normal), and sends that failed. `notify_failures` never changes the exit code. Details in the
   Telegram section of section 2.
+- `discovery_runs` / `discovery_skipped` / `discovery_failures`: automatic scan outcomes. Failures
+  do not stop the next user. Accepted failed attempts keep their day marker to prevent repeated
+  automatic spending; missing-snapshot failures still get the scan job's monthly-unit refund.
+  Use a manual scan for a deliberate retry. The command starts no new user after 40 minutes and
+  gives in-flight work up to five minutes of grace; users rotate daily.
+- `mentions_found` / `mentions_skipped`: names in a completed global batch, or a batch skipped
+  because owner keys/searches are not configured. An empty successful batch has zero found names.
 
-The job exits non-zero, and the GitHub run should turn red, when `failures` or `analysis_failures`
+The job exits non-zero, and the GitHub run should turn red, when `failures`, `analysis_failures` or `discovery_failures`
 is above zero. So a run can now be red with `failures=0 analysis_failures=1`: look at the analysis
 counter, not only `failures`. A failure for one user never stops the others; they still run.
 
