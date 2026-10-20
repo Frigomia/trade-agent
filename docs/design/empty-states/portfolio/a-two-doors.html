@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Portfolio empty · A Two doors</title>
+<link rel="stylesheet" href="../base.css"><link rel="stylesheet" href="p.css">
+<style>
+/* Direction A: the empty page asks one question, "what is your situation?", and answers it with two
+   clear doors: I own things (holding form) or I'm only watching (ticker). The watchlist panel
+   merges into the second door, so the page has one place to act, not three. */
+.doors{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px}
+.door{padding:22px;display:flex;flex-direction:column;gap:14px;min-height:352px}
+.door h2{margin:0;font-size:18px;font-weight:650;letter-spacing:-.02em}
+.door p{margin:0;color:var(--muted);font-size:13.5px;max-width:360px}
+.door .grow{flex:1}
+.door.primary{border-color:var(--line2);background:linear-gradient(180deg,var(--up-bg),transparent 55%),var(--panel)}
+.mini{display:grid;grid-template-columns:1.1fr .8fr 1fr;gap:8px}
+.watchlist-in{display:flex;flex-direction:column}
+.foot{max-width:900px;margin-top:14px;padding:0 4px}
+</style></head><body>
+<div class="tag">A · Two doors — Portfolio, nothing yet</div>
+<div class="frame" data-active="portfolio"><main class="main">
+ <div class="head"><div><h1>Portfolio</h1></div><div class="actions"><button class="hb dis" data-ic="cam">Record snapshot</button><button class="hb" data-ic="plus">Add holding</button><button class="hb dis" data-ic="swap">Log a trade</button><span class="theme" data-theme-btn></span></div></div>
+ <div class="doors">
+  <div class="panel door primary">
+   <div class="iconcirc" data-ic="wallet"></div>
+   <div><h2>I already own some</h2><p>Add what you hold at your broker. It gives the analysis your real positions and shows your value over time.</p></div>
+   <div class="mini"><div class="field"><label>Ticker</label><div class="input">AAPL</div></div><div class="field"><label>Shares</label><div class="input">10</div></div><div class="field"><label>Average cost</label><div class="input">150.00</div></div></div>
+   <div class="grow"></div>
+   <div><button class="btn">Add your first holding</button></div>
+  </div>
+  <div class="panel door">
+   <div class="iconcirc" data-ic="eye"></div>
+   <div><h2>I&rsquo;m only watching</h2><p>Track a stock or ETF you don&rsquo;t own yet. It gets analyzed like the rest.</p></div>
+   <div class="grow"></div>
+   <div class="addrow" style="margin:0"><div class="field" style="flex:1"><label>Watchlist ticker</label><div class="input">&nbsp;</div></div><div class="field"><label>&nbsp;</label><div class="input sel">Stock <span>&#9662;</span></div></div><button class="btn ghost sm" style="height:42px">Add to watchlist</button></div>
+  </div>
+ </div>
+ <div class="foot statement">Holdings are a record of what you own. trade-agent never buys or sells for you.</div>
+</main></div>
+
+<div class="tag">A · Two doors — no holdings, two on the watchlist</div>
+<div class="frame" data-active="portfolio"><main class="main">
+ <div class="head"><div><h1>Portfolio</h1></div><div class="actions"><button class="hb dis" data-ic="cam">Record snapshot</button><button class="hb" data-ic="plus">Add holding</button><button class="hb dis" data-ic="swap">Log a trade</button><span class="theme" data-theme-btn></span></div></div>
+ <div class="doors">
+  <div class="panel door primary">
+   <div class="iconcirc" data-ic="wallet"></div>
+   <div><h2>Own anything yet?</h2><p>Add a holding to see your value, profit and loss, and how it moves over time.</p></div>
+   <div class="grow"></div>
+   <div><button class="btn">Add a holding</button></div>
+  </div>
+  <div class="panel door">
+   <div class="iconcirc" data-ic="eye"></div>
+   <div><h2>Watching 2</h2></div>
+   <div class="watchlist-in"><div class="wlrow"><div><span class="tk">AAPL</span><small>Watching</small></div><span class="px">&mdash;</span></div><div class="wlrow"><div><span class="tk">VWCE</span><small>Watching</small></div><span class="px">&mdash;</span></div></div>
+   <div class="grow"></div>
+   <div class="addrow" style="margin:0"><div class="field" style="flex:1"><label>Watchlist ticker</label><div class="input">&nbsp;</div></div><div class="field"><label>&nbsp;</label><div class="input sel">Stock <span>&#9662;</span></div></div><button class="btn ghost sm" style="height:42px">Add</button></div>
+  </div>
+ </div>
+ <div class="foot statement">Holdings are a record of what you own. trade-agent never buys or sells for you.</div>
+</main></div>
+<script src="../shell.js"></script></body></html>

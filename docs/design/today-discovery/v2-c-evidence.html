@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · Option 3 · Evidence</title>
+<link rel="stylesheet" href="lib.css">
+<link rel="stylesheet" href="v2.css">
+<style>
+/* Option 3 · Evidence. Reference layout, but the Top opportunity shows why: three labelled score bars, the catalysts
+   and the risk flags beside the AI summary, so the decision can start without opening the analysis. Other cards carry
+   one overall score. Phone: sections become tabs, other opportunities a swipe row. Form from content: a score is three
+   computed parts (quality, valuation, fit), so the card is built from those parts. */
+.hero{padding:22px;display:grid;gap:16px}
+.hero .top{display:flex;gap:16px;align-items:flex-start}
+.hero .nm{font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em;line-height:1.2}
+.hero .tk{font-size:var(--fs-label);color:var(--muted);margin:2px 0 8px}
+.hero .price{margin-left:auto;text-align:right;font-size:var(--fs-metric);font-weight:650;letter-spacing:-.03em;line-height:1.15;white-space:nowrap}
+.hero .price small{display:flex;justify-content:flex-end;gap:6px;margin-top:2px;font-size:var(--fs-label);font-weight:400;color:var(--muted);letter-spacing:0}
+.hero .cols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px;align-items:start}
+.hero .webbox{margin-top:0}
+.ev{display:grid;gap:14px;align-content:start}
+.ev h3{margin:0 0 8px;font-size:var(--fs-label);font-weight:650;color:var(--text2)}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:76px 1fr 30px;gap:10px;align-items:center;font-size:var(--fs-label);color:var(--text2)}
+.bar i{display:block;height:6px;border-radius:999px;background:var(--track);overflow:hidden}
+.bar i b{display:block;height:100%;border-radius:999px;background:var(--text2)}
+.bar span.v{text-align:right;font-variant-numeric:tabular-nums;color:var(--text)}
+.bar.na i b{background:repeating-linear-gradient(90deg,var(--line2) 0 4px,transparent 4px 8px)}
+.bar.na .v{color:var(--muted)}
+.ov{display:flex;align-items:baseline;gap:8px}
+.ov b{font-size:var(--fs-metric);font-weight:650;letter-spacing:-.03em}
+.ov span{font-size:var(--fs-label);color:var(--muted)}
+.flags{margin:0;padding:0;list-style:none;display:grid;gap:6px;font-size:var(--fs-label);color:var(--text2)}
+.flags li{display:flex;gap:8px;align-items:flex-start}
+.flags svg{margin-top:1px;color:var(--warn)}
+.cats{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:8px;font-size:var(--fs-body);color:var(--text2)}
+.cats li{display:flex;gap:10px;align-items:flex-start}
+.cats svg{margin-top:2px;color:var(--accent);flex:none}
+.cats a{color:var(--accent);white-space:nowrap}
+.hero .cta{display:flex;gap:10px;align-items:center}
+.score{display:inline-flex;align-items:baseline;gap:4px;font-variant-numeric:tabular-nums}
+.score b{font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em}
+.score small{color:var(--muted);font-size:var(--fs-cap)}
+.mini{display:flex;align-items:center;gap:10px}
+.mini i{flex:1;height:5px;border-radius:999px;background:var(--track);overflow:hidden}
+.mini i b{display:block;height:100%;background:var(--text2);border-radius:999px}
+.tabs{display:none}
+.phone .tabs{display:flex;gap:6px;padding:4px;border-radius:999px;background:var(--track)}
+.phone .tabs a{white-space:nowrap;flex:1;text-align:center;border-radius:999px;font-size:var(--fs-label);color:var(--text2);display:grid;place-items:center;min-height:36px;font-weight:500}
+.phone .tabs a.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.phone .hero{padding:16px}
+.phone .tabs~.two{display:none}
+.phone .hero .top{flex-wrap:wrap}
+.phone .hero .price{margin-left:0;text-align:left;flex-basis:100%}
+.phone .hero .price small{justify-content:flex-start}
+.phone .hero .cols{grid-template-columns:1fr}
+.phone .snap{display:grid;grid-auto-flow:column;grid-auto-columns:82%;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -16px;padding:0 16px 6px;grid-template-columns:none}
+.phone .snap>*{scroll-snap-align:start}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 3 · Evidence.</b> The reference layout with a richer Top opportunity: three score bars, catalysts with their sources, and risk flags next to the AI summary. Other cards add one overall score bar. On a phone the sections become tabs and the other opportunities a swipe row. Most informative, most to build. Toggle <code>?theme=light</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Same page in each state.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width</b> (below the title only).</div>
+<div class="grid2" id="states"></div>
+<script src="lib.js"></script>
+<script src="v2.js"></script>
+<script>
+const lead = DATA.ideas[0], rest = DATA.ideas.slice(1);
+const bar = (l, v, na) => `<div class="bar ${na ? 'na' : ''}"><span>${l}</span><i role="img" aria-label="${l} ${na ? 'unavailable' : v + ' of 100'}"><b style="width:${na ? 100 : v}%"></b></i><span class="v">${na ? 'n/a' : v}</span></div>`;
+const evidence = (hasFit) => `<div class="ev"><div><div class="ov"><b class="num">${lead.overall}</b><span>overall, of 100 · computed</span></div>
+  <div class="bars" style="margin-top:10px">${bar('Quality', lead.quality)}${bar('Valuation', lead.valuation)}${bar('Fit', lead.fit, !hasFit)}</div>${hasFit ? '' : '<p class="adv" style="margin-top:6px">Fit needs your holdings.</p>'}</div>
+  <div><h3>Risk flags</h3><ul class="flags">${lead.flags.map((f) => `<li>${ic('alert', 'xs')}${f}</li>`).join('')}</ul></div></div>`;
+const hero = (hasFit) => `<div class="panel hero"><div class="top">${logo(lead.name, 52)}<div style="min-width:0"><div class="nm">${lead.name}</div><div class="tk">${lead.ticker} · ${lead.exch}</div>${idChips(lead)}</div>
+  <div class="price"><span class="num">${lead.cur} ${lead.price}</span><small>${chg(lead.chg)} · ${lead.asOf}</small></div></div>
+  <div class="chips"><span class="chip">${confW(lead.confidence)}</span><span class="chip">${riskW(lead.risk)}</span></div>
+  <div class="cols"><div class="webbox"><p class="thesis">${lead.thesis}</p><ul class="cats">${lead.catalysts.map((c, n) => `<li>${ic(n ? 'news' : 'spark', 's')}<span>${n ? '' : '<b>Why now.</b> '}${c} <a href="#">Source</a></span></li>`).join('')}</ul><span class="wl">AI research summary · ${lead.sources} cited sources</span></div>${evidence(hasFit)}</div>
+  <div class="cta"><button class="btn">Open full analysis ${ic('arrow', 's')}</button><button class="btn ghost" aria-label="Save to Discover">${ic('bookmark', 's')}Save</button></div></div>`;
+const card = (i, hasFit) => oppCard(i, `<div class="mini" role="img" aria-label="Overall score ${i.overall} of 100"><span class="score"><b>${i.overall}</b><small>of 100</small></span><i><b style="width:${i.overall}%"></b></i></div>`);
+const tabs = (on = 0) => `<nav class="tabs" aria-label="Today sections">${["Ideas","Alerts <span class=\"num\">${DATA.alerts2.length}</span>","Watchlist"].map((t, k) => `<a href="#" class="${k === on ? "on" : ""}">${t}</a>`).join("")}</nav>`;
+mountV2((hasFit) => `${tabs()}<div class="sec"><h2>Top opportunity</h2></div>${hero(hasFit)}
+  <div class="sec"><h2>Other opportunities${asOfNote}</h2><a href="#" class="more">View all ${rest.length}${ic('chev', 'xs')}</a></div><div class="grid3 snap">${rest.slice(0, 3).map((i) => card(i)).join('')}</div>`, { extra: ["Alerts tab (phone)", () => scanbar("found") + tabs(1) + `<section class="panel list ph"><h2 class="st">${ic("bell", "s")}Portfolio alerts</h2>${alertRows()}</section><section class="panel list ph"><h2 class="st">${ic("eye", "s")}Watchlist insights</h2>${watchRows()}</section>${adv()}`] });
+</script>
+</body>
+</html>
