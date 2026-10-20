@@ -1,0 +1,59 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Empty states · C Quiet ring</title>
+<link rel="stylesheet" href="base.css">
+<style>
+/* Direction C: one calm focal statement per page, anchored by a ring (the product's one emerald
+   light). Today: a dotted ring, the "waiting for a decision" light, still off. Track record: a 20-day ring. */
+.hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:26px 0 0}
+.ringwrap{position:relative;width:132px;height:132px;margin-bottom:20px}
+.ringwrap svg.r{width:132px;height:132px;transform:rotate(-90deg)}
+.ringwrap .mid{position:absolute;inset:0;display:grid;place-items:center;color:var(--accent)}
+.ringwrap .mid svg{width:34px;height:34px}
+.glow{position:absolute;inset:-34px;background:radial-gradient(closest-side,rgba(52,231,169,.16),transparent 70%);pointer-events:none}
+:root[data-theme=light] .glow{background:radial-gradient(closest-side,rgba(52,231,169,.3),transparent 70%)}
+.hero h2{margin:0 0 6px;font-size:22px;font-weight:650;letter-spacing:-.02em}
+.hero p{margin:0 0 20px;color:var(--muted);font-size:13.5px;max-width:420px}
+.hero .acts{display:flex;gap:10px}
+.days{font-size:30px;font-weight:650;letter-spacing:-.03em;line-height:1}
+.days small{display:block;font-size:11px;font-weight:400;color:var(--muted);letter-spacing:0;margin-top:4px}
+.legend{display:flex;gap:26px;margin-top:22px;color:var(--muted);font-size:12px}
+.legend span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px;background:var(--accent)}
+.legend span:nth-child(2):before{background:var(--line2)}
+.legend span:nth-child(3):before{display:none}
+.caught{display:flex;align-items:center;gap:22px;justify-content:center;padding-top:6px}
+.caught .ringwrap{width:76px;height:76px;margin:0}
+.caught .ringwrap svg.r{width:76px;height:76px}
+.caught .ringwrap .mid svg{width:22px;height:22px}
+.caught h2{font-size:18px;margin:0 0 2px}
+.caught p{margin:0 0 10px}
+</style></head><body>
+<div class="tag">C · Quiet ring — Today, first run</div>
+<div class="frame" data-active="today"><main class="main">
+ <div class="head"><div><h1>Today</h1></div><div class="actions"><button class="pill"><span data-play></span>Run analysis</button><span class="theme" data-theme-btn></span></div></div>
+ <div class="tiles"><div class="panel tile"><div class="l">Portfolio</div><div class="t">Add your holdings in <a class="lnk">Portfolio</a>.</div></div><div class="panel tile"><div class="l">Awaiting you</div><div class="v">0</div></div></div>
+ <div class="hero">
+  <div class="ringwrap"><div class="glow"></div><svg class="r" viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" fill="none" stroke="var(--line2)" stroke-width="2" stroke-dasharray="3 7" stroke-linecap="round"/></svg><div class="mid"><svg class="i" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div></div>
+  <h2>Nothing to decide yet</h2>
+  <p>Add a holding or a watchlist, then run your first analysis. Calls that need you show up here, one at a time.</p>
+  <div class="acts"><button class="btn">Add holdings</button><button class="btn ghost">Run analysis</button></div>
+ </div>
+</main></div>
+
+<div class="tag">C · Quiet ring — Today, caught up</div>
+<div class="frame short" data-active="today"><main class="main">
+ <div class="head"><div><h1>Today</h1></div><div class="actions"><button class="pill"><span data-play></span>Run analysis</button><span class="theme" data-theme-btn></span></div></div>
+ <div class="tiles"><div class="panel tile"><div class="l">Portfolio</div><div class="v">€12,480</div></div><div class="panel tile"><div class="l">Awaiting you</div><div class="v">0</div></div></div>
+ <div class="caught"><div class="ringwrap"><div class="glow" style="inset:-18px"></div><svg class="r" viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" fill="none" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"/></svg><div class="mid"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg></div></div><div class="hero" style="align-items:flex-start;text-align:left;padding:0"><h2>All caught up</h2><p>Every recommendation has a decision. Run a new analysis for a fresh look.</p><button class="btn ghost sm">Run analysis</button></div></div>
+</main></div>
+
+<div class="tag">C · Quiet ring — Track record, no scored calls yet</div>
+<div class="frame" data-active="track"><main class="main">
+ <div class="head"><div><h1>Track record</h1><div class="sub">How past calls looked 20 trading days later</div></div><div class="actions"><span class="theme" data-theme-btn></span></div></div>
+ <div class="hero">
+  <div class="ringwrap"><div class="glow"></div><svg class="r" viewBox="0 0 132 132"><circle cx="66" cy="66" r="58" fill="none" stroke="var(--track)" stroke-width="6"/><circle cx="66" cy="66" r="58" fill="none" stroke="var(--line2)" stroke-width="2" stroke-dasharray="1 5.3" stroke-linecap="round"/></svg><div class="mid" style="color:var(--text)"><div class="days">20<small>trading days</small></div></div></div>
+  <h2>No scored calls yet</h2>
+  <p>A call is scored 20 trading days after it is made. Then you see how many moved the way the action implied.</p>
+  <div class="acts"><button class="btn ghost">See today&rsquo;s recommendations</button></div>
+  <div class="legend"><span>Scored</span><span>Waiting</span><span>HOLD and WATCH aren&rsquo;t scored</span></div>
+ </div>
+</main></div>
+<script src="shell.js"></script></body></html>

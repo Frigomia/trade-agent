@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · Direction C · Ledger</title>
+<link rel="stylesheet" href="lib.css">
+<style>
+/* Direction C · Ledger. Designer lens: Edward Tufte, high data-ink ratio and small multiples.
+   Form from content: a scan is a funnel (600 to 5) and every idea is three scores, so show the funnel and the scores as data.
+   Numbers use Geist with tabular figures. The AI summary sits in the dashed box, apart from the computed scores. */
+.gc{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.gc>*{min-width:0}
+.gc .tw{overflow-x:auto}
+.gc .funnel{display:grid;grid-template-columns:repeat(5,auto) 1fr;align-items:end;gap:0;padding:14px 18px}
+.gc .fn{padding-right:22px;margin-right:22px;border-right:1px solid var(--line);min-width:0}
+.gc .fn:nth-child(5){border-right:0;margin-right:0}
+.gc .fn b{display:block;font-size:var(--fs-metric);font-weight:650;letter-spacing:-.03em;line-height:1.2;font-variant-numeric:tabular-nums}
+.gc .fn span{font-size:var(--fs-cap);color:var(--muted)}
+.gc .fn.key b{color:var(--accent)}
+.gc .meta{justify-self:end;text-align:right;display:grid;gap:6px;font-size:var(--fs-label);color:var(--muted)}
+.gc .meta .acts{display:flex;gap:14px;justify-content:flex-end}
+.gc .meta a{color:var(--text2);display:inline-flex;gap:5px;align-items:center;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
+.gc .meta a small{color:var(--muted)}
+.gc .logo{width:var(--sz);height:var(--sz);flex:none;border-radius:14px;display:grid;place-items:center;border:1px solid var(--line2);color:var(--text2);font-weight:650;font-size:calc(var(--sz)*.34)}
+.gc .ahead{display:flex;align-items:baseline;gap:10px;padding:14px 18px 4px}
+.gc .ahead h3{margin:0;font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}.gc .ahead span{font-size:var(--fs-label);color:var(--muted)}
+.gc .feat{display:grid;grid-template-columns:230px 1fr 260px;gap:14px;padding:6px 18px 18px}
+.gc .feat>div{min-width:0}
+.gc .feat h4{margin:10px 0 2px;font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em;line-height:1.25}
+.gc .feat .sm{font-size:var(--fs-label);color:var(--muted)}
+.gc .feat .pz{margin-top:14px;font-size:var(--fs-metric);font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.gc .feat .pz small{font-size:var(--fs-label);color:var(--muted);margin-left:6px;font-weight:400;letter-spacing:0}
+.gc .feat p{margin:0;font-size:var(--fs-lead);line-height:1.5;text-wrap:pretty}
+.gc .feat .nowl{margin-top:12px;font-size:var(--fs-body);color:var(--text2)}
+.gc .feat .nowl b{color:var(--text);font-weight:500}
+.gc .lbl{font-size:var(--fs-cap);color:var(--muted);margin-bottom:8px;letter-spacing:.04em}
+.gc .mult{display:grid;gap:10px}
+.gc .m{display:grid;grid-template-columns:64px 1fr 26px;gap:10px;align-items:center;font-size:var(--fs-label);color:var(--muted)}
+.gc .m .tr{position:relative;height:6px;border-radius:3px;background:var(--track)}
+.gc .m .tr i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--text2)}
+.gc .m .tr u{position:absolute;left:60%;top:-3px;bottom:-3px;width:1px;background:var(--text);opacity:.6}
+.gc .m b{font-weight:650;color:var(--text);text-align:right;font-size:var(--fs-label);font-variant-numeric:tabular-nums}
+.gc .m.na .tr i{display:none}.gc .m.na b{color:var(--muted)}
+.gc .legend{font-size:var(--fs-cap);color:var(--muted);margin-top:10px;line-height:1.5}
+.gc .cr{display:flex;gap:18px;margin-top:14px;font-size:var(--fs-label);color:var(--text2);flex-wrap:wrap}
+.gc .go{display:inline-flex;gap:8px;align-items:center;margin-top:16px;min-height:40px;padding:0 18px;border-radius:14px;background:var(--accent-solid);color:var(--on-accent);font-weight:650;font-size:var(--fs-body);box-shadow:var(--btn-shadow)}
+.gc .go.ghost{background:transparent;color:var(--text2);border:1px solid var(--line2);box-shadow:none;font-weight:500;margin-left:6px;padding:0 12px}
+.gc table{width:100%;border-collapse:collapse;font-size:var(--fs-body)}
+.gc th{font-size:var(--fs-cap);letter-spacing:.06em;color:var(--muted);font-weight:500;text-align:left;padding:12px 8px 9px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.gc td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.gc tr:last-child td{border-bottom:0}
+.gc th.r,.gc td.r{text-align:right}
+.gc .co{display:flex;gap:10px;align-items:center;min-width:150px}
+.gc .co b{display:block;font-weight:500;font-size:var(--fs-body)}.gc .co span{font-size:var(--fs-cap);color:var(--muted)}
+.gc td.why{color:var(--text2);font-size:var(--fs-label);max-width:210px;line-height:1.4}
+.gc .mb{display:grid;grid-template-columns:24px 1fr;gap:6px;align-items:center;width:76px;font-size:var(--fs-cap);font-weight:500;font-variant-numeric:tabular-nums}
+.gc .mb .tr{height:4px;background:var(--track);border-radius:2px;position:relative}.gc .mb .tr i{position:absolute;left:0;top:0;bottom:0;background:var(--text2);border-radius:2px}
+.gc .mb.na{color:var(--muted)}.gc .mb.na .tr i{display:none}
+.gc td .lk{color:var(--accent);font-size:var(--fs-label);font-weight:500;white-space:nowrap;padding:6px 4px}.gc td .lk.m2{color:var(--muted);margin-left:8px}
+.gc .arow{display:grid;grid-template-columns:130px 1fr 110px 60px;gap:14px;align-items:center;padding:11px 18px;border-top:1px solid var(--line);font-size:var(--fs-body)}
+.gc .tagc{font-size:var(--fs-cap);letter-spacing:.06em;font-weight:500;color:var(--warn)}.gc .tagc.rec{color:var(--accent)}
+.gc .arow .who{color:var(--text2)}.gc .arow .who b{color:var(--text);font-weight:500}
+.gc .arow .wh{color:var(--muted);font-size:var(--fs-label);text-align:right}
+.gc .arow a{color:var(--accent);font-size:var(--fs-label);text-align:right}
+.gc .wlr{padding:10px 18px 14px;border-top:1px solid var(--line);font-size:var(--fs-label);color:var(--muted)}
+.gc .stt{padding:22px 22px 24px}
+.gc .stt h3{margin:0 0 6px;font-size:var(--fs-title);font-weight:650;letter-spacing:-.01em;line-height:1.25}.gc .stt p{margin:0;color:var(--text2);font-size:var(--fs-body);max-width:60ch;line-height:1.5}
+.gc .misses{margin-top:14px;width:100%;max-width:520px}
+.gc .stg{display:flex;margin-top:16px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.gc .stg div{flex:1;padding:9px 10px;font-size:var(--fs-cap);color:var(--muted);border-right:1px solid var(--line)}
+.gc .stg div:last-child{border-right:0}
+.gc .stg .dn{color:var(--text2)}.gc .stg .cur{background:var(--up-bg);color:var(--accent);font-weight:500}
+.gc .stg b{display:flex;gap:4px;align-items:center;font-weight:650;font-size:var(--fs-body);font-variant-numeric:tabular-nums;min-height:18px}
+.gc .errt{display:flex;gap:12px;align-items:flex-start}
+.gc .errt svg{color:var(--warn);margin-top:2px}
+/* phone: the table becomes stacked rows, scores stay as small multiples */
+.phone .gc .funnel{grid-template-columns:repeat(5,1fr);padding:12px}
+.phone .gc .fn{padding-right:6px;margin-right:6px}
+.phone .gc .fn b{font-size:var(--fs-lead)}.phone .gc .fn span{font-size:var(--fs-cap);letter-spacing:0}
+.phone .gc .meta{grid-column:1/-1;justify-self:stretch;margin-top:10px;display:flex;justify-content:space-between;text-align:left}
+.phone .gc .feat{grid-template-columns:1fr}
+.phone .gc .row3{display:block;padding:12px 16px;border-top:1px solid var(--line)}
+.phone .gc .arow{grid-template-columns:1fr auto;gap:4px 10px}
+.phone .gc .arow .tagc{grid-column:1}.phone .gc .arow .wh{grid-column:2;text-align:right}
+.phone .gc .arow .who{grid-column:1/-1}.phone .gc .arow a{grid-column:1/-1;text-align:left;display:inline-flex;align-items:center}
+.phone .gc .stg div{padding:8px 2px;text-align:center}.phone .gc .stg b{justify-content:center}
+.gc .ph{display:none}
+.phone .gc .ph{display:block}.phone .gc .tb{display:none}
+.row3 .top{display:flex;gap:10px;align-items:center}
+.row3 .top .co{flex:1;min-width:0}
+.row3 .why{font-size:var(--fs-label);color:var(--text2);margin:8px 0}
+.row3 .mm{display:flex;gap:10px 12px;align-items:center;flex-wrap:wrap;font-size:var(--fs-label);color:var(--text2)}
+.row3 .ac{margin-top:4px;display:flex;gap:8px}
+.row3 .ac a,.row3 .ac button{font-size:var(--fs-label);color:var(--accent);font-weight:500;display:inline-flex;align-items:center;padding:0 8px}.row3 .ac button{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="tag"><b>Direction C · Ledger.</b> The scan as data: a funnel of counts, three scores per company as small bars, one dense table. The AI summary sits in the dashed box, apart from the computed scores. Best if Today should feel like an instrument panel for people who like numbers. Toggle <code>?theme=light</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> The same page in each state.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width</b> (discovery region only).</div>
+<div class="grid2" id="states"></div>
+<script src="lib.js"></script>
+<script>
+const S = DATA.scan, lead = DATA.ideas[0], rest = DATA.ideas.slice(1);
+const conf = (c) => `${meter(c, 'confidence')}${cap1(c)}`;
+const rk = (r) => `${meter(r, 'risk')}${cap1(r)}`;
+const mbl = (label, v) => `<div class="mb ${v == null ? 'na' : ''}" role="img" aria-label="${label} ${v == null ? 'unavailable' : v + ' of 100'}"><span style="display:contents">${v == null ? '—' : v}</span><div class="tr"><i style="width:${v ?? 0}%"></i></div></div>`;
+const mbp = (label, v) => `<div class="mb ${v == null ? 'na' : ''}" style="grid-template-columns:auto 22px 1fr;width:104px" role="img" aria-label="${label} ${v == null ? 'unavailable' : v + ' of 100'}"><span style="color:var(--muted)">${label[0]}</span>${v == null ? '—' : v}<div class="tr"><i style="width:${v ?? 0}%"></i></div></div>`;
+const mrow = (label, v) => `<div class="m ${v == null ? 'na' : ''}"><span>${label}</span><div class="tr" role="img" aria-label="${label} ${v == null ? 'unavailable' : v + ' of 100'}"><i style="width:${v ?? 0}%"></i><u></u></div><b>${v ?? '—'}</b></div>`;
+const funnel = (state) => {
+  const n = state === 'none' ? 0 : S.opportunities;
+  const f = (v, l, key) => `<div class="fn ${key ? 'key' : ''}"><b>${v}</b><span>${l}</span></div>`;
+  return `<div class="panel funnel">${f(S.universe, 'screened')}${f(S.eligible, 'eligible')}${f(S.shortlisted, 'shortlisted')}${f(S.researched, 'researched')}${f(n, n === 1 ? 'opportunity' : 'opportunities', 1)}<div class="meta"><span>Completed ${S.when}</span><div class="acts"><a href="#">${ic('refresh', 'xs')}Refresh <small>1 of ${S.budget.limit} runs</small></a><a href="#">${ic('history', 'xs')}History</a></div></div></div>`;
+};
+const featured = (hasFit) => `<div class="panel"><div class="ahead"><h3>Top opportunity</h3><span>of ${S.opportunities}</span></div><div class="feat">
+  <div><div style="display:flex;gap:10px;align-items:center">${logo(lead.name, 40)}<div class="sm">${lead.ticker} · ${lead.exch}</div></div>
+    <h4>${lead.name}</h4><div class="sm">${lead.sector}</div><div class="sm">${lead.country}</div>
+    <div class="pz">${lead.price}<small>${lead.cur} · ${lead.asOf}</small></div></div>
+  <div class="webbox"><div class="lbl">AI research summary · ${lead.sources} cited sources</div><p>${lead.thesis}</p><div class="nowl"><b>Why now.</b> ${lead.catalyst}</div>
+    <div class="cr"><span>${meter(lead.confidence, 'confidence')}${cap1(lead.confidence)} confidence</span><span>${meter(lead.risk, 'risk')}${cap1(lead.risk)} risk</span></div>
+    <div><button class="go">Open full analysis ${ic('arrow', 'xs')}</button><button class="go ghost" aria-label="Save to Discover">${ic('bookmark', 'xs')}</button></div></div>
+  <div><div class="lbl">Computed scores vs peers</div><div class="mult">${mrow('Quality', lead.quality)}${mrow('Valuation', lead.valuation)}${mrow('Fit', hasFit ? lead.fit : null)}</div>
+    <div class="legend">Overall <b class="num" style="color:var(--text)">${lead.overall}</b> of 100. The tick marks the 60-point bar.${hasFit ? '' : ' Fit needs holdings.'}</div></div></div></div>`;
+const table = () => `<div class="panel"><div class="ahead"><h3>Other opportunities</h3><span>${rest.length} from this scan</span></div>
+  <div class="tw"><table class="tb"><thead><tr><th>Company</th><th>Why it is interesting</th><th>Quality</th><th>Valuation</th><th>Fit</th><th>Confidence</th><th>Risk</th><th class="r">Price</th><th><span class="sr" style="position:absolute;left:-9999px">Actions</span></th></tr></thead><tbody>
+  ${rest.map((i) => `<tr><td><div class="co">${logo(i.name, 30)}<div><b>${i.name}</b><span>${i.ticker} · ${i.country}</span></div></div></td><td class="why">${i.why}</td>
+    <td>${mbl('Quality', i.quality)}</td><td>${mbl('Valuation', i.valuation)}</td><td>${mbl('Fit', i.fit)}</td><td style="white-space:nowrap">${conf(i.confidence)}</td><td style="white-space:nowrap">${rk(i.risk)}</td>
+    <td class="r num" style="white-space:nowrap">${i.price}<div style="font-size:var(--fs-cap);color:var(--muted)">${i.cur}</div></td><td style="white-space:nowrap"><a href="#" class="lk">Research</a><button class="lk m2">Save</button></td></tr>`).join('')}</tbody></table></div>
+  <div class="ph">${rest.map((i) => `<div class="row3"><div class="top">${logo(i.name, 30)}<div class="co"><b>${i.name}</b><span>${i.ticker} · ${i.country}</span></div><div class="num" style="text-align:right;font-size:var(--fs-body)">${i.price}<div style="font-size:var(--fs-cap);color:var(--muted)">${i.cur}</div></div></div>
+    <div class="why">${i.why}</div><div class="mm">${mbp('Quality', i.quality)}${mbp('Valuation', i.valuation)}${mbp('Fit', i.fit)}</div><div class="mm" style="margin-top:8px"><span>${conf(i.confidence)} confidence</span><span>${rk(i.risk)} risk</span></div><div class="ac"><a href="#">Research</a><button>${ic('bookmark', 'xs')}&nbsp;Save</button></div></div>`).join('')}</div></div>`;
+const alerts = () => `<div class="panel"><div class="ahead"><h3>Needs attention</h3><span>your holdings</span></div>${DATA.alerts.map((a) => `<div class="arow"><span class="tagc ${a.kind === 'rec' ? 'rec' : ''}">${a.tag}</span><span class="who"><b>${a.name}</b> · ${a.text}</span><span class="wh">${a.when}</span><a href="#">Open</a></div>`).join('')}<div class="wlr">${DATA.watch}</div></div>`;
+const stateBlock = (state) => {
+  if (state === 'none') return `<div class="panel stt"><h3>No compelling opportunity today</h3><p>No company reached 60 points with medium or better confidence. That is a result, not an error. These came closest:</p>
+    <table class="misses"><tbody>${DATA.misses.map((m) => `<tr><td class="num">${m.ticker}</td><td class="num">${m.overall} / 100</td><td>${conf(m.confidence)} confidence</td></tr>`).join('')}</tbody></table></div>`;
+  if (state === 'running') { const idx = 2; const lab = ['Screen', 'Admit', 'Research', 'Score', 'Save']; return `<div class="panel stt"><h3>Scan in progress</h3><p>Researching ${DATA.job.done} of ${DATA.job.total} shortlisted companies. This takes a few minutes, and the scan keeps running if you leave this page.</p>
+    <div class="stg" role="progressbar" aria-valuenow="${DATA.job.done}" aria-valuemax="${DATA.job.total}">${lab.map((l, n) => `<div class="${n < idx ? 'dn' : n === idx ? 'cur' : ''}"><b>${n < idx ? ic('check', 'xs') : n === idx ? `${DATA.job.done}/${DATA.job.total}` : '·'}</b>${l}</div>`).join('')}</div></div>`; }
+  if (state === 'failed') return `<div class="panel stt"><div class="errt">${ic('alert')}<div><h3>The scan did not finish</h3><p>${DATA.errors.generic} Nothing was saved.</p><button class="go">${ic('refresh', 'xs')}Try again</button></div></div></div>`;
+  if (state === 'failedKey') return `<div class="panel stt"><div class="errt">${ic('key')}<div><h3>${DATA.errors.key}</h3><p>Claude did not accept your key, so the scan stopped. Nothing was saved.</p><button class="go">${ic('key', 'xs')}Reconnect Claude</button></div></div></div>`;
+  return featured(state !== 'empty') + table();
+};
+function region(state) {
+  const head = state === 'running' || state === 'failed' || state === 'failedKey' ? '' : funnel(state);
+  return `<div class="gc">${head}${stateBlock(state)}${state === 'empty' || state === 'running' ? '' : alerts()}<p class="adv">${ADV}</p></div>`;
+}
+document.getElementById('desk').innerHTML = Desktop(region('found'));
+document.getElementById('phones').innerHTML = [['found', 'Ideas found'], ['none', 'No compelling opportunity'], ['running', 'Scan running'], ['failed', 'Scan failed'], ['failedKey', 'Claude key needs attention'], ['empty', 'Empty portfolio (alerts hidden, fit unavailable)']]
+  .map(([s, l]) => `<div><div class="cap">${l}</div>${Phone(region(s))}</div>`).join('');
+document.getElementById('states').innerHTML = [['none', 'No compelling opportunity'], ['running', 'Scan running'], ['failed', 'Scan failed'], ['failedKey', 'Claude key needs attention'], ['empty', 'Empty portfolio']]
+  .map(([s, l]) => `<div class="region"><div class="cap">${l}</div>${region(s)}</div>`).join('');
+</script>
+</body>
+</html>
