@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discover · Option 2 · Table</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="dc.css">
+<style>
+/* Option 2 · Table. One compact table: the column headings are the sort (Company, Daily change, Added), the search sits
+   inside the table as its first row, and the AI insight is a second line under the name. It fits the most companies on a
+   screen. Form from content: a watchlist grows, so it is built to scan down a column. */
+.co .tbl{padding:8px 8px 4px}
+.tbl .hint{margin:8px 0 0}
+.tbl .addrow{padding:8px 12px 14px;border-bottom:1px solid var(--line)}
+.thead,.trow{display:grid;grid-template-columns:minmax(0,2.2fr) 120px 150px 96px 156px;gap:14px;align-items:center}
+.thead{padding:10px 12px;font-size:var(--fs-label);color:var(--muted)}
+.thead button{display:inline-flex;gap:6px;align-items:center;font-size:var(--fs-label);color:var(--muted);min-height:32px;font-weight:500}
+.thead button.on{color:var(--accent);font-weight:650}
+.thead .r{justify-self:end}
+.trow{padding:12px;border-top:1px solid var(--line);min-height:68px}
+.trow:hover{background:var(--up-bg);border-radius:14px}
+.tco{display:flex;gap:12px;align-items:center;min-width:0}
+.tco>span:last-child{min-width:0;display:grid;gap:2px}
+.tco .nm{font-size:var(--fs-body)}
+.tco .ins{font-size:var(--fs-label)}
+.tco .mt3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .acts{display:flex;gap:8px;justify-content:flex-end}
+.trow .px{grid-template-columns:auto;}
+.trow .ad{font-size:var(--fs-label);color:var(--muted);white-space:nowrap}
+.frame .sortl{display:none}
+.phone .thead,.region .thead{display:none}
+.phone .trow,.region .trow{grid-template-columns:minmax(0,1fr) auto;gap:8px 12px}
+.phone .trow .tco,.region .trow .tco{grid-column:1/-1}
+.phone .trow .px,.region .trow .px{justify-items:start;text-align:left}
+.phone .trow .acts,.region .trow .acts{grid-column:1/-1;justify-content:flex-start}
+.phone .trow .acts .btn:first-child,.region .trow .acts .btn:first-child{flex:1}
+.phone .trow .ad,.region .trow .ad{display:none}
+.phone .tbl .addrow,.region .tbl .addrow{padding:8px 4px 14px}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 2 · Table.</b> One compact table: click a column heading to sort, the search is the table's first row, and the AI insight sits under the name. Fits the most companies per screen. Try it: type <code>kes</code> or <code>hal</code>, Add, Analyze, Remove (then Undo), the filters and the headings. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Headings give way to a sort menu; each company becomes a short card. Left to right: watchlist, empty, search with a duplicate, no match for the filter, loading.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Empty, duplicate in search, no search result, no match for the filter, loading, research running, removed with Undo.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="dc.js"></script>
+<script>
+const hb = (s, k, l, cls = '') => `<button class="${cls} ${s.sort === k ? 'on' : ''}" data-act="sort" data-v="${k}" aria-label="Sort by ${l}${s.sort === k ? ', current sort' : ''}">${l}${s.sort === k ? ic('chevd', 'xs') : ''}</button>`;
+const trow = (d) => `<div class="trow" role="row"><div class="tco" role="cell">${logo(d.n, 40)}<span>${nameLink(d)}<span class="mt3">${meta(d)}</span>${insight(d)}</span></div><div role="cell">${pill(d.status)}</div><div role="cell">${priceBlock(d)}</div><div class="ad" role="cell">${ago(d.age)}</div><div class="acts" role="cell">${rowActions(d)}</div></div>`;
+const render = (s) => {
+  const v = visible(s);
+  return `${dcHead()}
+  ${s.loading ? skel() : `<div class="bar2">${filters(s)}${sorter(s)}</div>
+  <section class="panel tbl"><div class="addrow">${searchBox(s)}</div>${!s.items.length ? empty().replace('class="panel emp"', 'class="emp" style="max-width:none"') : v.length ? `<div role="table" aria-label="Your watchlist"><div class="thead" role="row"><span role="columnheader" aria-sort="${s.sort === 'name' ? 'ascending' : 'none'}">${hb(s, 'name', 'Company')}</span><span role="columnheader">Status</span><span class="r" role="columnheader" aria-sort="${s.sort === 'chg' ? 'descending' : 'none'}">${hb(s, 'chg', 'Daily change', 'r')}</span><span role="columnheader" aria-sort="${s.sort === 'new' ? 'descending' : 'none'}">${hb(s, 'new', 'Added')}</span><span role="columnheader"><span class="sr">Actions</span></span></div>${v.map(trow).join('')}</div>` : noMatch(s).replace('class="panel emp"', 'class="emp" style="max-width:none"')}</section>`}
+  ${toast(s)}<p class="adv">Prices are delayed. AI insights come from research that is saved with each company; they are not investment advice, and nothing here is sent to a broker.</p>`;
+};
+mountDC(render);
+</script>
+</body>
+</html>
