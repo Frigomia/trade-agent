@@ -15,6 +15,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    ScanRun,
     TelegramLink,
     Trade,
     WatchlistItem,
@@ -31,6 +32,7 @@ from app.schemas import (
     PortfolioSnapshotOut,
     PreferencesOut,
     RecommendationOut,
+    ScanRunOut,
     TelegramExportOut,
     TradeOut,
     UsageDetail,
@@ -121,6 +123,9 @@ def export_data(
             for p in db.query(PortfolioSnapshot).filter_by(user_id=user.id)
         ],
         contribution_plans=plans.load_all(db, user.id),
+        scan_runs=[
+            ScanRunOut.model_validate(scan) for scan in db.query(ScanRun).filter_by(user_id=user.id)
+        ],
         # The settings only: the chat id is never exported.
         telegram=(
             TelegramExportOut(

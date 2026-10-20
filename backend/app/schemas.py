@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import (
@@ -14,6 +14,7 @@ from pydantic import (
 )
 
 from app.isin import is_valid_isin
+from app.schemas_discovery import Exclusion, IdeaOut, RejectedMention
 
 # Real symbol formats this must allow: "BRK.B", "^GSPC", "RDS-A", "SAP.DE".
 # Excludes path metacharacters (/, ?, #) and any ".." that yfinance interpolates
@@ -111,6 +112,7 @@ class RecommendationOut(BaseModel):
     suggested_position_pct: float | None
     status: str
     source: str = "manual"
+    idea: IdeaOut | None = None
     reviewed_at: datetime | None
     fundamental_score: int | None
     technical_signal: str | None
@@ -395,6 +397,24 @@ class DriftItemOut(BaseModel):
     points: float  # weight minus target, in percentage points
 
 
+class ScanRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: UUID
+    created_at: datetime
+    status: str
+    universe_size: int
+    eligible: int
+    shortlisted: int
+    researched: int
+    outcome: Literal["ideas", "none"]
+    summary: str
+    excluded: list[Exclusion]
+    rejected_mentions: list[RejectedMention]
+    coverage_summary: dict[str, Any]
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]
@@ -407,6 +427,7 @@ class ExportOut(BaseModel):
     portfolio_snapshots: list[PortfolioSnapshotOut]
     telegram: TelegramExportOut | None = None
     contribution_plans: list[PlanOut] = Field(default_factory=list)
+    scan_runs: list[ScanRunOut] = Field(default_factory=list)
 
 
 class UsageDetail(BaseModel):

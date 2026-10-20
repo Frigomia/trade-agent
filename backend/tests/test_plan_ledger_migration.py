@@ -16,11 +16,12 @@ def _migration():
     return module
 
 
-def test_the_migration_is_the_single_head_on_top_of_the_order_tickets_revision():
+def test_the_migration_remains_in_the_single_chain_after_order_tickets():
     config = Config(str(BACKEND / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND / "migrations"))
-    heads = ScriptDirectory.from_config(config).get_heads()
+    script = ScriptDirectory.from_config(config)
 
     migration = _migration()
-    assert heads == [migration.revision]
+    assert len(script.get_heads()) == 1
+    assert migration.revision in {revision.revision for revision in script.walk_revisions()}
     assert migration.down_revision == "e7b2c4d91a35"

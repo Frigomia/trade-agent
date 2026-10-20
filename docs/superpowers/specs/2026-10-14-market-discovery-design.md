@@ -1,6 +1,6 @@
 # Market discovery — design
 
-Status: Phase 0 design, completed 2026-10-18 for PR review. This records implementation decisions;
+Status: Phase 0 design, updated 2026-10-19 through Phase 6 evaluation and persistence. This records implementation decisions;
 it does not claim that the complete discovery feature has shipped. The
 [implementation plan](../plans/2026-10-14-market-discovery.md) remains the phase-by-phase handoff.
 Where its original proposals differ from the decisions below, this spec and the existing shared
@@ -37,8 +37,9 @@ company fundamentals.
 | Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable weekly Redis refresh and one ranked pool for universe and already-admitted candidates. User scan orchestration remains Phases 6 and 7. |
 | Provider setting | Optional backend `TAVILY_API_KEY`; Phase 2 uses it only when research is explicitly invoked. Startup and existing analysis do not call Tavily. |
 | Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Phase 2 produces mentions; scan integration remains later work. |
-| Research, evaluation graph | Phase 2 research implemented in `agents/research.py`; evaluation graph remains Phase 6. |
-| Scan persistence, API, and scheduled user scans | Future Phases 6 and 7; no discovery scan endpoint or `ScanRun` table exists yet. |
+| Research, evaluation graph | Implemented in `agents/research.py` and `agents/discovery_graph.py`: bounded research, follow-up/reassessment, deterministic evaluation and cited prose, with a quantitative fallback. |
+| Scan persistence | Implemented in `discovery/persistence.py`: nullable `Recommendation.idea`, owner-scoped `ScanRun`, atomic saves, export and deletion. |
+| Scan orchestration, API, and scheduled user scans | Future Phase 7; no user discovery scan endpoint or full shortlist-to-graph runner exists yet. |
 | Easy onboarding and discovery UI | Future Phases 8 and 9. |
 
 Phase 1 adds required `PortfolioExposure.notes` for partial valuation, FX/history limitations and
@@ -64,11 +65,11 @@ not new environment-variable settings or a new user configuration system.
 | Price freshness | Use the exchange-aware rules below. The old blanket `STALE_DAYS=5` proposal is superseded; 5 calendar days remains only the sparse-exchange fallback. | `discovery/snapshot.py`, implemented |
 | Research shortlist | `SHORTLIST_SIZE=8`. | `discovery/screen.py`, implemented |
 | Dynamic admission | `DISCOVERY_MAX_DYNAMIC=10` per scan; all remaining mentions carry `cap_reached` or another rejection reason. | `discovery/admit.py`, implemented (at most 30 mentions are looked up at all) |
-| Overall score | Equal-weight mean of available quality and valuation scores; `None` when neither exists. Fit never contributes to this mean. Serialize the final integer using Python `round`, matching current dimension scoring. | Phase 6 |
+| Overall score | Equal-weight mean of available quality and valuation scores; `None` when neither exists. Fit never contributes to this mean. Serialize the final integer using Python `round`, matching current dimension scoring. | `analysis/discovery_score.py`, implemented |
 | Ranking | Descending overall, then lower risk (`low`, `medium`, `high`, `unknown`), then better available fit when applicable, then ticker for deterministic ordering. Current screening has no fit yet and uses ticker after risk. Missing overall is unrankable. | Phases 4 and 6 |
-| Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` and confidence at least `medium`; otherwise persist `outcome="none"` with nearest misses. | Phase 6 |
+| Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` and confidence at least `medium`; otherwise persist `outcome="none"` with up to three nearest misses. | `analysis/discovery_score.py`, implemented |
 | Quota | One user scan consumes one existing `analysis_run` unit; a refused overlapping scan refunds it. No new usage kind or limit columns. | Phase 7 |
-| Research budget | At most 4 initial Tavily searches and one evidence-extraction Claude call per candidate (Phase 2). Daily themes: at most 14 searches and one extraction, once per UTC date. At most one targeted follow-up remains Phase 6. | Phases 2 and 6 |
+| Research budget | At most 4 initial Tavily searches and one targeted follow-up per candidate. At most four Claude calls: initial extraction, follow-up extraction, one total reassessment, synthesis; each has a 60-second timeout and no SDK retries. Daily themes: at most 14 searches and one extraction, once per UTC date. | Phases 2 and 6, implemented |
 | Portfolio comparison | Hypothetical candidate weight 5%; correlations need 60 overlapping daily returns. No usable portfolio means fit is not applicable. | Phase 1 |
 | Risk labels | Micro below EUR 300M, small below EUR 2B, mid below EUR 10B, large above; thin liquidity below EUR 1M average traded daily value; high annualized volatility above 40%; high leverage above 2x debt/equity where meaningful. | `discovery/risk.py`, implemented |
 | Risk level | `unknown` if nothing can be measured; otherwise 0 flags is low, 1 medium, 2 or more high. Never an eligibility filter or a penalty to the numeric overall. Lower risk breaks an otherwise equal score. | `discovery/risk.py`, implemented |
@@ -182,15 +183,63 @@ unverified with zero scoring weight. A repeated story is not independent corrobo
 Thesis exclusion requires a confirmed high-materiality development that invalidates the thesis
 and qualifying evidence under the plan's Phase 6 rules. Forum-only evidence never qualifies.
 Unverified or disputed allegations get at most one targeted follow-up; if unresolved, keep the
-candidate with the uncertainty disclosed and reduced confidence. Phase 6 must validate source
-membership and corroboration in code, rather than trusting the LLM's output flags.
+candidate with the uncertainty disclosed and reduced confidence. Phase 6 validates source
+membership and authority in code, rather than trusting the LLM's output flags.
 
 The LLM writes thesis, catalysts, outlook, bear case, community note and conclusion from the
 computed numbers and validated evidence; it never calculates scores or changes numeric rank.
 Catalysts may cite only URLs in the evidence. Confidence is deterministic from metric coverage,
-peer availability, staleness and unresolved conflicts; Phase 6 supplies a fixture-tested mapping
-before exposing results. Quality/valuation rank is separate from qualitative outlook. A scan
+peer availability, price uncertainty and unresolved conflicts using the fixture-tested mapping
+below. Screening enforces exchange-aware price freshness before the graph. Quality/valuation
+rank is separate from qualitative outlook. A scan
 with no qualifying overall/confidence persists `outcome="none"` and nearest misses.
+
+### Phase 6 implementation
+
+One `run_discovery_graph(candidate, client, fit=...)` evaluates an eligible candidate. It reuses
+the snapshot's peer/risk data and optional precomputed Phase 1 fit. Quant and research run in
+parallel, join, normalize evidence, follow up at most one unresolved development, reassess at
+most once, then exclude or evaluate and synthesize. No client means quantitative-only research;
+provider/schema/citation failures disclose limitations and preserve computed numbers. A user
+graph never substitutes the server's Claude key. This remains a service layer until Phase 7
+wires screening, admission, graphs and persistence into authenticated jobs.
+
+Source authority is conservative: exact hosts/subdomains of Reuters, AP, FT, WSJ and Bloomberg
+are reporting; SEC, FCA, US Justice and the European Commission are official. Additional issuer
+hosts must come from independently verified metadata supplied by trusted internal callers.
+Unknown hosts are `other`, irrespective of model tiers; forum claims remain forum. Exclusion
+requires a confirmed invalidating development, a cited high-materiality fact from this authority
+policy, and one reassessment quoting that fact verbatim. Repetition does not promote unknown
+publishers. A supported retain decision updates the matching development's thesis impact;
+unverified impact clears the invalidation flag and adds a limitation while preserving confirmed
+event facts. All generated prose accepts fetched absolute HTTP(S) URLs in plain text only;
+Markdown/HTML links and unsupported schemes fail validation. Ordinary financial comparisons
+such as `>20%` and `P/E <15`, and numeric markers such as `[1]`, remain valid prose. Every catalyst
+still needs a fetched source URL; numeric markers alone are not citations.
+
+The deterministic defaults in `analysis/discovery_score.py` are:
+
+- Confidence is low without a scored quality/valuation dimension, 50% core coverage, positive
+  dated price, or any non-forum research. High requires both dimensions, at least 80% core
+  coverage, an official/reporting fact, and no price-uncertainty note, research gap/conflict or
+  unresolved negative development. All other eligible evidence-backed cases are medium; one
+  scored dimension can never be high. A quantitative-only result cannot qualify for persistence.
+- Fit is unavailable without all three measured components and positive baseline volatility
+  and HHI. Its score is the rounded equal mean of clamped 0–100 components: correlation
+  `100*(1-corr)/2`, volatility `50+50*(1-vol_after/vol_before)`, concentration
+  `50+50*(1-hhi_after/hhi_before)`. Fit breaks ties after overall and risk; it never changes overall.
+- Style tags use quality/valuation at least 70, revenue growth at least 10%, dividend yield at
+  least 3%, or defensive-sector membership (Consumer Defensive, Healthcare, Utilities) with
+  positive return on equity. They are descriptive and have no ranking weight.
+
+`save_scan` validates and ranks results, saves only qualifying ideas as pending discovery BUY
+recommendations using existing position-size thresholds, and supersedes only matching pending
+discovery rows. One transaction also saves a completed scan, exclusions, rejected mentions and
+coverage; an explicit `none` includes up to three nearest misses. The active-account lock prevents
+writes after deletion. Migration `ffbf99d3adba` adds `Recommendation.idea` and `ScanRun` with owner
+RLS and runtime grants together. `GET /me/export` and `DELETE /me/data` cover scans; existing
+recommendations expose optional `idea=null` by default. No live paid-provider or end-to-end I3
+checkpoint is claimed by the mocked Phase 6 tests.
 
 ### Phase 2 implementation
 

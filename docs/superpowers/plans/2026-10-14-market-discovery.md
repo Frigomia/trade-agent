@@ -7,7 +7,7 @@ defaults and reconciles this original plan with the existing implementation. Use
 `app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
 historical guidance. No end-to-end discovery scan has shipped yet.
 
-| Phase | Implementation status (updated through Phase 2 research) |
+| Phase | Implementation status (updated through Phase 6 evaluation) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
 | 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
@@ -15,14 +15,15 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. User scan wiring remains Phases 6 and 7. |
 | 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
-| 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
+| 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Full scan orchestration remains Phase 7. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
 
-I2 passed locally on 2026-10-18 (see Phase 4); I1 and I3 remain outstanding. See the design spec
-for freshness, ETF, peer-statistic and ranking decisions that supersede the initial proposals below.
+I2 passed locally on 2026-10-18 (see Phase 4); I1 and I3 remain outstanding.
+See the design spec for freshness, ETF, peer-statistic and ranking decisions that supersede
+the initial proposals below. Phase 6 tests use mocked providers, not paid live calls.
 
 **Audience.** An engineer, and the coding LLM that engineer drives, who knows this repo only from
 the code. Everything the work depends on is stated here: the product goal, the hard rules, what
@@ -370,6 +371,10 @@ In the MVP `risk_level` is shown and does not reduce the ranking score. A future
   of peer comparison, data staleness, and unresolved conflicts or disputed material claims.
 - "No compelling opportunity": no candidate reaches `NO_OPPORTUNITY_MIN_OVERALL` (proposed 60) with
   confidence at least `medium`. This is a first-class stored result with nearest misses.
+- **Quant-only fallback is displayable screening output, not a qualifying BUY idea.** Without
+  non-forum research, confidence remains `low`, even with strong numeric scores. It cannot
+  create a discovery BUY recommendation; if no researched candidate qualifies, persist
+  `outcome="none"` with nearest misses.
 
 ### 4.5 Shared contracts (Phase 0 commits these; each lane codes against fixtures until the other lands)
 
@@ -948,6 +953,38 @@ carries a reason; a mention matching a universe symbol is a `duplicate`, not a s
 
 **Goal:** one LangGraph run per candidate producing an `IdeaOut` or an `Exclusion`.
 
+**Implementation handoff (2026-10-19):** `agents/discovery_graph.py` now implements this
+per-candidate flow. It consumes the existing `CandidateMetrics` and optional precomputed
+Phase 1 `CandidateFit`; no history is fetched twice. Quant and research join explicitly before
+evidence normalization. One unresolved development can receive one targeted Tavily follow-up
+and extraction, followed by one total thesis reassessment. There is no recursive retry loop.
+Missing user client or unavailable research produces a disclosed quantitative result with low
+confidence, never a fallback to the server's Claude key.
+These research-unavailable results remain displayable but cannot create BUY recommendations;
+low confidence fails the opportunity gate. A scan containing only these results records
+`outcome="none"` and nearest misses.
+
+`discovery/thesis.py` reclassifies authority by exact hostname/subdomain against a small explicit
+reporting/regulatory policy; unknown hosts remain `other`. Trusted internal callers may supply
+independently verified issuer hosts. An exclusion needs a confirmed invalidating development,
+a high-materiality official/reporting fact, its actual fetched citation, and a reassessment
+quoting that fact. Repetition is not an alternative authority check. A valid reassessment that
+retains the company replaces that development's thesis impact; unresolved impact is disclosed
+without changing confirmed underlying event facts. `discovery/citations.py` accepts plain-text
+absolute HTTP(S) citations from fetched evidence only; Markdown/HTML links are rejected.
+Ordinary financial comparisons (`>20%`, `P/E <15`) and numeric markers (`[1]`) are allowed;
+a numeric marker does not substitute for a catalyst's required source URL.
+
+`analysis/discovery_score.py` defines the fixture-tested overall, fit, confidence and style
+rules in the design spec. It ranks overall, risk, available fit, then ticker. Only overall at
+least 60 with medium/high confidence qualifies for a persisted idea. `discovery/persistence.py`
+atomically saves qualifying recommendations and one completed `ScanRun`, including explicit
+`none` outcomes with up to three nearest misses. Writes lock/recheck the active account; a
+failure rolls back both parts. Generated revision `ffbf99d3adba` adds nullable recommendation
+ideas and owner-only scan RLS/grants in the same transaction. Export and account deletion cover
+scans. User endpoints, the shortlist-to-graph scan runner, scheduling and notifications remain
+Phase 7; this service layer does not start scans itself.
+
 **Create** `backend/app/agents/discovery_graph.py` (own state; reuse existing node functions such
 as `fetch_data` where they fit; no nested graphs, no new agents):
 
@@ -1014,7 +1051,9 @@ empty shortlist produces `outcome="none"` with nearest misses; an empty portfoli
   usable key, respecting `auto_analysis.pause_state` and the usage rules.
 - Telegram: extend `notify.build_message` with one high-confidence idea line; reuse the opt-in
   flags. Keep the "Advisory only" footer.
-- A Tavily failure or quota exhaustion degrades to quant-only ideas with `data_notes`, never a 500.
+- A Tavily failure or quota exhaustion yields displayable quant-only output with `data_notes`,
+  low confidence and no qualifying BUY recommendation, never a 500. If nothing else qualifies,
+  save `outcome="none"` and nearest misses.
 
 **Acceptance:** two concurrent runs → second gets 409 and its usage is refunded; a removed account
 mid-run writes nothing (`lock_and_check_active`, as `_save_recommendation`); job TTL and marker

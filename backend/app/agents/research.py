@@ -27,6 +27,7 @@ from app.discovery.admit import NOTE_CHARS, _clean
 from app.discovery.sources import is_forum_url, source_tier
 from app.redis_client import get_redis
 from app.schemas_discovery import (
+    CandidateMetrics,
     Claim,
     Mention,
     MentionOrigin,
@@ -525,6 +526,73 @@ async def research_candidate(
             logger.warning("Research extraction unavailable: %s", type(exc).__name__)
             gaps.append("Research extraction unavailable.")
     return _evidence(ticker, name, {"claims": []}, sources, gaps, official_hosts=official_hosts)
+
+
+async def follow_up_candidate(
+    candidate: CandidateMetrics,
+    evidence: ResearchEvidence,
+    client: Anthropic,
+    query: str,
+    *,
+    official_hosts: Collection[str] = (),
+) -> ResearchEvidence:
+    """One targeted search and extraction; the graph may invoke this at most once.
+
+    An unavailable provider retains the original allegations and discloses the gap. Original
+    claims are never reintroduced as fetched source text; new citations must belong to this search.
+    """
+    if client is None:
+        raise ResearchUnavailable("Follow-up requires the caller's resolved Claude client.")
+    key, resolved = _credentials(client)
+    if evidence.ticker != candidate.ticker:
+        raise ValueError("Evidence belongs to another candidate")
+    sources, gaps, _ = await _gather(
+        [("follow-up", {"query": query[:500], "topic": "general"})], key, "tavily"
+    )
+    if not sources:
+        return evidence.model_copy(update={"gaps": [*evidence.gaps, *gaps]})
+    try:
+        data = await _extract(
+            resolved,
+            RESEARCH_SYSTEM_PROMPT,
+            {
+                "ticker": candidate.ticker,
+                "name": candidate.name,
+                "question": query[:500],
+                "previous_untrusted_evidence": evidence.model_dump(mode="json"),
+                "sources": [asdict(s) for s in sources.values()],
+                "task": "Reassess the supplied allegations using only the new fetched citations.",
+            },
+            ResearchEvidence.model_json_schema(),
+        )
+        fresh = _evidence(
+            candidate.ticker, candidate.name, data, sources, gaps, official_hosts=official_hosts
+        )
+    except Exception as exc:
+        logger.warning("Research follow-up unavailable: %s", type(exc).__name__)
+        return evidence.model_copy(
+            update={
+                "gaps": [
+                    *evidence.gaps,
+                    *gaps,
+                    "Follow-up extraction unavailable; quantitative evidence retained.",
+                ]
+            }
+        )
+    claims = {(c.url, c.event_id, c.text): c for c in [*evidence.claims, *fresh.claims]}
+    developments = {
+        " ".join(d.summary.split()).casefold(): d
+        for d in [*evidence.negative_developments, *fresh.negative_developments]
+    }
+    return ResearchEvidence(
+        ticker=candidate.ticker,
+        claims=list(claims.values()),
+        negative_developments=list(developments.values()),
+        competitors=list(dict.fromkeys([*evidence.competitors, *fresh.competitors])),
+        mentions=[*evidence.mentions, *fresh.mentions],
+        conflicts=list(dict.fromkeys([*evidence.conflicts, *fresh.conflicts])),
+        gaps=list(dict.fromkeys([*evidence.gaps, *fresh.gaps])),
+    )
 
 
 async def discover_mentions() -> list[Mention] | None:

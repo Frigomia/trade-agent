@@ -22,6 +22,7 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    ScanRun,
     TelegramLink,
     Trade,
     UserApiKey,
@@ -115,6 +116,19 @@ ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
     ),
     "recommendations": lambda uid: Recommendation(
         user_id=uid, ticker="AAPL", asset_type="STOCK", action="BUY", reasoning=["x"]
+    ),
+    "scan_runs": lambda uid: ScanRun(
+        user_id=uid,
+        status="completed",
+        universe_size=600,
+        eligible=100,
+        shortlisted=10,
+        researched=0,
+        outcome="none",
+        summary="No compelling opportunity.",
+        excluded=[],
+        rejected_mentions=[],
+        coverage_summary={},
     ),
     "chat_messages": lambda uid: ChatMessage(
         user_id=uid, session_id="s", role="user", content="hi"
