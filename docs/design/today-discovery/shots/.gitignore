@@ -1,0 +1,4 @@
+# only the chosen option and the first-round empty-state shots are tracked; regenerate the rest with shootall.sh
+*
+!.gitignore
+!v2b-*
