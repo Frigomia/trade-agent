@@ -7,12 +7,13 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from redis.asyncio import Redis
 
 from app import claude_keys, telegram
 from app import db as app_db
+from app.agents import research
 from app.agents.jobs import (
     AnalysisAlreadyRunning,
     create_job,
@@ -20,12 +21,14 @@ from app.agents.jobs import (
     get_job_status,
     run_job,
 )
+from app.agents.news import _get_client
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
+from app.discovery import jobs as discovery_jobs
 from app.discovery.refresh import refresh_snapshot
 from app.discovery.universe import load_universe
 from app.memory.outcomes import evaluate_due_outcomes
-from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot
+from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot, ScanRun
 from app.notify import notify_user
 from app.redis_client import get_redis
 from app.snapshots import record_snapshot
@@ -53,6 +56,11 @@ class Summary:
     analysis_runs: int = 0
     analysis_skipped: int = 0
     analysis_failures: int = 0
+    discovery_runs: int = 0
+    discovery_skipped: int = 0
+    discovery_failures: int = 0
+    mentions_found: int = 0
+    mentions_skipped: int = 0
     notify_sent: int = 0
     notify_skipped: int = 0
     notify_failures: int = 0
@@ -63,7 +71,10 @@ class Summary:
             f"snapshots_skipped={self.snapshots_skipped} "
             f"outcomes_evaluated={self.outcomes_evaluated} failures={self.failures} "
             f"analysis_runs={self.analysis_runs} analysis_skipped={self.analysis_skipped} "
-            f"analysis_failures={self.analysis_failures} notify_sent={self.notify_sent} "
+            f"analysis_failures={self.analysis_failures} "
+            f"discovery_runs={self.discovery_runs} discovery_skipped={self.discovery_skipped} "
+            f"discovery_failures={self.discovery_failures} mentions_found={self.mentions_found} "
+            f"mentions_skipped={self.mentions_skipped} notify_sent={self.notify_sent} "
             f"notify_skipped={self.notify_skipped} notify_failures={self.notify_failures}"
         )
 
@@ -169,11 +180,31 @@ async def run_outcomes(summary: Summary) -> None:
             logger.warning("Outcome evaluation failed for user %s: %s", user_id, type(exc).__name__)
 
 
+async def run_discovery_mentions(summary: Summary) -> None:
+    """One owner-funded daily batch; research owns its same-day claim and per-search budget."""
+    if (
+        not (settings.tavily_api_key or "").strip()
+        or not settings.anthropic_api_key
+        or settings.tavily_daily_search_limit == 0
+    ):
+        summary.mentions_skipped += 1
+        logger.info("Discovery mentions: not configured or searches disabled")
+        return
+    mentions = await research.discover_mentions()
+    if mentions is None:
+        summary.failures += 1
+        logger.warning("Discovery mentions: batch unavailable or incomplete")
+    else:
+        summary.mentions_found = len(mentions)
+        logger.info("Discovery mentions: found=%d", len(mentions))
+
+
 # One user's run can take minutes (up to 50 tickers, 3 at a time). The budget is measured from the
 # start of the whole command (snapshots and outcomes included) and keeps it inside its lock and its
 # machine: users not reached are skipped and logged. A user who starts just inside the budget is
 # still cut off at the end of it plus a grace period, so one stuck run cannot hold the command.
 MAX_ANALYSIS_SECONDS = 2400
+MAX_DISCOVERY_SECONDS = 2400
 ANALYSIS_GRACE_SECONDS = 300
 # The analysis step ends at most MAX_ANALYSIS_SECONDS + ANALYSIS_GRACE_SECONDS = 2700 s after the
 # command started (snapshots and outcomes are inside the budget). The notify step runs after it and
@@ -347,6 +378,113 @@ async def _analyze_all(summary: Summary, now: datetime, started: float) -> None:
         logger.warning("Analysis: %d users not reached, budget used up", not_reached)
 
 
+async def _discover_user(
+    user_id: uuid.UUID, now: datetime, defaults: LimitDefaults, run_seconds: float
+) -> str:
+    """Opt-in scan, including empty portfolios. One automatic attempt per user per UTC day."""
+    with app_db.scoped_session(user_id) as db:
+        prefs = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
+        user = db.get(AppUser, user_id)
+        if prefs is None or not prefs.auto_analysis or user is None or user.status != "active":
+            return "off"
+        if await pause_state(db, user, defaults, now.date()) is not None:
+            return "skipped"
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+        completed = (
+            db.query(ScanRun.id)
+            .filter(
+                ScanRun.user_id == user_id,
+                ScanRun.status == "completed",
+                ScanRun.created_at >= today,
+                ScanRun.created_at < today + timedelta(days=1),
+            )
+            .first()
+        )
+        if completed is not None or not await research.search_budget_available():
+            return "skipped"
+        try:
+            client = claude_keys.resolve_client(db, user_id, user.role)
+        except claude_keys.ClaudeKeyRequired:
+            return "skipped"
+        uses_saved_key = client is not None
+        if client is None:
+            if user.role != "admin":
+                return "skipped"
+            client = _get_client()
+            if client is None:
+                return "skipped"
+        limit = effective_limit(user, "analysis_run", defaults)
+    marker = f"discovery:ran:{user_id}:{now.strftime('%Y-%m-%d')}"
+    if not await get_redis().set(marker, "1", nx=True, ex=RAN_MARKER_SECONDS):
+        return "skipped"
+    try:
+        await check_and_increment_usage("analysis_run", str(user_id), limit)
+    except UsageLimitExceeded:
+        await _forget_marker(marker)
+        return "skipped"
+    # Other counter failures may have already charged: retain the marker rather than retry blindly.
+    try:
+        job_id = await discovery_jobs.create_job(user_id)
+    except Exception as exc:
+        # No work was accepted. Refund before removing the day marker, as in holdings analysis.
+        await refund_usage("analysis_run", str(user_id))
+        await _forget_marker(marker)
+        if isinstance(exc, discovery_jobs.DiscoveryAlreadyRunning):
+            return "skipped"
+        raise
+    try:
+        async with asyncio.timeout(run_seconds):
+            await discovery_jobs.run_job(job_id, user_id, client, uses_saved_key=uses_saved_key)
+        status = await discovery_jobs.get_job_status(job_id, user_id)
+    except Exception as exc:
+        logger.warning("Discovery user %s: run raised %s", user_id, type(exc).__name__)
+        return "failed"
+    with app_db.scoped_session(user_id) as db:
+        current = db.get(AppUser, user_id)
+        if current is None or current.status != "active":
+            return "skipped"
+    return "ran" if status is not None and status["status"] == "DONE" else "failed"
+
+
+async def run_discovery(
+    summary: Summary, now: datetime | None = None, started: float | None = None
+) -> None:
+    """Weekday scans under the discovery command's lock, with a rotating order and time budget."""
+    now = now or datetime.now(UTC)
+    if now.weekday() >= 5:
+        logger.info("Discovery: weekend, nothing to do")
+        return
+    started = time.monotonic() if started is None else started
+    ids = active_user_ids()
+    summary.users = len(ids)
+    if ids:
+        offset = now.date().toordinal() % len(ids)
+        ids = ids[offset:] + ids[:offset]
+    with app_db.SessionLocal() as db:
+        defaults = load_limit_defaults(db, settings)
+    for user_id in ids:
+        remaining = MAX_DISCOVERY_SECONDS - (time.monotonic() - started)
+        if remaining <= 0:
+            summary.discovery_skipped += 1
+            logger.warning("Discovery user %s: skipped (time budget used up)", user_id)
+            continue
+        try:
+            outcome = await _discover_user(
+                user_id, now, defaults, remaining + ANALYSIS_GRACE_SECONDS
+            )
+        except Exception as exc:
+            summary.discovery_failures += 1
+            logger.warning("Discovery failed for user %s: %s", user_id, type(exc).__name__)
+            continue
+        if outcome in ("ran", "failed"):
+            summary.discovery_runs += 1
+        if outcome == "failed":
+            summary.discovery_failures += 1
+        elif outcome == "skipped":
+            summary.discovery_skipped += 1
+        logger.info("Discovery user %s: %s", user_id, outcome)
+
+
 async def run_notify(
     summary: Summary, now: datetime | None = None, started: float | None = None
 ) -> None:
@@ -386,7 +524,16 @@ async def run_notify(
         logger.warning("Notify: %d users not reached, time budget used up", not_reached)
 
 
-COMMANDS = ("daily", "snapshots", "outcomes", "analysis", "notify", "discovery_snapshot")
+COMMANDS = (
+    "daily",
+    "snapshots",
+    "outcomes",
+    "analysis",
+    "notify",
+    "discovery_snapshot",
+    "discovery_mentions",
+    "discovery",
+)
 
 
 async def run_command(command: str) -> int:
@@ -407,6 +554,10 @@ async def run_command(command: str) -> int:
     try:
         if command == "discovery_snapshot":
             await run_discovery_snapshot(summary)
+        if command == "discovery_mentions":
+            await run_discovery_mentions(summary)
+        if command == "discovery":
+            await run_discovery(summary, started=started)
         if command in ("daily", "snapshots"):
             await run_snapshots(summary)
         if command in ("daily", "outcomes"):
@@ -428,7 +579,7 @@ async def run_command(command: str) -> int:
         return 1
     finally:
         await _release_lock(redis, key, token, f"Scheduled {command}")
-    return 1 if summary.failures or summary.analysis_failures else 0
+    return 1 if summary.failures or summary.analysis_failures or summary.discovery_failures else 0
 
 
 def main(argv: list[str] | None = None) -> int:

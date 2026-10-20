@@ -129,6 +129,19 @@ def test_owner_search_budget_is_atomic_across_concurrent_callers(monkeypatch):
     asyncio.run(run())
 
 
+def test_automatic_scan_preflight_reads_budget_without_consuming_it(monkeypatch):
+    monkeypatch.setattr(settings, "tavily_api_key", "test-tavily")
+    monkeypatch.setattr(settings, "tavily_daily_search_limit", 1)
+
+    async def run():
+        assert await research.search_budget_available()
+        assert await research.search_budget_available()
+        assert await research._claim_search_budget()
+        assert not await research.search_budget_available()
+
+    asyncio.run(run())
+
+
 def test_candidate_and_theme_searches_share_owner_budget(monkeypatch, providers):
     client, requests = providers
     monkeypatch.setattr(settings, "tavily_daily_search_limit", 2)

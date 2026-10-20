@@ -5,18 +5,19 @@ and the discovery foundation already merged into master. Two people execute it i
 The [Phase 0 design spec](../specs/2026-10-14-market-discovery-design.md) records the selected
 defaults and reconciles this original plan with the existing implementation. Use the spec and
 `app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
-historical guidance. No end-to-end discovery scan has shipped yet.
+historical guidance. Backend scans and scheduling are implemented; live-provider checkpoints
+remain unverified, and the discovery frontend remains Phase 9.
 
-| Phase | Implementation status (updated through Phase 6 evaluation) |
+| Phase | Implementation status (updated through Phase 7 scheduling) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
 | 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
-| 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Scan integration and scheduling remain Phases 6 and 7; live Reddit/provider coverage is unverified. |
+| 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Integrated with manual/scheduled scans and the owner daily batch; live Reddit/provider coverage is unverified. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
-| 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. User scan wiring remains Phases 6 and 7. |
-| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
+| 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. Consumed by manual/scheduled scans. |
+| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 produces mentions; manual/scheduled scans integrate admission. |
 | 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Manual scan orchestration is connected in Phase 7. |
-| 7: run and schedule | Manual slice implemented: authenticated scan start/progress/results, bounded shortlist-to-graph runner and atomic persistence. Weekly snapshots exist; scheduled user scans, daily theme-job wiring and Telegram ideas remain. |
+| 7: run and schedule | Backend implemented: authenticated manual scan API, bounded runner/persistence, weekly snapshots, daily owner theme batch, opt-in weekday user scans and a high-confidence Telegram idea line. Live I1/I3 checks remain outstanding. |
 | 8: easy onboarding | Not implemented. |
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
@@ -982,8 +983,8 @@ atomically saves qualifying recommendations and one completed `ScanRun`, includi
 `none` outcomes with up to three nearest misses. Writes lock/recheck the active account; a
 failure rolls back both parts. Generated revision `ffbf99d3adba` adds nullable recommendation
 ideas and owner-only scan RLS/grants in the same transaction. Export and account deletion cover
-scans. Phase 7 now connects user endpoints and the shortlist-to-graph manual scan runner;
-scheduling and notifications remain outstanding. This persistence service does not start scans.
+scans. Phase 7 connects user endpoints, the shortlist-to-graph scan runner, scheduling and
+notifications. This persistence service does not start scans itself.
 
 **Create** `backend/app/agents/discovery_graph.py` (own state; reuse existing node functions such
 as `fetch_data` where they fit; no nested graphs, no new agents):
@@ -1061,8 +1062,21 @@ budget: `TAVILY_DAILY_SEARCH_LIMIT=200` attempts across users, follow-ups and th
 Zero disables searches; attempts are not refunded on provider failure. The existing per-user
 monthly analysis allowance still applies.
 
-Remaining Phase 7 work: daily mentions command/scheduling, automated per-user scans and Telegram
-ideas. Live provider checks (I1 and I3) are still outstanding; mocked tests do not establish them.
+**Scheduling slice implemented.** Commands `discovery_mentions` (daily 04:30 UTC) and `discovery`
+(weekdays 05:00 UTC) reuse the existing batch and scan jobs. Opted-in active users share the
+existing monthly allowance with holdings analysis; each started scan consumes one unit. Missing
+keys, pause state, exhausted owner budget, a completed scan that day or a same-day automatic
+attempt skip work. Manual overlap/startup refusal refunds before clearing the automatic day
+marker. A 40-minute command budget plus five minutes of grace and daily rotation bounds cost
+and avoids always reaching users in the same order. Existing job-level key/active-account guards,
+refunds and cancellation handling remain in force.
+
+The existing 05:30 UTC morning digest adds at most one highest-ranked high-confidence discovery
+idea under `digest_enabled`, using the same daily send marker and advisory footer. Malformed,
+old, reviewed, medium/low-confidence and other users' ideas are excluded. Recipient, account and
+opt-in checks run again after quote waits. All workflow commands retain the production branch,
+environment and concurrency protections. No new tables, notification flags or frontend are added.
+Live provider checks (I1 and I3) are still outstanding; mocked tests do not establish them.
 
 - `POST /discovery/run` (202) mirroring `/analysis/run`: dependencies `require_claude_key`,
   `rate_limiter("discovery_run", limit=2)`, `check_monthly_usage("analysis_run")`, single-flight

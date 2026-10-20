@@ -591,8 +591,8 @@ records the shared contracts, selected MVP defaults and the remaining work. The 
 calculations, shortlist and Phase 1 portfolio analytics are implemented. Phase 2 adds
 `agents/research.py` for cited candidate research and globally cached theme mentions. Phase 6 adds
 the per-candidate evaluation graph, deterministic scoring and atomic scan persistence. Phase 7's
-manual runner/API now connects these services. Scheduled scans, daily mention-job wiring and
-Telegram ideas remain Phase 7; the discovery UI remains Phase 9. The existing holdings/watchlist
+manual runner/API and scheduled commands now connect these services, including the daily global
+mention batch and high-confidence Telegram ideas. The discovery UI remains Phase 9. The existing holdings/watchlist
 analysis keeps its current behavior.
 
 **Manual scans.** `discovery/runner.py` reads the committed universe's cached snapshots; a wholly
@@ -1030,6 +1030,9 @@ default — same dialect and models as production, started with
 | `outcomes` | Recommendation outcome evaluation only |
 | `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |
 | `notify` | Telegram messages only (does nothing on Saturday and Sunday, UTC, or without `TELEGRAM_BOT_TOKEN`) |
+| `discovery_snapshot` | Weekly global-universe snapshot refresh (no paid research) |
+| `discovery_mentions` | Owner-funded daily fixed-theme mention batch, reusing its daily claim and global search budget |
+| `discovery` | Weekday scans for opted-in active users, including empty portfolios; same jobs and persistence as the manual API |
 
 - **Runtime role:** same `DATABASE_URL` as the API; each user is processed in
   its own `scoped_session`, so RLS applies exactly as for a request.
@@ -1071,14 +1074,36 @@ default — same dialect and models as production, started with
   a Claude error, a key the provider rejected, an exception) is counted and logged by user id and
   exception class name only, and never stops the others. Because the run was already counted
   against the limit, a failed run is counted in both `analysis_runs` and `analysis_failures`.
+- **Automatic discovery:** a separate `discovery` command runs before the morning digest. It
+  reuses `auto_analysis`, `pause_state`, the caller's saved Claude key (explicit server fallback
+  only for admins without a saved key), the monthly `analysis_run` allowance and discovery's
+  single-flight job. It skips users with a completed scan on that UTC day and users whose owner
+  search budget is unavailable/exhausted, without charging or making a day claim. There is no
+  holdings requirement. `discovery:ran:<user_id>:<YYYY-MM-DD>` (25-hour TTL) permits at most one
+  automatic attempt per UTC day. Quota rejection clears it; refused job creation refunds before
+  clearing it, including overlap with a manual discovery run. Accepted failed attempts retain it,
+  so an operator retry cannot repeatedly spend that day. Missing snapshots still receive the
+  job-level refund. Ambiguous usage-counter failures retain the marker conservatively. Sessions
+  close before provider work. Users rotate daily; a 2,400-second command budget plus 300 seconds
+  of grace bounds in-flight work inside the one-hour command lock. Failures for one user do not
+  block others, and the reused persistence path prevents writes for removed/disabled accounts.
+  Automatic holdings analysis and discovery each use a unit when they run; both share the user's
+  existing monthly allowance. The preflight does not reserve budget; every actual Tavily request
+  must still pass the atomic global cap.
+- **Daily mentions:** `discovery_mentions` alone invokes `research.discover_mentions()` with its
+  fixed themes and server client. User scans only consume the cache. Missing owner keys or a
+  disabled search budget are a no-op; a configured but unavailable/incomplete batch makes the
+  command fail. Empty successful batches are valid. The existing daily claim prevents paid retries.
 - **Notifications:** the last step, `app/scheduled.py::run_notify`, calls
   `app/notify.py::notify_user` for each active user. It does nothing on Saturday and Sunday (UTC)
   and does nothing, with one log line, when `TELEGRAM_BOT_TOKEN` is unset. Each user is handled
   inside their own `scoped_session`, so row-level security applies as for a request. A person is
   skipped when they have no connected chat, the link is `blocked`, or they are not active. The
-  message holds up to two sections, one item per line: "📋 N new recommendations" with
+  message holds the existing sections plus at most one discovery idea line: "📋 N new recommendations" with
   "• AAPL  BUY, ..." for their PENDING recommendations with `source = "scheduled"` created today
-  (UTC), when `digest_enabled`; and "📈 Moved" with "• VWCE  ▲ 6.2%, ..." for open holdings and
+  (UTC), when `digest_enabled`; "Discovery idea: TICKER (high confidence). Review in the app."
+  for the highest-ranked valid, qualifying, PENDING discovery BUY created today (also gated by
+  `digest_enabled`); and "📈 Moved" with "• VWCE  ▲ 6.2%, ..." for open holdings and
   watchlist tickers whose last close moved at least `move_threshold_pct` from the close before
   (largest move first, ▲ up and ▼ down), when `moves_enabled`. Each section lists at most 10 items
   and then "• +N more". Sections are separated by a blank line. After them come a `Today:` link to
@@ -1086,7 +1111,7 @@ default — same dialect and models as production, started with
   broker." The message is plain text (no
   `parse_mode`, so nothing can be read as markup) and carries only tickers, actions and
   percentages: never amounts, share counts, portfolio values, reasoning or the person's notes.
-  When both sections would be empty nothing is sent and the person is counted as skipped. Quotes are
+  When every section would be empty nothing is sent and the person is counted as skipped. Quotes are
   fetched 5 at a time; a ticker whose quote fails only drops out of the message. "Moved" compares
   the last two closes the quote source returns, so on the day after a market holiday the same move
   can be reported again, and if the job runs after the market has opened the last bar may be a
@@ -1140,20 +1165,28 @@ default — same dialect and models as production, started with
   fixed-text `TelegramError` (`from None`, so the httpx exception, which carries the URL, is not
   chained) and logs carry the exception class name only. The webhook secret is compared in constant
   time, and the content of messages people send to the bot is never logged.
+  Discovery JSON and ticker identity are revalidated; malformed, non-high-confidence, reviewed,
+  old or other users' rows never enter that line. Only its ticker is sent, never thesis/evidence
+  prose. After quote waits, the sender rechecks active status, recipient chat and current opt-ins;
+  disconnects, relinks and opt-outs during loading prevent sending to the old recipient.
 - **Lock:** a per-command Redis key `scheduled:<command>` with a one-hour
   expiry and a random owner token (released only if it still holds that token). If it is held, the
   run logs it and exits 0 without doing any work. The analysis step also takes
   `scheduled:analysis-step` (same rules), so `daily` and `analysis` never overlap in it.
 - **Logging:** one info line per user per step, plus a final summary line:
   `users snapshots_recorded snapshots_skipped outcomes_evaluated failures analysis_runs
-  analysis_skipped analysis_failures notify_sent notify_skipped notify_failures`. Failures are
+  analysis_skipped analysis_failures discovery_runs discovery_skipped discovery_failures
+  mentions_found mentions_skipped notify_sent notify_skipped notify_failures`. Failures are
   logged by class name only.
 - **Exit codes:** `0` success or nothing to do (including a held lock); `1` any
   user failed (a holding that cannot be priced counts as a failure for that
-  user; `failures` or `analysis_failures` above zero; `notify_failures` never counts), or Redis
+  user; `failures`, `analysis_failures` or `discovery_failures` above zero; `notify_failures` never counts), or Redis
   unreachable;
   `2` unknown command (argparse). One user's failure never stops the others.
-- **Cadence:** the GitHub Actions cron runs once a day at 05:30 UTC; the
+- **Cadence:** the GitHub Actions cron refreshes snapshots Sundays at 04:00 UTC, runs global
+  mentions daily at 04:30 UTC, user discovery weekdays at 05:00 UTC and the existing daily job
+  at 05:30 UTC. They share the production concurrency group; a long discovery run can delay
+  the daily job. The
   cron and Task Scheduler examples below use weekdays at 23:00 UTC, after the EU
   and US closes.
 

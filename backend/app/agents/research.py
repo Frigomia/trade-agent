@@ -132,11 +132,22 @@ return 1
 """
 
 
+def _search_budget_key() -> str:
+    return f"discovery:tavily:{datetime.now(UTC).date().isoformat()}"
+
+
+async def search_budget_available() -> bool:
+    """A free preflight for automatic scans; actual requests must still claim atomically."""
+    if not (settings.tavily_api_key or "").strip() or settings.tavily_daily_search_limit == 0:
+        return False
+    count = await get_redis().get(_search_budget_key())
+    return int(count or 0) < settings.tavily_daily_search_limit
+
+
 async def _claim_search_budget() -> bool:
-    day = datetime.now(UTC).date().isoformat()
     return bool(
         await get_redis().eval(
-            _CLAIM_SEARCH_BUDGET, 1, f"discovery:tavily:{day}", settings.tavily_daily_search_limit
+            _CLAIM_SEARCH_BUDGET, 1, _search_budget_key(), settings.tavily_daily_search_limit
         )
     )
 

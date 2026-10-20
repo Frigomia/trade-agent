@@ -253,6 +253,8 @@ def test_summary_line_lists_every_counter():
     assert line == (
         "users=3 snapshots_recorded=2 snapshots_skipped=1 outcomes_evaluated=4 failures=0 "
         "analysis_runs=5 analysis_skipped=6 analysis_failures=7 "
+        "discovery_runs=0 discovery_skipped=0 discovery_failures=0 "
+        "mentions_found=0 mentions_skipped=0 "
         "notify_sent=8 notify_skipped=9 notify_failures=10"
     )
 
@@ -1300,11 +1302,17 @@ def test_run_notify_keeps_the_marker_when_the_cut_off_hits_during_the_send(env):
     _linked(env, USER_ID, 1001, "MSFT")
 
     class SlowBot:
+        entered_send = False
+
         async def send_message(self, chat_id, text):
+            self.entered_send = True
             await asyncio.sleep(5)
 
-    with patch("app.scheduled.NOTIFY_USER_SECONDS", 0.05):
-        summary = _run_notify(SlowBot())
+    bot = SlowBot()
+    # Allow the real database checks to finish before timing out inside the send.
+    with patch("app.scheduled.NOTIFY_USER_SECONDS", 1):
+        summary = _run_notify(bot)
+    assert bot.entered_send
     assert summary.notify_failures == 1
     assert len(_arun(get_redis().keys("telegram:sent:*"))) == 1
 
