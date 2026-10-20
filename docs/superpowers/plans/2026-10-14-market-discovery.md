@@ -1161,6 +1161,10 @@ semantics remain open. The implementation must retain relevant holdings alerts a
 states, keep the last saved scan visible on refresh failure, and include the required bear case.
 The portfolio empty-state alternatives in that PR do not replace the owner-selected Phase 8
 modal/full-screen holding form.
+Company overview also has an approved direction in merged [PR #138](https://github.com/Frigomia/trade-agent/pull/138):
+`co-c-workbench.html`, with an evidence tab layout and persistent decision controls, using the
+Soft light/dark themes. Its catalyst dates, price history, fit facts, named competitors, bull-claim
+statuses and Save/Discover semantics remain explicit Phase 9 scope decisions.
 
 - **Today** becomes the idea feed: ranked cards with ticker, region/country, size bucket,
   confidence, risk level, one-line thesis, one-line bear case, catalyst, suggested size. Holdings
