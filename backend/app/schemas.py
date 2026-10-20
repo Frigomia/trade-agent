@@ -415,6 +415,11 @@ class ScanRunOut(BaseModel):
     coverage_summary: dict[str, Any]
 
 
+class DiscoveryIdeasOut(BaseModel):
+    recommendations: list[RecommendationOut]
+    latest_scan: ScanRunOut | None
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]

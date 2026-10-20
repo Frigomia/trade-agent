@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     voyage_api_key: str | None = None
     # Optional owner-funded discovery research; existing analysis works without it.
     tavily_api_key: str | None = Field(default=None, repr=False)
+    tavily_daily_search_limit: int = Field(default=200, ge=0)
     supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
     migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only
     supabase_secret_key: str | None = None  # backend-only secret for Supabase Auth admin calls

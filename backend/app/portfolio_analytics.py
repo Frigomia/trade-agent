@@ -3,13 +3,14 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
 from app import fx
 from app.agents import market_data
-from app.analysis.portfolio import PositionInput, analyze_portfolio
+from app.analysis.portfolio import Histories, PositionInput, analyze_portfolio, clean_history
 from app.models import Holding
 from app.schemas_discovery import PortfolioExposure
 
@@ -24,8 +25,16 @@ async def load_analytics(db: Session, user_id: uuid.UUID) -> PortfolioExposure:
     ]
     # This service only reads. Release its connection before waiting on external providers.
     db.rollback()
+    exposure, _ = await load_fit_context(holdings)
+    return exposure
+
+
+async def load_fit_context(
+    holdings: Sequence[PositionInput],
+) -> tuple[PortfolioExposure, Histories]:
+    """Retain dated histories for discovery fit, using the same data as portfolio analytics."""
     if not holdings:
-        return analyze_portfolio([], {}, {}, {}, datetime.now(UTC))
+        return analyze_portfolio([], {}, {}, {}, datetime.now(UTC)), {}
     prices, skipped = await fx.eur_prices({holding.ticker for holding in holdings})
     sem = asyncio.Semaphore(LOOKUP_CONCURRENCY)
 
@@ -44,12 +53,15 @@ async def load_analytics(db: Session, user_id: uuid.UUID) -> PortfolioExposure:
         return ticker, history, profile
 
     loaded = await asyncio.gather(*(details(ticker) for ticker in sorted(prices)))
-    return await asyncio.to_thread(
+    as_of = datetime.now(UTC)
+    histories = {ticker: clean_history(history, as_of.date()) for ticker, history, _ in loaded}
+    exposure = await asyncio.to_thread(
         analyze_portfolio,
         holdings,
         prices,
-        {ticker: history for ticker, history, _ in loaded},
+        histories,
         {ticker: profile for ticker, _, profile in loaded},
-        datetime.now(UTC),
+        as_of,
         skipped,
     )
+    return exposure, histories

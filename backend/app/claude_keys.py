@@ -5,6 +5,7 @@ import base64
 import binascii
 import logging
 import os
+import secrets
 import uuid
 
 import anthropic
@@ -162,10 +163,22 @@ def resolve_client(db: Session, user_id: uuid.UUID, role: str) -> Anthropic | No
         raise ClaudeKeyRequired(needs_attention=True) from None
 
 
-def mark_needs_attention(user_id: uuid.UUID) -> None:
+def mark_needs_attention(user_id: uuid.UUID, *, expected_api_key: str | None = None) -> None:
     """Flags the user's key as rejected by Anthropic (revoked or invalid), in its own session so it
     works from a background job. Does nothing when the user has no saved key."""
     with scoped_session(user_id) as db:
+        if expected_api_key is not None:
+            # A request made with an older key must not disable a replacement saved meanwhile.
+            row = db.query(UserApiKey).filter_by(user_id=user_id).with_for_update().one_or_none()
+            if row is None:
+                return
+            try:
+                if not secrets.compare_digest(
+                    decrypt_key(user_id, row.ciphertext), expected_api_key
+                ):
+                    return
+            except KeyEncryptionError:
+                return
         flagged = (
             db.query(UserApiKey).filter_by(user_id=user_id).update({"status": "needs_attention"})
         )

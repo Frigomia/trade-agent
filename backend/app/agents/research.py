@@ -22,6 +22,7 @@ from pydantic import TypeAdapter, ValidationError
 from redis.exceptions import RedisError
 
 from app.agents.news import _get_client
+from app.claude_keys import is_key_problem
 from app.config import settings
 from app.discovery.admit import NOTE_CHARS, _clean
 from app.discovery.sources import is_forum_url, source_tier
@@ -111,6 +112,33 @@ origin (industry_research or reddit), reason and url for each. No prose outside 
 
 class ResearchUnavailable(RuntimeError):
     """Research is unconfigured; callers keep quant-only output with an explicit limitation."""
+
+
+class ResearchKeyRejected(RuntimeError):
+    """Stop candidate work when Claude rejects the scan's explicitly resolved key."""
+
+
+def _raise_if_key_problem(exc: Exception) -> None:
+    if isinstance(exc, ResearchKeyRejected) or is_key_problem(exc):
+        raise ResearchKeyRejected("Your Claude key needs attention.") from None
+
+
+_CLAIM_SEARCH_BUDGET = """
+local count = tonumber(redis.call('get', KEYS[1]) or '0')
+if count >= tonumber(ARGV[1]) then return 0 end
+redis.call('incr', KEYS[1])
+redis.call('expire', KEYS[1], 172800)
+return 1
+"""
+
+
+async def _claim_search_budget() -> bool:
+    day = datetime.now(UTC).date().isoformat()
+    return bool(
+        await get_redis().eval(
+            _CLAIM_SEARCH_BUDGET, 1, f"discovery:tavily:{day}", settings.tavily_daily_search_limit
+        )
+    )
 
 
 @dataclass
@@ -208,6 +236,15 @@ async def _gather(
     completed = True
     async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as http:
         for label, query in queries:
+            try:
+                permitted = await _claim_search_budget()
+            except RedisError as exc:
+                logger.warning("Research search budget unavailable: %s", type(exc).__name__)
+                permitted = False
+            if not permitted:
+                gaps.append("Research daily search budget exhausted or unavailable.")
+                completed = False
+                break
             try:
                 results = await _search(http, query, key)
             except Exception as exc:  # provider failures never discard quantitative results
@@ -523,6 +560,7 @@ async def research_candidate(
             )
             return _evidence(ticker, name, data, sources, gaps, official_hosts=official_hosts)
         except Exception as exc:
+            _raise_if_key_problem(exc)
             logger.warning("Research extraction unavailable: %s", type(exc).__name__)
             gaps.append("Research extraction unavailable.")
     return _evidence(ticker, name, {"claims": []}, sources, gaps, official_hosts=official_hosts)
@@ -569,6 +607,7 @@ async def follow_up_candidate(
             candidate.ticker, candidate.name, data, sources, gaps, official_hosts=official_hosts
         )
     except Exception as exc:
+        _raise_if_key_problem(exc)
         logger.warning("Research follow-up unavailable: %s", type(exc).__name__)
         return evidence.model_copy(
             update={

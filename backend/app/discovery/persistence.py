@@ -54,11 +54,18 @@ def save_scan(
         try:
             if not lock_and_check_active(db, user_id):
                 return None
+            # Low-confidence fallbacks and snapshot failures cannot withdraw researched advice.
+            evaluated = {
+                idea.ticker for idea in ranked if idea.confidence in ("medium", "high")
+            } | {item["ticker"] for item in exclusions if item["reason"] == "thesis_invalidated"}
+            if evaluated:
+                db.query(Recommendation).filter(
+                    Recommendation.user_id == user_id,
+                    Recommendation.source == "discovery",
+                    Recommendation.status == "PENDING",
+                    Recommendation.ticker.in_(evaluated),
+                ).update({"status": "SUPERSEDED"}, synchronize_session=False)
             for idea in qualifying:
-                # Keep holdings analyses and already reviewed decisions intact.
-                db.query(Recommendation).filter_by(
-                    user_id=user_id, ticker=idea.ticker, status="PENDING", source="discovery"
-                ).update({"status": "SUPERSEDED"})
                 db.add(
                     Recommendation(
                         user_id=user_id,

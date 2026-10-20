@@ -25,6 +25,7 @@ from app.routers import (
     backtest,
     chat,
     claude_key,
+    discovery,
     market,
     me,
     memory,
@@ -66,6 +67,7 @@ app.add_middleware(
 app.include_router(portfolio.router)
 app.include_router(market.router)
 app.include_router(analysis.router)
+app.include_router(discovery.router)
 app.include_router(backtest.router)
 app.include_router(memory.router)
 app.include_router(chat.router)

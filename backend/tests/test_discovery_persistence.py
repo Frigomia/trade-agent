@@ -151,6 +151,61 @@ def test_empty_shortlist_is_a_completed_no_opportunity_scan(db_session, app_sess
     assert db_session.query(ScanRun).count() == 1
 
 
+@pytest.mark.parametrize("outcome", ["invalidated", "low_score", "low_confidence"])
+def test_later_rejection_retires_the_earlier_pending_buy(
+    db_session,
+    app_session_local,
+    outcome,
+):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        save_scan(USER_ID, [_idea()], **COUNTS)
+        excluded = (
+            [
+                Exclusion(
+                    ticker="NESN.SW",
+                    name="Nestle",
+                    reason="thesis_invalidated",
+                    explanation="The regulator revoked its operating licence.",
+                    evidence=["https://www.sec.gov/report"],
+                )
+            ]
+            if outcome == "invalidated"
+            else []
+        )
+        ideas = (
+            []
+            if excluded
+            else [
+                _idea(
+                    overall=59 if outcome == "low_score" else 70,
+                    confidence="low" if outcome == "low_confidence" else "medium",
+                )
+            ]
+        )
+        scan = save_scan(USER_ID, ideas, excluded=excluded, **COUNTS)
+    assert scan is not None and scan.outcome == "none"
+    expected = "PENDING" if outcome == "low_confidence" else "SUPERSEDED"
+    assert db_session.query(Recommendation).one().status == expected
+    assert db_session.query(ScanRun).count() == 2
+
+
+@pytest.mark.parametrize("reason", ["unreliable_price", "insufficient_data", "ambiguous_identity"])
+def test_screening_failure_preserves_previous_researched_buy(db_session, app_session_local, reason):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        save_scan(USER_ID, [_idea()], **COUNTS)
+        exclusion = Exclusion(
+            ticker="NESN.SW",
+            name="Nestle",
+            reason=reason,
+            explanation="Snapshot unavailable for screening.",
+            evidence=[],
+        )
+        save_scan(USER_ID, [], excluded=[exclusion], **COUNTS)
+    assert db_session.query(Recommendation).one().status == "PENDING"
+
+
 def test_failed_scan_rolls_back_recommendations_and_supersession(db_session, app_session_local):
     add_app_user(db_session)
     previous = _rec()
