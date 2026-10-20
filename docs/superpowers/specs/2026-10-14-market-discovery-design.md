@@ -35,9 +35,9 @@ company fundamentals.
 | Global FX and portfolio analytics | Implemented: `app/fx.py` plus Phase 1 pure analytics/candidate fit and `/portfolio/analytics`. Read-only profile/dates support exposure; holding auto-fill stays Phase 8. |
 | Curated universe and coverage evidence | Implemented: 600 symbols, validator, [coverage report](universe-coverage.md), and [candidate-pool audit](universe-candidate-audit.md). |
 | Snapshot, peer comparison, risk, and shortlist | Implemented in `app/discovery/`; resumable weekly Redis refresh and one ranked pool for universe and already-admitted candidates. User scan orchestration remains Phases 6 and 7. |
-| Provider setting | Phase 0 adds optional backend `TAVILY_API_KEY` and documents its ownership and absence behavior. No request is made. |
-| Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Nothing produces mentions yet. |
-| Research, evaluation graph | Future Phases 2 and 6. Contract models are not implementations of these workflows. |
+| Provider setting | Optional backend `TAVILY_API_KEY`; Phase 2 uses it only when research is explicitly invoked. Startup and existing analysis do not call Tavily. |
+| Dynamic admission | Implemented in `app/discovery/admit.py`: untrusted mentions are resolved to one search result, deduplicated, put through the same safeguards, and capped. Phase 2 produces mentions; scan integration remains later work. |
+| Research, evaluation graph | Phase 2 research implemented in `agents/research.py`; evaluation graph remains Phase 6. |
 | Scan persistence, API, and scheduled user scans | Future Phases 6 and 7; no discovery scan endpoint or `ScanRun` table exists yet. |
 | Easy onboarding and discovery UI | Future Phases 8 and 9. |
 
@@ -46,7 +46,8 @@ ETF proxy exposures; its producer and fixtures are updated together. The new end
 existing public response to break. `marginal_effect` takes keyword-only `ticker` and
 `portfolio_returns` alongside the original inputs because the public summary does not contain raw
 returns. See [architecture §6](../../ARCHITECTURE.md#portfolio-analytics-phase-1) for the exact
-valuation, aligned-interval and missing-data rules. I1 still awaits Phase 2.
+valuation, aligned-interval and missing-data rules. The live I1 checkpoint remains outstanding;
+Phase 2 research is now implemented, but the combined live flow has not been verified.
 
 ## Decisions and defaults
 
@@ -67,7 +68,7 @@ not new environment-variable settings or a new user configuration system.
 | Ranking | Descending overall, then lower risk (`low`, `medium`, `high`, `unknown`), then better available fit when applicable, then ticker for deterministic ordering. Current screening has no fit yet and uses ticker after risk. Missing overall is unrankable. | Phases 4 and 6 |
 | Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` and confidence at least `medium`; otherwise persist `outcome="none"` with nearest misses. | Phase 6 |
 | Quota | One user scan consumes one existing `analysis_run` unit; a refused overlapping scan refunds it. No new usage kind or limit columns. | Phase 7 |
-| Research budget | At most 4 initial Tavily searches per shortlisted candidate, one targeted follow-up per candidate, and one evidence-extraction Claude call before evaluation/synthesis. Daily theme discovery has a separate fixed global budget, specified and tested in Phase 2. | Phases 2 and 6 |
+| Research budget | At most 4 initial Tavily searches and one evidence-extraction Claude call per candidate (Phase 2). Daily themes: at most 14 searches and one extraction, once per UTC date. At most one targeted follow-up remains Phase 6. | Phases 2 and 6 |
 | Portfolio comparison | Hypothetical candidate weight 5%; correlations need 60 overlapping daily returns. No usable portfolio means fit is not applicable. | Phase 1 |
 | Risk labels | Micro below EUR 300M, small below EUR 2B, mid below EUR 10B, large above; thin liquidity below EUR 1M average traded daily value; high annualized volatility above 40%; high leverage above 2x debt/equity where meaningful. | `discovery/risk.py`, implemented |
 | Risk level | `unknown` if nothing can be measured; otherwise 0 flags is low, 1 medium, 2 or more high. Never an eligibility filter or a penalty to the numeric overall. Lower risk breaks an otherwise equal score. | `discovery/risk.py`, implemented |
@@ -166,10 +167,10 @@ there. Do not fetch arbitrary citation URLs or trust a model-provided source tie
 No new contract fields or database tables are needed in Phase 0. A later contract change gets a
 small explicit producer/consumer PR with matching fixtures, not an ad hoc field in `schemas.py`.
 
-## Research and evaluation (future phases)
+## Research and evaluation
 
-Phase 2 uses `httpx` against Tavily's HTTPS API, subject to verification of the current official
-REST contract before implementation. Avoid a new SDK unless there is a concrete need. Search
+Phase 2 uses `httpx` against Tavily's HTTPS API; the request contract was checked against the
+official Python client (details below). No new SDK is needed. Search
 news/catalysts, bull case, bear case with equal effort, and forums; prefer relevant local-language
 sources where practical. No source date is invented.
 
@@ -191,6 +192,56 @@ peer availability, staleness and unresolved conflicts; Phase 6 supplies a fixtur
 before exposing results. Quality/valuation rank is separate from qualitative outlook. A scan
 with no qualifying overall/confidence persists `outcome="none"` and nearest misses.
 
+### Phase 2 implementation
+
+`agents/research.py` now implements `research_candidate` and `discover_mentions`, using the
+existing shared contracts unchanged. Candidate research makes four basic Tavily searches with
+five results each: monthly news, bull case, bear case and Reddit. Bull/bear get equal effort.
+News queries include home-market terms for the committed language map; country targeting is
+used only on general searches. Unknown/multilingual markets retain English terms. Each source
+contributes at most 1,500 content characters. There are no automatic Tavily retries and only one
+Claude extraction attempt (60-second timeout, SDK retries disabled).
+
+Post-processing accepts only fetched HTTP(S) citations and checks each `Claim.text` as a short
+verbatim excerpt in that citation's source content after whitespace/case normalization. It
+removes tracking/fragment differences and deduplicates by URL, event id and text, preserving
+different claims from one article. Ten reports of one event retain their citations; neither
+URL counts nor distinct hostnames alone prove independent corroboration.
+Publication dates come from parseable source metadata only; unknown dates stay null. Proposed
+negative-development dates survive only if present in cited source metadata; content-only dates
+remain unavailable. `discovery/sources.py` derives authority from regulatory/reporting hostname
+allowlists; unknown publishers remain `other` and cannot confirm a development. Trusted internal
+callers may supply independently verified issuer hosts. Actual community hosts, forum-query
+provenance and explicit Seeking Alpha comment/blog URLs force forum kind/tier; editorial article
+URLs are not all treated as forums. Confirmation requires an authoritative fact and invalidation
+also requires high materiality. Phase 6 verifies the final exclusion rules in code. Mentions need
+a fetched citation and a name present in its supplied text; unsupported ticker/exchange hints
+are cleared. Short legitimate names remain valid. Extracted text is cleaned and capped using
+the existing 300-character admission helper; oversized claim excerpts are rejected rather than
+silently cut. Model notes are prefixed so they cannot masquerade as code-written coverage gaps.
+
+The committed seven `DISCOVERY_THEMES` are the only input for `discover_mentions()`, which
+accepts no client or theme arguments and resolves the server's Claude client internally.
+There is one industry and one Reddit search
+each (14 searches total), one extraction and at most 30 mentions. Mentions have zero scoring
+weight. Redis stores `discovery:mentions:v2:YYYY-MM-DD` for 24 hours, including empty batches and
+unavailable (`null`) results. The version change ignores older unverified cache entries. An
+atomic daily budget claim is deliberately retained even if a worker fails or the result cannot
+be cached, preventing paid repeats that day. Unavailable Redis means no paid work. A failed or
+interrupted batch waits until the next UTC date; there is no in-day retry. This batch uses only
+explicit global/server Claude authentication, never a stored user's key. The original unversioned
+daily lock key is retained across cache upgrades, so deployments cannot repeat paid work that
+day. `[]` means a completed empty batch; `None` means unavailable or in progress. Nothing schedules
+it yet. Per-candidate research requires an explicit user client and rejects `None`, even when a
+server key is configured.
+
+The REST endpoint, bearer authentication and search options were verified on 2026-10-18 against
+[Tavily's official Python client at `46505f1`](https://github.com/tavily-ai/tavily-python/blob/46505f119e6ac0f30d63a4dce0ed9f923705ad97/tavily/tavily.py).
+The documentation website was inaccessible from this workspace. Fixtures are representative
+provider-shaped test data, not a claim of a successful live paid search. Actual Reddit coverage,
+current provider billing and live availability remain integration checks; sparse/empty results
+are explicitly supported and disclosed. Tests make no external provider calls.
+
 ## Configuration and cost ownership
 
 `Settings.tavily_api_key: str | None` reads backend `TAVILY_API_KEY` and defaults to `None`.
@@ -199,14 +250,15 @@ never log/dump settings or provider headers/bodies, and log only exception class
 Store the real key in backend secret configuration, with `api.tavily.com` as the future HTTPS
 destination. Never put it in frontend `NEXT_PUBLIC_*` variables, examples, tests or source.
 
-This phase does not contact Tavily, require credentials, add a dependency, or enable paid work.
+Phase 0 did not contact Tavily, require credentials, add a dependency, or enable paid work.
 The owner funds Tavily; per-user extraction/synthesis uses the resolved user's Claude client
-and existing monthly quota. Missing or empty Tavily configuration and provider failures in Phase
-2 mean research unavailable, not failed application startup. Preserve quant-only output with an
-explicit limitation; do not present missing research as a fully researched idea. Background
-theme work needs an explicit bounded budget and existing supported server authentication, not
-an arbitrary user's stored Claude key. Provider-contract, availability and cost checks remain
-Phase 2 implementation prerequisites.
+and existing monthly quota. Missing or empty Tavily configuration raises `ResearchUnavailable`;
+provider failures return empty/partial evidence with explicit gaps, not failed application
+startup. Callers preserve quant-only output with an explicit limitation; never present missing
+research as a fully researched idea. Background
+theme work uses the bounded global budget and existing supported server authentication, not
+an arbitrary user's stored Claude key. The REST request contract is verified; live availability,
+Reddit coverage and provider billing remain deployment integration checks.
 
 ## Persistence, API and lifecycle (future phases)
 

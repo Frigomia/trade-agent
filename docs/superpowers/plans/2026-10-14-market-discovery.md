@@ -7,14 +7,14 @@ defaults and reconciles this original plan with the existing implementation. Use
 `app/schemas_discovery.py` for the current shared contract; the code sketch in Section 4.5 is
 historical guidance. No end-to-end discovery scan has shipped yet.
 
-| Phase | Implementation status at the Phase 0 handoff |
+| Phase | Implementation status (updated through Phase 2 research) |
 | --- | --- |
 | 0: spec and contracts | Complete in this handoff: design/defaults, existing tested shared contracts, optional Tavily setting and configuration documentation. |
 | 1: analytics and FX | Implemented: existing global FX support plus pure analytics/candidate fit, cached dated histories and profiles, and authenticated `/portfolio/analytics`. See the Phase 1 completion notes below. |
-| 2: research | Not implemented; evidence models alone do not perform research. |
+| 2: research | Implemented: bounded candidate searches/extraction, citation/date/forum safeguards, event grouping and globally cached daily theme mentions in `app/agents/research.py`. Scan integration and scheduling remain Phases 6 and 7; live Reddit/provider coverage is unverified. |
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. User scan wiring remains Phases 6 and 7. |
-| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates; the research that produces mentions (Phase 2) is not. |
+| 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
 | 6: evaluation and persistence | Not implemented; idea contracts exist, graph and database changes do not. |
 | 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |
@@ -676,7 +676,7 @@ Implementation details that make the original interface sketch concrete:
 Validation: synthetic math/interval/empty/partial-data tests, mocked provider cache/retry tests,
 authenticated API tests with real local Postgres/RLS and Redis (including no-store and rate
 limits), existing global FX tests, backend lint/format/type checks and the full backend suite.
-The live I1 checkpoint requires Phase 2 research and remains outstanding.
+Phase 2 research is now implemented; the combined live I1 checkpoint remains outstanding.
 
 **Goal:** deterministic portfolio math from holdings plus history, and currency support for a
 global universe.
@@ -723,6 +723,11 @@ an ETF as one bucket labelled by its category and flag it.
 
 ### Phase 2: Research module (B, L)
 
+Implemented in `app/agents/research.py` with provider-shaped fixtures and mocked Tavily/Claude
+tests in `tests/test_agents_research.py`. The [design's implementation notes](../specs/2026-10-14-market-discovery-design.md#phase-2-implementation)
+record the fixed budgets, failure behavior, provider-contract verification and remaining live
+coverage check. This module does not expose or schedule scans; those integrations are later phases.
+
 **Goal:** structured, cited, dated, materiality-tagged evidence per candidate, and the daily
 global discovery of mentions.
 
@@ -731,10 +736,11 @@ global discovery of mentions.
 ```python
 async def research_candidate(
     ticker: str, name: str, sector: str | None, country: str | None,
-    client: Anthropic | None,
+    client: Anthropic,
+    *, official_hosts: Collection[str] = (),  # independently verified internal metadata only
 ) -> ResearchEvidence: ...
 
-async def discover_mentions(themes: list[str], client: Anthropic | None) -> list[Mention]: ...
+async def discover_mentions() -> list[Mention] | None: ...
 ```
 
 **Tavily access.** Context7 docs for `/tavily-ai/tavily-python` and `/websites/tavily` confirm
@@ -762,15 +768,23 @@ event; include `url` and `published_at` only when present in the source; list di
 `conflicts` and missing information in `gaps`. Company names mentioned that are not the subject
 go to `mentions`, never into claims.
 
-**Post-processing in code (not by the LLM):** drop claims with no URL; dedupe by normalized URL;
-cluster by `event_id` so one story reported by ten outlets is one event; never let a
-`source_tier="forum"` claim populate `NegativeDevelopment.status="confirmed"`.
+**Post-processing in code (not by the LLM):** require fetched URLs and short verbatim claim text
+in that URL's source snippet; dedupe by normalized URL, event id and text, preserving different
+claims in one article. Classify authority by trusted hostname policy, not model labels; only
+authoritative facts can confirm a development and invalidation additionally needs high
+materiality. Recognize community hosts and explicit comment pages as forum sources. Cluster by
+`event_id` without treating repetition or distinct hostnames as proof of independent reporting.
 
 **Theme discovery** (`discover_mentions`): runs in the global daily batch, not per user. Themes
 come from a small committed list (for example AI infrastructure, semiconductors, energy
 transition, healthcare, cybersecurity, industrial automation, robotics, plus rotating sector
 themes). For each theme run industry-research and Reddit queries and extract `Mention`s. Output
-is cached as `discovery:mentions:{date}`. Mentions carry zero scoring weight.
+is cached as `discovery:mentions:v2:{date}`; the original unversioned daily lock remains to prevent
+repeat spending after a cache-version change. `[]` is a completed empty batch and `None` is
+unavailable/in progress. The function selects committed themes and the server client internally;
+per-candidate research requires an explicit user client and never falls back to the server key.
+Mentions carry zero scoring weight. Live Claude tool-schema and Tavily coverage remain unverified
+integration checkpoints; automated tests make no paid provider calls.
 
 **Quota and cost:** `tavily_api_key` is the server's, so the owner pays. Per-candidate research is
 gated by the existing monthly counter at the route (Phase 7); the daily theme batch has its own

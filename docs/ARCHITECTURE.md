@@ -552,21 +552,58 @@ corrected on the holding form, since a SELL does not restore the average cost).
 
 ## 6. Multi-agent orchestration design
 
-### Market discovery: Phase 0 contracts and target design
+### Market discovery: contracts and research
 
 The [market-discovery design](superpowers/specs/2026-10-14-market-discovery-design.md)
 records the shared contracts, selected MVP defaults and the remaining work. The contracts in
 `app/schemas_discovery.py`, global FX support, curated universe, snapshot refresh, peer/risk
-calculations, shortlist and Phase 1 portfolio analytics are implemented. The research module,
-evaluation graph, scan API, scan persistence and discovery UI are future phases; no user discovery
+calculations, shortlist and Phase 1 portfolio analytics are implemented. Phase 2 adds
+`agents/research.py` for cited candidate research and globally cached theme mentions. The evaluation
+graph, scan API, scan persistence and discovery UI are future phases; no user discovery
 scan is exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
 content has no scoring weight and cannot establish a confirmed thesis-invalidating event.
 ETFs remain in the universe but are explicitly excluded from discovery scoring until separate
-criteria exist. `TAVILY_API_KEY` is an optional backend setting reserved for Phase 2, not a new
+criteria exist. `TAVILY_API_KEY` is an optional backend setting for research, not a new
 requirement for startup, tests, snapshots or the existing analysis flow.
+
+**Research (Phase 2).** `research_candidate` makes at most four Tavily basic searches (monthly
+news, bull, bear, Reddit; five results each) and one Claude extraction with SDK retries disabled.
+Bull and bear use equal budgets. Local news terms cover selected home markets; unknown markets
+retain English terms. Source snippets are bounded to 1,500 characters. Every extraction prompt
+treats fetched content and metadata as untrusted data. `Claim.text` must be a short verbatim
+excerpt found in its own cited source content after whitespace/case normalization; an unrelated
+fetched URL cannot support invented text. Distinct claims from one article are preserved;
+deduplication uses URL, event id and text. Dates come only from source metadata.
+`discovery/sources.py` derives authority from a conservative regulatory/reporting hostname
+policy; unknown hosts stay `other`, never model-assigned authority. Verified issuer hosts may
+be supplied only by trusted internal callers. Community hosts and explicit comment pages are
+forced to forum kind/tier without relabelling non-Reddit mentions as Reddit. Confirmation needs
+an authoritative fact, and invalidation additionally needs high materiality. Phase 6 still
+reassesses thesis impact before deciding any exclusion. Text is bounded and cleaned of control
+characters; model notes are labelled separately from code-written coverage gaps.
+
+`discover_mentions()` is global owner-funded work, selecting the existing server Claude client
+internally and using only committed `DISCOVERY_THEMES`; it accepts no user client or theme input.
+At most seven themes each get
+one industry and one Reddit search (14 total), one extraction and at most 30 cited mentions.
+Results, including empty results and unavailable (`null`) outcomes, are cached at
+`discovery:mentions:v2:YYYY-MM-DD` for 24 hours; the new namespace ignores older unverified data.
+A separate atomic daily budget claim prevents concurrent calls, crashes or cache-write failures
+from repeating paid work that UTC day. A failed batch waits until tomorrow; unavailable Redis
+means no paid batch. The original `discovery:mentions:YYYY-MM-DD:lock` key survives the cache
+version change, preventing a second paid attempt after deployment. `[]` means completed with no
+mentions; `None` means unavailable or still running. Scheduling this function remains Phase 7.
+
+Missing/empty Tavily configuration or a missing Claude client raises `ResearchUnavailable`,
+which future callers handle as quant-only. Provider failures return empty/partial evidence with
+explicit gaps (or `None` for unavailable daily discovery with a safe log). Candidate callers
+must resolve the user's Claude client and enforce quota first; `None` is rejected before any
+paid work and never falls back to the server key. There is no user endpoint for this module yet. Tavily
+REST details were checked against the official Python client's source; live Reddit coverage
+and provider billing/availability are unverified without a configured integration smoke test.
 
 **Discovery screening (Phase 4).** The weekly `discovery_snapshot` command refreshes per-symbol
 Redis entries (8-day TTL, 24-hour resume window); the GitHub schedule runs it on Sundays at
@@ -789,7 +826,7 @@ DATABASE_URL=postgresql+psycopg://trading_agent:trading_agent@localhost:5432/tra
 REDIS_URL=redis://localhost:6379/0
 ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
-TAVILY_API_KEY=                             # optional backend-only key for future discovery research; no calls wired in Phase 0
+TAVILY_API_KEY=                             # optional backend-only key for discovery research
 KEY_ENCRYPTION_SECRET=                      # base64 of 32 random bytes (openssl rand -base64 32); encrypts users' saved Claude keys; required when APP_ENV=production
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
@@ -805,10 +842,10 @@ APP_URL=                                    # the frontend origin; the message l
 ```
 
 `TAVILY_API_KEY` belongs to the environment owner and must be stored only in backend secret
-configuration (future HTTPS destination: `api.tavily.com`), never in a `NEXT_PUBLIC_*` variable.
-It is optional and omitted from the settings object's repr. Phase 0 only declares the setting;
-it does not call Tavily, add an SDK, or change existing analysis behavior. Phase 2 will handle
-missing/empty keys and provider failures as research unavailable, preserving quant-only results
+configuration (HTTPS destination: `api.tavily.com`), never in a `NEXT_PUBLIC_*` variable.
+It is optional and omitted from the settings object's repr. Research uses the existing `httpx`
+dependency, not a new SDK, and does not change existing analysis behavior. The module handles
+missing/empty keys and provider failures as described in Section 6, preserving quant-only output
 with an explicit data limitation. The owning environment funds Tavily; a user scan still uses
 that user's Claude client and one existing `analysis_run` quota unit (when Phase 7 lands).
 
