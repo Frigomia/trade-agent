@@ -1,0 +1,11 @@
+# Direction approved: Discover page
+
+Date: 2026-10-20
+
+Shown: three options (`dc-a-list.html`, `dc-b-table.html`, `dc-c-cards.html`; screenshots were rendered to `shots/dca-*`, `dcb-*`, `dcc-*` and are not tracked, regenerate with `WIN=1340 ./shootall.sh`).
+
+Chosen: option 1, List. User's words: "i will pick dc-a-list".
+
+What this means: the reference as drawn. Search and Add Company on top (name, exchange and currency filled in on pick, duplicates shown as "Already in Discover", no shares or cost); the three filters (All, AI analyzed, Not analyzed) with counts and the sort menu (Name, Daily change, Recently added) on one line; then one card per company with logo, name and ticker, status, one-line AI insight when research exists, price and daily change, and its actions (View or Analyze, and Remove with Undo). Companies saved from Today appear in the list by themselves. Light and dark follow the Soft direction.
+
+Still open (see `SPEC.md`, "Decisions for you"): whether single-company Analyze is in the first version, what the simple company overview shows when no report exists, whether Remove needs a confirm step, and how many companies the watchlist can hold. Decision 1 of that list (which option) is resolved by this file.

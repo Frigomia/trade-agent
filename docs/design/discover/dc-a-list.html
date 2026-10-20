@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discover · Option 1 · List</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="dc.css">
+<style>
+/* Option 1 · List. The reference as drawn: search and Add Company on top, the three filters and the sort on one line,
+   then one card per company with identity, insight, price and its two actions. Form from content: a watchlist row is one
+   company with one sentence about it, so each row is a small card that reads left to right. */
+.co .rowc{padding:16px 20px;display:grid;grid-template-columns:auto minmax(0,1fr) 168px auto;gap:16px;align-items:center}
+.rowc .mid{display:grid;gap:4px;min-width:0}
+.rowc .top1{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rowc .acts{display:flex;gap:8px;align-items:center}
+.list1{display:grid;gap:12px}
+.phone .rowc,.region .rowc{grid-template-columns:auto minmax(0,1fr);gap:12px 14px;padding:16px}
+.phone .rowc .px,.region .rowc .px{grid-column:1/-1;justify-items:start;text-align:left;grid-template-columns:auto auto 1fr;align-items:baseline;gap:4px 10px}
+.phone .rowc .px small,.region .rowc .px small{justify-self:end}
+.phone .rowc .acts,.region .rowc .acts{grid-column:1/-1}
+.phone .rowc .acts .btn:first-child,.region .rowc .acts .btn:first-child{flex:1}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 1 · List.</b> The reference as drawn: search and Add Company on top, filters and sort on one line, one card per company. Try it: type <code>kes</code> or <code>hal</code> in the search, Add, Analyze, Remove (then Undo), the filters and the sort all work. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Same page, one column. Left to right: watchlist, empty, search with a duplicate, no match for the filter, loading.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Empty, duplicate in search, no search result, no match for the filter, loading, research running, removed with Undo.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="dc.js"></script>
+<script>
+const card = (d) => `<article class="panel rowc"><span>${logo(d.n, 48)}</span>
+  <div class="mid"><div class="top1">${nameLink(d)}${pill(d.status)}</div><div class="mt3">${meta(d)} · ${sub(d)}</div>${insight(d)}</div>
+  ${priceBlock(d)}<div class="acts">${rowActions(d)}</div></article>`;
+const render = (s) => {
+  const c = counts(s), v = visible(s);
+  return `${dcHead()}${searchBox(s)}
+  ${s.loading ? skel() : !s.items.length ? empty() : `<div class="bar2">${filters(s)}${sorter(s)}</div>${v.length ? `<div class="list1">${v.map(card).join('')}</div>` : noMatch(s)}`}
+  ${toast(s)}<p class="adv">Prices are delayed. AI insights come from research that is saved with each company; they are not investment advice, and nothing here is sent to a broker.</p>`;
+};
+mountDC(render);
+</script>
+</body>
+</html>
