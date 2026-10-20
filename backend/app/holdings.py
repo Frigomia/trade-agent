@@ -15,6 +15,32 @@ from app.schemas import HoldingIn, HoldingOut, HoldingSummaryOut
 logger = logging.getLogger(__name__)
 
 
+async def load_holdings(db: Session, user_id: uuid.UUID) -> list[HoldingOut]:
+    task = asyncio.create_task(asyncio.to_thread(read_holdings, db, user_id))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # A cancelled request must not close its session while the worker still uses it.
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+        task.result()
+        raise
+
+
+def read_holdings(db: Session, user_id: uuid.UUID) -> list[HoldingOut]:
+    """Copy scoped rows and release the connection in the worker before provider awaits."""
+    try:
+        return [
+            HoldingOut.model_validate(row)
+            for row in db.query(Holding).filter_by(user_id=user_id).order_by(Holding.ticker)
+        ]
+    finally:
+        db.close()
+
+
 async def _profile_for(ticker: str) -> dict[str, str | None]:
     try:
         return await fetch_profile(ticker)
@@ -71,9 +97,9 @@ def _save_holding(
     return out
 
 
-async def enrich_holdings(rows: list[HoldingOut] | list[HoldingSummaryOut]) -> None:
-    semaphore = asyncio.Semaphore(8)
-
+async def enrich_holdings(
+    rows: list[HoldingOut] | list[HoldingSummaryOut], semaphore: asyncio.Semaphore
+) -> None:
     async def enrich(row: HoldingOut | HoldingSummaryOut) -> None:
         async with semaphore:
             profile = await _profile_for(row.ticker)

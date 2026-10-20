@@ -88,7 +88,7 @@ function HoldingFormBody({
       setError(TARGET_ERROR);
       return;
     }
-    const purchaseDetails = editing || !replacesExisting ? {
+    const purchaseDetails = editing ? {
       cost_basis: costNum, first_purchase_date: firstPurchase || null,
       target_weight: targetWeight,
     } : {
@@ -106,7 +106,6 @@ function HoldingFormBody({
             ...(assetType ? { asset_type: assetType } : {}),
             shares: sharesNum,
             ...purchaseDetails,
-            ...(editing ? { sector: holding.sector } : {}),
           }),
         });
       } catch (err) {

@@ -86,7 +86,6 @@ describe("HoldingForm", () => {
       shares: 40,
       cost_basis: 112.8,
       first_purchase_date: "2024-01-10",
-      target_weight: null,
     });
     expect(onClose).toHaveBeenCalled();
   });
@@ -162,7 +161,7 @@ describe("HoldingForm", () => {
     expect(screen.getByRole("button", { name: "Update position" })).toBeInTheDocument();
   });
 
-  it("edits in place: ticker locked, and sector, target weight and purchase date round-trip", async () => {
+  it("edits in place: ticker locked, target and purchase date round-trip without a sector override", async () => {
     apiFetch.mockResolvedValue({});
     const { onSaved } = setup({ holding: HELD, heldTickers: ["AAPL"] });
 
@@ -179,9 +178,16 @@ describe("HoldingForm", () => {
       shares: 12,
       cost_basis: 150,
       first_purchase_date: "2024-01-15",
-      sector: "Technology",
       target_weight: 0.2,
     });
+  });
+
+  it("omits unchanged sector on edit so the backend can backfill missing metadata", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: { ...HELD, sector: null } });
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).not.toHaveProperty("sector");
   });
 
   it("does not send a request when a required field is missing", () => {
@@ -226,7 +232,7 @@ describe("HoldingForm", () => {
     type("Shares", "0.125");
     fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
-    expect(sentBody()).toEqual({ ticker: "SAP.DE", shares: .125, cost_basis: null, first_purchase_date: null, target_weight: null });
+    expect(sentBody()).toEqual({ ticker: "SAP.DE", shares: .125 });
   });
 
   it("requires an explicit update action and preserves omitted details of an existing holding", async () => {

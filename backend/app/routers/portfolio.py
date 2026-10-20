@@ -48,6 +48,7 @@ router = APIRouter(
 MAX_WATCHLIST = 100
 WRITE_LIMIT_PER_MINUTE = 60  # per user, per route: the holdings/watchlist upserts
 QUOTE_LIMIT_PER_MINUTE = 30  # per user, per route: these routes fan out to yfinance
+PROFILE_READ_TIMEOUT_SECONDS = 1.0
 
 
 @router.get(
@@ -65,9 +66,14 @@ async def portfolio_analytics(
 async def list_holdings(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
 ) -> list[HoldingOut]:
-    rows = [HoldingOut.model_validate(h) for h in db.query(Holding).filter_by(user_id=user.id)]
-    db.close()
-    await holding_service.enrich_holdings(rows)
+    rows = await holding_service.load_holdings(db, user.id)
+    try:
+        await asyncio.wait_for(
+            holding_service.enrich_holdings(rows, asyncio.Semaphore(8)),
+            timeout=PROFILE_READ_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.warning("Holding metadata enrichment timed out")
     return rows
 
 
@@ -233,11 +239,11 @@ def list_snapshots(
     )
 
 
-async def _prices_for(tickers: set[str]) -> dict[str, tuple[float | None, date | None, bool]]:
+async def _prices_for(
+    tickers: set[str], sem: asyncio.Semaphore
+) -> dict[str, tuple[float | None, date | None, bool]]:
     """Live price per ticker; None when the fetch fails or returns a non-finite price."""
     ordered = sorted(tickers)
-
-    sem = asyncio.Semaphore(8)  # bound fan-out so unquotable tickers can't saturate the thread pool
 
     async def one(ticker: str) -> tuple[float | None, date | None, bool]:
         try:
@@ -278,9 +284,10 @@ async def get_summary(
     # can take seconds (retries) during a market-data outage.
     db.close()
     open_rows = [r for r in rows if r.shares > 0]  # a fully sold holding stays a row, unpriced
+    sem = asyncio.Semaphore(8)  # one request budget shared by metadata and quote lookups
     _, prices = await asyncio.gather(
-        holding_service.enrich_holdings(rows),
-        _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows}),
+        holding_service.enrich_holdings(open_rows, sem),
+        _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows}, sem),
     )
 
     for w in watch_rows:

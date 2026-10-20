@@ -758,7 +758,9 @@ key per ticker/period, finite positive closes by ISO date) and `fetch_profile(ti
 cache of name, sector, industry, country, quote type, exchange and ETF category). Empty results
 and exhausted provider failures are negative-cached for 5 minutes, after the existing retries;
 exception class names alone are logged. Both use the existing thread pattern. Profile strings
-are capped at 100 characters on fresh and cached reads. Phase 8 also includes profile currency,
+are capped on fresh and cached reads: names at 200 characters (matching the holding column),
+other fields at 100. The `profile:v2` namespace bypasses older entries without currency.
+Phase 8 also includes profile currency,
 holding auto-fill and nullable purchase details; see the onboarding notes below. No provider
 dependency is introduced.
 Phase 8 holding entry uses `app/holdings.py` for automatic name/type/sector and derived
@@ -766,12 +768,19 @@ industry/country/currency on API reads. Profile/cache failures are best effort a
 exception class; explicit-type creation and existing updates remain available. A missing type
 requires a manual Stock/ETF choice; validation failures reveal the form's optional fields.
 Recovered profiles backfill ticker-only names without replacing custom names. Explicit null
-sector overrides are respected. Summary profile and quote requests run concurrently. The API
-loads no provider data while holding the per-user write lock. Purchase fields are nullable; the generated migration alters nullability without
+sector overrides are respected; the form omits unchanged sector fields so missing metadata can
+backfill. New-entry forms omit blank purchase fields, including for fully sold positions.
+Summary profiles cover open positions only and share an eight-request budget with quotes.
+The holdings list reads its user-scoped session in a worker, closes it before provider work,
+and gives optional metadata enrichment one second total before returning the saved rows. The API
+loads no provider data while holding the per-user write lock. Purchase fields are nullable;
+the generated migration alters nullability without
 replacing rows. Omitted updates preserve stored values and explicit null clears purchase data.
 
 P/L excludes unknown-basis positions while their priced value still counts in portfolio value.
-Coverage fields explain partial P/L. Snapshots retain non-null cost totals over known-basis
+Coverage fields explain partial P/L and cost totals: the Cost basis stat shows unavailable
+when nothing is covered and labels partial costs explicitly. Snapshots retain non-null cost
+totals over known-basis
 positions only, plus persisted `cost_basis_complete`. History charts omit the cost comparison
 when any point in the selected period has incomplete costs; market value remains visible. The
 coverage migration defaults legacy snapshots to complete, since purchase costs were required

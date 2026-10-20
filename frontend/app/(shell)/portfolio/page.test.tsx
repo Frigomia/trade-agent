@@ -493,6 +493,36 @@ describe("PortfolioPage", () => {
     });
   });
 
+  it.each([0, 1])("labels cost coverage when %i holdings have usable purchase costs", async (covered) => {
+    handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY,
+      pl_covered_count: covered, pl_complete: false,
+      total_cost_basis: covered ? 1500 : 0,
+    });
+    renderFresh();
+    const cost = (await screen.findByText("Cost basis")).parentElement!;
+    if (covered === 0) {
+      expect(cost).toHaveTextContent("\u2014");
+      expect(cost).not.toHaveTextContent("0.00");
+    } else {
+      expect(cost).toHaveTextContent("1,500.00");
+      expect(cost).toHaveTextContent("Known costs only");
+    }
+  });
+
+  it("requires Update position for a closed holding and preserves blank purchase details", async () => {
+    handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+    renderFresh();
+    await screen.findByText("Apple Inc.");
+    fireEvent.click(screen.getByRole("button", { name: /^add holding$/i }));
+    fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "old" } });
+    fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "2.5" } });
+    expect(screen.getByText(/you already hold OLD/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Update position" }));
+    await waitFor(() => expect(count("POST /portfolio/holdings")).toBe(1));
+    const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+    expect(JSON.parse(post[1].body)).toEqual({ ticker: "OLD", shares: 2.5 });
+  });
+
   it("does not label a missing price as a stale quote", async () => {
     handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, unpriced_count: 1,
       holdings: [{ ...SUMMARY.holdings[0], current_price: null, market_value: null,
@@ -568,8 +598,6 @@ describe("PortfolioPage", () => {
         ticker: "AAPL",
         shares: 10,
         cost_basis: 150,
-        first_purchase_date: null,
-        target_weight: null,
       });
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
     });

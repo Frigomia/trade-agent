@@ -333,7 +333,10 @@ export default function PortfolioPage() {
               <Amount value={summary.total_market_value} size={38} />
             </Stat>
             <Stat label="Cost basis">
-              <Amount value={summary.total_cost_basis} />
+              {summary.pl_covered_count === 0 ? DASH : <Amount value={summary.total_cost_basis} />}
+              {summary.pl_complete === false && summary.pl_covered_count !== 0 && (
+                <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Known costs only</Typography>
+              )}
             </Stat>
             <Stat label="Total P/L">
               <Box component="span" sx={{ color: plColor(summary.total_pl) }}>

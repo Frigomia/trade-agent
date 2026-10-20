@@ -162,9 +162,9 @@ ANALYTICS_NEGATIVE_CACHE_TTL = 300
 PROFILE_TEXT_CHARS = 100
 
 
-def _profile_text(value: object) -> str | None:
+def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | None:
     text = " ".join(value.split()) if isinstance(value, str) else ""
-    return text[:PROFILE_TEXT_CHARS] or None
+    return text[:max_chars] or None
 
 
 async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
@@ -197,11 +197,14 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
 async def fetch_profile(ticker: str) -> dict[str, str | None]:
     """Cached metadata for analytics and holding auto-fill; never invented when unavailable."""
     redis = get_redis()
-    cache_key = f"profile:{ticker}"
+    cache_key = f"profile:v2:{ticker}"
     cached = await redis.get(cache_key)
     if cached is not None:
         # Bound old cached entries too; a rollout must not preserve oversized provider strings.
-        return {field: _profile_text(value) for field, value in dict(json.loads(cached)).items()}
+        return {
+            field: _profile_text(value, 200 if field == "name" else PROFILE_TEXT_CHARS)
+            for field, value in dict(json.loads(cached)).items()
+        }
 
     def _fetch() -> dict[str, str | None]:
         info = yf.Ticker(ticker).info or {}
@@ -215,7 +218,10 @@ async def fetch_profile(ticker: str) -> dict[str, str | None]:
             "category": "category",
             "currency": "currency",
         }
-        return {field: _profile_text(info.get(key)) for field, key in keys.items()}
+        return {
+            field: _profile_text(info.get(key), 200 if field == "name" else PROFILE_TEXT_CHARS)
+            for field, key in keys.items()
+        }
 
     try:
         result = await _retry_fetch(_fetch)

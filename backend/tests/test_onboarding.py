@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -263,3 +264,134 @@ def test_summary_overlaps_metadata_and_quotes_and_uses_provider_stale_flag(clien
     body = client.get("/portfolio/summary").json()
     assert body["holdings"][0]["currency"] == "USD"
     assert body["holdings"][0]["stale"] is True
+
+
+def test_list_holdings_reads_scoped_database_off_event_loop(client, monkeypatch):
+    original = holdings.read_holdings
+    called = []
+
+    def read(db, user_id):
+        with pytest.raises(RuntimeError, match="no running event loop"):
+            asyncio.get_running_loop()
+        called.append(user_id)
+        return original(db, user_id)
+
+    monkeypatch.setattr(holdings, "read_holdings", read)
+    assert client.get("/portfolio/holdings").json() == []
+    assert called == [USER_ID]
+
+
+def test_list_holdings_returns_saved_rows_when_metadata_exceeds_budget(client, monkeypatch):
+    client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1, "asset_type": "STOCK"})
+
+    async def slow_profile(ticker):
+        await asyncio.sleep(60)
+        return {"currency": "USD"}
+
+    monkeypatch.setattr(holdings, "fetch_profile", slow_profile)
+    monkeypatch.setattr("app.routers.portfolio.PROFILE_READ_TIMEOUT_SECONDS", 0.01)
+    response = client.get("/portfolio/holdings")
+    assert response.status_code == 200
+    assert response.json()[0]["ticker"] == "MSFT"
+    assert response.json()[0]["currency"] is None
+
+
+def test_summary_skips_closed_metadata_and_shares_one_fanout_budget(client, monkeypatch):
+    for i in range(12):
+        client.post(
+            "/portfolio/holdings", json={"ticker": f"TEST{i}", "shares": 1, "asset_type": "STOCK"}
+        )
+    client.post(
+        "/portfolio/holdings", json={"ticker": "CLOSED", "shares": 0, "asset_type": "STOCK"}
+    )
+    active = peak = 0
+    profiles, quotes = [], []
+
+    async def fetch(ticker, calls, result):
+        nonlocal active, peak
+        calls.append(ticker)
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.01)
+            return result
+        finally:
+            active -= 1
+
+    async def profile(ticker):
+        return await fetch(ticker, profiles, {"currency": "USD"})
+
+    async def quote(ticker):
+        return await fetch(ticker, quotes, {"price": 100, "stale": False})
+
+    monkeypatch.setattr(holdings, "fetch_profile", profile)
+    monkeypatch.setattr("app.routers.portfolio.fetch_quote_and_history", quote)
+    response = client.get("/portfolio/summary")
+    assert response.status_code == 200
+    assert len(profiles) == len(quotes) == 12
+    assert "CLOSED" not in profiles + quotes
+    assert 1 < peak <= 8
+
+
+def test_edit_backfills_missing_sector_and_preserves_purchase_details(client, monkeypatch, profile):
+    profile["sector"] = None
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "MSFT",
+            "shares": 0,
+            "cost_basis": 100,
+            "first_purchase_date": "2024-01-01",
+            "target_weight": 0.2,
+        },
+    )
+    profile["sector"] = "Technology"
+    body = client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1}).json()
+    assert body["sector"] == "Technology"
+    assert (body["cost_basis"], body["first_purchase_date"], body["target_weight"]) == (
+        100,
+        "2024-01-01",
+        0.2,
+    )
+
+
+def test_provider_name_preserves_up_to_holding_column_limit(client, profile):
+    profile["name"] = "A" * 180
+    body = client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1}).json()
+    assert body["name"] == "A" * 180
+
+
+def test_cancelled_holding_read_finishes_before_dependency_closes_session(monkeypatch):
+    started, release, finished = threading.Event(), threading.Event(), threading.Event()
+    closures = []
+
+    def read(db, user_id):
+        started.set()
+        try:
+            assert release.wait(5)
+            return []
+        finally:
+            finished.set()
+
+    async def request():
+        try:
+            await holdings.load_holdings(None, USER_ID)
+        finally:
+            closures.append(finished.is_set())
+
+    async def exercise():
+        task = asyncio.create_task(request())
+        try:
+            assert await asyncio.to_thread(started.wait, 5)
+            for _ in range(2):
+                task.cancel()
+                await asyncio.sleep(0)
+                assert not task.done()
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    monkeypatch.setattr(holdings, "read_holdings", read)
+    asyncio.run(exercise())
+    assert closures == [True]
