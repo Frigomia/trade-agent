@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfolio · Option 3 · Explorer</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="pf.css">
+<style>
+/* Option 3 · Explorer. Where the money is invested comes first: one large donut with Sector, Country and Currency tabs.
+   Clicking a slice or a legend row filters the holdings list beneath it, so allocation and holdings are one conversation.
+   Form from content: a slice of the donut is a group of holdings, so selecting it should show them. */
+.top3{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:24px;align-items:center;padding:20px 24px}
+.top3 .stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px}
+.top3 .stats .main-stat{grid-column:1/-1}
+.hero3{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:24px;align-items:start}
+.hero3 .dn{gap:28px}
+.hero3 .lg li{padding:8px 10px}
+.hero3 .tpbox{border-left:1px solid var(--line);padding-left:24px}
+.fnote{margin:8px 0 0}
+.rk3{display:grid;gap:12px}
+.region .top3,.phone .top3,.region .hero3,.phone .hero3{grid-template-columns:1fr}
+.region .hero3 .tpbox,.phone .hero3 .tpbox{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:16px}
+.phone .top3{padding:16px}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 3 · Explorer.</b> Allocation first: a large donut with Sector, Country and Currency tabs; click a slice's legend row and the holdings list below filters to it. Value and chart sit in a slim top strip; risk facts open with advanced analytics on demand. Most interactive. Try the tabs and the legend; toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Strip, donut with tabs, holdings, risk. States left to right: holdings, empty, no purchase prices, short history, loading.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Empty, no purchase prices, short history, loading, row menu, remove confirmation.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="pf.js"></script>
+<script>
+const compose = (s) => { const [m, g, d] = ovStats(s); return `${pfTop()}
+  <section class="panel top3"><div class="stats">${m}${g}${d}</div><div>${secH('Value over time', rangeTabs())}${chartBlock(s, 130)}</div></section>
+  <section class="panel">${secH('Where your money is', '<span class="gp">Select a row to filter the holdings below</span>')}<div class="hero3">${donutBox(220, 'sec', 'filter')}<div class="tpbox">${secH('Largest positions')}${topPos()}</div></div><div class="fnote"></div></section>
+  <section class="panel">${secH('Your holdings', `<span class="gp">${HOLD.length} holdings</span>`)}${holdTable(s, s === 'menu' ? 1 : -1)}</section>
+  <section class="panel">${secH('Risk and analytics', '<span class="gp">Measured, not scored</span>')}${riskEss()}${riskAdv()}</section>${adv()}`; };
+mountPF(compose);
+</script>
+</body>
+</html>
