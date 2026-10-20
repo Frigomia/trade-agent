@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company overview · Option 3 · Workbench</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="soft.css">
+<link rel="stylesheet" href="co.css">
+<style>
+/* Option 3 · Workbench. Decision first: a persistent rail holds price, confidence, risk, fit and the actions while the
+   evidence sits in four tabs (Overview, Numbers, Risk and fit, Sources). Form from content: the user's job on this page
+   is to decide (approve, save, dismiss, ask), so the decision controls never scroll away. */
+.co{display:grid;gap:16px;align-content:start}
+.hd3{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.wb{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.tabs3{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--track);margin-bottom:16px;width:max-content;max-width:100%}
+.tabs3 a{display:grid;place-items:center;min-height:36px;padding:0 18px;border-radius:999px;font-size:var(--fs-body);color:var(--text2);font-weight:500;white-space:nowrap}
+.tabs3 a.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.pane{display:grid;gap:16px;min-width:0}
+.pane>*{min-width:0}
+.decide{position:sticky;top:16px;padding:20px;display:grid;gap:16px}
+.decide .coprice{justify-items:start;text-align:left}
+.decide .coprice>b{font-size:28px}
+.decide .cometa{display:grid;gap:8px}
+.decide hr{border:0;border-top:1px solid var(--line);margin:0}
+.decide .coacts{grid-template-columns:1fr}
+.decide .fitline{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-body);color:var(--text2)}
+.decide .fitline b{font-size:var(--fs-title);font-weight:650;color:var(--text)}
+.decide .fitline .nb{font-weight:650;color:var(--text);font-size:var(--fs-body)}
+.decide .lnk{display:flex;justify-content:space-between;font-size:var(--fs-label);color:var(--muted)}
+.decide .lnk a{color:var(--accent)}
+.r2c{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.r2c>*{min-width:0}
+.region .wb,.phone .wb{grid-template-columns:1fr}
+.region .decide{position:static}
+.region .r2c,.phone .r2c{grid-template-columns:1fr}
+.phone .tabs3{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+.phone .tabs3 a{padding:0 4px;font-size:var(--fs-label);min-height:44px}
+.phone .hd3{gap:12px}
+.abar{display:grid;grid-template-columns:1fr 44px 44px 44px;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--panel)}
+.abar .btn{min-height:44px;padding:0}
+.abar .btn svg{margin:0}
+.abar .btn.sq{padding:0}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 3 · Workbench.</b> A decision rail stays beside the evidence: price, confidence, risk, fit and the actions. The evidence sits in four tabs, shown here one frame each. On a phone the actions become a bar above the tab bar (pinned in the app; this static mock draws it at the bottom of each frame). Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Tabs across the top, the action bar above the tab bar. Left to right: Overview, Numbers, Risk and fit, Sources, and the empty portfolio on Risk and fit.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Empty portfolio (Risk and fit), limited data (Numbers), expanded thesis (Overview).</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="co.js"></script>
+<script>
+const TABS = ['Overview', 'Numbers', 'Risk and fit', 'Sources'];
+const tabsHtml = (on) => `<nav class="tabs3" aria-label="Company sections">${TABS.map((t, i) => `<a href="#" class="${i === on ? 'on' : ''}" ${i === on ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
+const pane = (on, s) => [
+  `<section class="panel">${secThesis(s === 'expanded')}</section><section class="panel">${secChart(220)}</section><div class="r2c"><section class="panel">${secBull()}</section><section class="panel">${secBear()}</section></div>`,
+  `<section class="panel">${secFund()}</section><section class="panel">${s === 'limited' ? secPeersNA() : secPeers()}</section>`,
+  `<section class="panel">${secRisk()}</section><section class="panel">${secFit(s === 'empty' ? 'empty' : 'found')}</section>`,
+  `<section class="panel">${secSources(true)}</section>`,
+][on];
+const rail = (s) => `<aside class="panel decide" aria-label="Decision">${coPrice()}${coMeta()}<hr>
+  <div class="fitline"><span>Portfolio fit</span>${s === 'empty' ? '<span class="nb">Not applicable</span>' : `<span><b class="num">${CO.scores.fit}</b> of 100</span>`}</div><hr>${coActions()}
+  <div class="lnk"><span>${CO.sources} sources</span><a href="#">See sources</a></div></aside>`;
+const head = () => `${coBack()}<div class="hd3">${coIdentity(56)}</div>`;
+const page = (on, s) => `${head()}${tabsHtml(on)}<div class="wb"><div class="pane">${pane(on, s)}</div>${rail(s)}</div>${adv()}`;
+const abar = () => `<div class="abar"><button class="btn">${ic('check', 's')}Approve</button><button class="btn ghost sq" aria-label="Save to Discover">${ic('bookmark', 's')}</button><button class="btn ghost sq" aria-label="Dismiss">${ic('x', 's')}</button><button class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</button></div>`;
+const phoneBody = (on, s) => `${coBack()}<div class="hd3">${coIdentity(44)}</div>${coPrice()}${coMeta()}${tabsHtml(on)}<div class="pane">${pane(on, s)}</div>${adv()}`;
+document.getElementById('desk').innerHTML = [0, 1, 2, 3].map((i) => `${i ? `<div class="cap" style="margin:18px 0 8px">${TABS[i]} tab</div>` : ''}${coDesktop(page(i, 'found'))}`).join('');
+document.getElementById('phones').innerHTML = [[0, 'found', 'Overview'], [1, 'found', 'Numbers'], [2, 'found', 'Risk and fit'], [3, 'found', 'Sources'], [2, 'empty', 'Empty portfolio']].map(([i, s, l]) => `<div><div class="cap">${l}</div>${coPhone(phoneBody(i, s), abar())}</div>`).join('');
+document.getElementById('states').innerHTML = [[2, 'empty', 'Empty portfolio: fit is Not applicable'], [1, 'limited', 'Limited data: peers unavailable'], [0, 'expanded', 'Thesis expanded']].map(([i, s, l]) => `<div class="region"><div class="cap">${l}</div><div class="co">${page(i, s)}</div></div>`).join('');
+</script>
+</body>
+</html>
