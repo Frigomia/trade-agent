@@ -26,6 +26,7 @@ from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.discovery import jobs as discovery_jobs
 from app.discovery.refresh import refresh_snapshot
+from app.discovery.screen import SHORTLIST_SIZE
 from app.discovery.universe import load_universe
 from app.memory.outcomes import evaluate_due_outcomes
 from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapshot, ScanRun
@@ -385,9 +386,9 @@ async def _discover_user(
     with app_db.scoped_session(user_id) as db:
         prefs = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()
         user = db.get(AppUser, user_id)
-        if prefs is None or not prefs.auto_analysis or user is None or user.status != "active":
+        if prefs is None or not prefs.auto_discovery or user is None or user.status != "active":
             return "off"
-        if await pause_state(db, user, defaults, now.date()) is not None:
+        if await pause_state(db, user, defaults, now.date(), reserve_last_run=True) is not None:
             return "skipped"
         today = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
         completed = (
@@ -400,7 +401,9 @@ async def _discover_user(
             )
             .first()
         )
-        if completed is not None or not await research.search_budget_available():
+        # Full shortlist research plus one follow-up per candidate; actual claims stay atomic.
+        searches = SHORTLIST_SIZE * (research.CANDIDATE_QUERY_BUDGET + 1)
+        if completed is not None or not await research.search_budget_available(searches):
             return "skipped"
         try:
             client = claude_keys.resolve_client(db, user_id, user.role)
@@ -413,7 +416,7 @@ async def _discover_user(
             client = _get_client()
             if client is None:
                 return "skipped"
-        limit = effective_limit(user, "analysis_run", defaults)
+        limit = max(0, effective_limit(user, "analysis_run", defaults) - 1)
     marker = f"discovery:ran:{user_id}:{now.strftime('%Y-%m-%d')}"
     if not await get_redis().set(marker, "1", nx=True, ex=RAN_MARKER_SECONDS):
         return "skipped"

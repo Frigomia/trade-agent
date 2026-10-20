@@ -7,9 +7,6 @@ import { apiFetch } from "@/lib/api/client";
 import type { AutoAnalysisPaused, Preferences } from "@/lib/preferences";
 import { useAction } from "@/lib/useAction";
 
-const LABEL = "Analyze my portfolio automatically each weekday";
-const EXPLAIN = "Runs once each weekday morning and counts as one run of your monthly limit.";
-
 // "YYYY-MM-DD" read as a local calendar date, so the day never shifts with the time zone.
 function longDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
@@ -25,6 +22,10 @@ function PausedText({ paused }: { paused: AutoAnalysisPaused }) {
     );
   }
   if (paused.limit === 0) return <>Paused: your monthly limit is 0 runs.</>;
+  if (paused.reason === "reserved") {
+    return <>Paused: your last monthly run is kept available for portfolio analysis or a manual run.
+      {paused.resumes_on && ` It resumes on ${longDate(paused.resumes_on)}.`}</>;
+  }
   const used = paused.limit === null ? "all your runs" : `all ${paused.limit} runs`;
   return (
     <>
@@ -34,12 +35,17 @@ function PausedText({ paused }: { paused: AutoAnalysisPaused }) {
   );
 }
 
-/** Saves on toggle. POST /preferences only updates the fields sent, so only `auto_analysis` goes. */
-export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onSaved: () => unknown }) {
+/** Each switch saves only its own field, independently of the other switch and form drafts. */
+export function AutoAnalysisSwitch({ saved, onSaved, kind = "analysis" }: { saved: Preferences; onSaved: () => unknown; kind?: "analysis" | "discovery" }) {
+  const field = kind === "discovery" ? "auto_discovery" : "auto_analysis";
+  const label = kind === "discovery" ? "Discover new ideas automatically each weekday" : "Analyze my portfolio automatically each weekday";
+  const explain = kind === "discovery"
+    ? "Uses your Claude key to research up to 8 candidates each weekday, even without holdings. Counts as one additional run of your monthly limit; portfolio analysis uses a separate run. Keeps your last run available."
+    : "Runs once each weekday morning and counts as one run of your monthly limit.";
   const [optimistic, setOptimistic] = useState<boolean | null>(null);
   const { run, submitting, error } = useAction();
-  const on = optimistic ?? Boolean(saved.auto_analysis);
-  const paused = on ? saved.auto_analysis_paused : null;
+  const on = optimistic ?? Boolean(saved[field]);
+  const paused = on ? saved[`${field}_paused`] : null;
 
   function toggle(next: boolean) {
     setOptimistic(next);
@@ -47,7 +53,7 @@ export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onS
       try {
         await apiFetch("/preferences", {
           method: "POST",
-          body: JSON.stringify({ auto_analysis: next }),
+          body: JSON.stringify({ [field]: next }),
         });
         await onSaved();
       } finally {
@@ -60,18 +66,18 @@ export function AutoAnalysisSwitch({ saved, onSaved }: { saved: Preferences; onS
     <Box>
       <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
         <Box>
-          <Typography id="auto-analysis-label" variant="subtitle2" component="h2" sx={{ fontSize: 16 }}>
-            {LABEL}
+          <Typography id={`${field}-label`} variant="subtitle2" component="h2" sx={{ fontSize: 16 }}>
+            {label}
           </Typography>
-          <Typography id="auto-analysis-hint" sx={{ fontSize: 12.5, color: "var(--muted)" }}>
-            {EXPLAIN}
+          <Typography id={`${field}-hint`} sx={{ fontSize: 12.5, color: "var(--muted)" }}>
+            {explain}
           </Typography>
         </Box>
         <Switch
           checked={on}
           disabled={submitting}
           onChange={(_, next) => toggle(next)}
-          slotProps={{ input: { "aria-labelledby": "auto-analysis-label", "aria-describedby": "auto-analysis-hint" } }}
+          slotProps={{ input: { "aria-labelledby": `${field}-label`, "aria-describedby": `${field}-hint` } }}
           sx={paused ? { "& .MuiSwitch-switchBase.Mui-checked": { color: "var(--warn)" }, "& .MuiSwitch-track": { bgcolor: "var(--warn)" } } : undefined}
         />
       </Box>

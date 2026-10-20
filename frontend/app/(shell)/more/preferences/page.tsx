@@ -215,6 +215,9 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         <Panel sx={{ p: "20px 24px" }}>
           <AutoAnalysisSwitch saved={initial} onSaved={onSaved} />
         </Panel>
+        <Panel sx={{ p: "20px 24px" }}>
+          <AutoAnalysisSwitch saved={initial} onSaved={onSaved} kind="discovery" />
+        </Panel>
 
         {error && <Alert severity="error">{error}</Alert>}
         <Panel

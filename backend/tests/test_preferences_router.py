@@ -24,6 +24,8 @@ def test_get_preferences_returns_defaults_when_none_exist(client):
         "notes": None,
         "auto_analysis": False,
         "auto_analysis_paused": None,
+        "auto_discovery": False,
+        "auto_discovery_paused": None,
         "monthly_contribution": None,
         "drift_threshold_pct": 5.0,
     }
@@ -159,6 +161,41 @@ def test_auto_analysis_defaults_to_off(client):
     body = client.get("/preferences").json()
     assert body["auto_analysis"] is False
     assert body["auto_analysis_paused"] is None
+
+
+def test_discovery_consent_is_separate_and_old_clients_preserve_it(client):
+    existing = client.post("/preferences", json={"auto_analysis": True}).json()
+    assert existing["auto_discovery"] is False and existing["auto_discovery_paused"] is None
+    assert client.post("/preferences", json={"auto_discovery": True}).json()["auto_discovery"]
+    saved = client.post("/preferences", json={"auto_discovery": None, "notes": "draft"}).json()
+    assert saved["auto_discovery"] is True and saved["auto_analysis"] is True
+    assert client.get("/me/export").json()["investment_preferences"]["auto_discovery"] is True
+    off = client.post("/preferences", json={"auto_discovery": False}).json()
+    assert off["auto_discovery"] is False and off["auto_analysis"] is True
+    assert off["auto_discovery_paused"] is None
+
+
+def test_discovery_has_its_own_key_pause(client_no_key):
+    body = client_no_key.post("/preferences", json={"auto_discovery": True}).json()
+    assert body["auto_discovery_paused"]["reason"] == "no_key"
+    assert body["auto_analysis_paused"] is None
+
+
+def test_discovery_reserves_last_unit_without_pausing_holdings_analysis(client):
+    client.post("/preferences", json={"auto_analysis": True, "auto_discovery": True})
+    limit = settings.default_monthly_analysis_limit
+    try:
+        redis_client_module._redis = None
+        asyncio.run(get_redis().set(_usage_key("analysis_run", str(USER_ID)), limit - 1))
+    finally:
+        redis_client_module._redis = None
+    body = client.get("/preferences").json()
+    assert body["auto_analysis_paused"] is None
+    assert body["auto_discovery_paused"] == {
+        "reason": "reserved",
+        "limit": limit,
+        "resumes_on": next_month_start(datetime.now(UTC).date()).isoformat(),
+    }
 
 
 def test_the_switch_round_trips_and_saving_other_fields_keeps_it(client):

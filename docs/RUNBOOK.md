@@ -416,18 +416,22 @@ universe is empty; failed symbols are logged by name and retried the next time. 
 the workflow from the Actions tab with `job` set to `discovery_snapshot`. Whether Yahoo throttles the Fly
 machine harder than a laptop is unknown until the first run, so check that run's log.
 
-Two discovery commands share the same production workflow/concurrency guard: `discovery_mentions`
+Two discovery commands use the same production workflow with separate concurrency groups: `discovery_mentions`
 runs daily at 04:30 UTC and fills the fixed-theme global cache using the owner's server Claude
 and Tavily keys; `discovery` runs weekdays at 05:00 UTC for active users who enabled
-`auto_analysis`. Empty portfolios are supported. User scans use their own saved Claude client
+`auto_discovery` (off by default, independent of portfolio analysis). Empty portfolios are supported.
+The Preferences switch explains Claude costs and the additional monthly run. User scans use their own saved Claude client
 (only admins without a saved key use the server client), reuse the manual scan safeguards and
 consume one monthly analysis unit independently of holdings analysis. A completed scan that day,
-a prior automatic attempt, a missing/paused key or unavailable/exhausted Tavily budget skips the
+a prior automatic attempt, a missing/paused key, fewer than two monthly units left or fewer than
+40 Tavily searches remaining skips the
 user. The owner cap remains `TAVILY_DAILY_SEARCH_LIMIT=200` per UTC day across all searches.
 Missing owner configuration makes the mentions command a no-op; a configured failed batch exits 1.
 Both commands are selectable in the workflow's `job` dispatch input. They do not send Telegram
 messages themselves; the existing 05:30 daily job includes at most one high-confidence idea in
-the digest when opted in. A long discovery pass can delay that daily job in the shared queue.
+the digest when opted in. Different commands may overlap; their Redis locks prevent duplicate
+work for the same command. Late discovery may miss that day's digest. Daily mentions intentionally
+also serve weekend manual scans. Apply the consent migration before running the new application.
 
 When it finishes it logs one summary line, for example:
 

@@ -1064,8 +1064,11 @@ monthly analysis allowance still applies.
 
 **Scheduling slice implemented.** Commands `discovery_mentions` (daily 04:30 UTC) and `discovery`
 (weekdays 05:00 UTC) reuse the existing batch and scan jobs. Opted-in active users share the
-existing monthly allowance with holdings analysis; each started scan consumes one unit. Missing
-keys, pause state, exhausted owner budget, a completed scan that day or a same-day automatic
+existing monthly allowance with holdings analysis; each started scan consumes one unit. Discovery
+requires its own `auto_discovery` switch (default off, including existing analysis opt-ins), with
+Claude cost copy and its own pause status. It reserves the final monthly unit and requires
+40 searches of owner budget headroom (non-reserving preflight; actual claims remain atomic).
+Missing keys, pause state, insufficient owner budget, a completed scan that day or a same-day automatic
 attempt skip work. Manual overlap/startup refusal refunds before clearing the automatic day
 marker. A 40-minute command budget plus five minutes of grace and daily rotation bounds cost
 and avoids always reaching users in the same order. Existing job-level key/active-account guards,
@@ -1075,7 +1078,9 @@ The existing 05:30 UTC morning digest adds at most one highest-ranked high-confi
 idea under `digest_enabled`, using the same daily send marker and advisory footer. Malformed,
 old, reviewed, medium/low-confidence and other users' ideas are excluded. Recipient, account and
 opt-in checks run again after quote waits. All workflow commands retain the production branch,
-environment and concurrency protections. No new tables, notification flags or frontend are added.
+environment protections. Separate concurrency groups prevent pending discovery from replacing
+the daily job; existing Redis locks prevent same-command overlap. No new tables or notification
+flags are added; the separate discovery consent column has a generated migration and settings UI.
 Live provider checks (I1 and I3) are still outstanding; mocked tests do not establish them.
 
 - `POST /discovery/run` (202) mirroring `/analysis/run`: dependencies `require_claude_key`,
@@ -1086,7 +1091,7 @@ Live provider checks (I1 and I3) are still outstanding; mocked tests do not esta
   results. `GET /discovery/ideas` lists discovery recommendations plus the latest `ScanRun`
   including excluded and rejected items.
 - `scheduled.py`: commands `discovery_snapshot` (weekly, Phase 4), `discovery_mentions` (daily,
-  Phase 2), and `discovery` which runs a per-user scan for users with `auto_analysis` on and a
+  Phase 2), and `discovery` which runs a per-user scan for users with `auto_discovery` on and a
   usable key, respecting `auto_analysis.pause_state` and the usage rules.
 - Telegram: extend `notify.build_message` with one high-confidence idea line; reuse the opt-in
   flags. Keep the "Advisory only" footer.

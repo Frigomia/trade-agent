@@ -6,14 +6,24 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app import scheduled
+from app.agents.research import search_budget_available
 from app.config import settings
 from app.discovery import jobs
-from app.models import AppUser, Recommendation, ScanRun, UserApiKey
+from app.models import AppUser, InvestmentPreferences, Recommendation, ScanRun, UserApiKey
 from app.redis_client import get_redis
-from app.usage import UsageLimitExceeded, load_limit_defaults
+from app.usage import UsageLimitExceeded, _usage_key, check_and_increment_usage, load_limit_defaults
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 from tests.test_discovery_jobs import evaluation
-from tests.test_scheduled import MONDAY, SATURDAY, _arun, _key_text, _opted_in, _usage
+from tests.test_scheduled import MONDAY, SATURDAY, _arun, _key_text, _usage
+from tests.test_scheduled import _opted_in as _analysis_opted_in
+
+
+def _opted_in(db, user_id, **kwargs):
+    _analysis_opted_in(db, user_id, **kwargs)
+    prefs = db.query(InvestmentPreferences).filter_by(user_id=user_id).one()
+    prefs.auto_discovery = True
+    prefs.auto_analysis = False  # discovery consent is independent of portfolio analysis
+    db.commit()
 
 
 @pytest.fixture
@@ -46,9 +56,13 @@ def test_opted_in_empty_portfolio_gets_discovery_with_own_key(env):
     assert _usage(USER_ID) == "1"
 
 
-@pytest.mark.parametrize("mode", ["off", "no_key", "attention", "invited", "disabled", "weekend"])
+@pytest.mark.parametrize(
+    "mode", ["off", "no_preferences", "no_key", "attention", "invited", "disabled", "weekend"]
+)
 def test_noneligible_users_are_never_charged(env, mode):
     if mode == "off":
+        _analysis_opted_in(env, USER_ID)  # preferences and a usable key, but no discovery consent
+    elif mode == "no_preferences":
         add_app_user(env, USER_ID)
     else:
         _opted_in(
@@ -64,6 +78,44 @@ def test_noneligible_users_are_never_charged(env, mode):
     assert summary.discovery_runs == 0 and summary.discovery_failures == 0
     jobs.evaluate_scan.assert_not_awaited()
     assert _usage(USER_ID) is None
+    assert _arun(get_redis().exists(marker())) == 0
+
+
+def test_last_monthly_unit_stays_available_and_quota_race_is_rejected(env):
+    _opted_in(env, USER_ID)
+    env.get(AppUser, USER_ID).monthly_analysis_limit = 20
+    env.commit()
+    _arun(get_redis().set(_usage_key("analysis_run", str(USER_ID)), 18))
+
+    async def racing_usage(kind, user_id, limit):
+        assert limit == 19
+        await check_and_increment_usage(kind, user_id, 20)  # a manual run takes unit 19
+        await check_and_increment_usage(kind, user_id, limit)
+
+    with patch.object(scheduled, "check_and_increment_usage", racing_usage):
+        assert run().discovery_skipped == 1
+    assert _usage(USER_ID) == "19"
+    assert _arun(get_redis().exists(marker())) == 0
+    jobs.evaluate_scan.assert_not_awaited()
+    assert run().discovery_skipped == 1  # preflight also preserves the final unit
+    assert _arun(get_redis().exists(marker())) == 0
+    _arun(check_and_increment_usage("analysis_run", str(USER_ID), 20))
+    assert _usage(USER_ID) == "20"  # holdings/manual analysis can still use it
+
+
+@pytest.mark.parametrize("used, expected", [(160, 1), (161, 0), (199, 0)])
+def test_full_scan_search_headroom_is_required_before_charging(env, monkeypatch, used, expected):
+    _opted_in(env, USER_ID)
+    monkeypatch.setattr(settings, "tavily_api_key", "test-tavily-key")
+    monkeypatch.setattr(settings, "tavily_daily_search_limit", 200)
+    monkeypatch.setattr(scheduled.research, "search_budget_available", search_budget_available)
+    _arun(get_redis().set(scheduled.research._search_budget_key(), used))
+    summary = run()
+    assert summary.discovery_runs == expected
+    assert jobs.evaluate_scan.await_count == expected
+    assert _usage(USER_ID) == ("1" if expected else None)
+    assert _arun(get_redis().exists(marker())) == expected
+    assert _arun(get_redis().get(scheduled.research._search_budget_key())) == str(used)
 
 
 def test_admin_fallback_is_explicit_and_not_a_saved_key(env):

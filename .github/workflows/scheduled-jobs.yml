@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: scheduled-jobs
+  group: scheduled-jobs-${{ github.event.schedule || inputs.job || 'daily' }}
   cancel-in-progress: false
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
       - name: Run the scheduled command in a one-off Fly machine
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          # Scheduled commands share the production concurrency group; dispatch uses its chosen command.
+          # Redis locks prevent dispatch/cron overlap for the same command; other commands may overlap.
           COMMAND: ${{ github.event.schedule == '0 4 * * 0' && 'discovery_snapshot' || github.event.schedule == '30 4 * * *' && 'discovery_mentions' || github.event.schedule == '0 5 * * 1-5' && 'discovery' || inputs.job || 'daily' }}
         # `machine run` returns once the machine has started, not when the command ends, and with
         # `--rm` the exit code is gone with the machine. So the machine is kept, waited for, its exit

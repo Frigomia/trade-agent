@@ -20,7 +20,7 @@ FRESH_CALENDAR_DAYS = 2
 
 @dataclass(frozen=True)
 class Pause:
-    reason: Literal["no_key", "limit"]
+    reason: Literal["no_key", "limit", "reserved"]
     limit: int | None = None
     resumes_on: date | None = None
 
@@ -48,12 +48,20 @@ def next_month_start(today: date) -> date:
 
 
 async def pause_state(
-    db: Session, user: AppUser, defaults: LimitDefaults, today: date
+    db: Session,
+    user: AppUser,
+    defaults: LimitDefaults,
+    today: date,
+    *,
+    reserve_last_run: bool = False,
 ) -> Pause | None:
     """Why this user's automatic analysis cannot run right now, or None when it can."""
     if not claude_keys.has_usable_key(db, user.id, user.role):
         return Pause("no_key")
     limit = effective_limit(user, "analysis_run", defaults)
-    if await get_usage("analysis_run", str(user.id)) >= limit:
+    used = await get_usage("analysis_run", str(user.id))
+    if used >= limit:
         return Pause("limit", limit=limit, resumes_on=next_month_start(today))
+    if reserve_last_run and used >= limit - 1:
+        return Pause("reserved", limit=limit, resumes_on=next_month_start(today))
     return None

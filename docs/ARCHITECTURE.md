@@ -202,6 +202,7 @@ BacktestResult
 InvestmentPreferences
   id, user_id, risk_tolerance ("conservative"|"moderate"|"aggressive", nullable),
   auto_analysis (bool, not null, default false: weekday automatic analysis switch; the API leaves it unchanged when a save omits it),
+  auto_discovery (bool, not null, default false: separate weekday discovery consent; existing analysis opt-ins remain opted out),
   sector_avoid_list (JSON list[str], not null, default []; the API accepts at most 20 items, each
   stripped, 1-50 characters, no control characters — reads stay lenient for older rows),
   notes (nullable), updated_at,
@@ -361,8 +362,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar`. Rate limited: 5/min per user |
 | POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
-| GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes `auto_analysis` and `auto_analysis_paused` (`null` when not paused or when the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
-| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for `auto_analysis` is ignored). `monthly_contribution` is 0.01 to 1,000,000 with two decimals at most (`422` otherwise); `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds `auto_analysis_paused` (`{reason: "no_key"|"limit", limit?, resumes_on?}`) only while `auto_analysis` is on and cannot run |
+| GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes independent default-off `auto_analysis` and `auto_discovery` flags and their `_paused` fields (`null` when off, not paused or the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
+| POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for either automatic-run flag is ignored). `monthly_contribution` is 0.01 to 1,000,000 with two decimals at most (`422` otherwise); `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds each enabled flag's `_paused` state (`no_key` or `limit`; discovery also reports `reserved` when only the final monthly unit remains), with `limit` and `resumes_on` where applicable |
 | POST | `/plans/preview` | `{amount, whole_shares?}` | Computes this month's contribution plan from the caller's own holdings, watchlist, targets and pending calls, and saves nothing. `amount` is 0.01 to 1,000,000 EUR with two decimals at most (`422` otherwise). Returns the lines, `left_out`, the notes and the "Advisory only" line (see "Contribution planner" below). Rate limited: 10/min per user |
 | POST | `/plans` | `{amount, whole_shares?}` | Computes the plan again on the server (the client never sends lines) and saves it with its lines; returns it as stored, with `id` and `created_at`. `422` "This plan is too large to store." when a figure overflows its column. `201`. `409` when the caller already keeps 120 saved plans. Rate limited: 10/min per user |
 | GET | `/plans` | — | The caller's saved plans, newest first: `{id, created_at, amount_eur, line_count}` |
@@ -1075,10 +1076,12 @@ default — same dialect and models as production, started with
   exception class name only, and never stops the others. Because the run was already counted
   against the limit, a failed run is counted in both `analysis_runs` and `analysis_failures`.
 - **Automatic discovery:** a separate `discovery` command runs before the morning digest. It
-  reuses `auto_analysis`, `pause_state`, the caller's saved Claude key (explicit server fallback
+  requires separate `auto_discovery` consent (default off, including existing users), and reuses
+  `pause_state`, the caller's saved Claude key (explicit server fallback
   only for admins without a saved key), the monthly `analysis_run` allowance and discovery's
   single-flight job. It skips users with a completed scan on that UTC day and users whose owner
-  search budget is unavailable/exhausted, without charging or making a day claim. There is no
+  search budget has fewer than 40 searches left (eight candidates times four queries plus one
+  follow-up), without charging or making a day claim. There is no
   holdings requirement. `discovery:ran:<user_id>:<YYYY-MM-DD>` (25-hour TTL) permits at most one
   automatic attempt per UTC day. Quota rejection clears it; refused job creation refunds before
   clearing it, including overlap with a manual discovery run. Accepted failed attempts retain it,
@@ -1088,7 +1091,12 @@ default — same dialect and models as production, started with
   of grace bounds in-flight work inside the one-hour command lock. Failures for one user do not
   block others, and the reused persistence path prevents writes for removed/disabled accounts.
   Automatic holdings analysis and discovery each use a unit when they run; both share the user's
-  existing monthly allowance. The preflight does not reserve budget; every actual Tavily request
+  existing monthly allowance. Discovery preserves the last monthly unit for holdings/manual
+  analysis, enforced both by its pause check and the increment limit (`monthly limit - 1`) to
+  handle races. Preferences expose its own `auto_discovery_paused` field (`no_key`, `limit`, or
+  `reserved`, with the limit and next-month date). Its switch explains Claude costs and the
+  additional monthly unit. Explicit null/omitted consent leaves it unchanged. The search
+  preflight does not reserve budget; every actual Tavily request
   must still pass the atomic global cap.
 - **Daily mentions:** `discovery_mentions` alone invokes `research.discover_mentions()` with its
   fixed themes and server client. User scans only consume the cache. Missing owner keys or a
@@ -1185,8 +1193,9 @@ default — same dialect and models as production, started with
   `2` unknown command (argparse). One user's failure never stops the others.
 - **Cadence:** the GitHub Actions cron refreshes snapshots Sundays at 04:00 UTC, runs global
   mentions daily at 04:30 UTC, user discovery weekdays at 05:00 UTC and the existing daily job
-  at 05:30 UTC. They share the production concurrency group; a long discovery run can delay
-  the daily job. The
+  at 05:30 UTC. Concurrency groups are separated by schedule/dispatch command so a pending
+  discovery job cannot replace the daily job; Redis locks still prevent same-command overlap.
+  Ordering is best effort: a delayed discovery may miss that day's digest. The
   cron and Task Scheduler examples below use weekdays at 23:00 UTC, after the EU
   and US closes.
 
