@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · Option 2 · Soft</title>
+<link rel="stylesheet" href="lib.css">
+<link rel="stylesheet" href="v2.css">
+<style>
+/* Option 2 · Soft. The reference's own look: light and airy, blue accent, large radii, soft shadows, generous space.
+   Light first; the dark variant is a calm navy. Emerald and coral stay reserved for rise and fall. Form from content:
+   an idea is a person-sized story, so cards breathe and carry one price and one sentence. */
+:root[data-theme=light]{--bg:#f5f7fb;--text:#0f1a2e;--text2:#34425c;--muted:#5d6b85;--accent:#2457d6;--accent-solid:#2457d6;--on-accent:#fff;--up:#067a52;--down:#c8323d;--warn:#9a5b00;--up-bg:rgba(36,87,214,.09);--panel:#fff;--line:rgba(15,26,46,.08);--line2:rgba(15,26,46,.2);--track:rgba(15,26,46,.06);--shadow:0 1px 2px rgba(15,26,46,.04),0 12px 32px -14px rgba(15,26,46,.14);--btn-shadow:0 8px 18px -8px rgba(36,87,214,.5);--page-glow:none;--rp:22px;--rc:14px}
+:root[data-theme=dark]{--rp:22px;--rc:14px;--page-glow:none;--bg:#0c1426;--text:#e9eefb;--text2:#c2cce3;--muted:#92a0bd;--accent:#7ea3ff;--accent-solid:#7ea3ff;--on-accent:#0a1530;--up:#34e7a9;--down:#ff6b72;--warn:#f4c04f;--up-bg:rgba(126,163,255,.14);--panel:#131d36;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.2);--track:rgba(255,255,255,.07);--shadow:0 14px 34px -18px #000;--btn-shadow:none}
+.side{background:none}
+.nav.on{background:var(--panel);box-shadow:var(--shadow);color:var(--accent)}
+.nav em{background:var(--accent-solid)}
+.brand i{border-radius:12px}
+.main{padding:24px 34px 40px}
+.v2{gap:22px}
+.head2 h1{font-size:34px}
+.head2 .sub{font-size:var(--fs-lead);color:var(--muted)}
+.search{background:var(--panel);box-shadow:var(--shadow);border-color:transparent}
+.scanbar{padding:12px 16px;border-color:transparent}
+.hero{padding:30px;display:grid;gap:18px;position:relative;overflow:hidden;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 11%,var(--panel)),var(--panel) 62%)}
+.hero .top{display:flex;gap:16px;align-items:center}
+.hero .nm{font-size:var(--fs-head);font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.hero .tk{font-size:var(--fs-body);color:var(--muted);margin:2px 0 0}
+.hero .price{margin-left:auto;text-align:right;font-size:32px;font-weight:650;letter-spacing:-.035em;line-height:1.1;white-space:nowrap}
+.hero .price small{display:flex;justify-content:flex-end;gap:6px;margin-top:4px;font-size:var(--fs-label);font-weight:400;color:var(--muted);letter-spacing:0}
+.hero .body{display:grid;grid-template-columns:1fr auto;gap:22px;align-items:end}
+.hero .webbox{margin-top:0;background:color-mix(in srgb,var(--panel) 70%,transparent)}
+.hero .go{width:56px;height:56px;border-radius:999px;display:grid;place-items:center;background:var(--accent-solid);color:var(--on-accent);box-shadow:var(--btn-shadow)}
+.hero .go svg{width:22px;height:22px}
+.hero .meta{display:flex;gap:8px;flex-wrap:wrap}
+.hero .acts{display:grid;gap:10px;justify-items:center}
+.hero .acts small{font-size:var(--fs-cap);color:var(--muted)}
+.card{padding:18px;gap:12px}
+.card .chips .chip{padding:4px 8px;gap:5px}
+.card .chips .mt i{width:7px}
+.card .logo,.hero .logo{border-radius:50%}
+.grid3{gap:18px}
+.card .ln{font-size:var(--fs-body)}
+.chip{background:var(--track)}
+.list{padding:20px 22px}
+.rw{border-top-color:var(--line)}
+.pillx.up{background:color-mix(in srgb,var(--up) 12%,transparent)}
+.phone{background-image:none}
+.phone .hero{padding:20px}
+.phone .hero .top{flex-wrap:wrap}
+.phone .hero .price{margin-left:0;text-align:left;flex-basis:100%;font-size:var(--fs-metric)}
+.phone .hero .price small{justify-content:flex-start}
+.phone .hero .body{grid-template-columns:1fr}
+.phone .hero .acts{grid-auto-flow:column;justify-content:start;align-items:center}
+.phone .head2 h1{font-size:28px}
+.phone .tabbar{background:var(--panel)}
+.frame{border-color:var(--line)}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 2 · Soft.</b> The reference's own personality: light and airy, a blue accent, big radii and soft shadows, round logos, a circular go button. Light first, with a calm navy dark variant. It changes the app's look (teal to blue), so it is the biggest departure from DESIGN.md. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Same page, one column, in each state.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width</b> (below the title only).</div>
+<div class="grid2" id="states"></div>
+<script src="lib.js"></script>
+<script src="v2.js"></script>
+<script>
+const lead = DATA.ideas[0], rest = DATA.ideas.slice(1);
+const hero = (hasFit) => `<div class="panel hero"><div class="top">${logo(lead.name, 56)}<div style="min-width:0"><div class="nm">${lead.name}</div><div class="tk">${lead.ticker} · ${lead.exch}</div></div>
+  <div class="price"><span class="num">${lead.cur} ${lead.price}</span><small>${chg(lead.chg)} · ${lead.asOf}</small></div></div>
+  <div class="meta">${idChips(lead)}<span class="chip">${confW(lead.confidence)}</span><span class="chip">${riskW(lead.risk)}</span></div>
+  <div class="body">${aiBox(lead)}<div class="acts"><a href="#" class="go" aria-label="Open full analysis of ${lead.name}">${ic('arrow')}</a><small>Full analysis</small></div></div>
+  <div><button class="lk m" aria-label="Save to Discover">${ic('bookmark', 'xs')}Save to Discover</button>${hasFit ? '' : '<span class="chip" style="margin-left:8px">Fit unavailable until you add holdings</span>'}</div></div>`;
+mountV2((hasFit) => `<div class="sec"><h2>Top opportunity</h2></div>${hero(hasFit)}
+  <div class="sec"><h2>Other opportunities${asOfNote}</h2><a href="#" class="more">View all ${rest.length}${ic('chev', 'xs')}</a></div><div class="grid3">${rest.slice(0, 3).map((i) => oppCard(i)).join('')}</div>`);
+</script>
+</body>
+</html>
