@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Discover · Option 3 · Cards</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="dc.css">
+<style>
+/* Option 3 · Cards. A board of company cards, three across. The first tile is the add tile: it holds the search, so adding
+   a company feels like placing a card. The insight gets room to breathe (up to three lines). Form from content: each
+   company is a small story, so it gets a card, not a line. */
+.grid3c{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
+.co .ccard{padding:18px;display:grid;gap:12px;align-content:start;grid-template-rows:auto auto 1fr auto auto}
+.ccard .h{display:flex;gap:12px;align-items:center}
+.ccard .h>span:nth-child(2){min-width:0;display:grid}
+.ccard .ins{min-height:calc(3 * 1.45em)}
+.ccard .noins{font-size:var(--fs-body);color:var(--muted);min-height:calc(3 * 1.45em);margin:0}
+.ccard .pxr{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.ccard .pxr .px{justify-items:start;text-align:left}
+.ccard .pxr .ad{font-size:var(--fs-label);color:var(--muted)}
+.ccard .acts{display:flex;gap:8px}
+.ccard .acts .btn:first-child{flex:1}
+.addt{border:1.5px dashed var(--line2);border-radius:var(--rp);padding:18px;display:grid;gap:12px;align-content:start;position:relative;background:color-mix(in srgb,var(--panel) 60%,transparent)}
+.addt h2{margin:0;font-size:var(--fs-lead);font-weight:650;display:flex;gap:8px;align-items:center}
+.addt .sbox{flex-direction:column;align-items:stretch}
+.addt .sbox .search{min-height:44px;box-shadow:none}
+.addt .hint{margin:0;padding:0}
+.addt .sres{top:calc(100% + 6px)}
+.addt .srow{flex-direction:column;align-items:stretch;gap:8px}
+.addt .dupn{justify-content:center}
+.addt .btn{width:100%}
+.phone .grid3c,.region .grid3c{grid-template-columns:1fr}
+.region .addt .sres,.phone .addt .sres{position:static;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="tag"><b>Option 3 · Cards.</b> A board of company cards, three across; the first tile is the add tile with the search inside. The insight gets up to three lines. Try it: type <code>kes</code> or <code>hal</code> in the add tile, Add, Analyze, Remove (then Undo), the filters and the sort. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> One card per row, the add tile first. Left to right: watchlist, empty, search with a duplicate, no match for the filter, loading.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Empty, duplicate in search, no search result, no match for the filter, loading, research running, removed with Undo.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="dc.js"></script>
+<script>
+const cc = (d) => `<article class="panel ccard"><div class="h">${logo(d.n, 44)}<span>${nameLink(d)}<span class="mt3">${d.t} · ${d.exch} · ${d.cur}</span></span></div>
+  <div>${pill(d.status)}</div>${isAn(d) && d.insight ? `<p class="ins">${ic('spark', 'xs')}<span>${d.insight}</span></p>` : `<p class="noins">${d.status === 'running' ? 'Research is running. This takes about a minute.' : 'No research yet. Analyze it to get a one-line insight.'}</p>`}
+  <div class="pxr">${priceBlock(d)}<span class="ad">${sub(d)}</span></div><div class="acts">${rowActions(d)}</div></article>`;
+const addTile = (s) => `<div class="addt"><h2>${ic('plus', 's')}Add a company</h2>${searchBox(s)}</div>`;
+const render = (s) => {
+  const v = visible(s);
+  return `${dcHead()}
+  ${s.loading ? skel() : `<div class="bar2">${filters(s)}${sorter(s)}</div>
+  ${!s.items.length ? `<div class="grid3c">${addTile(s)}</div>${empty()}` : v.length ? `<div class="grid3c">${addTile(s)}${v.map(cc).join('')}</div>` : `<div class="grid3c">${addTile(s)}</div>${noMatch(s)}`}`}
+  ${toast(s)}<p class="adv">Prices are delayed. AI insights come from research that is saved with each company; they are not investment advice, and nothing here is sent to a broker.</p>`;
+};
+mountDC(render);
+</script>
+</body>
+</html>
