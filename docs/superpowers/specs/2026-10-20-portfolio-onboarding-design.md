@@ -22,8 +22,10 @@ not a verified listing country. No currency conversion is added to the existing 
 
 Portfolio value includes priced holdings with unknown basis. P/L includes only priced holdings
 with known basis and exposes coverage counts/completeness. Snapshot cost totals include known
-basis only. An additional purchase preserves an unknown basis for an existing nonempty position;
-a recorded first purchase into a zero-share position establishes basis and date from that trade.
+basis only and persist whether coverage is complete; charts suppress incomplete cost comparisons.
+An additional purchase preserves an unknown basis for an existing nonempty position;
+a recorded purchase into a zero-share position establishes basis and fills an unknown purchase
+date from that trade, preserving any previously known first purchase date.
 
 ## Portfolio frontend phase
 

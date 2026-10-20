@@ -3,7 +3,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Alert, Box, Button, Dialog, TextField, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { apiFetch } from "@/lib/api/client";
+import { ApiError, apiFetch } from "@/lib/api/client";
 import type { AssetType, HoldingSummary } from "@/lib/api/portfolio-types";
 import { useAction } from "@/lib/useAction";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
@@ -97,17 +97,22 @@ function HoldingFormBody({
       ...(target.trim() ? { target_weight: targetWeight } : {}),
     };
     await run(async () => {
-      await apiFetch("/portfolio/holdings", {
-        method: "POST",
-        body: JSON.stringify({
-          ticker: normalizedTicker,
-          ...(name.trim() ? { name: name.trim() } : {}),
-          ...(assetType ? { asset_type: assetType } : {}),
-          shares: sharesNum,
-          ...purchaseDetails,
-          ...(editing ? { sector: holding.sector } : {}),
-        }),
-      });
+      try {
+        await apiFetch("/portfolio/holdings", {
+          method: "POST",
+          body: JSON.stringify({
+            ticker: normalizedTicker,
+            ...(name.trim() ? { name: name.trim() } : {}),
+            ...(assetType ? { asset_type: assetType } : {}),
+            shares: sharesNum,
+            ...purchaseDetails,
+            ...(editing ? { sector: holding.sector } : {}),
+          }),
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 422) setShowMore(true);
+        throw err;
+      }
       // The holdings upsert never carries the ISIN; it has its own route, and a failure there does not undo the save.
       await saveIsinAfterAdd(normalizedTicker, editing ? null : isinFor(normalizedTicker));
       onSaved();

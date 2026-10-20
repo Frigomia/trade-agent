@@ -99,7 +99,12 @@ def test_removed_account_during_profile_lookup_cannot_write(client, db_session, 
 def test_summary_and_snapshot_keep_unknown_basis_out_of_profit(client, profile):
     client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 3})
     client.post("/portfolio/holdings", json={"ticker": "AAPL", "shares": 2, "cost_basis": 100})
-    quote = {"price": 150, "closes": [150], "as_of": datetime.now(UTC).date().isoformat()}
+    quote = {
+        "price": 150,
+        "closes": [150],
+        "as_of": datetime.now(UTC).date().isoformat(),
+        "stale": False,
+    }
     with patch("app.routers.portfolio.fetch_quote_and_history", AsyncMock(return_value=quote)):
         body = client.get("/portfolio/summary").json()
     assert body["total_market_value"] == 750 and body["total_cost_basis"] == 200
@@ -115,6 +120,8 @@ def test_summary_and_snapshot_keep_unknown_basis_out_of_profit(client, profile):
     with patch("app.snapshots.fetch_quote_and_history", AsyncMock(return_value=quote)):
         snap = client.post("/portfolio/snapshot").json()
     assert snap["total_market_value"] == 750 and snap["total_cost_basis"] == 200
+    assert snap["cost_basis_complete"] is False
+    assert client.get("/portfolio/snapshots").json()[0]["cost_basis_complete"] is False
 
 
 @pytest.mark.parametrize("action, shares", [("BUY", 1), ("SELL", 2)])
@@ -184,3 +191,75 @@ def test_metadata_outage_keeps_manual_updates_and_reads_available(client, monkey
         summary = client.get("/portfolio/summary")
     assert summary.status_code == 200 and summary.json()["unpriced_count"] == 1
     assert "secret-cache" not in caplog.text
+
+
+@pytest.mark.parametrize("days_ahead, expected", [(1, False), (2, True)])
+def test_quote_freshness_allows_exchange_local_date_one_day_ahead(days_ahead, expected):
+    as_of = (datetime.now(UTC).date() + timedelta(days=days_ahead)).isoformat()
+    assert market_data.quote_is_stale(as_of) is expected
+
+
+def test_rebuy_preserves_known_first_purchase_date(client, profile):
+    client.post(
+        "/portfolio/holdings",
+        json={
+            "ticker": "MSFT",
+            "shares": 0,
+            "cost_basis": 100,
+            "first_purchase_date": "2024-01-01",
+        },
+    )
+    response = client.post(
+        "/portfolio/trades",
+        json={
+            "ticker": "MSFT",
+            "action": "BUY",
+            "shares": 2,
+            "price": 50,
+            "date": "2026-10-20",
+        },
+    )
+    assert response.status_code == 200
+    row = client.get("/portfolio/holdings").json()[0]
+    assert row["cost_basis"] == 50
+    assert row["first_purchase_date"] == "2024-01-01"
+
+
+def test_profile_recovery_backfills_fallback_name_but_preserves_override(client, monkeypatch):
+    client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1, "asset_type": "STOCK"})
+    monkeypatch.setattr(holdings, "fetch_profile", AsyncMock(return_value={"name": "Microsoft"}))
+    assert client.get("/portfolio/holdings").json()[0]["name"] == "Microsoft"
+    assert (
+        client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 2}).json()["name"]
+        == "Microsoft"
+    )
+    client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 2, "name": "My Microsoft"})
+    assert client.get("/portfolio/holdings").json()[0]["name"] == "My Microsoft"
+
+
+def test_explicit_null_sector_is_not_refilled_by_profile(client, profile):
+    client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1})
+    body = client.post(
+        "/portfolio/holdings", json={"ticker": "MSFT", "shares": 1, "sector": None}
+    ).json()
+    assert body["sector"] is None
+    assert client.get("/portfolio/holdings").json()[0]["sector"] is None
+
+
+def test_summary_overlaps_metadata_and_quotes_and_uses_provider_stale_flag(client, monkeypatch):
+    client.post("/portfolio/holdings", json={"ticker": "MSFT", "shares": 1, "asset_type": "STOCK"})
+    started = asyncio.Event()
+
+    async def profile(ticker):
+        await asyncio.wait_for(started.wait(), timeout=2)
+        return {"currency": "USD"}
+
+    async def quote(ticker):
+        started.set()
+        return {"price": 100, "as_of": datetime.now(UTC).date().isoformat(), "stale": True}
+
+    monkeypatch.setattr(holdings, "fetch_profile", profile)
+    monkeypatch.setattr("app.routers.portfolio.fetch_quote_and_history", quote)
+    body = client.get("/portfolio/summary").json()
+    assert body["holdings"][0]["currency"] == "USD"
+    assert body["holdings"][0]["stale"] is True

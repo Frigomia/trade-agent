@@ -8,7 +8,7 @@ from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app import holdings as holding_service
-from app.agents.market_data import fetch_quote_and_history, quote_is_stale
+from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
 from app.http_headers import no_store
@@ -254,7 +254,7 @@ async def _prices_for(tickers: set[str]) -> dict[str, tuple[float | None, date |
             as_of = date.fromisoformat(raw_date) if isinstance(raw_date, str) else None
         except ValueError:
             as_of = None
-        return price, as_of, quote_is_stale(raw_date)
+        return price, as_of, bool(data.get("stale", True))
 
     results = await asyncio.gather(*(one(t) for t in ordered))
     return dict(zip(ordered, results, strict=True))
@@ -277,10 +277,11 @@ async def get_summary(
     # Everything needed is copied out; release the pooled connection before awaiting quotes, which
     # can take seconds (retries) during a market-data outage.
     db.close()
-    await holding_service.enrich_holdings(rows)
-
     open_rows = [r for r in rows if r.shares > 0]  # a fully sold holding stays a row, unpriced
-    prices = await _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows})
+    _, prices = await asyncio.gather(
+        holding_service.enrich_holdings(rows),
+        _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows}),
+    )
 
     for w in watch_rows:
         w.current_price = prices[w.ticker][0]

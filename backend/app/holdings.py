@@ -51,14 +51,14 @@ def _save_holding(
         # Missing update fields preserve known purchase data; explicit null clears it.
         for field, value in values.items():
             setattr(row, field, value)
-        if not row.name:
+        if not row.name or row.name == payload.ticker:
             row.name = profile.get("name") or payload.ticker
         if row.asset_type is None:
             quote_type = profile.get("quote_type")
             if quote_type not in {"EQUITY", "ETF"}:
                 raise HoldingRefused("Choose Stock or ETF when the security type is unavailable.")
             row.asset_type = "STOCK" if quote_type == "EQUITY" else "ETF"
-        if row.sector is None:
+        if row.sector is None and "sector" not in payload.model_fields_set:
             row.sector = profile.get("sector")
         db.commit()
         db.refresh(row)
@@ -77,6 +77,9 @@ async def enrich_holdings(rows: list[HoldingOut] | list[HoldingSummaryOut]) -> N
     async def enrich(row: HoldingOut | HoldingSummaryOut) -> None:
         async with semaphore:
             profile = await _profile_for(row.ticker)
+        name = profile.get("name")
+        if row.name == row.ticker and name:
+            row.name = name
         for field in ("industry", "country", "currency"):
             setattr(row, field, profile.get(field))
 

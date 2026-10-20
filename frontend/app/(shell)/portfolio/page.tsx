@@ -173,7 +173,7 @@ function HoldingRow({
       </Typography>
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
-        {holding.stale === true && (
+        {holding.current_price !== null && holding.stale === true && (
           <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--warn)" }}>
             {holding.as_of ? `Stale quote · ${holding.as_of}` : "Quote date unavailable"}
           </Box>
@@ -337,7 +337,7 @@ export default function PortfolioPage() {
             </Stat>
             <Stat label="Total P/L">
               <Box component="span" sx={{ color: plColor(summary.total_pl) }}>
-                {summary.unknown_basis_count && summary.pl_covered_count === 0 ? DASH : formatSigned(summary.total_pl)}
+                {summary.pl_covered_count === 0 ? DASH : formatSigned(summary.total_pl)}
                 {summary.total_pl_pct !== null && ` (${formatPct(summary.total_pl_pct)})`}
               </Box>
             </Stat>

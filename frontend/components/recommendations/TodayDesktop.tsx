@@ -99,6 +99,7 @@ export function TodayDesktop({ recommendations }: { recommendations: Recommendat
 export function CostBasisTile() {
   const { data: summary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   if (!summary || !summary.holdings.some((h) => h.shares > 0)) return null;
+  const hasProfit = summary.pl_covered_count !== 0;
   const tone = summary.total_pl < 0 ? "down" : "up";
   return (
     <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
@@ -106,12 +107,17 @@ export function CostBasisTile() {
       <Typography
         sx={{ fontSize: 22, fontWeight: 650, letterSpacing: "-0.035em", mt: 0.5, fontVariantNumeric: "tabular-nums" }}
       >
-        {formatSigned(summary.total_pl)}
+        {hasProfit ? formatSigned(summary.total_pl) : "\u2014"}
       </Typography>
-      {summary.total_pl_pct !== null && (
+      {hasProfit && summary.total_pl_pct !== null && (
         <Box sx={{ mt: 0.75 }}>
           <Pill tone={tone}>{formatPct(summary.total_pl_pct)}</Pill>
         </Box>
+      )}
+      {summary.pl_complete === false && (
+        <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 0.75 }}>
+          {hasProfit ? "P/L covers priced holdings with known costs." : "P/L unavailable until purchase costs and prices are known."}
+        </Typography>
       )}
     </Panel>
   );

@@ -200,6 +200,9 @@ class PortfolioSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     total_market_value: Mapped[float] = mapped_column(Numeric(18, 2))
     total_cost_basis: Mapped[float] = mapped_column(Numeric(18, 2))
+    cost_basis_complete: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=expression.true()
+    )
 
 
 class AppUser(Base):

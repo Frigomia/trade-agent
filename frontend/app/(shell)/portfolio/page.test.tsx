@@ -493,6 +493,16 @@ describe("PortfolioPage", () => {
     });
   });
 
+  it("does not label a missing price as a stale quote", async () => {
+    handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, unpriced_count: 1,
+      holdings: [{ ...SUMMARY.holdings[0], current_price: null, market_value: null,
+        stale: true, as_of: null }],
+    });
+    renderFresh();
+    await screen.findByText("ASML");
+    expect(screen.queryByText("Quote date unavailable")).not.toBeInTheDocument();
+  });
+
   it("shows unknown basis and stale-quote coverage without inventing a gain", async () => {
     handlers["GET /portfolio/summary"] = () => ({
       ...SUMMARY, holdings: [{ ...SUMMARY.holdings[0], cost_basis: null, unrealized_pl: null,

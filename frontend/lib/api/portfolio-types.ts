@@ -48,4 +48,5 @@ export interface Snapshot {
   created_at: string; // naive UTC, e.g. "2026-09-30T08:00:00"
   total_market_value: number;
   total_cost_basis: number;
+  cost_basis_complete?: boolean;
 }

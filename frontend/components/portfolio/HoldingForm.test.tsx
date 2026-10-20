@@ -266,6 +266,25 @@ describe("HoldingForm", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("reveals the manual type after validation fails and allows a successful retry", async () => {
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path !== "/portfolio/holdings") return [];
+      const body = JSON.parse(init?.body as string);
+      if (!body.asset_type) throw new FakeApiError(422, "Choose Stock or ETF when the security type is unavailable.");
+      return {};
+    });
+    const { onSaved } = setup();
+    type("Ticker", "MSFT");
+    type("Shares", "0.25");
+    expect(screen.queryByLabelText("Type")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    expect(await screen.findByLabelText("Type")).toBeVisible();
+    expect(screen.getByText(/choose stock or etf/i)).toBeInTheDocument();
+    type("Type", "STOCK");
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+  });
+
   it("shows the backend's error inline and stays open", async () => {
     apiFetch.mockRejectedValue(new FakeApiError(422, "Something is off"));
     const { onSaved } = setup({ holding: HELD });

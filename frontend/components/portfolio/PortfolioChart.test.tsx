@@ -53,6 +53,18 @@ describe("PortfolioChart", () => {
     expect(pointCount(container)).toBe(2);
   });
 
+  it("hides the cost comparison for a period containing incomplete purchase costs", () => {
+    const snapshots = [snap("2026-09-28T09:00:00", 1000),
+      { ...snap("2026-09-29T09:00:00", 6000), total_cost_basis: 800, cost_basis_complete: false }];
+    const { container, rerender } = render(<PortfolioChart snapshots={snapshots} />);
+    expect(container.querySelectorAll("polyline")).toHaveLength(1);
+    expect(screen.queryByText("Cost basis")).not.toBeInTheDocument();
+    expect(screen.getByText(/cost comparison unavailable/i)).toBeInTheDocument();
+    rerender(<PortfolioChart snapshots={snapshots.map((s) => ({ ...s, cost_basis_complete: true }))} />);
+    expect(container.querySelectorAll("polyline")).toHaveLength(2);
+    expect(screen.getByText("Cost basis")).toBeInTheDocument();
+  });
+
   it("filters by the selected range", () => {
     const snapshots = [
       snap("2025-01-01T00:00:00", 50),

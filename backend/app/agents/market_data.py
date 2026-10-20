@@ -76,7 +76,8 @@ def quote_is_stale(as_of: object) -> bool:
         age = (datetime.now(UTC).date() - date.fromisoformat(as_of)).days
     except ValueError:
         return True
-    return age < 0 or age > STALE_DAYS
+    # Exchange-local bars may be one calendar day ahead of UTC.
+    return age < -1 or age > STALE_DAYS
 
 
 async def fetch_fundamentals(ticker: str) -> dict[str, Any]:

@@ -248,6 +248,7 @@ class PortfolioSnapshotOut(BaseModel):
     created_at: datetime
     total_market_value: float
     total_cost_basis: float
+    cost_basis_complete: bool
 
 
 class HoldingSummaryOut(HoldingIn):

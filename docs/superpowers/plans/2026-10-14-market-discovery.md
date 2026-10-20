@@ -1110,7 +1110,9 @@ enrichment, with a post-await active-account guard under the shared lock. Only t
 are required when provider type resolves; otherwise Stock/ETF is an explicit manual choice.
 Omitted updates preserve known fields; null clears purchase details. Unknown cost basis is safe
 across summaries, snapshots, trades, plans, chat and export. The generated migration only changes
-nullability. Summary P/L covers priced known-basis positions and exposes coverage counts.
+nullability; a follow-up generated migration adds persisted snapshot cost coverage. Charts omit
+incomplete cost comparisons. Summary P/L covers priced known-basis positions and exposes
+coverage counts, including the Today tile. Validation reveals manual type fields when needed.
 Quote timestamps/stale flags tolerate old cache entries; discovery freshness rules are unchanged.
 
 The owner selected a desktop modal/full-screen mobile form after seeing three HTML directions.
@@ -1152,6 +1154,13 @@ changes. Needs the design-first step.
 
 Follow `frontend/CLAUDE.md` and `DESIGN.md`. **Design first:** three HTML directions per new flow
 in `docs/design/`, owner chooses, then build.
+
+Today already has an approved direction in merged [PR #137](https://github.com/Frigomia/trade-agent/pull/137):
+`v2-b-soft.html`, including blue light/dark theme tokens. Search behavior and Save/Discover
+semantics remain open. The implementation must retain relevant holdings alerts across scan
+states, keep the last saved scan visible on refresh failure, and include the required bear case.
+The portfolio empty-state alternatives in that PR do not replace the owner-selected Phase 8
+modal/full-screen holding form.
 
 - **Today** becomes the idea feed: ranked cards with ticker, region/country, size bucket,
   confidence, risk level, one-line thesis, one-line bear case, catalyst, suggested size. Holdings

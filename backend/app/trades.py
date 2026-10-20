@@ -36,7 +36,8 @@ def apply_trade(db: Session, user_id: uuid.UUID, holding: Holding, payload: Trad
         holding.shares = float(holding.shares) + shares
         if prior_shares == 0:
             holding.cost_basis = price
-            holding.first_purchase_date = payload.date
+            if holding.first_purchase_date is None:
+                holding.first_purchase_date = payload.date
         elif basis is not None:
             holding.cost_basis = (prior_shares * float(basis) + shares * price) / float(
                 holding.shares

@@ -213,6 +213,7 @@ InvestmentPreferences
 PortfolioSnapshot
   id, user_id, created_at, total_market_value (Numeric(18,2)),
   total_cost_basis (Numeric(18,2)) -- point-in-time portfolio totals, for value history charts
+  cost_basis_complete (Boolean, default true) -- false when any open holding lacks purchase cost
 
 UserApiKey
   id, user_id (unique), ciphertext (the encrypted key, AES-256-GCM), key_version, last4 (the final
@@ -763,18 +764,24 @@ dependency is introduced.
 Phase 8 holding entry uses `app/holdings.py` for automatic name/type/sector and derived
 industry/country/currency on API reads. Profile/cache failures are best effort and log only the
 exception class; explicit-type creation and existing updates remain available. A missing type
-requires a manual Stock/ETF choice. The API loads no provider data while holding the per-user
-write lock. Purchase fields are nullable; the generated migration alters nullability without
+requires a manual Stock/ETF choice; validation failures reveal the form's optional fields.
+Recovered profiles backfill ticker-only names without replacing custom names. Explicit null
+sector overrides are respected. Summary profile and quote requests run concurrently. The API
+loads no provider data while holding the per-user write lock. Purchase fields are nullable; the generated migration alters nullability without
 replacing rows. Omitted updates preserve stored values and explicit null clears purchase data.
 
 P/L excludes unknown-basis positions while their priced value still counts in portfolio value.
 Coverage fields explain partial P/L. Snapshots retain non-null cost totals over known-basis
-positions only. Adding to a nonempty unknown-basis position keeps that basis unknown; a first
-recorded BUY into a zero-share position establishes the actual price/date. Chat labels an unknown
-basis explicitly. No broker execution is added.
+positions only, plus persisted `cost_basis_complete`. History charts omit the cost comparison
+when any point in the selected period has incomplete costs; market value remains visible. The
+coverage migration defaults legacy snapshots to complete, since purchase costs were required
+before onboarding. Adding to a nonempty unknown-basis position keeps that basis unknown; a BUY
+into a zero-share position establishes its cost and fills the purchase date only if unknown.
+Chat labels an unknown basis explicitly. No broker execution is added.
 
 `fetch_quote_and_history` returns `as_of` for the last finite close and recomputes `stale` on every
-read. Missing/malformed/future dates or dates older than five calendar days are stale; old cache
+read. Missing/malformed dates, dates more than one day ahead of UTC, or dates older than five calendar
+days are stale. One day ahead is allowed for exchange-local bar dates; old cache
 entries without dates are supported. This is quote-display metadata; discovery retains its
 exchange-aware freshness rules. Quotes are not silently replaced or discarded by this display flag.
 
