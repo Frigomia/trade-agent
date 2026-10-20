@@ -15,8 +15,8 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 3: universe | Implemented: 600 symbols, validator, coverage report and candidate-pool audit. The audit limits what the coverage evidence proves. |
 | 4: refresh and screening | Implemented: resumable weekly Redis refresh, peers, risk, eligibility and one ranked shortlist for universe and admitted candidates. User scan wiring remains Phases 6 and 7. |
 | 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 now produces mentions; scan integration remains Phases 6 and 7. |
-| 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Full scan orchestration remains Phase 7. |
-| 7: run and schedule | Partial: weekly snapshots exist; user scan API/jobs, theme discovery and Telegram ideas remain. |
+| 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Manual scan orchestration is connected in Phase 7. |
+| 7: run and schedule | Manual slice implemented: authenticated scan start/progress/results, bounded shortlist-to-graph runner and atomic persistence. Weekly snapshots exist; scheduled user scans, daily theme-job wiring and Telegram ideas remain. |
 | 8: easy onboarding | Not implemented. |
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
@@ -982,8 +982,8 @@ atomically saves qualifying recommendations and one completed `ScanRun`, includi
 `none` outcomes with up to three nearest misses. Writes lock/recheck the active account; a
 failure rolls back both parts. Generated revision `ffbf99d3adba` adds nullable recommendation
 ideas and owner-only scan RLS/grants in the same transaction. Export and account deletion cover
-scans. User endpoints, the shortlist-to-graph scan runner, scheduling and notifications remain
-Phase 7; this service layer does not start scans itself.
+scans. Phase 7 now connects user endpoints and the shortlist-to-graph manual scan runner;
+scheduling and notifications remain outstanding. This persistence service does not start scans.
 
 **Create** `backend/app/agents/discovery_graph.py` (own state; reuse existing node functions such
 as `fetch_data` where they fit; no nested graphs, no new agents):
@@ -1038,6 +1038,22 @@ empty shortlist produces `outcome="none"` with nearest misses; an empty portfoli
 `security-reviewer` subagent (prompts).
 
 ### Phase 7: Run and schedule (B, M)
+
+**Manual scan slice implemented.** `discovery/runner.py`, `discovery/jobs.py` and
+`routers/discovery.py` connect existing screening, cached mention admission, portfolio fit,
+per-candidate graphs and atomic persistence. One eight-candidate shortlist uses at most three
+graphs concurrently; provider work times out after 15 minutes. Missing universe snapshots and
+failure of every shortlisted graph are explicit failed jobs. Partial failures and coverage
+limitations are disclosed; quant-only output still cannot create BUY recommendations.
+
+Manual scans consume only cached daily mentions; they never trigger owner-funded theme searches.
+Progress is owner-only and expires after one hour. Single-flight claims/refunds and marker release
+follow analysis jobs, with cancellation waiting for any already-started database write. The
+active-account guard remains at persistence. Previously pending discovery BUYs for evaluated or
+excluded tickers are superseded even when a new scan no longer qualifies them.
+
+Remaining Phase 7 work: daily mentions command/scheduling, automated per-user scans and Telegram
+ideas. Live provider checks (I1 and I3) are still outstanding; mocked tests do not establish them.
 
 - `POST /discovery/run` (202) mirroring `/analysis/run`: dependencies `require_claude_key`,
   `rate_limiter("discovery_run", limit=2)`, `check_monthly_usage("analysis_run")`, single-flight

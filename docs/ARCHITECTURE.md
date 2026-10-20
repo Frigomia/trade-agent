@@ -347,6 +347,9 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key). One analysis job per user at a time: a second call while one is `RUNNING` returns `409` ("An analysis is already running...") and does not count against the monthly cap; a scheduled run skips that user meanwhile |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
+| POST | `/discovery/run` | — | Starts a manual discovery scan (202, `{job_id}`), including for an empty portfolio. Requires a usable Claude key, 2 requests/minute and one shared monthly `analysis_run` unit. A second concurrent scan returns 409 and refunds that unit. Admins without a saved key use an explicit server client; regular users never do. Reads cached universe snapshots and daily mentions; never starts the owner-funded global theme batch. |
+| GET | `/discovery/run/{job_id}` | — | Owner-only, no-store job status (`RUNNING` \| `DONE` \| `FAILED`), stage, `total`/`done`, evaluated `results`, completed `scan` or a safe `error`. Unknown and other users' UUIDs both return 404. |
+| GET | `/discovery/ideas` | — | Owner-only, no-store `{recommendations, latest_scan}`: up to 50 pending discovery recommendations, newest first, and the latest completed `ScanRun` with exclusions, rejected mentions and coverage. No Claude key needed to read stored results. |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Allowed from `PENDING` or `REJECTED` (a decision can be reversed); from `APPROVED` (same decision again) or `SUPERSEDED` it returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
@@ -424,7 +427,7 @@ tickers between holdings and watchlist.
 and older recommendation responses remain valid. The existing recommendation list/detail and
 export expose stored discovery ideas when present. `GET /me/export` adds `scan_runs` (an empty
 list when none exist), and `DELETE /me/data` removes those rows through the shared user-table
-registry. Starting, polling and listing discovery scans through dedicated endpoints is Phase 7.
+registry. Dedicated manual discovery endpoints start, poll and list scans (Phase 7 manual slice).
 
 ### Contribution planner
 
@@ -587,9 +590,34 @@ records the shared contracts, selected MVP defaults and the remaining work. The 
 `app/schemas_discovery.py`, global FX support, curated universe, snapshot refresh, peer/risk
 calculations, shortlist and Phase 1 portfolio analytics are implemented. Phase 2 adds
 `agents/research.py` for cited candidate research and globally cached theme mentions. Phase 6 adds
-the per-candidate evaluation graph, deterministic scoring and atomic scan persistence. The scan
-API and scheduling remain Phase 7; the discovery UI remains Phase 9. No user discovery scan is
-exposed yet. The existing holdings/watchlist analysis below keeps its current behavior.
+the per-candidate evaluation graph, deterministic scoring and atomic scan persistence. Phase 7's
+manual runner/API now connects these services. Scheduled scans, daily mention-job wiring and
+Telegram ideas remain Phase 7; the discovery UI remains Phase 9. The existing holdings/watchlist
+analysis keeps its current behavior.
+
+**Manual scans.** `discovery/runner.py` reads the committed universe's cached snapshots; a wholly
+missing snapshot fails with an explicit refresh message rather than a misleading quiet-day result.
+Partial coverage, stale/uncertain prices, unavailable mentions and individual candidate failures
+are recorded in `coverage_summary`. It loads only the caller's open holdings and avoided sectors,
+admits cached mentions through the same safeguards, then ranks universe and admitted candidates
+for one eight-candidate shortlist. It never refreshes all 600 symbols or funds a global theme batch
+from a manual request. Candidate evaluation uses the caller's explicit client, at most three graphs
+at once and a 15-minute provider-work timeout. No candidates is a valid completed `none` scan;
+failure of every shortlisted graph is a failed job, never a no-opportunity claim.
+
+Portfolio fit reuses the analytics loader, retaining dated holding histories and removing future
+bars from both holding and candidate returns. An empty/inapplicable portfolio leaves fit absent.
+All provider work finishes before atomic `save_scan`; rejected or no-longer-qualifying evaluated
+tickers supersede earlier pending discovery BUYs, including thesis exclusions. Manual, scheduled,
+already reviewed and other users' recommendations are preserved.
+
+`discovery/jobs.py` stores private progress/results at `discovery:job:{job_id}` for one hour and
+claims `discovery_active:{user_id}` with `SET NX` for the same TTL as analysis jobs. Cleanup uses
+`_RELEASE_IF_MINE`, so an old job cannot delete a newer marker. Cancellation waits for an already
+started database write before releasing the marker. Persistence rechecks the account's active
+status under the existing user lock. Redis and provider exceptions expose class names only in
+logs and fixed messages in job responses. As with analysis, background work is in-process; a hard
+process loss leaves an expiring job/marker, and no durable worker queue is claimed.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
