@@ -1,0 +1,13 @@
+/* Soft theme (chosen Today direction): light first, blue accent, navy dark. Copied from today-discovery/v2-b-soft.html so
+   the theme is explicit here (the pages still load ../today-discovery/lib.css and lib.js for the shell). Emerald and coral are only for a price rising or falling. */
+:root{--fs-body:13px;--fs-label:12px;--fs-cap:12px;--fs-title:20px;--fs-head:26px;--fs-metric:26px;--fs-lead:15px}
+:root[data-theme=light]{--rp:22px;--rc:14px;--bg:#f5f7fb;--text:#0f1a2e;--text2:#34425c;--muted:#5d6b85;--accent:#2457d6;--accent-solid:#2457d6;--on-accent:#fff;--up:#067a52;--down:#c8323d;--warn:#9a5b00;--up-bg:rgba(36,87,214,.09);--panel:#fff;--line:rgba(15,26,46,.08);--line2:rgba(15,26,46,.2);--track:rgba(15,26,46,.06);--shadow:0 1px 2px rgba(15,26,46,.04),0 12px 32px -14px rgba(15,26,46,.14);--btn-shadow:0 8px 18px -8px rgba(36,87,214,.5);--page-glow:none}
+:root[data-theme=dark]{--rp:22px;--rc:14px;--page-glow:none;--bg:#0c1426;--text:#e9eefb;--text2:#c2cce3;--muted:#92a0bd;--accent:#7ea3ff;--accent-solid:#7ea3ff;--on-accent:#0a1530;--up:#34e7a9;--down:#ff6b72;--warn:#f4c04f;--up-bg:rgba(126,163,255,.14);--panel:#131d36;--line:rgba(255,255,255,.07);--line2:rgba(255,255,255,.2);--track:rgba(255,255,255,.07);--shadow:0 14px 34px -18px #000;--btn-shadow:none}
+.side{background:none}
+.nav.on{background:var(--panel);box-shadow:var(--shadow);color:var(--accent)}
+.nav em{background:var(--accent-solid)}
+.brand i{border-radius:12px}
+.main{padding:24px 34px 40px}
+.phone{background-image:none}
+.phone .tabbar{background:var(--panel)}
+.frame{border-color:var(--line)}
