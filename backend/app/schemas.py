@@ -39,11 +39,11 @@ AssetType = Literal["ETF", "STOCK"]
 
 class HoldingIn(BaseModel):
     ticker: Ticker
-    name: str = Field(max_length=200)  # matches Holding.name String(200)
-    asset_type: AssetType
+    name: str | None = Field(default=None, max_length=200)
+    asset_type: AssetType | None = None
     shares: NonNegativeFloat
-    cost_basis: NonNegativeFloat
-    first_purchase_date: date
+    cost_basis: NonNegativeFloat | None = None
+    first_purchase_date: date | None = None
     target_weight: float | None = Field(default=None, ge=0, le=1)
     sector: str | None = Field(default=None, max_length=100)  # matches Holding.sector String(100)
 
@@ -53,6 +53,11 @@ class HoldingOut(HoldingIn):
 
     id: int
     user_id: UUID
+    name: str
+    asset_type: AssetType
+    industry: str | None = None
+    country: str | None = None
+    currency: str | None = None
     isin: str | None = None
 
 
@@ -246,6 +251,13 @@ class PortfolioSnapshotOut(BaseModel):
 
 
 class HoldingSummaryOut(HoldingIn):
+    name: str
+    asset_type: AssetType
+    industry: str | None = None
+    country: str | None = None
+    currency: str | None = None
+    as_of: date | None = None
+    stale: bool = True
     # Computed at request time, never stored; all None when the quote fails (or shares == 0).
     current_price: float | None = None
     market_value: float | None = None
@@ -261,13 +273,16 @@ class WatchlistSummaryOut(WatchlistItemIn):
 class PortfolioSummaryOut(BaseModel):
     holdings: list[HoldingSummaryOut]
     watchlist: list[WatchlistSummaryOut]
-    # Totals cover only priced, open (shares > 0) holdings — cost basis included, so P/L
-    # compares like with like. unpriced_count says how many open holdings were left out.
+    # Value covers priced open holdings; P/L and cost cover only the known-basis subset.
+    # Coverage counts disclose missing prices and unknown purchase costs separately.
     total_market_value: float
     total_cost_basis: float
     total_pl: float
     total_pl_pct: float | None
     unpriced_count: int
+    unknown_basis_count: int = 0
+    pl_covered_count: int = 0
+    pl_complete: bool = True
 
 
 # Light shape check only; the real check is that Supabase can deliver the invitation. Lowercased

@@ -1,6 +1,7 @@
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pandas as pd
 import pytest
 
 from app.agents.market_data import (
@@ -13,6 +14,7 @@ from app.agents.market_data import (
 
 def test_fetch_quote_and_history_cache_miss_calls_yfinance():
     fake_ticker = MagicMock()
+    fake_ticker.history.return_value.index = pd.to_datetime(["2024-01-01"] * 3)
     fake_ticker.history.return_value.__getitem__.return_value.tolist.return_value = [
         100.0,
         101.0,
@@ -32,7 +34,12 @@ def test_fetch_quote_and_history_cache_miss_calls_yfinance():
         result = asyncio.run(fetch_quote_and_history("AAPL"))
 
     mock_yf.assert_called_once_with("AAPL")
-    assert result == {"price": 102.0, "closes": [100.0, 101.0, 102.0]}
+    assert result == {
+        "price": 102.0,
+        "closes": [100.0, 101.0, 102.0],
+        "as_of": "2024-01-01",
+        "stale": True,
+    }
     mock_redis.set.assert_called_once()
     assert mock_redis.set.call_args.kwargs["ex"] == 300
 
@@ -51,7 +58,7 @@ def test_fetch_quote_and_history_cache_hit_skips_yfinance():
         result = asyncio.run(fetch_quote_and_history("AAPL"))
 
     mock_yf.assert_not_called()
-    assert result == {"price": 99.0, "closes": [99.0]}
+    assert result == {"price": 99.0, "closes": [99.0], "as_of": None, "stale": True}
 
 
 def test_fetch_fundamentals_normalizes_debt_to_equity():
@@ -148,6 +155,9 @@ def test_fetch_price_history_empty_result_not_cached():
 
 def test_fetch_quote_and_history_retries_on_failure_then_succeeds():
     fake_history = MagicMock()
+    fake_history.index.__getitem__.return_value.date.return_value.isoformat.return_value = (
+        "2024-01-01"
+    )
     fake_history.__getitem__.return_value.tolist.return_value = [100.0, 101.0]
 
     fake_ticker = MagicMock()
@@ -166,7 +176,12 @@ def test_fetch_quote_and_history_retries_on_failure_then_succeeds():
 
         result = asyncio.run(fetch_quote_and_history("AAPL"))
 
-    assert result == {"price": 101.0, "closes": [100.0, 101.0]}
+    assert result == {
+        "price": 101.0,
+        "closes": [100.0, 101.0],
+        "as_of": "2024-01-01",
+        "stale": True,
+    }
     assert fake_ticker.history.call_count == 2
     mock_sleep.assert_called_once()
 
@@ -233,6 +248,7 @@ def test_empty_trailing_closes_are_dropped(fetch):
     """Yahoo's newest row can have no close (nan, e.g. at the weekend): the price is the last real
     close, not nan."""
     fake_ticker = MagicMock()
+    fake_ticker.history.return_value.index = pd.to_datetime(["2024-01-01"] * 3)
     fake_ticker.history.return_value.__getitem__.return_value.tolist.return_value = [
         100.0,
         101.0,
@@ -251,7 +267,12 @@ def test_empty_trailing_closes_are_dropped(fetch):
 
         if fetch == "quote":
             result = asyncio.run(fetch_quote_and_history("IWDA.L"))
-            assert result == {"price": 101.0, "closes": [100.0, 101.0]}
+            assert result == {
+                "price": 101.0,
+                "closes": [100.0, 101.0],
+                "as_of": "2024-01-01",
+                "stale": True,
+            }
         else:
             result = asyncio.run(fetch_price_history("IWDA.L", date(2026, 9, 1), date(2026, 10, 9)))
             assert result == [100.0, 101.0]

@@ -6,8 +6,8 @@ export interface HoldingSummary {
   name: string;
   asset_type: AssetType;
   shares: number;
-  cost_basis: number; // average cost per share
-  first_purchase_date: string; // "2024-01-01"
+  cost_basis: number | null; // unknown stays null
+  first_purchase_date: string | null; // "2024-01-01", when known
   sector: string | null;
   target_weight: number | null;
   current_price: number | null;
@@ -15,6 +15,11 @@ export interface HoldingSummary {
   unrealized_pl: number | null;
   unrealized_pl_pct: number | null;
   weight: number | null;
+  industry?: string | null;
+  country?: string | null;
+  currency?: string | null;
+  as_of?: string | null;
+  stale?: boolean;
 }
 
 export interface WatchlistSummary {
@@ -33,6 +38,9 @@ export interface PortfolioSummary {
   total_pl: number;
   total_pl_pct: number | null;
   unpriced_count: number;
+  unknown_basis_count?: number;
+  pl_covered_count?: number;
+  pl_complete?: boolean;
 }
 
 export interface Snapshot {

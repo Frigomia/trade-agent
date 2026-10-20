@@ -39,8 +39,8 @@ class Holding(Base):
     name: Mapped[str] = mapped_column(String(200))
     asset_type: Mapped[str] = mapped_column(String(10))  # "ETF" | "STOCK"
     shares: Mapped[float] = mapped_column(Numeric(18, 6))
-    cost_basis: Mapped[float] = mapped_column(Numeric(18, 6))
-    first_purchase_date: Mapped[date] = mapped_column(Date)
+    cost_basis: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    first_purchase_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_weight: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
     isin: Mapped[str | None] = mapped_column(String(12), nullable=True)

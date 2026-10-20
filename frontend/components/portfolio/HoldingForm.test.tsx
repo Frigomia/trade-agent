@@ -47,6 +47,7 @@ function setup(props: Partial<React.ComponentProps<typeof HoldingForm>> = {}) {
 }
 
 function type(label: string, value: string) {
+  if (!screen.queryByLabelText(label)) fireEvent.click(screen.getByRole("button", { name: /purchase details and overrides/i }));
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
@@ -85,7 +86,6 @@ describe("HoldingForm", () => {
       shares: 40,
       cost_basis: 112.8,
       first_purchase_date: "2024-01-10",
-      sector: null,
       target_weight: null,
     });
     expect(onClose).toHaveBeenCalled();
@@ -158,7 +158,8 @@ describe("HoldingForm", () => {
     type("Ticker", "aapl");
 
     expect(screen.getByText(/you already hold AAPL/i)).toBeInTheDocument();
-    expect(screen.getByText(/replaces its shares and average cost/i)).toBeInTheDocument();
+    expect(screen.getByText(/update its total shares/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update position" })).toBeInTheDocument();
   });
 
   it("edits in place: ticker locked, and sector, target weight and purchase date round-trip", async () => {
@@ -189,7 +190,7 @@ describe("HoldingForm", () => {
     type("Ticker", "AAPL");
     fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
 
-    expect(screen.getByText(/enter a ticker, a name/i)).toBeInTheDocument();
+    expect(screen.getByText(/enter a ticker and valid shares/i)).toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -202,7 +203,7 @@ describe("HoldingForm", () => {
     type("Average cost", "10");
     fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
 
-    expect(screen.getByText(/enter a ticker, a name/i)).toBeInTheDocument();
+    expect(screen.getByText(/enter a ticker and valid shares/i)).toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -215,6 +216,37 @@ describe("HoldingForm", () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(sentBody().shares).toBe(0);
+  });
+
+  it("saves fractional shares using only ticker and shares without inventing purchase data", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup();
+    expect(screen.queryByLabelText("Average cost")).not.toBeInTheDocument();
+    type("Ticker", "SAP.DE");
+    type("Shares", "0.125");
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).toEqual({ ticker: "SAP.DE", shares: .125, cost_basis: null, first_purchase_date: null, target_weight: null });
+  });
+
+  it("requires an explicit update action and preserves omitted details of an existing holding", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ heldTickers: ["AAPL"] });
+    type("Ticker", "AAPL");
+    type("Shares", "10.5");
+    fireEvent.click(screen.getByRole("button", { name: "Update position" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).toEqual({ ticker: "AAPL", shares: 10.5 });
+  });
+
+  it("edits an unknown cost basis without sending the string null", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: { ...HELD, cost_basis: null, first_purchase_date: null } });
+    expect(screen.getByLabelText("Average cost")).toHaveValue(null);
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody().cost_basis).toBeNull();
+    expect(sentBody().first_purchase_date).toBeNull();
   });
 
   it("removes a holding only after an explicit confirm", async () => {

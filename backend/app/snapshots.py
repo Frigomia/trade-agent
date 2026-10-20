@@ -36,7 +36,8 @@ async def record_snapshot(db: Session, user_id: uuid.UUID) -> PortfolioSnapshot 
         if price is None or not math.isfinite(price):
             raise PriceUnavailable(holding.ticker)
         total_market_value += float(holding.shares) * price
-        total_cost_basis += float(holding.shares) * float(holding.cost_basis)
+        if holding.cost_basis is not None:
+            total_cost_basis += float(holding.shares) * float(holding.cost_basis)
 
     # Last step before the write (after the slow quote fetches): take the user's lock and re-check.
     if not lock_and_check_active(db, user_id):

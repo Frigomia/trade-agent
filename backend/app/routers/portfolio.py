@@ -1,16 +1,18 @@
 import asyncio
 import logging
 import math
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
-from app.agents.market_data import fetch_quote_and_history
+from app import holdings as holding_service
+from app.agents.market_data import fetch_quote_and_history, quote_is_stale
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
 from app.http_headers import no_store
-from app.limits import MAX_HOLDINGS, cap_message
+from app.limits import cap_message
 from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
 from app.portfolio_analytics import load_analytics
 from app.rate_limit import rate_limiter
@@ -60,10 +62,13 @@ async def portfolio_analytics(
 
 
 @router.get("/holdings", response_model=list[HoldingOut])
-def list_holdings(
+async def list_holdings(
     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
-) -> list[Holding]:
-    return db.query(Holding).filter_by(user_id=user.id).all()
+) -> list[HoldingOut]:
+    rows = [HoldingOut.model_validate(h) for h in db.query(Holding).filter_by(user_id=user.id)]
+    db.close()
+    await holding_service.enrich_holdings(rows)
+    return rows
 
 
 @router.put(
@@ -96,26 +101,15 @@ def set_isin(
     response_model=HoldingOut,
     dependencies=[Depends(rate_limiter("portfolio_holdings", limit=WRITE_LIMIT_PER_MINUTE))],
 )
-def upsert_holding(
+async def upsert_holding(
     payload: HoldingIn,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
-) -> Holding:
-    # Lock first, before the lookup: a plan-line placement creating this same ticker takes the same
-    # lock, so it cannot insert between this lookup and the insert below (a unique-key error).
-    lock_user_for_insert(db, user.id)
-    holding = db.query(Holding).filter_by(user_id=user.id, ticker=payload.ticker).one_or_none()
-    if holding is None:
-        if db.query(Holding).filter_by(user_id=user.id).count() >= MAX_HOLDINGS:
-            raise HTTPException(status_code=409, detail=cap_message("holdings", MAX_HOLDINGS))
-        holding = Holding(user_id=user.id, **payload.model_dump())
-        db.add(holding)
-    else:
-        for field, value in payload.model_dump().items():
-            setattr(holding, field, value)
-    db.commit()
-    db.refresh(holding)
-    return holding
+) -> HoldingOut:
+    try:
+        return await holding_service.upsert_holding(db, user.id, payload)
+    except holding_service.HoldingRefused as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from None
 
 
 @router.delete("/holdings/{ticker}", status_code=204)
@@ -239,22 +233,28 @@ def list_snapshots(
     )
 
 
-async def _prices_for(tickers: set[str]) -> dict[str, float | None]:
+async def _prices_for(tickers: set[str]) -> dict[str, tuple[float | None, date | None, bool]]:
     """Live price per ticker; None when the fetch fails or returns a non-finite price."""
     ordered = sorted(tickers)
 
     sem = asyncio.Semaphore(8)  # bound fan-out so unquotable tickers can't saturate the thread pool
 
-    async def one(ticker: str) -> float | None:
+    async def one(ticker: str) -> tuple[float | None, date | None, bool]:
         try:
             async with sem:
                 data = await fetch_quote_and_history(ticker)
         except Exception as exc:
             logger.warning("Live price fetch failed for %s: %s", ticker, type(exc).__name__)
-            return None
+            return None, None, True
         price = data.get("price")
         # NaN/inf would survive the Redis JSON round-trip and then fail response serialization.
-        return price if price is not None and math.isfinite(price) else None
+        price = price if price is not None and math.isfinite(price) else None
+        raw_date = data.get("as_of")
+        try:
+            as_of = date.fromisoformat(raw_date) if isinstance(raw_date, str) else None
+        except ValueError:
+            as_of = None
+        return price, as_of, quote_is_stale(raw_date)
 
     results = await asyncio.gather(*(one(t) for t in ordered))
     return dict(zip(ordered, results, strict=True))
@@ -277,34 +277,41 @@ async def get_summary(
     # Everything needed is copied out; release the pooled connection before awaiting quotes, which
     # can take seconds (retries) during a market-data outage.
     db.close()
+    await holding_service.enrich_holdings(rows)
 
     open_rows = [r for r in rows if r.shares > 0]  # a fully sold holding stays a row, unpriced
     prices = await _prices_for({r.ticker for r in open_rows} | {w.ticker for w in watch_rows})
 
     for w in watch_rows:
-        w.current_price = prices[w.ticker]
+        w.current_price = prices[w.ticker][0]
 
     total_market_value = 0.0
     total_cost_basis = 0.0
+    total_pl = 0.0
+    covered = 0
     for r in open_rows:
-        price = prices[r.ticker]
+        price, r.as_of, r.stale = prices[r.ticker]
         if price is None:
             continue
         market_value = r.shares * price
-        cost = r.shares * r.cost_basis
         r.current_price = price
         r.market_value = market_value
-        r.unrealized_pl = market_value - cost
-        r.unrealized_pl_pct = (market_value - cost) / cost * 100 if cost > 0 else None
         total_market_value += market_value
-        total_cost_basis += cost
+        if r.cost_basis is not None:
+            cost = r.shares * r.cost_basis
+            r.unrealized_pl = market_value - cost
+            r.unrealized_pl_pct = (market_value - cost) / cost * 100 if cost > 0 else None
+            total_cost_basis += cost
+            total_pl += market_value - cost
+            covered += 1
 
     if total_market_value > 0:
         for r in open_rows:
             if r.market_value is not None:
                 r.weight = r.market_value / total_market_value
 
-    total_pl = total_market_value - total_cost_basis
+    unknown_basis = sum(r.cost_basis is None for r in open_rows)
+    unpriced = sum(r.current_price is None for r in open_rows)
     return PortfolioSummaryOut(
         holdings=rows,
         watchlist=watch_rows,
@@ -312,5 +319,8 @@ async def get_summary(
         total_cost_basis=total_cost_basis,
         total_pl=total_pl,
         total_pl_pct=total_pl / total_cost_basis * 100 if total_cost_basis > 0 else None,
-        unpriced_count=sum(1 for r in open_rows if r.current_price is None),
+        unpriced_count=unpriced,
+        unknown_basis_count=unknown_basis,
+        pl_covered_count=covered,
+        pl_complete=not (unknown_basis or unpriced),
     )

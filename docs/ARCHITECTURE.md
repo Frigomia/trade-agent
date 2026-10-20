@@ -139,7 +139,7 @@ boundary:
 ```python
 Holding
   id, user_id, ticker (unique per user), name, asset_type ("ETF"|"STOCK"),
-  shares, cost_basis, first_purchase_date, target_weight, sector
+  shares, cost_basis (nullable: unknown average price), first_purchase_date (nullable), target_weight, sector
 
 WatchlistItem
   id, user_id, ticker (unique per user), asset_type, note,
@@ -148,8 +148,8 @@ WatchlistItem
 
 -- Holding and WatchlistItem also carry isin (varchar(12), nullable, a check that it is empty or matches
 -- ^[A-Z]{2}[A-Z0-9]{9}[0-9]$; the API also verifies the ISO 6166 check digit). It is set only by
--- PUT /portfolio/instruments/{ticker}/isin: the upserts never touch it (the holdings upsert is a full
--- replace), so saving a holding cannot wipe it. It is entered by hand, never looked up (the price
+-- PUT /portfolio/instruments/{ticker}/isin: the upserts never touch it, and holding updates preserve
+-- omitted fields, so saving a holding cannot wipe it. It is entered by hand, never looked up (the price
 -- source is unreliable for ISINs, and a wrong ISIN on an order is worse than none).
 
 Trade
@@ -335,7 +335,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/health` | — | Liveness check |
 | GET | `/portfolio/holdings` | — | List all holdings |
 | GET | `/portfolio/analytics` | — | EUR exposure, concentration, aligned-history volatility/correlations and data notes (`PortfolioExposure`); caller's open holdings only, no-store, 5 requests/minute; no Claude key or paid research needed |
-| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker (a full replace: an omitted `target_weight` resets it to `null`); at most 100 holdings per user (`409` beyond that) |
+| POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker, requiring only ticker and shares when security type resolves. Optional name/type/sector auto-fill from cached profile; missing type asks for Stock/ETF (`422`). Omitted update fields preserve stored values; explicit null clears purchase details. At most 100 holdings per user (`409` beyond that). After metadata awaits, rechecks active account under the shared per-user lock before writing; rollback on failure |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
 | POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that). Accepts `target_weight` (0 to 1) |
@@ -345,7 +345,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/trades` | `TradeIn` | Logs a trade **the human already placed manually**; updates holding shares/cost basis through the shared `app/trades.py`; takes the per-person lock `lock_user_for_insert`, so it serializes with placements; `shares` and `price` must be finite and at least 0.000001, and a number too large to store is a `422` with nothing written; 60 requests a minute per user |
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
-| GET | `/portfolio/summary` | — | Holdings and watchlist with live prices, plus totals. Per holding: stored fields (incl. `first_purchase_date`, `sector`, `target_weight`) and computed, never-persisted `current_price`, `market_value`, `unrealized_pl`, `unrealized_pl_pct`, `weight`; watchlist items carry `current_price`. Totals (`total_market_value`, `total_cost_basis`, `total_pl`, `total_pl_pct`) cover priced holdings with shares > 0 only; `unpriced_count` says how many were left out. A failed or non-finite quote leaves that holding's computed fields `null` — never a 500. Reuses the 5-minute cached quote fetch; no currency conversion |
+| GET | `/portfolio/summary` | — | Holdings and watchlist with live prices and totals. Holdings include computed `current_price`, `market_value`, `weight`, `as_of`, `stale`, and profile `industry`, `country` (issuer domicile), `currency`. Unknown cost basis leaves per-position P/L null; total P/L and cost basis cover priced open holdings with known basis only, while total value includes all priced open holdings. `unknown_basis_count`, `pl_covered_count`, `pl_complete` and `unpriced_count` expose coverage. Missing/non-finite quotes stay null. Reuses the 5-minute quote cache; no currency conversion |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key). One analysis job per user at a time: a second call while one is `RUNNING` returns `409` ("An analysis is already running...") and does not count against the monthly cap; a scheduled run skips that user meanwhile |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | POST | `/discovery/run` | — | Starts a manual discovery scan (202, `{job_id}`), including for an empty portfolio. Requires a usable Claude key, 2 requests/minute and one shared monthly `analysis_run` unit. A second concurrent scan returns 409 and refunds that unit. Admins without a saved key use an explicit server client; regular users never do. Reads cached universe snapshots and daily mentions; never starts the owner-funded global theme batch. |
@@ -757,8 +757,33 @@ key per ticker/period, finite positive closes by ISO date) and `fetch_profile(ti
 cache of name, sector, industry, country, quote type, exchange and ETF category). Empty results
 and exhausted provider failures are negative-cached for 5 minutes, after the existing retries;
 exception class names alone are logged. Both use the existing thread pattern. Profile strings
-are capped at 100 characters on fresh and cached reads. Profiles are read-only here; holding auto-fill and
-nullable cost basis remain Phase 8. No schema migration or provider dependency is introduced.
+are capped at 100 characters on fresh and cached reads. Phase 8 also includes profile currency,
+holding auto-fill and nullable purchase details; see the onboarding notes below. No provider
+dependency is introduced.
+Phase 8 holding entry uses `app/holdings.py` for automatic name/type/sector and derived
+industry/country/currency on API reads. Profile/cache failures are best effort and log only the
+exception class; explicit-type creation and existing updates remain available. A missing type
+requires a manual Stock/ETF choice. The API loads no provider data while holding the per-user
+write lock. Purchase fields are nullable; the generated migration alters nullability without
+replacing rows. Omitted updates preserve stored values and explicit null clears purchase data.
+
+P/L excludes unknown-basis positions while their priced value still counts in portfolio value.
+Coverage fields explain partial P/L. Snapshots retain non-null cost totals over known-basis
+positions only. Adding to a nonempty unknown-basis position keeps that basis unknown; a first
+recorded BUY into a zero-share position establishes the actual price/date. Chat labels an unknown
+basis explicitly. No broker execution is added.
+
+`fetch_quote_and_history` returns `as_of` for the last finite close and recomputes `stale` on every
+read. Missing/malformed/future dates or dates older than five calendar days are stale; old cache
+entries without dates are supported. This is quote-display metadata; discovery retains its
+exchange-aware freshness rules. Quotes are not silently replaced or discarded by this display flag.
+
+The selected holding UI uses a desktop modal and full-screen mobile form, initially ticker and
+fractional shares, with optional purchase details/overrides. An existing ticker offers an explicit
+Update position action and preserves blank purchase details. See the [owner-selected portfolio
+direction](superpowers/specs/2026-10-20-portfolio-onboarding-design.md) for the later EUR overview,
+allocation charts and expandable analytics. Those sections remain frontend-phase work.
+
 Successful dated closes retain quote-level freshness because Yahoo daily history can contain
 an in-progress intraday bar used for valuation. The `dated_closes:v2` namespace bypasses entries
 written under the earlier 24-hour policy; profile metadata keeps its 24-hour cache.
