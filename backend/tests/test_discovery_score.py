@@ -10,6 +10,7 @@ from app.analysis.discovery_score import (
     is_opportunity,
     rank_ideas,
 )
+from app.discovery.screen import PRICE_DATE_UNCERTAIN_PREFIX
 from app.schemas_discovery import (
     CandidateFit,
     CandidateMetrics,
@@ -210,8 +211,11 @@ def test_unknown_or_invalid_price_data_is_low_confidence(updates: dict[str, Any]
     assert result.overall == 60
 
 
-def test_uncertain_freshness_lowers_confidence_without_changing_score() -> None:
-    result = evaluate(candidate(data_notes=["price date uncertain: holiday or outage"]), evidence())
+@pytest.mark.parametrize(
+    "prefix", [PRICE_DATE_UNCERTAIN_PREFIX, PRICE_DATE_UNCERTAIN_PREFIX.upper()]
+)
+def test_uncertain_freshness_lowers_confidence_without_changing_score(prefix: str) -> None:
+    result = evaluate(candidate(data_notes=[f"{prefix} holiday or outage"]), evidence())
 
     assert result.confidence == "medium"
     assert result.overall == 60

@@ -22,7 +22,6 @@ historical guidance. No end-to-end discovery scan has shipped yet.
 | 10: deferred | Still deferred; separate specs and decisions required. |
 
 I2 passed locally on 2026-10-18 (see Phase 4); I1 and I3 remain outstanding.
-This Phase 6 branch is stacked on Phase 2 PR #131.
 See the design spec for freshness, ETF, peer-statistic and ranking decisions that supersede
 the initial proposals below. Phase 6 tests use mocked providers, not paid live calls.
 
@@ -372,6 +371,10 @@ In the MVP `risk_level` is shown and does not reduce the ranking score. A future
   of peer comparison, data staleness, and unresolved conflicts or disputed material claims.
 - "No compelling opportunity": no candidate reaches `NO_OPPORTUNITY_MIN_OVERALL` (proposed 60) with
   confidence at least `medium`. This is a first-class stored result with nearest misses.
+- **Quant-only fallback is displayable screening output, not a qualifying BUY idea.** Without
+  non-forum research, confidence remains `low`, even with strong numeric scores. It cannot
+  create a discovery BUY recommendation; if no researched candidate qualifies, persist
+  `outcome="none"` with nearest misses.
 
 ### 4.5 Shared contracts (Phase 0 commits these; each lane codes against fixtures until the other lands)
 
@@ -957,6 +960,9 @@ evidence normalization. One unresolved development can receive one targeted Tavi
 and extraction, followed by one total thesis reassessment. There is no recursive retry loop.
 Missing user client or unavailable research produces a disclosed quantitative result with low
 confidence, never a fallback to the server's Claude key.
+These research-unavailable results remain displayable but cannot create BUY recommendations;
+low confidence fails the opportunity gate. A scan containing only these results records
+`outcome="none"` and nearest misses.
 
 `discovery/thesis.py` reclassifies authority by exact hostname/subdomain against a small explicit
 reporting/regulatory policy; unknown hosts remain `other`. Trusted internal callers may supply
@@ -966,6 +972,8 @@ quoting that fact. Repetition is not an alternative authority check. A valid rea
 retains the company replaces that development's thesis impact; unresolved impact is disclosed
 without changing confirmed underlying event facts. `discovery/citations.py` accepts plain-text
 absolute HTTP(S) citations from fetched evidence only; Markdown/HTML links are rejected.
+Ordinary financial comparisons (`>20%`, `P/E <15`) and numeric markers (`[1]`) are allowed;
+a numeric marker does not substitute for a catalyst's required source URL.
 
 `analysis/discovery_score.py` defines the fixture-tested overall, fit, confidence and style
 rules in the design spec. It ranks overall, risk, available fit, then ticker. Only overall at
@@ -1043,7 +1051,9 @@ empty shortlist produces `outcome="none"` with nearest misses; an empty portfoli
   usable key, respecting `auto_analysis.pause_state` and the usage rules.
 - Telegram: extend `notify.build_message` with one high-confidence idea line; reuse the opt-in
   flags. Keep the "Advisory only" footer.
-- A Tavily failure or quota exhaustion degrades to quant-only ideas with `data_notes`, never a 500.
+- A Tavily failure or quota exhaustion yields displayable quant-only output with `data_notes`,
+  low confidence and no qualifying BUY recommendation, never a 500. If nothing else qualifies,
+  save `outcome="none"` and nearest misses.
 
 **Acceptance:** two concurrent runs → second gets 409 and its usage is refunded; a removed account
 mid-run writes nothing (`lock_and_check_active`, as `_save_recommendation`); job TTL and marker

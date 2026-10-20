@@ -668,9 +668,16 @@ gaps/conflicts; no research or forum-only research yields `low`. Neither forum p
 counts nor discovery origin changes a score. The LLM supplies prose only; identity, scores,
 confidence, risk and style tags come from code.
 
+A research-unavailable quantitative result remains visible for human review but cannot create
+a discovery BUY recommendation: low confidence fails the medium/high opportunity threshold.
+If every candidate is quantitative-only, the scan stores `outcome="none"` with nearest misses.
+Screening and scoring share `PRICE_DATE_UNCERTAIN_PREFIX` for the price-date disclosure.
+
 Every synthesis catalyst must cite a claim URL from the validated evidence. `discovery/citations.py`
 checks all prose URLs and requires plain text with absolute HTTP(S) citations; Markdown links,
-reference links and HTML are rejected. Invalid synthesis falls back to explicit quantitative
+reference links and HTML are rejected. Financial notation such as `>20%`, `P/E <15` and `[1]`
+is allowed; numeric markers never replace a catalyst's required source URL.
+Invalid synthesis falls back to explicit quantitative
 screening prose with a disclosure. Forum discussion is labelled unverified, fit stays absent for
 an empty/inapplicable portfolio, and the conclusion carries the human-review/advisor disclaimer.
 No live-provider integration checkpoint is claimed by this implementation.

@@ -7,14 +7,17 @@ from app.agents.research import _normalize_url
 
 _URL = re.compile(
     r"(?i)(?:\b(?:[a-z][a-z0-9+.-]*://|(?:javascript|data|mailto):|www\.)|(?<!:)//)"
-    r"[^\s<>\[\]\"']+"
+    r"[^\s]+"
 )
+# Reject link syntax, not financial comparisons or standalone numeric markers such as [1].
+_MARKDOWN_DESTINATION = re.compile(r"\]\s*(?:\(|\[|:)")
+_HTML_OR_AUTOLINK = re.compile(r"<\s*(?:/?[A-Za-z]|!|\?)")
 
 
 def prose_urls(text: str) -> set[str]:
     # Plain-text citations avoid needing a Markdown/HTML parser to validate link destinations.
-    if any(character in text for character in "[]<>"):
-        raise ValueError("Prose citations must be plain-text absolute HTTP URLs")
+    if _MARKDOWN_DESTINATION.search(text) or _HTML_OR_AUTOLINK.search(text):
+        raise ValueError("Markdown links, HTML and autolinks are not supported")
     urls: set[str] = set()
     for match in _URL.finditer(text):
         value = match.group().rstrip(".,;:!?")

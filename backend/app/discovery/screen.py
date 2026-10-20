@@ -21,6 +21,7 @@ from app.schemas_discovery import CandidateMetrics, Exclusion, Origin
 
 SHORTLIST_SIZE = 8  # proposed default
 RISK_ORDER = {"low": 0, "medium": 1, "high": 2, "unknown": 3}
+PRICE_DATE_UNCERTAIN_PREFIX = "price date uncertain:"
 PEER_DATA_NOTE = (
     "Peer fundamentals may use different fiscal periods and accounting standards; "
     "no adjustments are made."
@@ -58,7 +59,7 @@ def build_candidate(
         if score is None
     )
     if uncertain:
-        notes.insert(0, f"price date uncertain: {uncertain}")
+        notes.insert(0, f"{PRICE_DATE_UNCERTAIN_PREFIX} {uncertain}")
     risk = build_risk_profile(
         group=record.group,
         market_cap=snap.market_cap,

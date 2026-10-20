@@ -213,7 +213,9 @@ policy, and one reassessment quoting that fact verbatim. Repetition does not pro
 publishers. A supported retain decision updates the matching development's thesis impact;
 unverified impact clears the invalidation flag and adds a limitation while preserving confirmed
 event facts. All generated prose accepts fetched absolute HTTP(S) URLs in plain text only;
-Markdown/HTML links and unsupported schemes fail validation. Every catalyst needs a citation.
+Markdown/HTML links and unsupported schemes fail validation. Ordinary financial comparisons
+such as `>20%` and `P/E <15`, and numeric markers such as `[1]`, remain valid prose. Every catalyst
+still needs a fetched source URL; numeric markers alone are not citations.
 
 The deterministic defaults in `analysis/discovery_score.py` are:
 

@@ -225,6 +225,18 @@ def test_catalyst_requires_a_claim_citation(providers):
     assert any("Synthesis unavailable" in note for note in result.data_notes)
 
 
+def test_financial_comparisons_and_numeric_markers_preserve_valid_synthesis(providers):
+    _, _, extraction = providers
+    thesis = "EBITDA margin >20% and P/E <15 support further research [1]."
+    catalyst = f"Coverage > 5x was reported [1]; source: {URL}."
+    extraction.return_value = {**prose(), "thesis": thesis, "catalysts": [catalyst]}
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.thesis == thesis
+    assert result.catalysts == [catalyst]
+    assert not any("Synthesis unavailable" in note for note in result.data_notes)
+
+
 @pytest.mark.parametrize(
     "untrusted_link",
     [

@@ -10,7 +10,7 @@ from typing import Literal
 
 from app.discovery.peers import METRIC_SETS, metric_group
 from app.discovery.scoring import dimension_score
-from app.discovery.screen import RISK_ORDER
+from app.discovery.screen import PRICE_DATE_UNCERTAIN_PREFIX, RISK_ORDER
 from app.schemas_discovery import (
     CandidateFit,
     CandidateMetrics,
@@ -143,7 +143,8 @@ def _confidence(
     ):
         return "low"
     uncertain_price = any(
-        note.casefold().startswith("price date uncertain:") for note in candidate.data_notes
+        note.casefold().startswith(PRICE_DATE_UNCERTAIN_PREFIX.casefold())
+        for note in candidate.data_notes
     )
     unresolved = any(
         development.status != "confirmed" or development.invalidates_thesis

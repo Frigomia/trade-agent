@@ -34,8 +34,9 @@ Repetition does not establish independent corroboration. State what happened and
 confirmed or disputed, and its effect on the thesis. An invalidating conclusion must quote a
 supporting claim verbatim in explanation and cite that claim's exact supplied URL. The evidence
 array must contain only URLs supporting that same confirmed high-materiality development.
-Use plain text with absolute HTTP(S) URLs only: no Markdown links, reference citations, HTML,
-autolinks, square brackets or angle brackets.
+Use plain text with absolute HTTP(S) URLs only: no Markdown links, reference-link definitions,
+HTML or autolinks. Financial comparisons such as >20%, <15 and numeric markers like [1] are allowed;
+numeric markers do not replace source URLs.
 Return only the record_research tool input: invalidates_thesis, explanation and evidence.
 """
 
@@ -46,8 +47,9 @@ never change them, invent additional scores, or let forum popularity or discover
 the recommendation. Evidence is not certainty. Clearly state missing data and source conflicts.
 Use only supplied evidence URLs; never invent citations. Every catalyst must cite an exact claim
 URL. Any URL anywhere in your prose must be a supplied claim URL. Do not invent dated events.
-Use plain text with absolute HTTP(S) URLs only: no Markdown links, reference citations, HTML,
-autolinks, square brackets or angle brackets.
+Use plain text with absolute HTTP(S) URLs only: no Markdown links, reference-link definitions,
+HTML or autolinks. Financial comparisons such as >20%, <15 and numeric markers like [1] are allowed;
+numeric markers do not replace source URLs.
 Write thesis, catalysts, qualitative outlook, a balanced bear_case, fit_summary (null when fit
 is not applicable), community_note (explicitly unverified, or null without forum claims), and
 conclusion. Do not place trades, give orders, promise returns or claim to be a licensed advisor.
