@@ -15,7 +15,10 @@ import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { useClaudeLock } from "@/lib/claudeKey";
 import { DiscoveryFeed } from "@/components/discovery/DiscoveryFeed";
+import { alertRows, missingNote } from "@/lib/alerts";
 import { holdingsOnly } from "@/lib/discovery";
+import { useAlerts } from "@/lib/useAlerts";
+import { PortfolioAlerts } from "@/components/recommendations/PortfolioAlerts";
 import { useDiscovery } from "@/lib/useDiscovery";
 import type { Usage } from "@/lib/usage";
 
@@ -34,6 +37,15 @@ export default function TodayPage() {
 
   // The pending table also holds discovery ideas; the holdings list below shows only the rest.
   const pending = holdingsOnly(recommendations ?? []);
+  // The panel's rows: the typed alerts once they load (calls, upcoming earnings, big moves), the
+  // pending calls until then.
+  const typed = useAlerts();
+  const rows = alertRows(typed, pending);
+  const otherRows = rows.filter((r) => r.kind !== "new_recommendation"); // a phone shows calls as cards
+  // What could not be checked is said inside the alerts panel; when no panel is mounted (no rows,
+  // or a phone with only call cards) it is said on its own, so a failed check never reads as quiet.
+  const missing = missingNote(typed?.missing ?? []);
+  const panelShown = isDesktop ? rows.length > 0 : otherRows.length > 0;
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
@@ -78,15 +90,25 @@ export default function TodayPage() {
           Could not load recommendations.
         </Alert>
       )}
+      {missing && !panelShown && (
+        <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>
+          {missing}
+        </Typography>
+      )}
       {recommendations && pending.length === 0 && emptyKind !== null && (
         <TodayEmpty firstRun={emptyKind === "first-run"} />
       )}
+      {!isDesktop && otherRows.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <PortfolioAlerts rows={otherRows} missing={typed?.missing} />
+        </Box>
+      )}
       {!isDesktop && pending.length > 0 && (
         <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mt: 3 }}>
-          Portfolio alerts
+          {otherRows.length > 0 ? "New recommendations" : "Portfolio alerts"}
         </Typography>
       )}
-      {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
+      {isDesktop && rows.length > 0 && <TodayDesktop rows={rows} missing={typed?.missing} />}
       {!isDesktop &&
         pending.map((recommendation) => (
           // No inline confirmation here: approving or dismissing just revalidates the list, and the

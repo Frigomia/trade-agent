@@ -9,6 +9,7 @@ export interface RecommendationOut {
   user_id: string;
   created_at: string;
   ticker: string;
+  name?: string | null; // the company, from the holding or the idea; null for a watched-only ticker
   asset_type: "ETF" | "STOCK";
   action: Action;
   source?: "manual" | "scheduled" | "discovery"; // absent on older payloads: treat as manual

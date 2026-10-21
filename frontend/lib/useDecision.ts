@@ -17,11 +17,15 @@ export function useDecision(id: number, onDecided: (updated: RecommendationOut) 
   const decide = (action: "approve" | "reject") =>
     run(async () => {
       try {
-        onDecided(await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, { method: "POST" }));
+        const updated = await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, { method: "POST" });
+        void mutate("/portfolio/alerts"); // a decided call is no longer an alert
+        onDecided(updated);
       } catch (err) {
         if (err instanceof ApiError && err.status === 409) {
           setError(err.detail);
-          void mutate((key) => typeof key === "string" && key.startsWith("/analysis/recommendations"));
+          void mutate(
+            (key) => typeof key === "string" && (key.startsWith("/analysis/recommendations") || key === "/portfolio/alerts"),
+          );
           return;
         }
         throw err;

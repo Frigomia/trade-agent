@@ -26,6 +26,10 @@ vi.mock("@/lib/api/client", () => ({
 // Each is tested on its own; here they would only add unrelated requests to the shared apiFetch mock.
 vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} }));
 
+// A phone unless a test says otherwise; the layouts differ in where the alerts panel is mounted.
+let desktop = false;
+vi.mock("@mui/material", async (importOriginal) => ({ ...(await importOriginal<typeof import("@mui/material")>()), useMediaQuery: () => desktop }));
+
 import TodayPage from "./page";
 
 function renderFresh(ui: React.ReactElement) {
@@ -63,18 +67,20 @@ interface Api {
   recs?: RecommendationOut[] | Error;
   summary?: unknown;
   ideas?: unknown;
+  alerts?: unknown;
   run?: (init?: RequestInit) => Promise<unknown>;
   extra?: (path: string, init?: RequestInit) => Promise<unknown> | undefined;
 }
 
 // One router for every path Today asks for; a test overrides only what it is about.
-function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, run, extra }: Api = {}) {
+function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, alerts, run, extra }: Api = {}) {
   apiFetch.mockImplementation((path: string, init?: RequestInit) => {
     const handled = extra?.(path, init);
     if (handled) return handled;
     if (path.startsWith("/analysis/recommendations")) return recs instanceof Error ? Promise.reject(recs) : Promise.resolve(recs);
     if (path === "/portfolio/summary") return Promise.resolve(summary);
     if (path === "/discovery/ideas") return Promise.resolve(ideas);
+    if (path === "/portfolio/alerts") return alerts ? Promise.resolve(alerts) : Promise.reject(new FakeApiError(404, "Not found"));
     if (path === "/me/usage") return Promise.resolve(USAGE);
     if (path === "/discovery/run" && init?.method === "POST") return run ? run(init) : Promise.resolve({ job_id: "job-1" });
     if (path.startsWith("/discovery/run/")) return new Promise(() => {}); // a scan that never ends
@@ -87,6 +93,7 @@ const scanButton = () => screen.getByRole("button", { name: /refresh scan|run sc
 beforeEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
+  desktop = false;
 });
 
 describe("TodayPage", () => {
@@ -125,6 +132,95 @@ describe("TodayPage", () => {
     expect(screen.queryByText("Vs cost basis")).not.toBeInTheDocument();
     expect(screen.queryByText("Portfolio")).not.toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalledWith("/portfolio/snapshots");
+  });
+
+  it("shows the typed alerts for earnings and moves above the pending-call cards, on a phone", async () => {
+    mockApi({
+      recs: [rec()],
+      alerts: {
+        alerts: [
+          { ticker: "AAPL", name: "Apple Inc.", kind: "new_recommendation", text: "New AI recommendation: BUY", when: null, direction: null, recommendation_id: 1 },
+          { ticker: "AURL", name: "Aurelle Foods", kind: "earnings_upcoming", text: "Earnings tomorrow", when: "2026-10-22", direction: null, recommendation_id: null },
+        ],
+        missing: [],
+      },
+    });
+    renderFresh(<TodayPage />);
+
+    const panel = await screen.findByRole("region", { name: "Portfolio alerts" });
+    expect(panel).toHaveTextContent("Aurelle Foods");
+    expect(panel).toHaveTextContent("Earnings tomorrow");
+    expect(panel).not.toHaveTextContent("New AI recommendation"); // the call is a decision card below, not repeated here
+    expect(screen.getByRole("heading", { name: "New recommendations" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^approve$/i })).toBeInTheDocument();
+  });
+
+  describe("when part of the alerts check failed", () => {
+    const NOTHING_CHECKED = { alerts: [], missing: ["earnings", "prices"] };
+    const UNCHECKED_NOTE = /could not check earnings dates or some prices/i;
+
+    it("says so instead of the all-clear alone, on desktop with no alert rows", async () => {
+      desktop = true;
+      mockApi({ alerts: NOTHING_CHECKED });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByText(UNCHECKED_NOTE)).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Portfolio alerts" })).not.toBeInTheDocument();
+    });
+
+    it("says so on a phone that shows only recommendation cards", async () => {
+      mockApi({
+        recs: [rec()],
+        alerts: {
+          alerts: [{ ticker: "AAPL", name: "Apple Inc.", kind: "new_recommendation", text: "New AI recommendation: BUY", when: null, direction: null, recommendation_id: 1 }],
+          missing: ["earnings"],
+        },
+      });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByText(/could not check earnings dates,/i)).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Portfolio alerts" })).not.toBeInTheDocument();
+    });
+
+    it("says it once, inside the panel, when the panel is shown", async () => {
+      mockApi({
+        recs: [rec()],
+        alerts: {
+          alerts: [{ ticker: "AURL", name: "Aurelle Foods", kind: "earnings_upcoming", text: "Earnings tomorrow", when: "2026-10-22", direction: null, recommendation_id: null }],
+          missing: ["prices"],
+        },
+      });
+      renderFresh(<TodayPage />);
+
+      const panel = await screen.findByRole("region", { name: "Portfolio alerts" });
+      expect(panel).toHaveTextContent(/could not check some prices/i);
+      expect(screen.getAllByText(/could not check/i)).toHaveLength(1);
+    });
+
+    it("says nothing when every check worked", async () => {
+      desktop = true;
+      mockApi({
+        alerts: {
+          alerts: [{ ticker: "AURL", name: "Aurelle Foods", kind: "earnings_upcoming", text: "Earnings tomorrow", when: "2026-10-22", direction: null, recommendation_id: null }],
+          missing: [],
+        },
+      });
+      renderFresh(<TodayPage />);
+
+      // The row proves the alerts response has rendered before the note is looked for.
+      expect(await screen.findByText("Earnings tomorrow")).toBeInTheDocument();
+      expect(screen.queryByText(/could not check/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps working, with the calls alone, when the alerts endpoint is not there", async () => {
+    mockApi({ recs: [rec()] }); // /portfolio/alerts answers 404
+
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Portfolio alerts" })).not.toBeInTheDocument();
   });
 
   it("shows an inline error when the list fails to load", async () => {

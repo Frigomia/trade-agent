@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { SWRConfig } from "swr";
+import { alertRows } from "@/lib/alerts";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
 const apiFetch = vi.fn();
@@ -12,7 +13,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("TodayDesktop", () => {
   it("shows the Portfolio alerts panel and no portfolio value chart, and asks for no snapshots", () => {
     const recs = [{ id: 1, ticker: "AAPL", action: "TRIM", status: "PENDING" }] as RecommendationOut[];
-    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TodayDesktop recommendations={recs} /></SWRConfig>);
+    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TodayDesktop rows={alertRows(undefined, recs)} /></SWRConfig>);
 
     expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
     expect(screen.queryByText("Portfolio value")).not.toBeInTheDocument();
