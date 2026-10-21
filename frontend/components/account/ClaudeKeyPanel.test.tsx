@@ -46,7 +46,7 @@ describe("ClaudeKeyPanel", () => {
 
   it("not connected: copy, chip and a Connect Claude link to the guide", async () => {
     renderPanel();
-    expect(await screen.findByText("Connect your own Claude account to use Chat and Run analysis.")).toBeInTheDocument();
+    expect(await screen.findByText("Connect your own Claude account to use Chat and scans.")).toBeInTheDocument();
     expect(screen.getByText("Not connected")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connect Claude" })).toHaveAttribute("href", "/more/connect-claude");
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("ClaudeKeyPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Remove" }));
     const dialog = await screen.findByRole("dialog", { name: "Remove your Claude key?" });
     expect(dialog).toHaveTextContent(
-      "Chat and Run analysis stop working until you connect a key again. Your portfolio, watchlist and past recommendations stay as they are.",
+      "Chat and scans stop working until you connect a key again. Your portfolio, watchlist and past recommendations stay as they are.",
     );
     expect(screen.getByRole("button", { name: "Keep it" })).toHaveFocus();
     expect(screen.getByRole("button", { name: "Remove key" })).not.toHaveFocus();

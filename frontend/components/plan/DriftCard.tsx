@@ -26,9 +26,9 @@ export function DriftCard() {
   if (!drift || drift.length === 0) return null;
   return (
     <Panel sx={{ p: "12px 14px", my: 1.5 }}>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Off target</Typography>
-      <Typography sx={{ fontSize: 14, mt: 0.5 }}>{driftSentence(drift)}</Typography>
-      <MuiLink component={NextLink} href="/portfolio/plan" sx={{ fontSize: 12.5, display: "inline-block", mt: 0.75 }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Off target</Typography>
+      <Typography sx={{ fontSize: "0.875rem", mt: 0.5 }}>{driftSentence(drift)}</Typography>
+      <MuiLink component={NextLink} href="/portfolio/plan" sx={{ fontSize: "0.78125rem", display: "inline-block", mt: 0.75 }}>
         Plan this month&apos;s contribution
       </MuiLink>
     </Panel>

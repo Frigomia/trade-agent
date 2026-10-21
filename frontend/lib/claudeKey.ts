@@ -12,7 +12,7 @@ export interface ClaudeKeyStatus {
 
 const PATH = "/me/claude-key";
 
-/** True when POST /chat or /analysis/run refused because the user has no usable Claude key. */
+/** True when POST /chat or /discovery/run refused because the user has no usable Claude key. */
 export function isClaudeKeyRequired(error: unknown): boolean {
   return error instanceof ApiError && error.status === 409 && error.code === "claude_key_required";
 }
@@ -42,7 +42,7 @@ export function useClaudeKey(onStatus?: (status: ClaudeKeyStatus) => void) {
 export type ClaudeLock = "connect" | "reconnect" | null;
 
 /**
- * Whether Chat and Run analysis are locked behind a Claude key, and `markRequired` for when a
+ * Whether Chat and scans are locked behind a Claude key, and `markRequired` for when a
  * request answers 409 claude_key_required (a key revoked mid-session). Unknown never locks: while
  * the status loads, or if it fails to load, the normal UI shows and the backend still enforces.
  * An admin with no personal key uses the server key, so only a flagged key locks an admin.

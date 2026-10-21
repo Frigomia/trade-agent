@@ -43,7 +43,7 @@ describe("Automatic tag on the desktop views", () => {
     );
     expect(screen.getAllByText("Automatic")).toHaveLength(1);
     const row = screen.getByText("AAPL").closest("li");
-    expect(row).toHaveStyle({ flexWrap: "wrap" });
+    expect(screen.getByText("AAPL").parentElement).toHaveStyle({ flexWrap: "wrap" }); // the ticker line wraps
     expect(row).toContainElement(screen.getByText("Automatic"));
   });
 

@@ -24,7 +24,7 @@ const COPY = {
   today: {
     connect: {
       title: "Connect Claude to start analyzing",
-      text: "Run analysis and Chat use your own Claude account. About five minutes, once.",
+      text: "Scans and Chat use your own Claude account. About five minutes, once.",
       cta: "Set up",
     },
     reconnect: RECONNECT,

@@ -6,11 +6,13 @@ import {
   meterFill,
   monogram,
   priceText,
+  commonQuoteDay,
   quoteLabel,
   riskLabel,
   scanCounts,
   sectorText,
   splitIdeas,
+  stageIndex,
   whenText,
 } from "./discovery";
 
@@ -54,8 +56,10 @@ function idea(over: Partial<IdeaOut> = {}): IdeaOut {
   };
 }
 
-function rec(id: number, source: string, withIdea = true): DiscoveryRecommendation {
-  return { id, source, idea: withIdea ? idea({ ticker: `T${id}` }) : null } as unknown as DiscoveryRecommendation;
+function rec(id: number, source: string, withIdea = true, asOf?: string | null): DiscoveryRecommendation {
+  const base = idea({ ticker: `T${id}` });
+  const withDate = asOf === undefined ? base : { ...base, snapshot: { ...base.snapshot!, price_as_of: asOf } };
+  return { id, source, idea: withIdea ? withDate : null } as unknown as DiscoveryRecommendation;
 }
 
 describe("holdingsOnly", () => {
@@ -136,6 +140,33 @@ describe("whenText", () => {
   });
 });
 
+
+describe("stageIndex", () => {
+  it("places each reported stage, and starts at the first for an unknown or missing one", () => {
+    expect(["screening", "admitting", "researching", "evaluating", "writing"].map(stageIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(stageIndex("failed")).toBe(0);
+    expect(stageIndex(undefined)).toBe(0);
+  });
+});
+
+describe("commonQuoteDay", () => {
+  const at = (asOf: string | null) => rec(1, "discovery", true, asOf);
+  const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+
+  it("names the day when every idea shown was quoted on it", () => {
+    expect(commonQuoteDay([at("2026-10-20T20:00:00Z"), at("2026-10-20T20:00:00Z")])).toBe(day("2026-10-20T20:00:00Z"));
+  });
+
+  it("gives no shared day when the quotes differ, so an older one is not passed off as fresh", () => {
+    expect(commonQuoteDay([at("2026-10-09T20:00:00Z"), at("2026-10-21T20:00:00Z")])).toBeNull();
+  });
+
+  it("gives no shared day when any quote date is missing or unusable, or there is nothing to show", () => {
+    expect(commonQuoteDay([at("2026-10-21T20:00:00Z"), at(null)])).toBeNull();
+    expect(commonQuoteDay([at("2026-10-21T20:00:00Z"), at("not a date")])).toBeNull();
+    expect(commonQuoteDay([])).toBeNull();
+  });
+});
 
 describe("quoteLabel", () => {
   const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });

@@ -47,7 +47,7 @@ export function ClaudeKeyPanel() {
       {status && kind === "none" && (
         <>
           <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
-            Connect your own Claude account to use Chat and Run analysis.
+            Connect your own Claude account to use Chat and scans.
           </Typography>
           <Box>
             <Button component={Link} href={GUIDE} variant="contained" size="small">
@@ -62,7 +62,7 @@ export function ClaudeKeyPanel() {
           {kind === "warn" && (
             <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
               Anthropic did not accept your key. It may have been revoked, or the account may be out of credit. Chat and
-              Run analysis are paused.
+              scans are paused.
             </Typography>
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -105,7 +105,7 @@ export function ClaudeKeyPanel() {
         <DialogTitle id="remove-claude-key-title">Remove your Claude key?</DialogTitle>
         <DialogContent>
           <DialogContentText id="remove-claude-key-text">
-            Chat and Run analysis stop working until you connect a key again. Your portfolio, watchlist and past
+            Chat and scans stop working until you connect a key again. Your portfolio, watchlist and past
             recommendations stay as they are.
           </DialogContentText>
           {removeError && (

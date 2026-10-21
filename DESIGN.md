@@ -392,20 +392,25 @@ active states, `--up-bg` and `--down-bg` are only for a price rising or falling,
 **Built on Today:** the discovery section (latest-scan bar, Top opportunity, Other opportunities,
 the scan states), the round monogram `Logo`, the `Meter` (confidence and risk as bars plus a word)
 and the `Change` (signed, arrowed price move). Save to Discover is shown disabled. The holdings
-recommendations sit under "Portfolio alerts" with their existing cards; the search bar and
-Watchlist insights are not built.
+recommendations sit under "Portfolio alerts" (a list with monogram logos on desktop, cards on a
+phone); the search bar and Watchlist insights are not built. The page title is 30px (26px on a
+phone) on every screen.
 
 **Not built yet:** the Company workbench, Portfolio explorer and Discover screens, the Discover
 navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
 
+Decided:
+
+- **Action chips** (BUY, ADD, HOLD, WATCH, TRIM, SELL) are neutral pills: an icon and the word on the
+  Track fill with a hairline edge, never green, red or amber, because those colours mean a price moved.
+  Built in `ActionChip`.
+- **One scan button.** Today has a single Refresh button in the scan bar. The holdings analysis is
+  no longer started from the UI; the daily analysis (Preferences) produces the holdings alerts.
+
 Open items:
 
-- The action chips (BUY, ADD, HOLD, WATCH, TRIM, SELL) are not drawn in the Soft mocks. BUY, ADD,
-  HOLD and WATCH now take the accent colour and TRIM stays amber, but SELL is still a red fill,
-  which breaks the Movement Only Rule. It needs a design decision (for example neutral pills with
-  an icon and the word) before the recommendation screens are restyled.
 - Cards built with `borderRadius: 2` still render at 36px (MUI multiplies the 18px base), and plain
   MUI `Paper` surfaces at 18px; the Soft panel is 22px. Each screen moves to `Panel` as it is
   restyled.

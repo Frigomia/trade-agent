@@ -130,6 +130,21 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent(/[+-]\d+\.\d%/);
   });
 
+  it("names a shared quote day only when every other idea has it, not the newest date for all", () => {
+    const older = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical"), older] });
+
+    expect(screen.queryByText(/^Prices as of /)).not.toBeInTheDocument();
+  });
+
+  it("says when the other ideas' prices were saved, and offers no link when everything is shown", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
+
+    const day = new Date(Date.parse("2026-10-19T20:00:00Z")).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    expect(screen.getByText(`Prices as of ${day}`)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /view all/i })).not.toBeInTheDocument();
+  });
+
   it("dates every saved price, so an older idea does not look current", () => {
     const old = rec(2, "Brevik Medical", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
     const none = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: null } });
@@ -159,8 +174,10 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: SCAN, recommendations: recs });
 
     expect(screen.getAllByRole("article")).toHaveLength(4); // top + three
-    fireEvent.click(screen.getByRole("button", { name: "Show 2 more" }));
+    fireEvent.click(screen.getByRole("button", { name: "View all 5" }));
     expect(screen.getAllByRole("article")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getAllByRole("article")).toHaveLength(4);
   });
 
   it("leaves out price and meta for an idea saved before the display fields existed", () => {
@@ -171,6 +188,78 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent("USD");
     expect(top).toHaveTextContent("A long thesis sentence."); // the thesis excerpt stands in for the headline
     expect(top).not.toHaveTextContent("NaN");
+  });
+
+  it("lists the five scan stages with the finished ones checked and the current one counted", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { running: true, job: { status: "RUNNING", stage: "researching", total: 8, done: 3, error: null } },
+    );
+
+    const steps = screen.getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual([
+      "Screening 600 companies",
+      "Checking companies from research",
+      "Researching candidates · 3 of 8",
+      "Scoring and ranking",
+      "Saving results",
+    ]);
+    expect(steps[2]).toHaveAttribute("aria-current", "step");
+    expect(steps[0]).not.toHaveAttribute("aria-current");
+    // two stages are done, plus 3 of 8 candidates: (2 + 3/8) / 5
+    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveAttribute("aria-valuenow", "48");
+    expect(screen.getByText("The scan keeps running if you leave this page.")).toBeInTheDocument();
+  });
+
+  it("starts at the first stage when the job has not reported one yet", () => {
+    renderFeed(
+      { latest_scan: null, recommendations: [] },
+      { running: true, job: undefined },
+    );
+
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("aria-current", "step");
+    expect(screen.getByText("Screening companies")).toBeInTheDocument(); // size unknown before a first scan
+  });
+
+  it("offers a Reconnect Claude link, not Try again, when the key was rejected", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Your Claude key needs attention." } },
+    );
+
+    expect(screen.getByRole("heading", { name: "Your Claude key needs attention." })).toBeInTheDocument();
+    expect(screen.getByText(/claude did not accept your key, so the scan stopped. nothing was saved./i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /reconnect claude/i })).toHaveAttribute("href", "/more/connect-claude?step=5");
+    expect(screen.queryByRole("button", { name: /^try again$/i })).not.toBeInTheDocument();
+  });
+
+  it("puts a Try again button in a failed state and keeps it off without a usable key", () => {
+    const { onRun } = renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed. Please try again." } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^try again$/i }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Try again off in a failed state when the monthly runs are used up, and says why", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { usage: { used: 100, limit: 100 }, job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed." } },
+    );
+
+    expect(screen.getByRole("button", { name: /^try again$/i })).toBeDisabled();
+    expect(screen.getByText(/used all your scan runs for this month/i)).toBeInTheDocument();
+  });
+
+  it("disables the Try again button when Claude is not connected", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { locked: true, job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed." } },
+    );
+
+    expect(screen.getByRole("button", { name: /^try again$/i })).toBeDisabled();
   });
 
   it("says a quiet scan is a result and names the nearest misses", () => {
@@ -184,7 +273,9 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: quiet, recommendations: [] });
 
     expect(screen.getByText("No compelling opportunity today")).toBeInTheDocument();
-    expect(screen.getByText(/Norsk Verk/)).toBeInTheDocument();
+    // The name, score and confidence are visible text, not a hover title, so a phone and a keyboard see them.
+    const chip = screen.getByText("Norsk Verk").closest("li")!;
+    expect(chip).toHaveTextContent("Norsk Verk NRSK · 58 · medium confidence");
   });
 
   it("shows a quiet latest scan and its nearest misses even while an older idea is still pending, and labels that idea", () => {

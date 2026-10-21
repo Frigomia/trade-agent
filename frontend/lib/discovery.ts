@@ -96,6 +96,43 @@ export function scanCounts(scan: ScanRun): string[] {
 export const clampLines = (lines: number) =>
   ({ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }) as const;
 
+/** No scan runs left this month. A limit of zero means no runs at all: the server refuses the first. */
+export function runsExhausted(usage: { used: number; limit: number } | undefined): boolean {
+  return !!usage && usage.used >= usage.limit;
+}
+
+/** The stages the discovery job reports, in order (backend/app/discovery/jobs.py and runner.py). */
+export const SCAN_STAGES = [
+  { key: "screening", label: "Screening companies" },
+  { key: "admitting", label: "Checking companies from research" },
+  { key: "researching", label: "Researching candidates" },
+  { key: "evaluating", label: "Scoring and ranking" },
+  { key: "writing", label: "Saving results" },
+] as const;
+
+/** Where a job's stage sits in SCAN_STAGES; an unknown or missing stage counts as the first. */
+export function stageIndex(stage: string | undefined): number {
+  return Math.max(0, SCAN_STAGES.findIndex((s) => s.key === stage));
+}
+
+/** The error the job stores when Anthropic rejected the user's key (jobs.py). */
+export const KEY_REJECTED_MESSAGE = "Your Claude key needs attention.";
+
+/**
+ * "Mon 19 Oct" when every idea shown has a saved quote from that same day, otherwise null: the
+ * feed spans scans, so quotes can differ or be missing, and one shared caption would make the
+ * older or undated ones look as fresh as the newest. Each card carries its own date regardless.
+ */
+export function commonQuoteDay(recs: DiscoveryRecommendation[]): string | null {
+  const days = recs.map((rec) => {
+    const asOf = rec.idea?.snapshot?.price_as_of;
+    const ms = asOf ? toTime(asOf) : Number.NaN;
+    return Number.isNaN(ms) ? null : formatDay(ms);
+  });
+  const first = days[0];
+  return first && days.every((day) => day === first) ? first : null;
+}
+
 const formatDay = (ms: number) => new Date(ms).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
 
 /**
