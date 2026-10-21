@@ -35,6 +35,21 @@ describe("Numbers", () => {
     expect(screen.queryByRole("img", { name: /interest cover/i })).not.toBeInTheDocument(); // no band for an unavailable one
   });
 
+  it("states each comparison's own group and count, and labels a mix of industry and sector peers", () => {
+    render(
+      <Numbers
+        idea={testIdea({
+          peers: [peer("returnOnEquity", { peer_group: "industry", peer_count: 12 }), peer("trailingPE", { peer_group: "sector", peer_count: 40 })],
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Industry and sector groups · 12 to 40 companies")).toBeInTheDocument();
+    expect(screen.queryByText("Industry group · 40 companies")).not.toBeInTheDocument();
+    expect(screen.getByText("median 15.0% · 12 industry peers")).toBeInTheDocument();
+    expect(screen.getByText("median 0.15x · 40 sector peers")).toBeInTheDocument();
+  });
+
   it("names the metrics that have no peer verdict instead of dropping them when others do", () => {
     const base = testIdea();
     render(<Numbers idea={testIdea({ peers: [...base.peers!, peer("payoutRatio", { value: 0.4, position: "unavailable", peer_median: null, peer_p25: null, peer_p75: null })] })} />);

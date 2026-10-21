@@ -1,11 +1,12 @@
 import type { PeerComparison, RiskProfile } from "@/lib/api/discovery-types";
 
-type Unit = "fraction" | "percent" | "multiple";
+type Unit = "fraction" | "multiple";
 
 /**
  * The company metrics the discovery scan compares with peers (backend/app/discovery/peers.py),
- * with the label to show and how Yahoo reports each: a fraction (0.21 is 21%), a figure already in
- * percent (dividend yield, debt to equity) or a multiple (24.6 is 24.6x).
+ * with the label to show and how the discovery API reports each: a fraction (0.21 is 21%; the
+ * backend divides Yahoo's dividend yield and debt to equity by 100, so those are fractions too) or
+ * a multiple (24.6 is 24.6x).
  */
 const METRICS: Record<string, { label: string; unit: Unit }> = {
   returnOnEquity: { label: "Return on equity", unit: "fraction" },
@@ -14,8 +15,8 @@ const METRICS: Record<string, { label: string; unit: Unit }> = {
   revenueGrowth: { label: "Revenue growth", unit: "fraction" },
   fcfMargin: { label: "Free cash flow margin", unit: "fraction" },
   payoutRatio: { label: "Payout ratio", unit: "fraction" },
-  debtToEquity: { label: "Debt to equity", unit: "percent" },
-  dividendYield: { label: "Dividend yield", unit: "percent" },
+  debtToEquity: { label: "Debt to equity", unit: "fraction" },
+  dividendYield: { label: "Dividend yield", unit: "fraction" },
   trailingPE: { label: "P/E", unit: "multiple" },
   enterpriseToEbitda: { label: "EV/EBITDA", unit: "multiple" },
   pegRatio: { label: "PEG ratio", unit: "multiple" },
@@ -38,7 +39,6 @@ export function formatMetric(key: string, value: number | null | undefined): str
   if (value === null || value === undefined || !Number.isFinite(value)) return null;
   const unit = METRICS[key]?.unit;
   if (unit === "fraction") return `${one(value * 100)}%`;
-  if (unit === "percent") return `${one(value)}%`;
   if (unit === "multiple") return `${one(value)}x`;
   return String(Number(value.toPrecision(3))); // an unlisted metric: the number, with no unit guessed
 }
@@ -74,12 +74,29 @@ export function bandLayout(c: PeerComparison): BandLayout | null {
   return { band: { left: at(p25), width: at(p75) - at(p25) }, median: at(med), value: at(value) };
 }
 
-/** "Industry group · 12 companies", from the comparisons; null when no peer group was found. */
+const usablePeers = (peers: PeerComparison[]) => peers.filter((p) => p.peer_group !== "none" && p.peer_count > 0);
+
+/**
+ * The heading over the peer bands. The backend falls back from industry to sector for each metric
+ * on its own, so the comparisons can differ: one group and count is stated as such ("Industry
+ * group · 12 companies"), a spread of counts as a range, and a mix of groups as a mix. Null when
+ * no peer group was found.
+ */
 export function peerGroupLabel(peers: PeerComparison[]): string | null {
-  const usable = peers.filter((p) => p.peer_group !== "none" && p.peer_count > 0);
+  const usable = usablePeers(peers);
   if (usable.length === 0) return null;
-  const group = usable[0].peer_group === "industry" ? "Industry group" : "Sector group";
-  return `${group} · ${Math.max(...usable.map((p) => p.peer_count))} companies`;
+  const groups = new Set(usable.map((p) => p.peer_group));
+  const group = groups.size > 1 ? "Industry and sector groups" : groups.has("industry") ? "Industry group" : "Sector group";
+  const counts = usable.map((p) => p.peer_count);
+  const [lo, hi] = [Math.min(...counts), Math.max(...counts)];
+  const size = lo === hi ? `${hi} ${hi === 1 ? "company" : "companies"}` : `${lo} to ${hi} companies`;
+  return `${group} · ${size}`;
+}
+
+/** "12 industry peers": the group and count behind one comparison, null when it has none. */
+export function peerNote(c: PeerComparison): string | null {
+  if (c.peer_group === "none" || c.peer_count <= 0) return null;
+  return `${c.peer_count} ${c.peer_group} ${c.peer_count === 1 ? "peer" : "peers"}`;
 }
 
 const SIZE_WORD: Record<RiskProfile["size_bucket"], string> = { micro: "Micro", small: "Small", mid: "Mid-sized", large: "Large", unknown: "Unknown" };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PeerComparison } from "@/lib/api/discovery-types";
-import { bandLayout, eurCompact, formatMetric, metricLabel, peerGroupLabel, riskFlag, sizeWord } from "./metrics";
+import { bandLayout, eurCompact, formatMetric, metricLabel, peerGroupLabel, peerNote, riskFlag, sizeWord } from "./metrics";
 
 const cmp = (over: Partial<PeerComparison> = {}): PeerComparison => ({
   metric: "trailingPE",
@@ -15,11 +15,12 @@ const cmp = (over: Partial<PeerComparison> = {}): PeerComparison => ({
 });
 
 describe("formatMetric", () => {
-  it("shows a fraction as a percent, a percent as it is, and a multiple with an x", () => {
+  it("shows a fraction as a percent and a multiple with an x", () => {
     expect(formatMetric("returnOnEquity", 0.213)).toBe("21.3%");
     expect(formatMetric("operatingMargins", -0.04)).toBe("-4.0%");
-    expect(formatMetric("dividendYield", 2.5)).toBe("2.5%");
-    expect(formatMetric("debtToEquity", 45)).toBe("45.0%");
+    // dividend yield and debt to equity arrive normalized: the backend has already divided by 100
+    expect(formatMetric("dividendYield", 0.025)).toBe("2.5%");
+    expect(formatMetric("debtToEquity", 0.45)).toBe("45.0%");
     expect(formatMetric("trailingPE", 24.64)).toBe("24.6x");
   });
 
@@ -78,11 +79,31 @@ describe("bandLayout", () => {
 });
 
 describe("peerGroupLabel", () => {
-  it("names the group and its largest peer count, or nothing when there is no group", () => {
-    expect(peerGroupLabel([cmp(), cmp({ peer_count: 9 })])).toBe("Industry group · 12 companies");
+  it("names the group and count when every comparison agrees, or nothing when there is no group", () => {
+    expect(peerGroupLabel([cmp(), cmp()])).toBe("Industry group · 12 companies");
     expect(peerGroupLabel([cmp({ peer_group: "sector", peer_count: 40 })])).toBe("Sector group · 40 companies");
+    expect(peerGroupLabel([cmp({ peer_count: 1 })])).toBe("Industry group · 1 company");
     expect(peerGroupLabel([cmp({ peer_group: "none", peer_count: 0 })])).toBeNull();
     expect(peerGroupLabel([])).toBeNull();
+  });
+
+  it("gives a range of counts rather than the largest, and says when the groups are mixed", () => {
+    expect(peerGroupLabel([cmp(), cmp({ peer_count: 9 })])).toBe("Industry group · 9 to 12 companies");
+    expect(peerGroupLabel([cmp({ peer_count: 12 }), cmp({ peer_group: "sector", peer_count: 40 })])).toBe(
+      "Industry and sector groups · 12 to 40 companies",
+    );
+  });
+
+  it("ignores a comparison with no peer group", () => {
+    expect(peerGroupLabel([cmp(), cmp({ peer_group: "none", peer_count: 0 })])).toBe("Industry group · 12 companies");
+  });
+});
+
+describe("peerNote", () => {
+  it("states the group and count behind one comparison", () => {
+    expect(peerNote(cmp())).toBe("12 industry peers");
+    expect(peerNote(cmp({ peer_group: "sector", peer_count: 1 }))).toBe("1 sector peer");
+    expect(peerNote(cmp({ peer_group: "none", peer_count: 0 }))).toBeNull();
   });
 });
 

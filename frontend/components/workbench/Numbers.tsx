@@ -3,7 +3,7 @@ import { Box, Table, TableBody, TableCell, TableHead, TableRow, Typography } fro
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { IdeaOut, PeerComparison, PeerRow } from "@/lib/api/discovery-types";
-import { bandLayout, eurCompact, formatMetric, metricLabel, peerGroupLabel, POSITION_WORD } from "@/lib/metrics";
+import { bandLayout, eurCompact, formatMetric, metricLabel, peerGroupLabel, peerNote, POSITION_WORD } from "@/lib/metrics";
 import { BODY, H3 } from "./Cases";
 
 const POSITION_ICON = { below: ArrowDown, within: Minus, above: ArrowUp } as const;
@@ -68,6 +68,7 @@ function Band({ c }: { c: PeerComparison }) {
   const Icon = POSITION_ICON[c.position];
   const value = formatMetric(c.metric, c.value);
   const median = formatMetric(c.metric, c.peer_median);
+  const note = peerNote(c);
   return (
     <Box sx={{ display: "grid", gap: 0.75 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text2)" }}>
@@ -87,7 +88,10 @@ function Band({ c }: { c: PeerComparison }) {
         <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, color: "var(--text2)" }}>
           <Icon size={13} aria-hidden /> {POSITION_WORD[c.position]}
         </Box>
-        <span>median {median}</span>
+        <span>
+          median {median}
+          {note && ` · ${note}`}
+        </span>
       </Box>
     </Box>
   );
@@ -96,7 +100,7 @@ function Band({ c }: { c: PeerComparison }) {
 function Peers({ idea }: { idea: IdeaOut }) {
   const rows = idea.peers ?? [];
   const bands = rows.filter((c) => c.position !== "unavailable" && bandLayout(c) !== null);
-  const group = peerGroupLabel(rows);
+  const group = peerGroupLabel(bands);
   const noVerdict = rows.filter((c) => !bands.includes(c) && c.value !== null);
   if (bands.length === 0) {
     return (

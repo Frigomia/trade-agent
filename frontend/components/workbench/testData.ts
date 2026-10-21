@@ -77,7 +77,7 @@ export function testIdea(over: Partial<IdeaOut> = {}): IdeaOut {
       currency: "USD",
       price: 184.2,
       price_as_of: "2026-10-19T20:00:00",
-      fundamentals: { returnOnEquity: 0.213, trailingPE: 24.6, debtToEquity: 140 },
+      fundamentals: { returnOnEquity: 0.213, trailingPE: 24.6, debtToEquity: 1.4 },
       peers: [
         { ticker: "PEER1", name: "Peerco One", country: "Germany", currency: "EUR", market_cap_eur: 21_000_000_000, values: { returnOnEquity: 0.18, trailingPE: 31.2 } },
         { ticker: "PEER2", name: "Peerco Two", country: null, currency: null, market_cap_eur: null, values: { returnOnEquity: null, trailingPE: 27.5 } },
