@@ -10,6 +10,7 @@ import {
   scanCounts,
   sectorText,
   splitIdeas,
+  stageIndex,
   whenText,
 } from "./discovery";
 
@@ -132,3 +133,11 @@ describe("whenText", () => {
   });
 });
 
+
+describe("stageIndex", () => {
+  it("places each reported stage, and starts at the first for an unknown or missing one", () => {
+    expect(["screening", "admitting", "researching", "evaluating", "writing"].map(stageIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(stageIndex("failed")).toBe(0);
+    expect(stageIndex(undefined)).toBe(0);
+  });
+});

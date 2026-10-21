@@ -42,8 +42,8 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, usag
       <ScanBar scan={scan} job={job} running={running} usage={usage} locked={locked} now={now} onRun={onRun} />
       {loadError ? <Alert severity="error">Your saved ideas are unavailable right now.</Alert> : null}
       {startError && <Alert severity="error">{startError}</Alert>}
-      {running && <ScanRunning job={job} />}
-      {failed && <ScanFailed message={job?.error ?? null} />}
+      {running && <ScanRunning job={job} universe={scan?.universe_size} />}
+      {failed && <ScanFailed message={job?.error ?? null} locked={locked} onRetry={onRun} />}
       {!running && !failed && ideas && !scan && <FirstScan />}
       {!running && !failed && scan && !top && scan.outcome === "none" && <NoOpportunity scan={scan} />}
       {top && (

@@ -95,3 +95,20 @@ export function scanCounts(scan: ScanRun): string[] {
 /** Cuts a block of text to `lines` lines with an ellipsis, in CSS, so no sentence is guessed at. */
 export const clampLines = (lines: number) =>
   ({ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }) as const;
+
+/** The stages the discovery job reports, in order (backend/app/discovery/jobs.py and runner.py). */
+export const SCAN_STAGES = [
+  { key: "screening", label: "Screening companies" },
+  { key: "admitting", label: "Checking companies from research" },
+  { key: "researching", label: "Researching candidates" },
+  { key: "evaluating", label: "Scoring and ranking" },
+  { key: "writing", label: "Saving results" },
+] as const;
+
+/** Where a job's stage sits in SCAN_STAGES; an unknown or missing stage counts as the first. */
+export function stageIndex(stage: string | undefined): number {
+  return Math.max(0, SCAN_STAGES.findIndex((s) => s.key === stage));
+}
+
+/** The error the job stores when Anthropic rejected the user's key (jobs.py). */
+export const KEY_REJECTED_MESSAGE = "Your Claude key needs attention.";

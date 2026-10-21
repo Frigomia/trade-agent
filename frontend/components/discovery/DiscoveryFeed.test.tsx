@@ -157,6 +157,68 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent("NaN");
   });
 
+  it("lists the five scan stages with the finished ones checked and the current one counted", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { running: true, job: { status: "RUNNING", stage: "researching", total: 8, done: 3, error: null } },
+    );
+
+    const steps = screen.getAllByRole("listitem");
+    expect(steps.map((li) => li.textContent)).toEqual([
+      "Screening 600 companies",
+      "Checking companies from research",
+      "Researching candidates · 3 of 8",
+      "Scoring and ranking",
+      "Saving results",
+    ]);
+    expect(steps[2]).toHaveAttribute("aria-current", "step");
+    expect(steps[0]).not.toHaveAttribute("aria-current");
+    // two stages are done, plus 3 of 8 candidates: (2 + 3/8) / 5
+    expect(screen.getByRole("progressbar", { name: "Scan progress" })).toHaveAttribute("aria-valuenow", "48");
+    expect(screen.getByText("The scan keeps running if you leave this page.")).toBeInTheDocument();
+  });
+
+  it("starts at the first stage when the job has not reported one yet", () => {
+    renderFeed(
+      { latest_scan: null, recommendations: [] },
+      { running: true, job: undefined },
+    );
+
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("aria-current", "step");
+    expect(screen.getByText("Screening companies")).toBeInTheDocument(); // size unknown before a first scan
+  });
+
+  it("offers a Reconnect Claude link, not Try again, when the key was rejected", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Your Claude key needs attention." } },
+    );
+
+    expect(screen.getByRole("heading", { name: "Your Claude key needs attention." })).toBeInTheDocument();
+    expect(screen.getByText(/claude did not accept your key, so the scan stopped. nothing was saved./i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /reconnect claude/i })).toHaveAttribute("href", "/more/connect-claude?step=5");
+    expect(screen.queryByRole("button", { name: /^try again$/i })).not.toBeInTheDocument();
+  });
+
+  it("puts a Try again button in a failed state and keeps it off without a usable key", () => {
+    const { onRun } = renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed. Please try again." } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^try again$/i }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the Try again button when Claude is not connected", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { locked: true, job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed." } },
+    );
+
+    expect(screen.getByRole("button", { name: /^try again$/i })).toBeDisabled();
+  });
+
   it("says a quiet scan is a result and names the nearest misses", () => {
     const quiet: ScanRun = {
       ...SCAN,
@@ -168,7 +230,8 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: quiet, recommendations: [] });
 
     expect(screen.getByText("No compelling opportunity today")).toBeInTheDocument();
-    expect(screen.getByText(/Norsk Verk/)).toBeInTheDocument();
+    const chip = screen.getByText("NRSK · 58");
+    expect(chip).toHaveAttribute("title", "Norsk Verk, medium confidence"); // the company name is on the chip
   });
 
   it("invites a first scan when none has ever run", () => {
