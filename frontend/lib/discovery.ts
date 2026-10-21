@@ -157,3 +157,8 @@ export function quoteLabel(idea: IdeaOut): string {
 export function isEarlier(rec: Pick<DiscoveryRecommendation, "created_at">, scan: Pick<ScanRun, "created_at"> | null): boolean {
   return scan !== null && toTime(rec.created_at) < toTime(scan.created_at);
 }
+
+/** The portfolio-fit score (0 to 100), or null when fit does not apply (no holdings to compare). */
+export function fitScore(idea: IdeaOut): number | null {
+  return idea.scores.find((s) => s.name === "fit")?.score ?? null;
+}

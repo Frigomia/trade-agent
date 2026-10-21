@@ -110,3 +110,14 @@ export interface DiscoveryJob {
   done: number;
   error: string | null;
 }
+
+export type HistoryRange = "1w" | "1m" | "3m" | "1y";
+
+/** GET /discovery/ideas/{id}/history: dated daily closes in the major currency unit, oldest first. */
+export interface PriceHistory {
+  ticker: string;
+  currency: string | null;
+  as_of: string | null;
+  range: HistoryRange;
+  points: { date: string; close: number }[];
+}

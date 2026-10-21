@@ -396,7 +396,14 @@ recommendations sit under "Portfolio alerts" (a list with monogram logos on desk
 phone); the search bar and Watchlist insights are not built. The page title is 30px (26px on a
 phone) on every screen.
 
-**Not built yet:** the Company workbench, Portfolio explorer and Discover screens, the Discover
+**Built on the company page** (`/today/[id]` for a discovery idea): the Workbench shell (identity, a
+decision rail beside the evidence, tabs, a phone action bar above the tab bar) with the Overview and
+Sources tabs: thesis, price chart, bull and bear cases at equal weight, negative developments with
+their status as shape plus word, every source, data limits and the unverified community view. The
+price chart is built but shows "not available" until the history endpoint exists. Numbers, Risk and
+fit (with the named-peer table) are the next slice.
+
+**Not built yet:** the Numbers and Risk and fit tabs, the Portfolio explorer and Discover screens, the Discover
 navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
