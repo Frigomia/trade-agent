@@ -8,11 +8,15 @@ import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { listingText, sectorText } from "@/lib/discovery";
 import { DecisionRail, DecisionSummary, PhoneActions } from "./DecisionRail";
+import { Numbers } from "./Numbers";
 import { Overview } from "./Overview";
+import { RiskFit } from "./RiskFit";
 import { SourcesTab } from "./SourcesTab";
 
 const TABS = [
   { key: "overview", label: "Overview" },
+  { key: "numbers", label: "Numbers" },
+  { key: "risk", label: "Risk and fit" },
   { key: "sources", label: "Sources" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -95,7 +99,10 @@ export function Workbench({ recommendation, onDecided }: { recommendation: Disco
       </Box>
       <Box sx={{ display: "grid", gap: 3, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 300px" }, alignItems: "start" }}>
         <Box role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}-tab`} sx={{ minWidth: 0 }}>
-          {tab === "overview" ? <Overview idea={idea} recommendationId={recommendation.id} /> : <SourcesTab idea={idea} />}
+          {tab === "overview" && <Overview idea={idea} recommendationId={recommendation.id} />}
+          {tab === "numbers" && <Numbers idea={idea} />}
+          {tab === "risk" && <RiskFit idea={idea} />}
+          {tab === "sources" && <SourcesTab idea={idea} />}
         </Box>
         {isDesktop && <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />}
       </Box>
