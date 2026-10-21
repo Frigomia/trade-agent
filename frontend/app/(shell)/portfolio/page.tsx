@@ -33,6 +33,7 @@ import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
 import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
+import { rangeText } from "@/lib/priceRange";
 import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
@@ -420,6 +421,7 @@ export default function PortfolioPage() {
         )}
         {watchlist.map((item) => {
           const isOwned = owned.has(item.ticker.toUpperCase());
+          const range = rangeText(item);
           return (
           <Box
             key={item.ticker}
@@ -429,11 +431,12 @@ export default function PortfolioPage() {
               <Typography sx={{ fontWeight: 600 }}>{item.ticker}</Typography>
               <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
                 {isOwned ? (
-                  "Owned · target on the holding"
+                  `Owned · target on the holding${range ? ` · range ${range}` : ""}`
                 ) : (
                   <>
                     {item.note ?? "Watching"}
                     {item.target_weight != null && ` · target ${targetText(item.target_weight)}`}
+                    {range && ` · range ${range}`}
                   </>
                 )}
               </Typography>
@@ -441,19 +444,14 @@ export default function PortfolioPage() {
             <Typography>
               {item.current_price !== null ? formatAmount(item.current_price) : DASH}
             </Typography>
-            {isOwned ? (
-              // Keeps the price lined up with the rows that have a pencil.
-              <Box sx={{ ml: 0.5, width: 25, flex: "none" }} />
-            ) : (
-              <IconButton
-                size="small"
-                aria-label={`Edit target for ${item.ticker}`}
-                onClick={() => setEditingTarget(item)}
-                sx={{ ml: 0.5, color: "var(--muted)" }}
-              >
-                <Pencil size={15} />
-              </IconButton>
-            )}
+            <IconButton
+              size="small"
+              aria-label={isOwned ? `Edit price range for ${item.ticker}` : `Edit target for ${item.ticker}`}
+              onClick={() => setEditingTarget(item)}
+              sx={{ ml: 0.5, color: "var(--muted)" }}
+            >
+              <Pencil size={15} />
+            </IconButton>
             <IconButton
               size="small"
               aria-label={`Remove ${item.ticker} from watchlist`}
@@ -519,7 +517,7 @@ export default function PortfolioPage() {
       </Panel>
       </Box>
 
-      <WatchTargetDialog item={editingTarget} onClose={() => setEditingTarget(null)} onSaved={() => mutateSummary()} />
+      <WatchTargetDialog item={editingTarget} rangeOnly={editingTarget !== null && owned.has(editingTarget.ticker.toUpperCase())} onClose={() => setEditingTarget(null)} onSaved={() => mutateSummary()} />
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogContent>
           <DialogContentText>Remove {removing} from your watchlist?</DialogContentText>

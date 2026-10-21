@@ -27,6 +27,9 @@ export interface WatchlistSummary {
   asset_type: AssetType;
   note: string | null;
   target_weight: number | null; // fraction 0..1
+  // The price range the person would like to see, in the quote's own unit; both set or both null.
+  target_price_low?: number | null;
+  target_price_high?: number | null;
   current_price: number | null;
 }
 
