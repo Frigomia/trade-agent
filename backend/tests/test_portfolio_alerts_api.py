@@ -79,6 +79,7 @@ def test_alerts_return_a_call_upcoming_earnings_and_a_move_for_the_users_holding
     ]
     assert body["alerts"][0]["recommendation_id"] is not None
     assert body["alerts"][1]["when"] == tomorrow().isoformat()
+    assert body["alerts"][2]["direction"] == "up"
 
 
 def test_alerts_are_empty_for_a_user_with_nothing_to_report(client):

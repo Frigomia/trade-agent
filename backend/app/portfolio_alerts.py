@@ -86,7 +86,13 @@ def build_alerts(
         word = "Up" if pct > 0 else "Down"
         text = f"{word} {abs(pct):.1f}% on your purchase cost"
         alerts.append(
-            PortfolioAlertOut(ticker=h.ticker, name=h.name, kind="move_since_purchase", text=text)
+            PortfolioAlertOut(
+                ticker=h.ticker,
+                name=h.name,
+                kind="move_since_purchase",
+                text=text,
+                direction="up" if pct > 0 else "down",
+            )
         )
 
     return alerts

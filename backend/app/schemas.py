@@ -597,6 +597,7 @@ class PortfolioAlertOut(BaseModel):
     kind: AlertKind
     text: str
     when: date | None = None  # the earnings date, for earnings_upcoming
+    direction: Literal["up", "down"] | None = None  # for move_since_purchase
     recommendation_id: int | None = None  # for new_recommendation
 
 

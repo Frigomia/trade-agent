@@ -45,6 +45,8 @@ def test_a_move_of_five_points_or_more_against_the_cost_is_an_alert_in_either_di
     up = build_alerts([hold(price=106.8)], [], TODAY)
     down = build_alerts([hold(price=92.0)], [], TODAY)
 
+    assert [a.direction for a in up] == ["up"]
+    assert [a.direction for a in down] == ["down"]
     assert [(a.kind, a.text) for a in up] == [
         ("move_since_purchase", "Up 6.8% on your purchase cost")
     ]
