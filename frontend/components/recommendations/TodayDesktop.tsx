@@ -3,34 +3,21 @@
 import useSWR from "swr";
 import { Box, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
+import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct, formatSigned } from "@/lib/format";
-import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { PortfolioAlerts } from "./PortfolioAlerts";
 
-/** The desktop part of Today from the mockup: value over time beside the compact review list. */
+/**
+ * The desktop part of Today from the Soft mock: the Portfolio alerts panel. The portfolio value
+ * chart that used to sit beside it is not part of the new Today; the value and its trend are in the
+ * tile above and on the Portfolio page.
+ */
 export function TodayDesktop({ recommendations }: { recommendations: RecommendationOut[] }) {
-  const { data: snapshots } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
-
   return (
-    <Box
-      sx={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1.65fr) minmax(0, 1fr)",
-        gap: 1.75,
-        mt: 1.75,
-        alignItems: "start",
-      }}
-    >
-      <Panel sx={{ p: "18px 20px" }}>
-        <Typography sx={{ fontSize: "1.0625rem", fontWeight: 650, letterSpacing: "-0.01em", mb: 0.5 }}>
-          Portfolio value
-        </Typography>
-        <PortfolioChart snapshots={snapshots ?? []} />
-      </Panel>
+    <Box sx={{ mt: 1.75 }}>
       <PortfolioAlerts recommendations={recommendations} />
     </Box>
   );

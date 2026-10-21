@@ -5,7 +5,8 @@ import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 
 const apiFetch = vi.fn();
 vi.mock("@/lib/api/client", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
-import { CostBasisTile } from "./TodayDesktop";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { CostBasisTile, TodayDesktop } from "./TodayDesktop";
 
 function show(covered: number, complete: boolean, profit: number) {
   const summary = {
@@ -35,5 +36,16 @@ describe("CostBasisTile", () => {
     show(1, true, 50);
     expect(await screen.findByText("+50.00")).toBeInTheDocument();
     expect(screen.queryByText(/P\/L covers/)).not.toBeInTheDocument();
+  });
+});
+
+describe("TodayDesktop", () => {
+  it("shows the Portfolio alerts panel and no portfolio value chart, and asks for no snapshots", () => {
+    const recs = [{ id: 1, ticker: "AAPL", action: "TRIM", status: "PENDING" }] as RecommendationOut[];
+    render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><TodayDesktop recommendations={recs} /></SWRConfig>);
+
+    expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
+    expect(screen.queryByText("Portfolio value")).not.toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalledWith("/portfolio/snapshots");
   });
 });
