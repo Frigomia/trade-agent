@@ -1,5 +1,7 @@
 # Today: three options built on the "Invest" reference
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Status: option 2 (Soft) chosen as-is on 2026-10-20 (see `direction-approved.md`). Written 2026-10-20. Supersedes the first round (`a-gallery`, `b-pulse`, `c-ledger`, see `SPEC.md`), whose backend mapping (gaps 1 to 9) still applies. Nothing here is implemented in `frontend/`. All companies are fictional and logos are monogram placeholders.
 
 Only the chosen option's screenshots (`shots/v2b-*`) are committed; the others regenerate with `./shootall.sh` (the three v2 options) or `WIN=1500 ./shootall.sh v3-evidence:v3`; `shots/.gitignore` keeps the rest out of git. Set `CHROME` if Chrome is not at the default Windows path.

@@ -1,5 +1,7 @@
 # Contribution planner: three design directions
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Drafts for Task 9 of `docs/superpowers/plans/2026-10-08-contribution-planner.md`. Nothing is chosen yet;
 `direction-approved.md` is written after the pick.
 

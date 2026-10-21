@@ -1,5 +1,7 @@
 # Direction approved: Today screen
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Date: 2026-10-20
 
 Shown: three reference-based options (`v2-a-lean.html`, `v2-b-soft.html`, `v2-c-evidence.html`; screenshots `shots/v2a-*`, `v2b-*`, `v2c-*`).

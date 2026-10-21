@@ -1,5 +1,7 @@
 # Direction approved — Portfolio navigation
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Shown (2026-10): `index.html` mockup with 12 screenshots in `shots/`.
 
 Chosen by the user: the tab-strip recommendation ("yes look good, lets go with that one").

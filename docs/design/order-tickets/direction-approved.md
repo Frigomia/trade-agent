@@ -1,5 +1,7 @@
 # Direction approved — Order tickets
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Shown (2026-10): directions A (ticket strip), B (orders checklist), C (expandable rows) and a hybrid D, with screenshots in `shots/`. The user asked for D to be changed to show the approved ledger row when collapsed and Copy / Placed only when expanded, then approved it ("ok looks good").
 
 Chosen: **D, as updated** (`d-hybrid.html`, `shots/d-*`, README "D - hybrid").

@@ -1,5 +1,7 @@
 # Company overview: three options (option 3, Workbench, chosen)
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Status: option 3 (Workbench) chosen on 2026-10-20, see `direction-approved.md`. Written 2026-10-20. The page opens from a Today card (`/today/[id]` area). Uses the chosen Soft direction (light and dark, blue accent). Nothing here is implemented in `frontend/`. The company, its numbers and the sources are fictional.
 
 Open `co-a-dashboard.html`, `co-b-story.html` or `co-c-workbench.html` (add `?theme=dark`, and `?only=desk|phones|states`). Screenshots are in `shots/` (`coa|cob|coc` + `desk|phones|states` + `dark|light`); `WIN=1340 ./shootall.sh` regenerates them (headless Chrome; set `CHROME` if it is not at the default Windows path). Shared files: `soft.css` (theme), `co.css` (components), `co.js` (sample data and section builders); the shell comes from `../today-discovery/lib.css` and `lib.js`.
