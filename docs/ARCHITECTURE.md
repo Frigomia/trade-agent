@@ -440,7 +440,8 @@ Country is the listing country, not issuer domicile or revenue exposure. Missing
 remain null and existing price-date uncertainty disclosures remain in `data_notes`.
 The saved price is a scan-time quote, not a live price or a change to outcome-evaluation inputs.
 `headline` is a whitespace-normalized, word-bounded thesis excerpt of at most 180 characters;
-it adds no model call or new claims. Full thesis, bear case and sources remain available.
+it is null when no word fits instead of returning a bare ellipsis. It adds no model call or
+new claims. Full thesis, bear case and sources remain available.
 Legacy idea JSON validates with `snapshot=null` and `headline=null`; reads do not backfill it
 from current provider metadata.
 

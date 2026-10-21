@@ -1,5 +1,6 @@
 """Discovery scan writes run through the real restricted Postgres role."""
 
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -299,3 +300,36 @@ def test_opportunities_cannot_exceed_researched_candidates(db_session, app_sessi
     with patch("app.db.SessionLocal", app_session_local), pytest.raises(ValueError, match="exceed"):
         save_scan(USER_ID, [_idea()], **{**COUNTS, "researched": 0})
     assert db_session.query(ScanRun).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (None, None),
+        (True, None),
+        (False, None),
+        (-1, None),
+        (3, None),
+        (1.5, None),
+        ("1", None),
+        (0, 0),
+        (1, 1),
+        (2, 2),
+    ],
+)
+def test_scan_count_requires_an_integer_within_researched_bounds(count, expected):
+    scan = ScanRunOut(
+        id=1,
+        user_id=USER_ID,
+        created_at=datetime(2026, 10, 21),
+        status="completed",
+        **COUNTS,
+        outcome="ideas",
+        summary="Saved scan",
+        excluded=[],
+        rejected_mentions=[],
+        coverage_summary={} if count is None else {"opportunities": count},
+    )
+    data = scan.model_dump()
+    assert data["opportunities"] == expected
+    assert data["set_aside"] == (None if expected is None else COUNTS["researched"] - expected)

@@ -353,6 +353,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         conclusion += " Advisory research for human review only. Not a licensed advisor."
     # The model supplies prose only. All identity, risk and numeric output comes from code.
     currency, unit = SUBUNITS.get(candidate.currency or "", (candidate.currency, Decimal(1)))
+    headline = shorten(prose.thesis, width=180, placeholder="...")
     idea = IdeaOut(
         ticker=candidate.ticker,
         name=candidate.name,
@@ -374,7 +375,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         sources=evidence.claims,
         style_tags=evaluation.style_tags,
         data_notes=list(dict.fromkeys(notes)),
-        headline=shorten(prose.thesis, width=180, placeholder="...") or None,
+        headline=headline if headline not in ("", "...") else None,
         snapshot=IdeaSnapshot(
             exchange=candidate.exchange,
             country=candidate.country,

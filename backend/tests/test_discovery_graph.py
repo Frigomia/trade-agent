@@ -159,6 +159,17 @@ def test_headline_is_a_bounded_excerpt_of_validated_thesis(providers):
     assert extraction.await_count == 1
 
 
+@pytest.mark.parametrize("thesis", ["x" * 181, "x" * 181 + " More research follows."])
+def test_headline_is_unavailable_when_no_word_fits(providers, thesis):
+    _, _, extraction = providers
+    extraction.return_value = {**prose(), "thesis": thesis}
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.thesis == thesis
+    assert result.headline is None
+    assert not any("Synthesis unavailable" in note for note in result.data_notes)
+
+
 def test_quant_and_research_run_in_parallel_and_join_before_normalization(monkeypatch, providers):
     original_quant = discovery_graph.quant
     original_extract = discovery_graph.extract_evidence

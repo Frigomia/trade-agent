@@ -250,6 +250,43 @@ def test_saved_display_fields_round_trip_without_live_enrichment(client_no_key, 
     assert saved == idea.model_dump(mode="json")
 
 
+def test_feed_treats_legacy_risk_as_unknown_and_breaks_equal_rank_ties_by_date(client, db_session):
+    rows = []
+    for ticker, risk, day in [
+        ("AAA", None, 1),
+        ("BBB", "unknown", 1),
+        ("CCC", None, 1),
+        ("ZZZ", "low", 1),
+        ("DUP", "unknown", 3),
+        ("DUP", "unknown", 2),
+    ]:
+        idea = None
+        if risk is not None:
+            idea = sample_idea()
+            idea.ticker, idea.overall, idea.risk.risk_level = ticker, None, risk
+            next(score for score in idea.scores if score.name == "fit").score = None
+        row = Recommendation(
+            user_id=USER_ID,
+            ticker=ticker,
+            asset_type="STOCK",
+            action="BUY",
+            source="discovery",
+            status="PENDING",
+            reasoning=["saved"],
+            created_at=datetime(2026, 10, day),
+            idea=idea.model_dump(mode="json") if idea is not None else None,
+        )
+        db_session.add(row)
+        rows.append(row)
+    db_session.commit()
+    response = client.get("/discovery/ideas")
+    assert response.status_code == 200
+    saved = response.json()["recommendations"]
+    assert [row["ticker"] for row in saved] == ["ZZZ", "AAA", "BBB", "CCC", "DUP", "DUP"]
+    # The older duplicate has the higher ID; the date must take precedence over that ID.
+    assert [row["id"] for row in saved[-2:]] == [rows[-2].id, rows[-1].id]
+
+
 def test_monthly_cap_prevents_job_creation(client, db_session):
     db_session.get(AppUser, USER_ID).monthly_analysis_limit = 0
     db_session.commit()
