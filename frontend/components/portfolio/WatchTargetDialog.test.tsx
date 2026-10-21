@@ -144,6 +144,30 @@ describe("WatchTargetDialog", () => {
       await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     });
 
+    it("with range only, hides the weight field and never sends the weight", async () => {
+      const onSaved = vi.fn();
+      render(<WatchTargetDialog item={{ ...ITEM, target_weight: 0.3 }} rangeOnly onClose={vi.fn()} onSaved={onSaved} />);
+      expect(screen.queryByLabelText("Target weight (%)")).not.toBeInTheDocument();
+      expect(screen.getByText("Price range for ASML")).toBeInTheDocument();
+      fireEvent.change(low(), { target: { value: "90" } });
+      fireEvent.change(high(), { target: { value: "110" } });
+
+      fireEvent.click(screen.getByRole("button", { name: /save range/i }));
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).toEqual({ ticker: "ASML", asset_type: "STOCK", target_price_low: 90, target_price_high: 110 });
+    });
+
+    it("with range only and nothing edited, just closes without a request", () => {
+      const onClose = vi.fn();
+      render(<WatchTargetDialog item={{ ...ITEM, target_price_low: 90, target_price_high: 110 }} rangeOnly onClose={onClose} onSaved={vi.fn()} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /save range/i }));
+
+      expect(onClose).toHaveBeenCalled();
+      expect(apiFetch).not.toHaveBeenCalled();
+    });
+
     it("says the prices are in the quote's own unit", () => {
       setup();
       expect(screen.getByText(/pence/i)).toBeInTheDocument();

@@ -244,6 +244,28 @@ describe("PortfolioPage", () => {
     expect(await screen.findByText("Watching · range 650 to 720.5")).toBeInTheDocument();
   });
 
+  it("keeps the price range visible and editable on a watchlist row whose ticker is now owned, without its weight target", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      watchlist: [{ ticker: "AAPL", asset_type: "STOCK", note: null, target_weight: 0.3, target_price_low: 190, target_price_high: 210, current_price: 200 }],
+    });
+    handlers["POST /portfolio/watchlist"] = () => ({ ticker: "AAPL" });
+    renderFresh();
+
+    expect(await screen.findByText("Owned · target on the holding · range 190 to 210")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit target for aapl/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /edit price range for aapl/i }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.queryByLabelText("Target weight (%)")).not.toBeInTheDocument(); // the weight stays on the holding
+    fireEvent.change(dialog.getByLabelText("Lowest price"), { target: { value: "" } });
+    fireEvent.change(dialog.getByLabelText("Highest price"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save range/i }));
+
+    await waitFor(() => expect(count("POST /portfolio/watchlist")).toBe(1));
+    const call = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/watchlist" && (c[1] as RequestInit | undefined)?.method === "POST")!;
+    expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({ ticker: "AAPL", asset_type: "STOCK", target_price_low: null, target_price_high: null });
+  });
+
   it("shows an em dash for an unpriced holding and says it isn't in the totals", async () => {
     handlers["GET /portfolio/summary"] = () => ({
       ...SUMMARY,
