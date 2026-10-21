@@ -31,6 +31,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/portfolio/LogTradeCta", () => ({ LogTradeCta: () => null }));
 
 import RecommendationDetailPage from "./page";
+import { testIdea } from "@/components/workbench/testData";
 
 function renderFresh(ui: React.ReactElement) {
   return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>);
@@ -64,18 +65,17 @@ describe("RecommendationDetailPage", () => {
     routeId = "1";
   });
 
-  it("shows a discovery idea's saved research, including the full bear case, instead of the web opinion box", async () => {
-    const idea = {
-      ticker: "HLDN", name: "Halden Systems", asset_type: "STOCK", scores: [], overall: 80, confidence: "high",
-      risk: { risk_level: "medium" }, thesis: "Recurring revenue and widening margins.", catalysts: [], outlook: "",
-      bear_case: "Top customers are 38% of revenue. " + "More risk text. ".repeat(30) + "Final risk sentence.",
-      negative_developments: [], fit_summary: null, community_note: null, conclusion: "c", sources: [], data_notes: [],
-    };
-    apiFetch.mockResolvedValue(rec({ source: "discovery", idea, ai_analysis: "Recurring revenue and widening margins." } as unknown as Partial<RecommendationOut>));
+  it("opens a discovery idea as the company page, with the full bear case and the decision rail, not the web opinion box", async () => {
+    apiFetch.mockImplementation((path: string) =>
+      path.startsWith("/discovery/ideas/")
+        ? Promise.reject(new Error("no history in this test"))
+        : Promise.resolve(rec({ source: "discovery", idea: testIdea(), ai_analysis: "Recurring revenue and widening margins." } as unknown as Partial<RecommendationOut>)),
+    );
     renderFresh(<RecommendationDetailPage />);
 
-    expect(await screen.findByRole("heading", { name: "Risk to the thesis" })).toBeInTheDocument();
-    expect(screen.getByText(/Final risk sentence./)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bear case" }).closest("section")).toHaveTextContent("The final sentence of the risk.");
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(screen.queryByText(/web second opinion/i)).not.toBeInTheDocument();
   });
 
