@@ -1,5 +1,7 @@
 # Direction approved — contribution planner
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Shown (2026-10-08): three directions, each with dark/light and desktop/phone screenshots in `shots/`.
 
 - A, one column, amount first: `a-one-column.html`

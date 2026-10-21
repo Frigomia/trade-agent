@@ -1,5 +1,7 @@
 # Direction approved — Orders tab
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Shown (2026-10): three directions (A stacked plan sections, B plan chips, C collapsible groups), screenshots in `shots/`.
 
 Chosen by the user: **A, stacked plan sections with a sticky plan heading** ("A").

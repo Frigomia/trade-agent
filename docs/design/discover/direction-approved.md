@@ -1,5 +1,7 @@
 # Direction approved: Discover page
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Date: 2026-10-20
 
 Shown: three options (`dc-a-list.html`, `dc-b-table.html`, `dc-c-cards.html`; screenshots were rendered to `shots/dca-*`, `dcb-*`, `dcc-*` and are not tracked, regenerate with `WIN=1340 ./shootall.sh`).

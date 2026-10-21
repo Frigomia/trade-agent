@@ -1,5 +1,7 @@
 # Portfolio page: three options (option 3, Explorer, chosen)
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Status: option 3 (Explorer) chosen on 2026-10-20, see `direction-approved.md`. Written 2026-10-20. Uses the chosen Soft direction (light and dark, blue accent) and the existing navigation (Today, Discover, Portfolio, Plan, Chat, ...). The page keeps the existing segmented views (Holdings, This month, Saved plans, Orders); the options redesign the Holdings view. Nothing here is implemented in `frontend/`. Holdings, numbers and logos are fictional (monogram placeholders); all amounts are EUR.
 
 Open `pf-a-dashboard.html`, `pf-b-holdings.html` or `pf-c-explorer.html` (add `?theme=dark`, and `?only=desk|phones|states`). The donut tabs, legend, range tabs, advanced analytics and the row menu work in the browser (option 3 also filters the holdings from the legend). Screenshots are in `shots/` (`pfa|pfb|pfc` + `desk|phones|states` + `dark|light`) and are not tracked; `WIN=1340 ./shootall.sh` regenerates them (headless Chrome; set `CHROME` if it is not at the default Windows path). Shared files: `pf.js` (data and builders), `pf.css`; the theme and shell come from `../company-overview/soft.css`, `co.css` and `../today-discovery/lib.css`, `lib.js`.

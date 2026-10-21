@@ -1,5 +1,7 @@
 # Discover (watchlist): three options (option 1, List, chosen)
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Status: option 1 (List) chosen on 2026-10-20, see `direction-approved.md`. Written 2026-10-20. Uses the chosen Soft direction (light and dark, blue accent) and the existing navigation (Discover appears between Today and Portfolio, as in the approved Today direction). Nothing here is implemented in `frontend/`. Companies, prices and insights are fictional; logos are monogram placeholders.
 
 Open `dc-a-list.html`, `dc-b-table.html` or `dc-c-cards.html` (add `?theme=dark`, `?only=desk|phones|states`, and `?q=hal` to open the desktop with a search typed). Everything works in the browser: type in the search (try `kes`, `hal`, `nvk`, `zzz`), Add, Analyze (a fake 1.4 second run), Remove with Undo, the filters and the sort. Enter adds the first result and Escape clears the search. Screenshots are in `shots/` (`dca|dcb|dcc` + `desk|phones|states` + `dark|light`) and are not tracked; `WIN=1340 ./shootall.sh` regenerates them (headless Chrome; set `CHROME` if it is not at the default Windows path). Shared files: `dc.js` (data, behaviour, builders), `dc.css`; the theme and shell come from `../company-overview/soft.css`, `co.css` and `../today-discovery/lib.css`, `lib.js`.

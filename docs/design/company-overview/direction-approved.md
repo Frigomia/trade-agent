@@ -1,5 +1,7 @@
 # Direction approved: Company overview
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Date: 2026-10-20
 
 Shown: three options (`co-a-dashboard.html`, `co-b-story.html`, `co-c-workbench.html`; screenshots were rendered to `shots/coa-*`, `cob-*`, `coc-*` and are not tracked, regenerate with `WIN=1340 ./shootall.sh`).

@@ -1,5 +1,7 @@
 # Today: discovery sections, three directions
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Status: design options for review, not yet chosen. Written 2026-10-20 after the Phase 7 backend landed (#134, #135).
 Nothing here is implemented in `frontend/`. All companies in the mocks are fictional.
 

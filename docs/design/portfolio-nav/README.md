@@ -1,5 +1,7 @@
 # Portfolio with Plan as a view: mockup
 
+> Cleanup note (2026-10-21): the options that were not chosen, and the old screenshot scripts, were removed from this folder. They are in git history before commit `18ce2f5`; read any mention of them below as history. Regenerating screenshots: see [../README.md](../README.md).
+
 Static mockup of one decided change (no app code). `index.html?v=holdings|month|saved`, add `&theme=light`
 and/or `&view=phone`. Reuses `../contribution-planner/` (base.css tokens, shell.js icons, cp.css/cp.js for
 the approved ledger); `pn.js`/`pn.css` add the sidebar, view strip, holdings and watchlist. `node shoot.mjs`
