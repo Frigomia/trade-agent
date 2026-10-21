@@ -772,7 +772,9 @@ sector overrides are respected; the form omits unchanged sector fields so missin
 backfill. New-entry forms omit blank purchase fields, including for fully sold positions.
 Summary profiles cover open positions only and share an eight-request budget with quotes.
 The holdings list reads its user-scoped session in a worker, closes it before provider work,
-and gives optional metadata enrichment one second total before returning the saved rows. The API
+and gives optional metadata enrichment one second total before returning the saved rows.
+Slow cold-cache profiles can remain blank on this route; a holding save or an open-position
+summary lookup can warm the shared cache. The API
 loads no provider data while holding the per-user write lock. Purchase fields are nullable;
 the generated migration alters nullability without
 replacing rows. Omitted updates preserve stored values and explicit null clears purchase data.

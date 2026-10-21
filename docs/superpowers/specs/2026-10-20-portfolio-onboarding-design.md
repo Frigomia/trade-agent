@@ -1,6 +1,9 @@
 # Portfolio onboarding and frontend direction
 
 Owner direction selected on 2026-10-20 after reviewing three Phase 8 HTML directions.
+The owner's written direction below is the approval record, implemented in `HoldingForm` and
+`FirstHolding`. The three unchosen exploratory HTML drafts were removed during review cleanup;
+they remain in git history before that cleanup.
 
 ## Phase 8: holding entry
 
