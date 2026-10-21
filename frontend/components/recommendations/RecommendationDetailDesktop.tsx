@@ -11,6 +11,7 @@ import { DecisionActions } from "./DecisionActions";
 import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
 import { ActionChip, ChangePill } from "./RecommendationCard";
 import { WebOpinionBox } from "./WebOpinionBox";
+import { IdeaEvidence } from "@/components/discovery/IdeaEvidence";
 
 const BIG = { fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 } as const;
 
@@ -93,7 +94,12 @@ export function RecommendationDetailDesktop({
 
       <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
 
-      {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} article />}
+      {/* A discovery idea carries its saved research; the web opinion box is for holdings calls. */}
+      {recommendation.idea ? (
+        <IdeaEvidence idea={recommendation.idea} />
+      ) : (
+        recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} article />
+      )}
 
       <Panel
         sx={{

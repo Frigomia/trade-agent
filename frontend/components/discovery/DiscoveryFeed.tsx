@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import type { DiscoveryIdeas, DiscoveryJob } from "@/lib/api/discovery-types";
-import { splitIdeas } from "@/lib/discovery";
+import { isEarlier, splitIdeas } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
 import { OpportunityCard } from "./OpportunityCard";
 import { ScanBar } from "./ScanBar";
@@ -16,6 +16,11 @@ interface Props {
   job: DiscoveryJob | undefined;
   running: boolean;
   startError: string | null;
+  /** Reading the scan's progress is failing, but the scan may still be running. */
+  progressUnavailable?: boolean;
+  /** The server no longer knows the scan this page started. */
+  lost?: boolean;
+  onRecheck?: () => void;
   usage?: UsageDetail;
   locked: boolean;
   now: number;
@@ -28,8 +33,9 @@ const heading = { fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01e
  * Today's discovery section: the scan bar, then either the ranked ideas or the state that explains
  * why there are none. The last saved ideas stay visible while a scan runs or after one fails.
  */
-export function DiscoveryFeed({ ideas, loadError, job, running, startError, usage, locked, now, onRun }: Props) {
+export function DiscoveryFeed({ ideas, loadError, job, running, startError, progressUnavailable = false, lost = false, onRecheck, usage, locked, now, onRun }: Props) {
   const [showAll, setShowAll] = useState(false);
+  const [lostSeen, setLostSeen] = useState(false); // the "no longer available" note can be dismissed
   const scan = ideas?.latest_scan ?? null;
   const recs = ideas?.recommendations ?? [];
   const { top, others, more } = splitIdeas(recs);
@@ -42,16 +48,35 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, usag
       <ScanBar scan={scan} job={job} running={running} usage={usage} locked={locked} now={now} onRun={onRun} />
       {loadError ? <Alert severity="error">Your saved ideas are unavailable right now.</Alert> : null}
       {startError && <Alert severity="error">{startError}</Alert>}
+      {progressUnavailable && (
+        <Alert
+          severity="warning"
+          action={
+            <Button color="inherit" size="small" onClick={onRecheck}>
+              Check now
+            </Button>
+          }
+        >
+          The scan&apos;s progress can&apos;t be read right now. It may still be running, so another scan stays off until this is
+          settled. Trying again automatically.
+        </Alert>
+      )}
+      {lost && !lostSeen && (
+        <Alert severity="info" onClose={() => setLostSeen(true)}>
+          This scan&apos;s progress is no longer available. Your saved ideas below are as of now.
+        </Alert>
+      )}
       {running && <ScanRunning job={job} universe={scan?.universe_size} />}
       {failed && <ScanFailed message={job?.error ?? null} locked={locked} onRetry={onRun} />}
       {!running && !failed && ideas && !scan && <FirstScan />}
-      {!running && !failed && scan && !top && scan.outcome === "none" && <NoOpportunity scan={scan} />}
+      {/* The latest scan's result shows even when older ideas are still pending below. */}
+      {!running && !failed && scan && scan.outcome === "none" && <NoOpportunity scan={scan} />}
       {top && (
         <>
           <Typography component="h2" sx={heading}>
             Top opportunity
           </Typography>
-          <TopOpportunity rec={top} />
+          <TopOpportunity rec={top} earlier={isEarlier(top, scan)} />
           {others.length > 0 && (
             <>
               <Typography component="h2" sx={heading}>
@@ -59,7 +84,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, usag
               </Typography>
               <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(3, minmax(0, 1fr))" } }}>
                 {[...others, ...extra].map((rec) => (
-                  <OpportunityCard key={rec.id} rec={rec} />
+                  <OpportunityCard key={rec.id} rec={rec} earlier={isEarlier(rec, scan)} />
                 ))}
               </Box>
               {more > 0 && !showAll && (
