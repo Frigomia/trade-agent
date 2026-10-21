@@ -1,7 +1,7 @@
 ---
 name: Trade Agent
 description: "A personal, advisory-only trading research app: calm soft panels, one blue accent for what you can act on, green and red only for a price moving."
-status: "Approved direction (Soft, 2026-10-20). The shipped frontend still uses the earlier Emerald Glass palette; see Implementation status."
+status: "Approved direction (Soft, 2026-10-20). Tokens and shell are built; screens are restyled one by one, see Implementation status."
 colors:
   light:
     cloud: "#f5f7fb"
@@ -201,8 +201,10 @@ the hex values.
 
 ### Named Rules
 **The Movement Only Rule.** Green and red mean a price went up or down, and nothing else. A
-status, a confidence, a risk level, a "Buy" action or an error is never green or red. If a
-screen shows green or red on something that did not move, it is a defect.
+status, a confidence, a risk level or a "Buy" action is never green or red. The exceptions are
+a form validation error and a blocking limit ("At limit"), which use the Price Down colour together
+with an icon or a word, because nothing else reads as a stop. If a screen shows green or red on something else that did
+not move, it is a defect.
 
 **The Sign And Word Rule.** Colour is never the only carrier of meaning. A move is coloured,
 signed and arrowed (▲ +2.4%); confidence and risk are filled bars plus a word (Medium); status is
@@ -361,8 +363,8 @@ Paper pill with the panel shadow and Cobalt text. The advisory note closes every
   Discover") and say when nothing is sent to a broker.
 
 ### Don't:
-- **Don't** use green or red for anything but a price rising or falling: not for buy/sell
-  actions, statuses, confidence, errors or "good/bad".
+- **Don't** use green or red for anything but a price rising or falling (and the red of a validation error or a
+  blocking limit): not for buy/sell actions, statuses, confidence or "good/bad".
 - **Don't** reintroduce the old teal glass: no translucent panes, backdrop blur, mint hairlines or
   emerald glow.
 - **Don't** add glows, gradients, neon, pulsing or large luminous fills.
@@ -377,35 +379,27 @@ Paper pill with the panel shadow and Cobalt text. The advisory note closes every
 
 ## Implementation status
 
-This file now describes the approved **Soft** direction (decided 2026-10-20, see
+This file describes the approved **Soft** direction (decided 2026-10-20, see
 [docs/design/README.md](docs/design/README.md) and the four `direction-approved.md` files for
-Today, Company overview, Portfolio and Discover). The `frontend/` build has **not** moved yet: it
-still ships the earlier Emerald Glass palette and is waiting for Lane B before the new screens
-are built. Until the restyle lands, `frontend/app/globals.css` and the MUI theme are the source of
-truth for what is on screen; this file is the target.
+Today, Company overview, Portfolio and Discover).
 
-What changes when the build starts:
+**Built:** the tokens (`frontend/app/globals.css`), the MUI theme, the Panel (22px), the sidebar
+and tab bar, and the separation of accent from price movement: `--accent-wash` tints selected and
+active states, `--up-bg` and `--down-bg` are only for a price rising or falling, and `Pill` has an
+`accent` tone for status. Status pills (technical signal, fundamental score, Claude connection, usage
+"OK") no longer use green or red.
 
-| Area | Shipped (Emerald Glass) | Target (Soft) |
-|---|---|---|
-| Light page / panel | #f2f8f5 / white 78% glass | #f5f7fb / #ffffff |
-| Dark page / panel | #060d0c / white 3.5% glass | #0c1426 / #131d36 |
-| Accent | emerald #078a5f (light), #34e7a9 (dark) | Cobalt #2457d6 (light), Periwinkle #7ea3ff (dark) |
-| Rise / fall | the accent doubles as "rise" | separate: #067a52 / #34e7a9 and #c8323d / #ff6b72, movement only |
-| Hairline | mint, 11 to 15% | ink or white, 7 to 8% |
-| Panel radius / control radius | 18px base (cards render 36px) / 14px | 22px / 14px |
-| Depth | no shadow, 20px backdrop blur | one soft shadow, no blur |
-| Page background | radial teal glow | flat Cloud or Deep Navy (`--page-glow: none`) |
-| Action chips (BUY, ADD, HOLD, WATCH, TRIM, SELL) | emerald, amber and coral fills | not shown in any Soft mock; see the open item below |
-| Logos | none | round monogram circles |
-| Nav | the shipped items | adds Discover between Today and Portfolio (sidebar and tab bar) |
+**Not built yet:** the screens drawn in the mocks (Today feed, Company workbench, Portfolio
+explorer, Discover), the round monogram logos, the Discover navigation item, and the rem sizes in
+component `sx` props (only the theme is in rem so far). Existing screens keep their current layouts
+and sizes until each is restyled.
 
-Tokens that exist in `globals.css` but have no value in the Soft mocks yet and need one when the
-build starts: `--down-bg`, `--warn-bg` (the mocks use a 14% mix of `--warn`), `--field`,
-`--scrim`, `--on-warn`, `--tab-bg` (the mocks use the panel colour), `--bubble`, `--focus` (use
-the accent), `--pop`, `--tabbar-h`.
+Open items:
 
-Open item: the action chips (BUY, ADD, HOLD, WATCH, TRIM, SELL) are not drawn in the Soft mocks.
-Under the Movement Only Rule they cannot keep emerald and coral fills, so they need a design
-decision (for example neutral pills with an icon and the word) before the recommendation screens
-are restyled. Nothing in the four mock folders settles it.
+- The action chips (BUY, ADD, HOLD, WATCH, TRIM, SELL) are not drawn in the Soft mocks. BUY, ADD,
+  HOLD and WATCH now take the accent colour and TRIM stays amber, but SELL is still a red fill,
+  which breaks the Movement Only Rule. It needs a design decision (for example neutral pills with
+  an icon and the word) before the recommendation screens are restyled.
+- Cards built with `borderRadius: 2` still render at 36px (MUI multiplies the 18px base), and plain
+  MUI `Paper` surfaces at 18px; the Soft panel is 22px. Each screen moves to `Panel` as it is
+  restyled.

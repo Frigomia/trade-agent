@@ -130,7 +130,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
         {heading ?? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
           {allPlaced ? (
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--up)" }}>
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--accent)" }}>
               <CircleCheck size={18} aria-hidden />
               All lines placed
             </Box>
@@ -177,7 +177,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
           sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: 14, color: "var(--text2)" } : hidden}
         >
           {status && (
-            <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--up)", pt: "2px" }}>
+            <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>
               <Check size={16} />
             </Box>
           )}
@@ -278,7 +278,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
-    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--up-bg)" : undefined }}>
+    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--accent-wash)" : undefined }}>
       <Box
         component="button"
         ref={button}
@@ -297,7 +297,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
           font: "inherit",
           textAlign: "left",
           cursor: "pointer",
-          "&:hover": { bgcolor: open ? undefined : "var(--up-bg)" },
+          "&:hover": { bgcolor: open ? undefined : "var(--accent-wash)" },
           "&:focus-visible": { outline: "2px solid var(--accent-solid)", outlineOffset: -2 },
         }}
       >
@@ -330,7 +330,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
             {shares(line, plan.whole_shares)}
           </Box>
         </Box>
-        <Box component="span" aria-hidden sx={{ gridColumn: { xs: 3, md: 5 }, gridRow: 1, alignSelf: { xs: "start", md: "center" }, display: "flex", color: placed ? "var(--up)" : "var(--muted)" }}>
+        <Box component="span" aria-hidden sx={{ gridColumn: { xs: 3, md: 5 }, gridRow: 1, alignSelf: { xs: "start", md: "center" }, display: "flex", color: placed ? "var(--accent)" : "var(--muted)" }}>
           {placed ? <CircleCheck size={22} data-testid="mark-placed" /> : <Circle size={22} data-testid="mark-open" />}
         </Box>
         <Box component="span" aria-hidden sx={{ gridColumn: { xs: 3, md: 6 }, gridRow: { xs: 3, md: 1 }, alignSelf: { xs: "end", md: "center" }, display: "flex", color: "var(--muted)" }}>

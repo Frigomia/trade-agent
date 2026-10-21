@@ -36,7 +36,7 @@ export function PortfolioTile() {
               </Pill>
             </Box>
           )}
-          <Box sx={{ display: { xs: "none", md: "block" }, mt: 1, color: "var(--up)" }}>
+          <Box sx={{ display: { xs: "none", md: "block" }, mt: 1, color: "var(--accent)" }}>
             <PortfolioChart snapshots={snapshots ?? []} variant="sparkline" />
           </Box>
           {summary.unpriced_count > 0 && (

@@ -5,79 +5,77 @@ body {
   height: 100%;
 }
 
+/*
+ * The Soft palette (DESIGN.md): one blue accent, green and red only for a price moving.
+ * --accent-wash is the tint behind selected and active states; --up-bg / --down-bg are the
+ * faint fills behind a price rising or falling and are never used for selection.
+ */
 :root {
-  --bg: #060d0c;
-  --text: #e7f3ef;
-  --text2: #cfe2dc;
-  --muted: #8aa89f;
-  --accent: #34e7a9;
-  --accent-solid: #34e7a9;
-  --on-accent: #032116;
+  --bg: #0c1426;
+  --text: #e9eefb;
+  --text2: #c2cce3;
+  --muted: #92a0bd;
+  --accent: #7ea3ff;
+  --accent-solid: #7ea3ff;
+  --on-accent: #0a1530;
+  --accent-wash: rgba(126, 163, 255, 0.14);
   --up: #34e7a9;
   --down: #ff6b72;
   --warn: #f4c04f;
-  --up-bg: rgba(52, 231, 169, 0.13);
-  --down-bg: rgba(255, 107, 114, 0.13);
-  --warn-bg: rgba(244, 192, 79, 0.12);
-  --panel: rgba(255, 255, 255, 0.035);
-  --line: rgba(120, 255, 214, 0.11);
-  --line2: rgba(120, 255, 214, 0.2);
-  --track: rgba(255, 255, 255, 0.08);
+  --up-bg: color-mix(in srgb, var(--up) 13%, transparent);
+  --down-bg: color-mix(in srgb, var(--down) 13%, transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) 14%, transparent);
+  --panel: #131d36;
+  --line: rgba(255, 255, 255, 0.07);
+  --line2: rgba(255, 255, 255, 0.2);
+  --track: rgba(255, 255, 255, 0.07);
   --field: rgba(255, 255, 255, 0.045);
   --scrim: rgba(0, 0, 0, 0.55);
   --on-warn: #2a1c00;
-  --tab-bg: rgba(6, 13, 12, 0.7);
-  --bubble: rgba(52, 231, 169, 0.14);
-  --focus: #34e7a9;
+  --tab-bg: #131d36;
+  --bubble: var(--accent-wash);
+  --focus: #7ea3ff;
   /* The phone tab bar's height; TabBar overwrites it with the measured value. */
   --tabbar-h: 66px;
-  /* Depth is a soft ambient shadow plus a 1px top highlight; the button glow is the one luminous accent. */
-  --shadow: 0 18px 34px -22px #000, inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  --btn-shadow: 0 12px 24px -12px rgba(52, 231, 169, 0.6);
-  --pop: 0 30px 60px -20px #000, 0 0 0 1px rgba(120, 255, 214, 0.14);
-  --page-glow:
-    radial-gradient(520px 260px at 0% 0%, rgba(24, 190, 146, 0.16), transparent 62%),
-    radial-gradient(420px 260px at 100% 100%, rgba(24, 120, 190, 0.1), transparent 60%);
+  /* One soft shadow level; the primary button has its own short blue shadow in light only. */
+  --shadow: 0 14px 34px -18px #000;
+  --btn-shadow: none;
+  --pop: 0 30px 60px -20px #000, 0 0 0 1px rgba(255, 255, 255, 0.14);
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --bg: #f2f8f5;
-  --text: #0b1f19;
-  --text2: #29473c;
-  --muted: #52695f;
-  --accent: #078a5f;
-  --accent-solid: #067a52;
+  --bg: #f5f7fb;
+  --text: #0f1a2e;
+  --text2: #34425c;
+  --muted: #5d6b85;
+  --accent: #2457d6;
+  --accent-solid: #2457d6;
   --on-accent: #ffffff;
+  --accent-wash: rgba(36, 87, 214, 0.09);
   --up: #067a52;
   --down: #c8323d;
   --warn: #9a5b00;
-  --up-bg: rgba(6, 122, 82, 0.1);
-  --down-bg: rgba(200, 50, 61, 0.1);
-  --warn-bg: rgba(154, 91, 0, 0.11);
-  --panel: rgba(255, 255, 255, 0.78);
-  --line: rgba(8, 110, 80, 0.15);
-  --line2: rgba(8, 110, 80, 0.3);
-  --track: rgba(10, 60, 45, 0.1);
-  --field: rgba(255, 255, 255, 0.9);
-  --scrim: rgba(11, 31, 25, 0.35);
+  --up-bg: color-mix(in srgb, var(--up) 10%, transparent);
+  --down-bg: color-mix(in srgb, var(--down) 10%, transparent);
+  --warn-bg: color-mix(in srgb, var(--warn) 11%, transparent);
+  --panel: #ffffff;
+  --line: rgba(15, 26, 46, 0.08);
+  --line2: rgba(15, 26, 46, 0.2);
+  --track: rgba(15, 26, 46, 0.06);
+  --field: #ffffff;
+  --scrim: rgba(15, 26, 46, 0.35);
   --on-warn: #ffffff;
-  --tab-bg: rgba(255, 255, 255, 0.82);
-  --bubble: rgba(7, 138, 95, 0.12);
-  --focus: #067a52;
-  --shadow: 0 16px 30px -20px rgba(6, 60, 45, 0.3), 0 1px 0 rgba(6, 60, 45, 0.05), inset 0 1px 0 #fff;
-  --btn-shadow: 0 10px 20px -10px rgba(6, 122, 82, 0.55);
-  --pop: 0 30px 60px -22px rgba(6, 60, 45, 0.45), 0 0 0 1px rgba(8, 110, 80, 0.14);
-  --page-glow:
-    radial-gradient(520px 260px at 0% 0%, rgba(52, 231, 169, 0.22), transparent 62%),
-    radial-gradient(420px 260px at 100% 100%, rgba(80, 160, 255, 0.13), transparent 60%);
+  --tab-bg: #ffffff;
+  --focus: #2457d6;
+  --shadow: 0 1px 2px rgba(15, 26, 46, 0.04), 0 12px 32px -14px rgba(15, 26, 46, 0.14);
+  --btn-shadow: 0 8px 18px -8px rgba(36, 87, 214, 0.5);
+  --pop: 0 30px 60px -22px rgba(15, 26, 46, 0.35), 0 0 0 1px rgba(15, 26, 46, 0.14);
   color-scheme: light;
 }
 
 body {
   background-color: var(--bg);
-  background-image: var(--page-glow);
-  background-attachment: fixed;
   color: var(--text);
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -92,7 +90,7 @@ body {
 }
 
 ::selection {
-  background: rgba(52, 231, 169, 0.3);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 :focus-visible {

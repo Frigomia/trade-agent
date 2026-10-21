@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import { Box } from "@mui/material";
 
-export type PillTone = "up" | "down" | "warn" | "mute";
+// up and down are for a price or a result moving; accent is for status and selection.
+export type PillTone = "up" | "down" | "warn" | "accent" | "mute";
 
 const TONES: Record<PillTone, { color: string; bg: string }> = {
   up: { color: "var(--up)", bg: "var(--up-bg)" },
   down: { color: "var(--down)", bg: "var(--down-bg)" },
   warn: { color: "var(--warn)", bg: "var(--warn-bg)" },
+  accent: { color: "var(--accent)", bg: "var(--accent-wash)" },
   mute: { color: "var(--muted)", bg: "var(--track)" },
 };
 

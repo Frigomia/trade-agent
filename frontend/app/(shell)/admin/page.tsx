@@ -114,7 +114,7 @@ export default function AdminPage() {
             borderBottom: "1px solid var(--line)",
             "&:last-of-type": { borderBottom: 0 },
             cursor: clickable ? "pointer" : "default",
-            ...(clickable && user.id === selectedUserId && { bgcolor: "var(--up-bg)", borderRadius: "12px" }),
+            ...(clickable && user.id === selectedUserId && { bgcolor: "var(--accent-wash)", borderRadius: "12px" }),
           }}
         >
           <Avatar email={user.email} />

@@ -74,7 +74,7 @@ function RailItem({ n, current, step, onJump }: { n: number; current: number; st
         border: "1px solid var(--line2)",
         color: "var(--muted)",
         ...(cur && { bgcolor: "var(--accent-solid)", color: "var(--on-accent)", borderColor: "transparent" }),
-        ...(done && { bgcolor: "var(--up-bg)", color: "var(--accent)", borderColor: "transparent" }),
+        ...(done && { bgcolor: "var(--accent-wash)", color: "var(--accent)", borderColor: "transparent" }),
       }}
     >
       {done ? <Check size={15} data-testid="step-check" aria-hidden /> : n}
@@ -201,7 +201,7 @@ function Connected({ last4, onToday }: { last4: string | null | undefined; onTod
             width: 46,
             height: 46,
             borderRadius: "50%",
-            bgcolor: "var(--up-bg)",
+            bgcolor: "var(--accent-wash)",
             color: "var(--accent)",
             display: "grid",
             placeItems: "center",
@@ -237,7 +237,7 @@ function Connected({ last4, onToday }: { last4: string | null | undefined; onTod
           label="Connected"
           size="small"
           icon={<Check size={13} aria-hidden />}
-          sx={{ bgcolor: "var(--up-bg)", color: "var(--accent)", "& .MuiChip-icon": { color: "var(--accent)" } }}
+          sx={{ bgcolor: "var(--accent-wash)", color: "var(--accent)", "& .MuiChip-icon": { color: "var(--accent)" } }}
         />
       </Box>
       <Box>

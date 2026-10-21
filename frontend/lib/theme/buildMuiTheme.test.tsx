@@ -14,15 +14,15 @@ import { DEFAULT_STATUS_COLORS, type StatusColors } from "./readStatusColors";
 // Matches app/globals.css's :root[data-theme="light"] token values — this test doesn't exercise
 // readStatusColors' DOM reading, just that buildMuiTheme's output is safe for MUI to render.
 const LIGHT_STATUS_COLORS: StatusColors = {
-  accentSolid: "#067a52",
+  accentSolid: "#2457d6",
   up: "#067a52",
   down: "#c8323d",
   warn: "#9a5b00",
   onAccent: "#ffffff",
-  textPrimary: "#0b1f19",
-  textSecondary: "#29473c",
-  bgDefault: "#f2f8f5",
-  bgPaper: "rgba(255, 255, 255, 0.78)",
+  textPrimary: "#0f1a2e",
+  textSecondary: "#34425c",
+  bgDefault: "#f5f7fb",
+  bgPaper: "#ffffff",
 };
 
 describe.each([

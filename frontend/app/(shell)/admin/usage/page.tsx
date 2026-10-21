@@ -12,7 +12,7 @@ import { Pill } from "@/components/ui/Pill";
 import { usageFraction, usageLevel, type UsageDetail } from "@/lib/usage";
 
 const LEVEL = {
-  ok: { tone: "up", label: "OK", color: "var(--accent)" },
+  ok: { tone: "accent", label: "OK", color: "var(--accent)" },
   warn: { tone: "warn", label: "Near limit", color: "var(--warn)" },
   limit: { tone: "down", label: "At limit", color: "var(--down)" },
 } as const;

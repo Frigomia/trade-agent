@@ -195,7 +195,7 @@ function HoldingRow({
           aria-label={watched ? `${holding.ticker} is on your watchlist` : `Add ${holding.ticker} to watchlist`}
           disabled={watched}
           onClick={onWatch}
-          sx={{ color: watched ? "var(--up)" : "var(--muted)" }}
+          sx={{ color: watched ? "var(--accent)" : "var(--muted)" }}
         >
           {watched ? <Check size={16} /> : <Eye size={16} />}
         </IconButton>

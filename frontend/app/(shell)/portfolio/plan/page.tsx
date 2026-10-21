@@ -44,7 +44,7 @@ const stepBadge = {
     placeItems: "center",
     fontSize: 12,
     fontWeight: 650,
-    bgcolor: "var(--up-bg)",
+    bgcolor: "var(--accent-wash)",
     color: "var(--accent)",
   },
 } as const;

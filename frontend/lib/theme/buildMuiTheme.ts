@@ -17,10 +17,10 @@ import type { StatusColors } from "./readStatusColors";
  * without this module knowing. `mode` only steers MUI's own contrast/elevation math; it does
  * not select the actual colors.
  *
- * The component overrides below follow docs/design/mockups (the `.tA` rules): tinted glass
- * panels with a soft ambient shadow, 14px-radius buttons with a glow on the primary one, inputs
- * with a static label above the field and an emerald focus ring, tinted callouts instead of
- * filled alerts, and segmented toggles.
+ * The component overrides below follow the Soft direction in DESIGN.md: white (navy in dark)
+ * panels with a hairline and one soft shadow, 14px-radius buttons with a short blue shadow on the
+ * primary one in light, inputs with a static label above the field and a blue focus ring, tinted
+ * callouts instead of filled alerts, and segmented toggles. Font sizes are in rem.
  */
 export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors): MuiTheme {
   // light/dark/contrastText are set explicitly (even though light/dark repeat `main`) because
@@ -36,7 +36,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
   });
 
   const fieldFocus = {
-    "&.Mui-focused": { boxShadow: "0 0 0 3px var(--up-bg)" },
+    "&.Mui-focused": { boxShadow: "0 0 0 3px var(--accent-wash)" },
     "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
       borderColor: "var(--accent)",
       borderWidth: 1,
@@ -60,12 +60,12 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
       // Using the wrong name here isn't a build/lint/type error, it's a var() that silently
       // resolves to nothing, so font-family falls back to the browser default.
       fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
-      h5: { fontSize: 22, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.25 },
-      h6: { fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em", lineHeight: 1.3 },
-      subtitle2: { fontSize: 12.5, fontWeight: 600 },
-      body1: { fontSize: 15, lineHeight: 1.45 },
-      body2: { fontSize: 13.5, lineHeight: 1.45 },
-      button: { fontSize: 15, fontWeight: 600, textTransform: "none" },
+      h5: { fontSize: "1.375rem", fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.25 },
+      h6: { fontSize: "1.0625rem", fontWeight: 650, letterSpacing: "-0.01em", lineHeight: 1.3 },
+      subtitle2: { fontSize: "0.78125rem", fontWeight: 600 },
+      body1: { fontSize: "0.9375rem", lineHeight: 1.45 },
+      body2: { fontSize: "0.84375rem", lineHeight: 1.45 },
+      button: { fontSize: "0.9375rem", fontWeight: 600, textTransform: "none" },
     },
     components: {
       MuiPaper: {
@@ -74,7 +74,6 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
             backgroundColor: "var(--panel)",
             backgroundImage: "none",
             border: "1px solid var(--line)",
-            backdropFilter: "blur(20px)",
             boxShadow: "var(--shadow)",
           },
         },
@@ -94,7 +93,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
           paper: {
             backgroundColor: "var(--bg)",
             border: "1px solid var(--line2)",
-            borderRadius: 20,
+            borderRadius: 22,
             boxShadow: "var(--pop)",
             backdropFilter: "none",
           },
@@ -108,14 +107,14 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
           root: {
             borderRadius: 14,
             textTransform: "none",
-            fontSize: 15,
+            fontSize: "0.9375rem",
             fontWeight: 600,
-            minHeight: 46,
+            minHeight: 44,
             padding: "0 18px",
             boxShadow: "none",
             "&.Mui-disabled": { opacity: 0.45 },
           },
-          sizeSmall: { minHeight: 36, padding: "0 14px", fontSize: 13.5, borderRadius: 11 },
+          sizeSmall: { minHeight: 36, padding: "0 14px", fontSize: "0.84375rem", borderRadius: 11 },
           contained: {
             "&.MuiButton-colorPrimary": {
               boxShadow: "var(--btn-shadow)",
@@ -138,12 +137,12 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
       MuiChip: {
         styleOverrides: {
           root: { borderRadius: 999, fontWeight: 600 },
-          sizeSmall: { height: 26, fontSize: 12 },
-          // A selected filter/range chip is a wash with accent text, never a filled emerald pill.
+          sizeSmall: { height: 26, fontSize: "0.75rem" },
+          // A selected filter/range chip is a wash with accent text, never a filled pill.
           colorPrimary: {
-            backgroundColor: "var(--up-bg)",
+            backgroundColor: "var(--accent-wash)",
             color: "var(--accent)",
-            "&:hover": { backgroundColor: "var(--up-bg)" },
+            "&:hover": { backgroundColor: "var(--accent-wash)" },
           },
         },
       },
@@ -152,7 +151,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
           root: {
             borderRadius: 13,
             backgroundColor: "var(--field)",
-            fontSize: 15,
+            fontSize: "0.9375rem",
             ...fieldFocus,
             "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "var(--line2)" },
             "&.Mui-error": { boxShadow: "0 0 0 3px var(--down-bg)" },
@@ -179,7 +178,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
             transform: "none",
             maxWidth: "100%",
             marginBottom: 6,
-            fontSize: 12.5,
+            fontSize: "0.78125rem",
             fontWeight: 600,
             color: "var(--text2)",
             "&.Mui-focused": { color: "var(--text2)" },
@@ -190,7 +189,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
       },
       MuiFormHelperText: {
         styleOverrides: {
-          root: { fontSize: 12, color: "var(--muted)", marginLeft: 0, marginTop: 6, lineHeight: 1.4 },
+          root: { fontSize: "0.75rem", color: "var(--muted)", marginLeft: 0, marginTop: 6, lineHeight: 1.4 },
         },
       },
       MuiLink: {
@@ -208,7 +207,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
           root: {
             borderRadius: 14,
             padding: "11px 13px",
-            fontSize: 12.5,
+            fontSize: "0.78125rem",
             lineHeight: 1.45,
             color: "var(--text2)",
             alignItems: "flex-start",
@@ -217,11 +216,11 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
             boxShadow: "none",
             backdropFilter: "none",
           },
-          icon: { padding: 0, marginRight: 10, marginTop: 1, fontSize: 17, opacity: 1 },
+          icon: { padding: 0, marginRight: 10, marginTop: 1, fontSize: "1.0625rem", opacity: 1 },
           message: { padding: 0 },
           standard: {
             "&.MuiAlert-colorInfo, &.MuiAlert-colorSuccess": {
-              backgroundColor: "var(--up-bg)",
+              backgroundColor: "var(--accent-wash)",
               "& .MuiAlert-icon": { color: "var(--accent)" },
             },
             "&.MuiAlert-colorWarning": {
@@ -263,7 +262,7 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
         styleOverrides: {
           root: {
             textTransform: "none",
-            fontSize: 13,
+            fontSize: "0.8125rem",
             color: "var(--muted)",
             padding: "6px 12px",
             "&.Mui-selected, &.Mui-selected:hover": {
@@ -277,8 +276,8 @@ export function buildMuiTheme(mode: "light" | "dark", statusColors: StatusColors
       },
       MuiTableCell: {
         styleOverrides: {
-          root: { borderBottom: "1px solid var(--line)", fontSize: 13.5, padding: "14px 16px" },
-          head: { fontSize: 12, fontWeight: 400, color: "var(--muted)", padding: "10px 16px" },
+          root: { borderBottom: "1px solid var(--line)", fontSize: "0.84375rem", padding: "14px 16px" },
+          head: { fontSize: "0.75rem", fontWeight: 400, color: "var(--muted)", padding: "10px 16px" },
         },
       },
       MuiDivider: {

@@ -1,10 +1,10 @@
 import { Chip } from "@mui/material";
 
 const CHIP = {
-  ok: { label: "Connected", color: "var(--up)", bg: "var(--up-bg)" },
+  ok: { label: "Connected", color: "var(--accent)", bg: "var(--accent-wash)" },
   warn: { label: "Needs attention", color: "var(--warn)", bg: "var(--warn-bg)" },
   none: { label: "Not connected", color: "var(--muted)", bg: "transparent" },
-  server: { label: "Server key", color: "var(--up)", bg: "var(--up-bg)" },
+  server: { label: "Server key", color: "var(--accent)", bg: "var(--accent-wash)" },
 } as const;
 
 export type ClaudeChipKind = keyof typeof CHIP;

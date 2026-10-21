@@ -41,7 +41,6 @@ export function TabBar({ role }: { role: Role }) {
         bottom: 0,
         p: "10px 6px 16px",
         background: "var(--tab-bg)",
-        backdropFilter: "blur(20px)",
       }}
     >
       {tabs.map((tab) => {

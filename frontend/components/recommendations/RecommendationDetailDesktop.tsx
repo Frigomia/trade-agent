@@ -102,7 +102,6 @@ export function RecommendationDetailDesktop({
           mt: 3,
           p: "14px 18px",
           bgcolor: "var(--tab-bg)",
-          backdropFilter: "blur(18px)",
         }}
       >
         <DecisionActions id={recommendation.id} onDecided={onDecided} title={`Your decision on ${recommendation.ticker}`} />

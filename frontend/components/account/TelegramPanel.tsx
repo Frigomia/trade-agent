@@ -67,7 +67,7 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
         <Typography sx={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>trade-agent bot</Typography>
         <Box
           sx={{
-            bgcolor: "var(--up-bg)",
+            bgcolor: "var(--accent-wash)",
             border: "1px solid var(--line)",
             borderRadius: "6px 16px 16px 16px",
             p: "10px 12px",
