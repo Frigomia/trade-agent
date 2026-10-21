@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import (
@@ -11,6 +11,7 @@ from pydantic import (
     StringConstraints,
     computed_field,
     field_validator,
+    model_validator,
 )
 
 from app.isin import is_valid_isin
@@ -61,14 +62,35 @@ class HoldingOut(HoldingIn):
     isin: str | None = None
 
 
-class WatchlistItemIn(BaseModel):
+# A target price as the column stores it (Numeric(18,6)): finite, positive, at least one step and
+# below 10^12 (12 integer digits).
+TargetPrice = Annotated[float, Field(ge=0.000001, le=999999999999, allow_inf_nan=False)]
+
+
+class WatchlistItemBase(BaseModel):
     ticker: Ticker
     asset_type: AssetType
     note: str | None = Field(default=None, max_length=500)  # matches WatchlistItem.note String(500)
     target_weight: float | None = Field(default=None, ge=0, le=1)
+    # The price range the user would like to see, in the quote's own unit. Both ends or neither.
+    target_price_low: TargetPrice | None = None
+    target_price_high: TargetPrice | None = None
 
 
-class WatchlistItemOut(WatchlistItemIn):
+class WatchlistItemIn(WatchlistItemBase):
+    @model_validator(mode="after")
+    def _range_is_both_ends_in_order(self) -> Self:
+        # Sent together too, so a request naming one end can never leave the other behind.
+        sent = {"target_price_low", "target_price_high"} & self.model_fields_set
+        low, high = self.target_price_low, self.target_price_high
+        if len(sent) == 1 or (low is None) != (high is None):
+            raise ValueError("target_price_low and target_price_high must be set together")
+        if low is not None and high is not None and low > high:
+            raise ValueError("target_price_low must not be above target_price_high")
+        return self
+
+
+class WatchlistItemOut(WatchlistItemBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -270,8 +292,25 @@ class HoldingSummaryOut(HoldingIn):
     weight: float | None = None
 
 
-class WatchlistSummaryOut(WatchlistItemIn):
+class WatchlistSummaryOut(WatchlistItemBase):
     current_price: float | None = None
+
+
+class WatchlistInsightOut(BaseModel):
+    """One thing on a watchlist item worth a look. Text states a fact, never advice."""
+
+    ticker: str
+    kind: Literal["in_target_range"]
+    text: str
+    current_price: float
+    target_price_low: float
+    target_price_high: float
+
+
+class WatchlistInsightsOut(BaseModel):
+    insights: list[WatchlistInsightOut]
+    # What could not be looked up, so a missing insight is never silently "nothing to report".
+    missing: list[Literal["prices"]]
 
 
 class PortfolioSummaryOut(BaseModel):

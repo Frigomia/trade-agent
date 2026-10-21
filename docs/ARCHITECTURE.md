@@ -144,7 +144,9 @@ Holding
 WatchlistItem
   id, user_id, ticker (unique per user), asset_type, note,
   target_weight (Numeric(5,4), nullable, check 0 to 1: the share of the contribution pool the person
-  wants this ticker to be; a holding's own target_weight is the same idea)
+  wants this ticker to be; a holding's own target_weight is the same idea),
+  target_price_low, target_price_high (Numeric(18,6), nullable: the price range the person would like
+  to see, in the quote's own unit; both set or both empty, 0 < low <= high, enforced by a check)
 
 -- Holding and WatchlistItem also carry isin (varchar(12), nullable, a check that it is empty or matches
 -- ^[A-Z]{2}[A-Z0-9]{9}[0-9]$; the API also verifies the ISO 6166 check digit). It is set only by
@@ -339,7 +341,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker, requiring only ticker and shares when security type resolves. Optional name/type/sector auto-fill from cached profile; missing type asks for Stock/ETF (`422`). Omitted update fields preserve stored values; explicit null clears purchase details. At most 100 holdings per user (`409` beyond that). After metadata awaits, rechecks active account under the shared per-user lock before writing; rollback on failure |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
-| POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that). Accepts `target_weight` (0 to 1) |
+| POST | `/portfolio/watchlist` | `WatchlistItemIn` | Upsert by ticker; at most 100 watchlist items per user (`409` beyond that). Accepts `target_weight` (0 to 1) and a target price range, `target_price_low` and `target_price_high` (both or neither, each 0.000001 to below 1e12, low not above high; `422` otherwise). Re-adding without the range keeps it; sending both as `null` clears both; naming only one end is a `422` |
+| GET | `/portfolio/insights` | — | `{insights, missing}`: watchlist items whose live price is inside their target range (ends included), one `{ticker, kind: "in_target_range", text, current_price, target_price_low, target_price_high}` each, sorted by ticker. Only items with a range are priced. A stale or failed quote gives no insight and puts `"prices"` in `missing`, so a quiet answer is never read as "outside the range". Text states a fact, never advice. 30 requests a minute per user |
 | DELETE | `/portfolio/watchlist/{ticker}` | — | Removes the caller's watchlist item (`204`; `404` if it is not on the list); 60 requests a minute per user |
 | GET | `/market/search?q=` | — | Stocks and ETFs matching a name, ticker or ISIN (`yfinance` search): up to 8 of `{symbol, name, type, exchange}`; `q` is 2–60 characters; cached an hour; 30 requests a minute per user; an empty list when Yahoo fails. The ticker field in the holding and backtest forms uses it |
 | PUT | `/portfolio/instruments/{ticker}/isin` | `{isin: string \| null}` | Sets or clears the ISIN on whichever of the caller's holding and watchlist rows exist for the ticker (both when both exist). The text is trimmed and upper-cased; an empty string or `null` clears it; `422` for a wrong shape or check digit; `404` when neither row exists. The only way to set an ISIN; 60 requests a minute per user |
