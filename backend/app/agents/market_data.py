@@ -249,3 +249,54 @@ async def fetch_currency(ticker: str) -> str | None:
     if currency:
         await redis.set(cache_key, currency, ex=CURRENCY_CACHE_TTL)
     return currency
+
+
+EARNINGS_CACHE_TTL = 21600  # a next-earnings date changes rarely; six hours is plenty
+EARNINGS_NONE_TTL = 3600  # "no date" is shorter: an empty answer can be a throttled one
+
+
+def next_earnings_date(calendar: Any, today: date) -> date | None:
+    """The next upcoming earnings date in yfinance's calendar (today or later), or None.
+
+    The calendar is a dict whose "Earnings Date" holds one or two dates (a window while the
+    exact day is unconfirmed); anything that is not a date is ignored, never guessed at.
+    """
+    raw = calendar.get("Earnings Date") if isinstance(calendar, dict) else None
+    candidates = raw if isinstance(raw, list | tuple) else [raw]
+    found: list[date] = []
+    for item in candidates:
+        day = item.date() if isinstance(item, datetime) else item
+        if isinstance(day, date) and day >= today:
+            found.append(day)
+    return min(found) if found else None
+
+
+async def fetch_next_earnings(ticker: str) -> date | None:
+    """The next earnings date, cached; None when the provider has none (an ETF, no schedule).
+
+    A provider failure raises after the retries, so a caller can tell "no date" from "could not
+    look".
+    """
+    redis = get_redis()
+    cache_key = f"next_earnings:v1:{ticker}"
+    cached = await redis.get(cache_key)
+    today = datetime.now(UTC).date()
+    if cached is not None:
+        stored = json.loads(cached)  # an ISO date, or null for "the provider has none"
+        found = date.fromisoformat(stored) if stored else None
+        # A date that has passed is no longer "the next" one: look again rather than answer None.
+        if found is None or found >= today:
+            return found
+
+    calendar = await _retry_fetch(lambda: yf.Ticker(ticker).calendar)
+    if not isinstance(calendar, dict):
+        # An empty dict is a real "no schedule" answer; any other shape is not an answer at all, so
+        # it is neither cached as one nor reported as one.
+        raise ValueError("unexpected earnings calendar")
+    found = next_earnings_date(calendar, today)
+    await redis.set(
+        cache_key,
+        json.dumps(found.isoformat() if found else None),
+        ex=EARNINGS_CACHE_TTL if found else EARNINGS_NONE_TTL,
+    )
+    return found
