@@ -1,7 +1,7 @@
 import { Box } from "@mui/material";
 import { Change } from "@/components/ui/Change";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
-import { priceText } from "@/lib/discovery";
+import { priceText, quoteLabel } from "@/lib/discovery";
 
 /**
  * The saved quote (price at scan time) with the live day change when it loaded. A scan that saved
@@ -29,6 +29,9 @@ export function PriceBlock({ rec, large = false }: { rec: DiscoveryRecommendatio
           <Change pct={rec.price_change_pct} />
         </Box>
       )}
+      <Box component="span" sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+        {quoteLabel(rec.idea!)}
+      </Box>
     </Box>
   );
 }

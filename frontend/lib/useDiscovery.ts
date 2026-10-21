@@ -7,14 +7,6 @@ import type { DiscoveryIdeas, DiscoveryJob } from "@/lib/api/discovery-types";
 import { isClaudeKeyRequired } from "@/lib/claudeKey";
 import { useAction } from "@/lib/useAction";
 
-const UNREADABLE: DiscoveryJob = {
-  status: "FAILED",
-  stage: "failed",
-  total: 0,
-  done: 0,
-  error: "The scan's progress could not be read.",
-};
-
 // The running scan's id, kept for the browser tab so leaving Today and coming back (or a refresh)
 // resumes the progress instead of forgetting a scan the server is still running.
 const STORAGE_KEY = "discovery:job";
@@ -52,6 +44,11 @@ function subscribe(onChange: () => void) {
  * The saved discovery ideas plus a manual scan: start it, poll it, and reload the ideas and the
  * monthly run count when it finishes. The last saved ideas stay on screen while a scan runs or after
  * one fails, and a scan still running when the page was left is picked up again.
+ *
+ * Reading the job's status can fail without the scan failing: `progressUnavailable` means the read
+ * is failing and is retried while the scan is treated as still running (so a second one cannot be
+ * started into the server's one-scan lock); `lost` means the server no longer knows the scan this
+ * page started. `job.status === "FAILED"` is only ever the server's own answer.
  * `onKeyRequired` fires when the scan is refused for want of a usable Claude key.
  */
 export function useDiscovery(onKeyRequired: () => void) {
@@ -64,7 +61,7 @@ export function useDiscovery(onKeyRequired: () => void) {
   const finished = useRef<string | null>(null); // the job whose end was already handled
   const { run, submitting, error: startError } = useAction();
 
-  const { data: polled, error: pollError } = useSWR<DiscoveryJob>(jobId ? `/discovery/run/${jobId}` : null, apiFetch, {
+  const { data: polled, error: pollError, mutate: recheck } = useSWR<DiscoveryJob>(jobId ? `/discovery/run/${jobId}` : null, apiFetch, {
     refreshInterval: (current) => (current?.status === "RUNNING" ? 2000 : 0),
     revalidateOnFocus: false,
     onSuccess: (current) => {
@@ -76,17 +73,22 @@ export function useDiscovery(onKeyRequired: () => void) {
       mutate();
       mutateKey("/me/usage");
     },
-    // Only an id the server does not know is dropped; a network blip or a 5xx keeps the scan resumable.
+    // Only an id the server does not know is dropped (and the ideas reloaded, as the scan may have
+    // finished); a network blip or a 5xx keeps the scan resumable and is retried by SWR.
     onError: (err) => {
-      if (isUnknownJob(err)) writeStoredJob(null);
+      if (!isUnknownJob(err)) return;
+      writeStoredJob(null);
+      mutate();
+      mutateKey("/me/usage");
     },
   });
 
-  // A poll that errors says so instead of spinning forever, and recovers if a retry succeeds. An id
-  // taken over from an earlier visit that the server no longer knows (expired, restarted) is dropped
-  // quietly.
-  const job = pollError ? (isUnknownJob(pollError) && !own ? undefined : UNREADABLE) : polled;
-  const running = submitting || (jobId !== null && !pollError && (!polled || polled.status === "RUNNING"));
+  const gone = isUnknownJob(pollError);
+  // Still going as far as anyone knows: no answer yet, or the last answer said so.
+  const running = submitting || (jobId !== null && !gone && (!polled || polled.status === "RUNNING"));
+  const progressUnavailable = !!pollError && !gone && running;
+  // Only for a scan this page started: an id left over from an earlier visit is dropped quietly.
+  const lost = gone && own !== null;
 
   function start() {
     return run(async () => {
@@ -101,5 +103,5 @@ export function useDiscovery(onKeyRequired: () => void) {
     });
   }
 
-  return { ideas: data, loadError: error, job, running, startError, start };
+  return { ideas: data, loadError: error, job: polled, running, startError, start, progressUnavailable, lost, recheck: () => recheck() };
 }

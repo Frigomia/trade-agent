@@ -12,7 +12,7 @@ import { SaveToDiscover } from "./SaveToDiscover";
  * The highest-ranked idea. The AI text sits in the dashed box apart from the computed numbers,
  * with the risk to the thesis next to it at equal weight.
  */
-export function TopOpportunity({ rec }: { rec: DiscoveryRecommendation }) {
+export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecommendation; earlier?: boolean }) {
   const idea = rec.idea!;
   const why = idea.catalysts.find((c) => c.trim());
   const headline = idea.headline?.trim() || idea.thesis;
@@ -38,6 +38,7 @@ export function TopOpportunity({ rec }: { rec: DiscoveryRecommendation }) {
             {idea.name}
           </Typography>
           <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>{listingText(idea)}</Typography>
+          {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
         </Box>
         <PriceBlock rec={rec} large />
       </Box>
