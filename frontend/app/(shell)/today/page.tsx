@@ -15,7 +15,7 @@ import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { useClaudeLock } from "@/lib/claudeKey";
 import { DiscoveryFeed } from "@/components/discovery/DiscoveryFeed";
-import { alertRows } from "@/lib/alerts";
+import { alertRows, missingNote } from "@/lib/alerts";
 import { holdingsOnly } from "@/lib/discovery";
 import { useAlerts } from "@/lib/useAlerts";
 import { PortfolioAlerts } from "@/components/recommendations/PortfolioAlerts";
@@ -42,6 +42,10 @@ export default function TodayPage() {
   const typed = useAlerts();
   const rows = alertRows(typed, pending);
   const otherRows = rows.filter((r) => r.kind !== "new_recommendation"); // a phone shows calls as cards
+  // What could not be checked is said inside the alerts panel; when no panel is mounted (no rows,
+  // or a phone with only call cards) it is said on its own, so a failed check never reads as quiet.
+  const missing = missingNote(typed?.missing ?? []);
+  const panelShown = isDesktop ? rows.length > 0 : otherRows.length > 0;
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
@@ -85,6 +89,11 @@ export default function TodayPage() {
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.
         </Alert>
+      )}
+      {missing && !panelShown && (
+        <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>
+          {missing}
+        </Typography>
       )}
       {recommendations && pending.length === 0 && emptyKind !== null && (
         <TodayEmpty firstRun={emptyKind === "first-run"} />
