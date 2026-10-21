@@ -96,6 +96,11 @@ export function scanCounts(scan: ScanRun): string[] {
 export const clampLines = (lines: number) =>
   ({ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }) as const;
 
+/** No scan runs left this month. A limit of zero means no runs at all: the server refuses the first. */
+export function runsExhausted(usage: { used: number; limit: number } | undefined): boolean {
+  return !!usage && usage.used >= usage.limit;
+}
+
 /** The stages the discovery job reports, in order (backend/app/discovery/jobs.py and runner.py). */
 export const SCAN_STAGES = [
   { key: "screening", label: "Screening companies" },

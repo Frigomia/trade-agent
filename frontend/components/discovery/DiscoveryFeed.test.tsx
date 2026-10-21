@@ -226,6 +226,16 @@ describe("DiscoveryFeed", () => {
     expect(onRun).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps Try again off in a failed state when the monthly runs are used up, and says why", () => {
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { usage: { used: 100, limit: 100 }, job: { status: "FAILED", stage: "failed", total: 0, done: 0, error: "Discovery scan failed." } },
+    );
+
+    expect(screen.getByRole("button", { name: /^try again$/i })).toBeDisabled();
+    expect(screen.getByText(/used all your scan runs for this month/i)).toBeInTheDocument();
+  });
+
   it("disables the Try again button when Claude is not connected", () => {
     renderFeed(
       { latest_scan: SCAN, recommendations: [] },
@@ -246,8 +256,9 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: quiet, recommendations: [] });
 
     expect(screen.getByText("No compelling opportunity today")).toBeInTheDocument();
-    const chip = screen.getByText("NRSK · 58");
-    expect(chip).toHaveAttribute("title", "Norsk Verk, medium confidence"); // the company name is on the chip
+    // The name, score and confidence are visible text, not a hover title, so a phone and a keyboard see them.
+    const chip = screen.getByText("Norsk Verk").closest("li")!;
+    expect(chip).toHaveTextContent("Norsk Verk NRSK · 58 · medium confidence");
   });
 
   it("shows a quiet latest scan and its nearest misses even while an older idea is still pending, and labels that idea", () => {

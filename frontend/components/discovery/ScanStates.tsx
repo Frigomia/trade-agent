@@ -120,8 +120,10 @@ export function NoOpportunity({ scan }: { scan: ScanRun }) {
         <Box component="ul" aria-label="Nearest misses" sx={{ listStyle: "none", m: 0, mt: 1.5, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
           <Chip>Nearest misses</Chip>
           {misses.map((miss) => (
-            <Chip key={miss.ticker} title={`${miss.name ?? miss.ticker}, ${miss.confidence} confidence`}>
-              {miss.ticker} · {miss.overall ?? "no score"}
+            <Chip key={miss.ticker}>
+              {miss.name && <b>{miss.name}</b>}
+              {miss.name ? " " : ""}
+              {miss.ticker} · {miss.overall ?? "no score"} · {miss.confidence} confidence
             </Chip>
           ))}
         </Box>
@@ -130,12 +132,11 @@ export function NoOpportunity({ scan }: { scan: ScanRun }) {
   );
 }
 
-function Chip({ children, title }: { children: ReactNode; title?: string }) {
+function Chip({ children }: { children: ReactNode }) {
   return (
     <Box
       component="li"
-      title={title}
-      sx={{ px: 1.5, minHeight: 28, display: "inline-flex", alignItems: "center", borderRadius: 999, bgcolor: "var(--track)", color: "var(--text2)", fontSize: "0.75rem", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}
+      sx={{ px: 1.5, py: 0.5, minHeight: 28, display: "inline-flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", borderRadius: 14, bgcolor: "var(--track)", color: "var(--text2)", fontSize: "0.75rem", fontWeight: 500, fontVariantNumeric: "tabular-nums" }}
     >
       {children}
     </Box>
@@ -157,7 +158,7 @@ export function FirstScan() {
  * The last scan failed and nothing was saved; the previous ideas are still below. A rejected
  * Claude key gets its own wording and a way to fix it; anything else offers to try again.
  */
-export function ScanFailed({ message, locked, onRetry }: { message: string | null; locked: boolean; onRetry: () => void }) {
+export function ScanFailed({ message, locked, exhausted, onRetry }: { message: string | null; locked: boolean; exhausted: boolean; onRetry: () => void }) {
   if (message === KEY_REJECTED_MESSAGE) {
     return (
       <State title={KEY_REJECTED_MESSAGE} tile={<Tone icon={KeyRound} />}>
@@ -177,9 +178,10 @@ export function ScanFailed({ message, locked, onRetry }: { message: string | nul
   return (
     <State title="The scan did not finish" tile={<Tone icon={TriangleAlert} />}>
       <Typography sx={BODY}>{(message ?? "Something went wrong").replace(/[.!?\s]*$/, ".")} Nothing was saved.</Typography>
-      <Button variant="contained" disabled={locked} onClick={onRetry} startIcon={<RefreshCw size={15} aria-hidden />} sx={{ mt: 1.75, minHeight: 44 }}>
+      <Button variant="contained" disabled={locked || exhausted} onClick={onRetry} startIcon={<RefreshCw size={15} aria-hidden />} sx={{ mt: 1.75, minHeight: 44 }}>
         Try again
       </Button>
+      {exhausted && <Typography sx={{ ...BODY, color: "var(--muted)" }}>You have used all your scan runs for this month.</Typography>}
     </State>
   );
 }

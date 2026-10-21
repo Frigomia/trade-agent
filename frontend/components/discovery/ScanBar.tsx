@@ -2,7 +2,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryJob, ScanRun } from "@/lib/api/discovery-types";
-import { scanCounts, whenText } from "@/lib/discovery";
+import { runsExhausted, scanCounts, whenText } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
 
 interface Props {
@@ -39,8 +39,7 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
   } else {
     text = <b>No scan yet</b>;
   }
-  // A limit of zero means no runs at all (the server refuses the first one), not unlimited.
-  const atLimit = !!usage && usage.used >= usage.limit;
+  const atLimit = runsExhausted(usage);
   const label = failed ? "Try again" : usage ? `${usage.used} of ${usage.limit} runs` : "Run scan";
   return (
     <Panel sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "10px 14px", flexWrap: "wrap" }}>
