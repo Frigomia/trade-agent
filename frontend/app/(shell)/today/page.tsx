@@ -18,6 +18,8 @@ import { DiscoveryFeed } from "@/components/discovery/DiscoveryFeed";
 import { alertRows, missingNote } from "@/lib/alerts";
 import { holdingsOnly } from "@/lib/discovery";
 import { useAlerts } from "@/lib/useAlerts";
+import { insightsMissingNote, useInsights } from "@/lib/useInsights";
+import { WatchlistInsights } from "@/components/recommendations/WatchlistInsights";
 import { PortfolioAlerts } from "@/components/recommendations/PortfolioAlerts";
 import { useDiscovery } from "@/lib/useDiscovery";
 import type { Usage } from "@/lib/usage";
@@ -46,6 +48,11 @@ export default function TodayPage() {
   // or a phone with only call cards) it is said on its own, so a failed check never reads as quiet.
   const missing = missingNote(typed?.missing ?? []);
   const panelShown = isDesktop ? rows.length > 0 : otherRows.length > 0;
+  // Watchlist items inside their target range. The panel mounts whenever there are any, on both
+  // layouts; with none, a failed price check is still said on its own.
+  const loaded = useInsights();
+  const watch = loaded && loaded.insights.length > 0 ? loaded : undefined;
+  const watchMissing = watch ? null : insightsMissingNote(loaded?.missing ?? []);
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
@@ -91,10 +98,9 @@ export default function TodayPage() {
         </Alert>
       )}
       {missing && !panelShown && (
-        <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>
-          {missing}
-        </Typography>
+        <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>{missing}</Typography>
       )}
+      {watchMissing && <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>{watchMissing}</Typography>}
       {recommendations && pending.length === 0 && emptyKind !== null && (
         <TodayEmpty firstRun={emptyKind === "first-run"} />
       )}
@@ -103,12 +109,17 @@ export default function TodayPage() {
           <PortfolioAlerts rows={otherRows} missing={typed?.missing} />
         </Box>
       )}
+      {!isDesktop && watch && (
+        <Box sx={{ mt: 3 }}>
+          <WatchlistInsights insights={watch.insights} missing={watch.missing} />
+        </Box>
+      )}
       {!isDesktop && pending.length > 0 && (
         <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mt: 3 }}>
           {otherRows.length > 0 ? "New recommendations" : "Portfolio alerts"}
         </Typography>
       )}
-      {isDesktop && rows.length > 0 && <TodayDesktop rows={rows} missing={typed?.missing} />}
+      {isDesktop && (rows.length > 0 || watch) && <TodayDesktop rows={rows} missing={typed?.missing} insights={watch} />}
       {!isDesktop &&
         pending.map((recommendation) => (
           // No inline confirmation here: approving or dismissing just revalidates the list, and the

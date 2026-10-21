@@ -68,12 +68,13 @@ interface Api {
   summary?: unknown;
   ideas?: unknown;
   alerts?: unknown;
+  insights?: unknown;
   run?: (init?: RequestInit) => Promise<unknown>;
   extra?: (path: string, init?: RequestInit) => Promise<unknown> | undefined;
 }
 
 // One router for every path Today asks for; a test overrides only what it is about.
-function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, alerts, run, extra }: Api = {}) {
+function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, alerts, insights, run, extra }: Api = {}) {
   apiFetch.mockImplementation((path: string, init?: RequestInit) => {
     const handled = extra?.(path, init);
     if (handled) return handled;
@@ -81,6 +82,7 @@ function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, 
     if (path === "/portfolio/summary") return Promise.resolve(summary);
     if (path === "/discovery/ideas") return Promise.resolve(ideas);
     if (path === "/portfolio/alerts") return alerts ? Promise.resolve(alerts) : Promise.reject(new FakeApiError(404, "Not found"));
+    if (path === "/portfolio/insights") return insights ? Promise.resolve(insights) : Promise.reject(new FakeApiError(404, "Not found"));
     if (path === "/me/usage") return Promise.resolve(USAGE);
     if (path === "/discovery/run" && init?.method === "POST") return run ? run(init) : Promise.resolve({ job_id: "job-1" });
     if (path.startsWith("/discovery/run/")) return new Promise(() => {}); // a scan that never ends
@@ -209,6 +211,54 @@ describe("TodayPage", () => {
 
       // The row proves the alerts response has rendered before the note is looked for.
       expect(await screen.findByText("Earnings tomorrow")).toBeInTheDocument();
+      expect(screen.queryByText(/could not check/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("watchlist insights", () => {
+    const NVDA = { ticker: "NVDA", kind: "in_target_range", text: "Entered your target price range", current_price: 98.4, target_price_low: 90, target_price_high: 110 };
+
+    it("shows the panel on a phone, ahead of the recommendation cards", async () => {
+      mockApi({ recs: [rec()], insights: { insights: [NVDA], missing: [] } });
+      renderFresh(<TodayPage />);
+
+      const panel = await screen.findByRole("region", { name: "Watchlist insights" });
+      expect(panel).toHaveTextContent("Entered your target price range");
+      const card = screen.getByRole("button", { name: /^approve$/i });
+      expect(panel.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("shows the panel on desktop even when there are no alert rows", async () => {
+      desktop = true;
+      mockApi({ insights: { insights: [NVDA], missing: [] } });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByRole("region", { name: "Watchlist insights" })).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Portfolio alerts" })).not.toBeInTheDocument();
+    });
+
+    it("says a failed price check on its own when there is no insight to show", async () => {
+      mockApi({ insights: { insights: [], missing: ["prices"] } });
+      renderFresh(<TodayPage />);
+
+      expect(await screen.findByText(/could not check some prices, so watchlist insights may be missing/i)).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Watchlist insights" })).not.toBeInTheDocument();
+    });
+
+    it("says it once, inside the panel, when the panel is shown", async () => {
+      mockApi({ insights: { insights: [NVDA], missing: ["prices"] } });
+      renderFresh(<TodayPage />);
+
+      await screen.findByRole("region", { name: "Watchlist insights" });
+      expect(screen.getAllByText(/watchlist insights may be missing/i)).toHaveLength(1);
+    });
+
+    it("shows nothing, and no error, when the endpoint is not there", async () => {
+      mockApi({ recs: [rec()] }); // /portfolio/insights answers 404
+      renderFresh(<TodayPage />);
+
+      await screen.findByText("AAPL");
+      expect(screen.queryByRole("region", { name: "Watchlist insights" })).not.toBeInTheDocument();
       expect(screen.queryByText(/could not check/i)).not.toBeInTheDocument();
     });
   });

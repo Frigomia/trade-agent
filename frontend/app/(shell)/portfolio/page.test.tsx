@@ -234,6 +234,16 @@ describe("PortfolioPage", () => {
     expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
   });
 
+  it("shows a watchlist item's target price range beside its note", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      watchlist: [{ ticker: "ASML", asset_type: "STOCK", note: null, target_weight: null, target_price_low: 650, target_price_high: 720.5, current_price: 702.4 }],
+    });
+    renderFresh();
+
+    expect(await screen.findByText("Watching · range 650 to 720.5")).toBeInTheDocument();
+  });
+
   it("shows an em dash for an unpriced holding and says it isn't in the totals", async () => {
     handlers["GET /portfolio/summary"] = () => ({
       ...SUMMARY,

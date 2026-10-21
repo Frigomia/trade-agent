@@ -33,6 +33,7 @@ import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
 import { WatchTargetDialog } from "@/components/portfolio/WatchTargetDialog";
+import { rangeText } from "@/lib/priceRange";
 import { effectiveTarget, fractionToPercentText, percentTextToFraction, TARGET_ERROR } from "@/lib/targetWeight";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
@@ -420,6 +421,7 @@ export default function PortfolioPage() {
         )}
         {watchlist.map((item) => {
           const isOwned = owned.has(item.ticker.toUpperCase());
+          const range = rangeText(item);
           return (
           <Box
             key={item.ticker}
@@ -434,6 +436,7 @@ export default function PortfolioPage() {
                   <>
                     {item.note ?? "Watching"}
                     {item.target_weight != null && ` · target ${targetText(item.target_weight)}`}
+                    {range && ` · range ${range}`}
                   </>
                 )}
               </Typography>

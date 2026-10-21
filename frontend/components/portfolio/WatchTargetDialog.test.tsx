@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import useSWR, { SWRConfig } from "swr";
 import type { WatchlistSummary } from "@/lib/api/portfolio-types";
 
 const apiFetch = vi.fn();
@@ -41,6 +42,112 @@ describe("WatchTargetDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /save target/i }));
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(body()).toHaveProperty("target_weight", null);
+  });
+
+  describe("target price range", () => {
+    const low = () => screen.getByLabelText("Lowest price") as HTMLInputElement;
+    const high = () => screen.getByLabelText("Highest price") as HTMLInputElement;
+    const save = () => fireEvent.click(screen.getByRole("button", { name: /save target/i }));
+
+    it("shows the saved range and leaves it out of the request when it did not change", async () => {
+      const { onSaved } = setup({ ...ITEM, target_price_low: 90, target_price_high: 110.5 });
+      expect([low().value, high().value]).toEqual(["90", "110.5"]);
+
+      save();
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).not.toHaveProperty("target_price_low");
+      expect(body()).not.toHaveProperty("target_price_high");
+    });
+
+    it("saves a new range with both ends", async () => {
+      const { onSaved } = setup();
+      fireEvent.change(low(), { target: { value: "90" } });
+      fireEvent.change(high(), { target: { value: "110,5" } });
+
+      save();
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).toMatchObject({ target_price_low: 90, target_price_high: 110.5 });
+    });
+
+    it("clears a saved range with two explicit nulls", async () => {
+      const { onSaved } = setup({ ...ITEM, target_price_low: 90, target_price_high: 110 });
+      fireEvent.change(low(), { target: { value: "" } });
+      fireEvent.change(high(), { target: { value: "" } });
+
+      save();
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).toMatchObject({ target_price_low: null, target_price_high: null });
+    });
+
+    it("sends no range fields when there was none and none was typed", async () => {
+      const { onSaved } = setup();
+
+      save();
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).not.toHaveProperty("target_price_low");
+    });
+
+    it("refuses one end alone, or a lowest price above the highest, without a request", () => {
+      setup();
+      fireEvent.change(low(), { target: { value: "90" } });
+      save();
+      expect(apiFetch).not.toHaveBeenCalled();
+      expect(screen.getAllByText(/both ends of the range/i).length).toBeGreaterThan(0);
+
+      fireEvent.change(high(), { target: { value: "80" } });
+      save();
+      expect(apiFetch).not.toHaveBeenCalled();
+    });
+
+    it("waits for the save before calling one end alone an error, but flags two ends that cannot be a range", () => {
+      setup();
+      fireEvent.change(low(), { target: { value: "90" } }); // the highest price is still to come
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(low()).toHaveAttribute("aria-invalid", "false");
+
+      fireEvent.change(high(), { target: { value: "80" } });
+      expect(low()).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByRole("alert")).toHaveTextContent(/both ends of the range/i);
+    });
+
+    it("does not check or send a range that was not touched, even one the form cannot read back", async () => {
+      const { onSaved } = setup({ ...ITEM, target_price_low: 0.0000001, target_price_high: 5 });
+
+      save();
+
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(body()).not.toHaveProperty("target_price_low");
+    });
+
+    it("refreshes Today's watchlist insights once the range is saved", async () => {
+      const fetcher = vi.fn().mockResolvedValue({ insights: [], missing: [] });
+      function Probe() {
+        useSWR("/portfolio/insights", fetcher);
+        return null;
+      }
+      render(
+        <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+          <Probe />
+          <WatchTargetDialog item={ITEM} onClose={vi.fn()} onSaved={vi.fn()} />
+        </SWRConfig>,
+      );
+      await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+      fireEvent.change(low(), { target: { value: "90" } });
+      fireEvent.change(high(), { target: { value: "110" } });
+
+      save();
+
+      await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    });
+
+    it("says the prices are in the quote's own unit", () => {
+      setup();
+      expect(screen.getByText(/pence/i)).toBeInTheDocument();
+    });
   });
 
   it("rejects values outside 0 to 100 without a request", () => {
