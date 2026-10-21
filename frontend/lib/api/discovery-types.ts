@@ -111,7 +111,7 @@ export interface DiscoveryJob {
   error: string | null;
 }
 
-export type HistoryRange = "1w" | "1m" | "3m" | "1y";
+export type HistoryRange = "1w" | "1m" | "6m" | "1y" | "5y";
 
 /** GET /discovery/ideas/{id}/history: dated daily closes in the major currency unit, oldest first. */
 export interface PriceHistory {

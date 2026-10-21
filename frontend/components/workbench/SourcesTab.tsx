@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Box, Typography } from "@mui/material";
-import { Users } from "lucide-react";
+import { ArrowLeftRight, Users } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { IdeaOut } from "@/lib/api/discovery-types";
 import { quoteLabel } from "@/lib/discovery";
@@ -20,7 +20,6 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 /** The Sources tab: every cited source, the data's limits, what is unresolved, and the community view. */
 export function SourcesTab({ idea }: { idea: IdeaOut }) {
   const open = idea.negative_developments.filter((d) => d.status !== "confirmed");
-  const unverified = idea.sources.filter((s) => s.source_tier === "forum").length;
   return (
     <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
       <Panel component="section" sx={{ p: "20px", display: "grid", gap: 1.5 }}>
@@ -30,8 +29,7 @@ export function SourcesTab({ idea }: { idea: IdeaOut }) {
           </Typography>
           <Box sx={{ flex: 1 }} />
           <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-            {idea.sources.length} source{idea.sources.length === 1 ? "" : "s"}
-            {unverified > 0 ? ` · ${unverified} unverified` : ""}
+            {idea.sources.length} source{idea.sources.length === 1 ? "" : "s"} · {open.length} unresolved
           </Typography>
         </Box>
         {idea.sources.length === 0 ? (
@@ -41,10 +39,12 @@ export function SourcesTab({ idea }: { idea: IdeaOut }) {
             {idea.sources.map((s, i) => (
               <Box component="li" key={`${i}-${s.url}`} sx={{ display: "grid", gap: 0.25, py: 1.25, borderTop: "1px solid var(--line)", "&:first-of-type": { borderTop: 0, pt: 0 } }}>
                 <Typography sx={{ ...BODY, color: "var(--text)" }}>{s.text}</Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, fontSize: "0.75rem", color: "var(--muted)" }}>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, fontSize: "0.75rem", color: "var(--muted)", alignItems: "center" }}>
                   <SourceLink url={s.url} />
-                  <span>· {TIER_LABEL[s.source_tier]}</span>
-                  {s.published_at && <span>· {s.published_at}</span>}
+                  <Box component="span" sx={{ border: "1px solid var(--line2)", borderRadius: 999, px: 1, color: "var(--text2)" }}>
+                    {TIER_LABEL[s.source_tier]}
+                  </Box>
+                  {s.published_at && <time>{s.published_at}</time>}
                 </Box>
               </Box>
             ))}
@@ -63,11 +63,14 @@ export function SourcesTab({ idea }: { idea: IdeaOut }) {
             {open.length === 0 ? (
               <Typography sx={BODY}>Nothing disputed or unverified was found.</Typography>
             ) : (
-              <Box component="ul" sx={{ m: 0, pl: 2.25, display: "grid", gap: 0.5, ...BODY }}>
+              <Box component="ul" sx={{ m: 0, p: 0, listStyle: "none", display: "grid", gap: 0.75, ...BODY }}>
                 {open.map((d, i) => (
-                  <li key={`${i}-${d.summary}`}>
-                    {d.summary} ({d.status})
-                  </li>
+                  <Box component="li" key={`${i}-${d.summary}`} sx={{ display: "flex", gap: 1 }}>
+                    <ArrowLeftRight size={14} aria-hidden style={{ flex: "none", marginTop: 3 }} />
+                    <span>
+                      {d.summary} ({d.status})
+                    </span>
+                  </Box>
                 ))}
               </Box>
             )}

@@ -5,13 +5,16 @@ import { Box, Typography } from "@mui/material";
 import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 import { Change } from "@/components/ui/Change";
 import { formatAmount } from "@/lib/format";
-import { buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
+import { buildPriceChart, CHART_HEIGHT, CHART_LEFT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
+
+const RANGE_NAME: Record<HistoryRange, string> = { "1w": "One week", "1m": "One month", "6m": "Six months", "1y": "One year", "5y": "Five years" };
 
 const RANGES: { key: HistoryRange; label: string }[] = [
   { key: "1w", label: "1W" },
   { key: "1m", label: "1M" },
-  { key: "3m", label: "3M" },
+  { key: "6m", label: "6M" },
   { key: "1y", label: "1Y" },
+  { key: "5y", label: "5Y" },
 ];
 
 const day = (iso: string) =>
@@ -133,8 +136,8 @@ export function PriceChart({
         </defs>
         {geo.yTicks.map((t) => (
           <g key={t.value}>
-            <line x1={0} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
-            <text x={CHART_WIDTH} y={t.y - 4} textAnchor="end" fontSize={10} fill="var(--muted)">
+            <line x1={CHART_LEFT} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
+            <text x={CHART_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">
               {formatAmount(t.value)}
             </text>
           </g>
@@ -150,7 +153,7 @@ export function PriceChart({
       </Box>
       <Typography aria-live="polite" sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
         {picked === null
-          ? `${day(last.date)} close, ${clean.length} days shown.`
+          ? `${day(last.date)}, last close. ${RANGE_NAME[range]} shown, ${clean.length} days.`
           : `${day(point.date)}: ${money(point.close)}`}
       </Typography>
     </Box>

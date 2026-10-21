@@ -83,6 +83,13 @@ export function whenText(iso: string, now: number): string {
   return `${date.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
+/** "20 Oct 2026, 06:12": an absolute date and time for a record that should not read as relative. */
+export function dateTimeText(iso: string): string {
+  const date = new Date(toTime(iso));
+  const day = date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+  return `${day}, ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+
 /** The scan bar's count words, from the saved counts only; empty parts when a legacy scan lacks them. */
 export function scanCounts(scan: ScanRun): string[] {
   if (scan.opportunities === null) return [];

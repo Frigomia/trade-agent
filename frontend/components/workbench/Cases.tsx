@@ -63,7 +63,7 @@ function Case({ title, note, children }: { title: string; note: string; children
         <Box sx={{ flex: 1 }} />
         <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{note}</Typography>
       </Box>
-      {children}
+      <Box sx={{ borderStyle: "dashed", borderWidth: "1px", borderColor: "var(--line2)", borderRadius: "14px", p: "14px 16px", display: "grid", gap: 1.5, minWidth: 0 }}>{children}</Box>
     </Panel>
   );
 }
@@ -132,7 +132,7 @@ export function BearCase({ idea }: { idea: IdeaOut }) {
                     <Icon size={14} aria-hidden />
                     {label}
                     {d.occurred_on && <span>· {d.occurred_on}</span>}
-                    {d.invalidates_thesis && <span>· Invalidates the thesis</span>}
+                    <span>· {d.invalidates_thesis ? "Invalidates the thesis" : "Thesis still stands"}</span>
                   </Box>
                   <Typography sx={{ ...BODY, color: "var(--text)" }}>{d.summary}</Typography>
                   <Typography sx={BODY}>Effect on the thesis: {d.thesis_impact}</Typography>

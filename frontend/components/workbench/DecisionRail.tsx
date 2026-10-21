@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { Bookmark, Check, Clock, MessageSquare, X } from "lucide-react";
@@ -9,7 +8,7 @@ import { Meter } from "@/components/ui/Meter";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
-import { confidenceLabel, fitScore, meterFill, riskLabel, whenText } from "@/lib/discovery";
+import { confidenceLabel, dateTimeText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
 import { useDecision } from "@/lib/useDecision";
 
 const NOTE = "Approving records your decision. Nothing is sent to a broker.";
@@ -40,7 +39,6 @@ function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & object }) {
  */
 export function DecisionSummary({ rec, onSeeSources }: { rec: DiscoveryRecommendation; onSeeSources?: () => void }) {
   const idea = rec.idea!;
-  const [now] = useState(() => Date.now()); // lazy: the purity lint forbids Date.now() in render
   return (
     <Box sx={{ display: "grid", gap: 1.5 }}>
       <Box sx={{ "& > div": { justifyItems: "start", textAlign: "left" } }}>
@@ -50,7 +48,7 @@ export function DecisionSummary({ rec, onSeeSources }: { rec: DiscoveryRecommend
         <Meter fill={meterFill(idea.confidence)} label={confidenceLabel(idea.confidence)} />
         <Meter fill={meterFill(idea.risk.risk_level)} label={riskLabel(idea.risk.risk_level)} />
         <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, color: "var(--muted)" }}>
-          <Clock size={14} aria-hidden /> Last analysis {whenText(rec.created_at, now)}
+          <Clock size={14} aria-hidden /> Last analysis {dateTimeText(rec.created_at)}
         </Box>
       </Box>
       {onSeeSources && (

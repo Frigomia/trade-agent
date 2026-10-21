@@ -62,6 +62,12 @@ describe("rangeChangePct", () => {
   });
 });
 
+describe("tickLabel for five years", () => {
+  it("shows the year", () => {
+    expect(tickLabel("2024-03-04", "5y")).toBe("2024");
+  });
+});
+
 describe("tickLabel", () => {
   it("shows the month on long ranges and the day on short ones, in UTC", () => {
     expect(tickLabel("2026-10-19", "1y")).toBe(new Date("2026-10-19T00:00:00Z").toLocaleDateString([], { month: "short", timeZone: "UTC" }));

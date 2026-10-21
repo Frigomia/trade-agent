@@ -4,7 +4,9 @@ import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 
 export const CHART_WIDTH = 600;
 export const CHART_HEIGHT = 220;
-const MARGIN = { top: 12, right: 8, bottom: 26, left: 8 };
+// The left margin holds the price labels, as in the mock.
+export const CHART_LEFT = 40;
+const MARGIN = { top: 12, right: 6, bottom: 24, left: CHART_LEFT };
 
 type Point = PriceHistory["points"][number];
 
@@ -24,10 +26,11 @@ export interface PriceChartGeometry {
   indexAtX: (x: number) => number;
 }
 
-/** "Jul" for a long range, "19 Oct" for a short one, from a YYYY-MM-DD date. */
+/** "2024" for five years, "Jul" for a long range, "19 Oct" for a short one, from a YYYY-MM-DD date. */
 export function tickLabel(date: string, range: HistoryRange): string {
   const day = new Date(`${date}T00:00:00Z`);
-  return range === "1y" || range === "3m"
+  if (range === "5y") return day.toLocaleDateString([], { year: "numeric", timeZone: "UTC" });
+  return range === "1y" || range === "6m"
     ? day.toLocaleDateString([], { month: "short", timeZone: "UTC" })
     : day.toLocaleDateString([], { day: "numeric", month: "short", timeZone: "UTC" });
 }

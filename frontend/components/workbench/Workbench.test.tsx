@@ -57,7 +57,7 @@ describe("Workbench identity and rail", () => {
     expect(within(rail).getByText("USD 184.20")).toBeInTheDocument();
     expect(within(rail).getByText("High confidence")).toBeInTheDocument();
     expect(within(rail).getByText("Medium risk")).toBeInTheDocument();
-    expect(within(rail).getByText(/Last analysis/)).toBeInTheDocument();
+    expect(within(rail).getByText(/Last analysis .*2026/)).toBeInTheDocument(); // an absolute date and time
     expect(within(rail).getByText("61")).toBeInTheDocument();
     expect(within(rail).getByText(/nothing is sent to a broker/i)).toBeInTheDocument();
   });
@@ -126,6 +126,14 @@ describe("Workbench tabs", () => {
     expect(bear).toHaveTextContent("Effect on the thesis: Revenue growth could slow.");
   });
 
+  it("keeps both cases' content in the dashed AI box, and says whether the thesis stands after each development", async () => {
+    show();
+
+    const bear = (await screen.findByRole("heading", { name: "Bear case" })).closest("section")!;
+    expect(within(bear).getByText("The final sentence of the risk.", { exact: false }).closest("div")).toHaveStyle({ borderStyle: "dashed" });
+    expect(bear).toHaveTextContent("Thesis still stands");
+  });
+
   it("shows bull claims with their kind and tier in words, and the catalysts as why now", async () => {
     show();
 
@@ -152,7 +160,7 @@ describe("Workbench tabs", () => {
     fireEvent.click(await screen.findByRole("tab", { name: "Sources" }));
     const panel = screen.getByRole("tabpanel");
     expect(within(panel).getByRole("heading", { name: "Sources and research transparency" })).toBeInTheDocument();
-    expect(within(panel).getByText(/3 sources · 1 unverified/)).toBeInTheDocument();
+    expect(within(panel).getByText(/3 sources · 1 unresolved/)).toBeInTheDocument();
     const link = within(panel).getByRole("link", { name: /example\.com/ });
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(link).toHaveAttribute("target", "_blank");
@@ -210,7 +218,8 @@ describe("Workbench price chart", () => {
     expect(await screen.findByRole("img", { name: /price chart, 30 daily closes/i })).toBeInTheDocument();
     expect(screen.getByText("USD 179.00")).toBeInTheDocument(); // the last close
     expect(screen.getByText(/over this range/)).toBeInTheDocument();
-    expect(screen.getByText(/30 days shown/)).toBeInTheDocument();
+    expect(screen.getByText(/One year shown, 30 days/)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /^(1W|1M|6M|1Y|5Y)$/ }).map((b) => b.textContent)).toEqual(["1W", "1M", "6M", "1Y", "5Y"]);
   });
 
   it("keeps the range control on screen while a new range loads", async () => {
