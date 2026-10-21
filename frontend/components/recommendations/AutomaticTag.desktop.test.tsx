@@ -6,6 +6,7 @@ import type { RecommendationOut } from "@/lib/api/recommendation-types";
 vi.mock("@/lib/api/client", () => ({ apiFetch: vi.fn().mockResolvedValue([]), ApiError: class extends Error {} }));
 vi.mock("@/components/portfolio/PortfolioChart", () => ({ PortfolioChart: () => null }));
 
+import { alertRows } from "@/lib/alerts";
 import { TodayDesktop } from "./TodayDesktop";
 import { RecommendationDetailDesktop } from "./RecommendationDetailDesktop";
 
@@ -38,7 +39,7 @@ describe("Automatic tag on the desktop views", () => {
   it("tags only the scheduled row in the Today list, and the row wraps instead of overflowing", () => {
     wrap(
       <TodayDesktop
-        recommendations={[rec({ id: 1, ticker: "AAPL", source: "scheduled" }), rec({ id: 2, ticker: "MSFT" })]}
+        rows={alertRows(undefined, [rec({ id: 1, ticker: "AAPL", source: "scheduled" }), rec({ id: 2, ticker: "MSFT" })])}
       />,
     );
     expect(screen.getAllByText("Automatic")).toHaveLength(1);
