@@ -39,45 +39,45 @@ colors:
 typography:
   page-title:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "30px"
+    fontSize: "1.875rem"
     fontWeight: 650
     lineHeight: 1.15
     letterSpacing: "-0.025em"
   page-title-phone:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "26px"
+    fontSize: "1.625rem"
     fontWeight: 650
     lineHeight: 1.15
     letterSpacing: "-0.025em"
   price-hero:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "30px"
+    fontSize: "1.875rem"
     fontWeight: 650
     lineHeight: 1.1
     letterSpacing: "-0.035em"
   metric:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "26px"
+    fontSize: "1.625rem"
     fontWeight: 650
     letterSpacing: "-0.03em"
   title:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "20px"
+    fontSize: "1.25rem"
     fontWeight: 650
     letterSpacing: "-0.02em"
   lead:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "15px"
+    fontSize: "0.9375rem"
     fontWeight: 650
     lineHeight: 1.55
   body:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "13px"
+    fontSize: "0.8125rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
     fontFamily: "Geist Sans, system-ui, sans-serif"
-    fontSize: "12px"
+    fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: 1.5
 rounded:
@@ -214,26 +214,28 @@ an icon shape plus a word.
 available for tabular figures where alignment matters; numerals otherwise stay in Geist Sans with
 `font-variant-numeric: tabular-nums`.
 
+**Units:** font sizes are in `rem` (1rem = 16px), never `px`, so they follow the user's browser setting. Lengths such as radii, spacing and touch targets stay in `px`.
+
 **Character:** One clean geometric sans at a small number of sizes. Weight (650 for names and
 numbers, 500 for controls, 400 for prose) and colour carry hierarchy more than size does; the big
 moments are numbers and the company name, not headlines.
 
 ### Hierarchy
-- **Page title** (650, 30px desktop, 26px phone, -0.025em): one per screen, the `h1`.
-- **Price hero / Stat** (650, 30 to 32px, -0.035em): the single price or total a region is
+- **Page title** (650, 1.875rem desktop, 1.625rem phone, -0.025em): one per screen, the `h1`.
+- **Price hero / Stat** (650, 1.875 to 2rem, -0.035em): the single price or total a region is
   about. Never more than one per region.
-- **Metric** (650, 26px, -0.03em): section totals and key figures.
-- **Title** (650, 20px): tile values, empty-state headings, drawer titles.
-- **Lead** (650, 15px): company names in lists, section headings, the thesis paragraph (400,
+- **Metric** (650, 1.625rem, -0.03em): section totals and key figures.
+- **Title** (650, 1.25rem): tile values, empty-state headings, drawer titles.
+- **Lead** (650, 0.9375rem): company names in lists, section headings, the thesis paragraph (400,
   line-height 1.55).
-- **Body** (400 to 650, 13px, 1.5): nearly all interface text; 650 for values.
-- **Label** (400, 12px, Slate Muted): captions, units, metadata, pill text, the advisory note.
+- **Body** (400 to 650, 0.8125rem, 1.5): nearly all interface text; 650 for values.
+- **Label** (400, 0.75rem, Slate Muted): captions, units, metadata, pill text, the advisory note.
 
 ### Named Rules
 **The Numbers Lead Rule.** Only numbers and the company name get the large sizes. Text never
 competes with the figure it describes.
 
-**The Readable Floor Rule.** Nothing is below 12px. The advisory note is 12px, in the muted
+**The Readable Floor Rule.** Nothing is below 0.75rem. The advisory note is 0.75rem, in the muted
 colour, at most 72 characters wide.
 
 ## Layout
@@ -315,11 +317,11 @@ Three or five small bars (8 by 12px, 2px radius, 1px edge); filled bars use the 
 colour. The word (Low, Medium, High) always sits beside them. Never emerald, coral or blue.
 
 ### Tiles, bands and breakdowns
-Metric tiles on the Track fill (14px radius, label above, 20px value below, a muted unit line);
+Metric tiles on the Track fill (14px radius, label above, 1.25rem value below, a muted unit line);
 a tile with no data becomes a dashed outline with the reason in plain words. The peer band is a
 10px Track bar with a Cobalt wash for the peer range, a median tick, and a dot for the company.
 Key-value lists are divided by hairlines. Charts are hand-built SVG: Cobalt line,
-hairline gridlines, 12px muted axis labels, a keyboard-readable point, and the numbers beside
+hairline gridlines, 0.75rem muted axis labels, a keyboard-readable point, and the numbers beside
 it as text. Allocation uses the chart-series hues with a legend.
 
 ### AI text and the Web Opinion Box
@@ -333,7 +335,7 @@ A dark-on-light (light-on-dark in dark) bar pinned to the bottom of its region, 
 (Undo) underlined and 32px tall. Remove is immediate and offers Undo; nothing is sent to a broker.
 
 ### Empty, loading and error states
-Every list and region has a designed empty state: a 44px icon tile on the Cobalt Wash, a 20px
+Every list and region has a designed empty state: a 44px icon tile on the Cobalt Wash, a 1.25rem
 heading, one or two plain sentences saying what to do, and one primary action. Loading uses Track
 skeletons with the same shape as the content; errors name the problem and the next step in plain
 words. A missing price says "Price unavailable" and how to proceed, never a zero.
