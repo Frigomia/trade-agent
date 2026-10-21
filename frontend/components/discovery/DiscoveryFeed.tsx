@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { ChevronRight } from "lucide-react";
 import type { DiscoveryIdeas, DiscoveryJob } from "@/lib/api/discovery-types";
-import { isEarlier, pricesAsOf, runsExhausted, splitIdeas } from "@/lib/discovery";
+import { commonQuoteDay, isEarlier, runsExhausted, splitIdeas } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
 import { OpportunityCard } from "./OpportunityCard";
 import { ScanBar } from "./ScanBar";
@@ -42,7 +42,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, prog
   const { top, others, more } = splitIdeas(recs);
   // "Show more" lists the ideas beyond the top one and the three shown.
   const extra = showAll ? recs.filter((r) => r.idea).slice(1 + others.length) : [];
-  const asOf = pricesAsOf([...others, ...extra]);
+  const asOf = commonQuoteDay([...others, ...extra]);
   const failed = !running && job?.status === "FAILED";
 
   return (

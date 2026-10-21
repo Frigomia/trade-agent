@@ -130,6 +130,13 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent(/[+-]\d+\.\d%/);
   });
 
+  it("names a shared quote day only when every other idea has it, not the newest date for all", () => {
+    const older = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical"), older] });
+
+    expect(screen.queryByText(/^Prices as of /)).not.toBeInTheDocument();
+  });
+
   it("says when the other ideas' prices were saved, and offers no link when everything is shown", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
 

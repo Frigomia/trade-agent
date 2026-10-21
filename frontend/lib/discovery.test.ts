@@ -6,7 +6,7 @@ import {
   meterFill,
   monogram,
   priceText,
-  pricesAsOf,
+  commonQuoteDay,
   quoteLabel,
   riskLabel,
   scanCounts,
@@ -149,17 +149,22 @@ describe("stageIndex", () => {
   });
 });
 
-describe("pricesAsOf", () => {
+describe("commonQuoteDay", () => {
   const at = (asOf: string | null) => rec(1, "discovery", true, asOf);
+  const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
 
-  it("uses the newest saved quote date and ignores ideas that saved none", () => {
-    const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
-    expect(pricesAsOf([at("2026-10-19T20:00:00Z"), at("2026-10-20T20:00:00Z"), at(null)])).toBe(day("2026-10-20T20:00:00Z"));
+  it("names the day when every idea shown was quoted on it", () => {
+    expect(commonQuoteDay([at("2026-10-20T20:00:00Z"), at("2026-10-20T20:00:00Z")])).toBe(day("2026-10-20T20:00:00Z"));
   });
 
-  it("is null when no idea saved a quote date", () => {
-    expect(pricesAsOf([at(null)])).toBeNull();
-    expect(pricesAsOf([])).toBeNull();
+  it("gives no shared day when the quotes differ, so an older one is not passed off as fresh", () => {
+    expect(commonQuoteDay([at("2026-10-09T20:00:00Z"), at("2026-10-21T20:00:00Z")])).toBeNull();
+  });
+
+  it("gives no shared day when any quote date is missing or unusable, or there is nothing to show", () => {
+    expect(commonQuoteDay([at("2026-10-21T20:00:00Z"), at(null)])).toBeNull();
+    expect(commonQuoteDay([at("2026-10-21T20:00:00Z"), at("not a date")])).toBeNull();
+    expect(commonQuoteDay([])).toBeNull();
   });
 });
 
