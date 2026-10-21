@@ -18,7 +18,7 @@ remain unverified, and the discovery frontend remains Phase 9.
 | 5: dynamic admission | Implemented: `app/discovery/admit.py` resolves, validates and caps (10 per scan, 30 looked up) mentions as candidates. Phase 2 produces mentions; manual/scheduled scans integrate admission. |
 | 6: evaluation and persistence | Implemented: per-candidate LangGraph, bounded follow-up and quoted thesis reassessment, deterministic scoring/ranking, cited prose and quant-only fallback, atomic recommendation/scan persistence with RLS, export and deletion. Manual scan orchestration is connected in Phase 7. |
 | 7: run and schedule | Backend implemented: authenticated manual scan API, bounded runner/persistence, weekly snapshots, daily owner theme batch, opt-in weekday user scans and a high-confidence Telegram idea line. Live I1/I3 checks remain outstanding. |
-| 8: easy onboarding | Not implemented. |
+| 8: easy onboarding | Implemented: ticker/shares API and responsive modal, cached profile auto-fill, nullable purchase details and safe readers, P/L coverage, quote dates/stale flags. Owner-selected portfolio overview/analytics direction is recorded for Phase 9. |
 | 9: frontend | Not implemented for discovery. |
 | 10: deferred | Still deferred; separate specs and decisions required. |
 
@@ -1105,6 +1105,23 @@ release match `agents/jobs.py`.
 
 ### Phase 8: Easy onboarding (B, M)
 
+**Implemented handoff:** `app/holdings.py` owns metadata-assisted upserts and best-effort profile
+enrichment, with a post-await active-account guard under the shared lock. Only ticker and shares
+are required when provider type resolves; otherwise Stock/ETF is an explicit manual choice.
+Omitted updates preserve known fields; null clears purchase details. Unknown cost basis is safe
+across summaries, snapshots, trades, plans, chat and export. The generated migration only changes
+nullability; a follow-up generated migration adds persisted snapshot cost coverage. Charts omit
+incomplete cost comparisons. Summary P/L covers priced known-basis positions and exposes
+coverage counts, including the Today tile. Validation reveals manual type fields when needed.
+Quote timestamps/stale flags tolerate old cache entries; discovery freshness rules are unchanged.
+
+The owner selected a desktop modal/full-screen mobile form after seeing three HTML directions.
+Ticker and fractional shares are primary; purchase details are optional. Existing holdings offer
+Update position, preserving blank purchase fields. The first holding uses the same form.
+The [selected direction](../specs/2026-10-20-portfolio-onboarding-design.md) also records the future
+four-section portfolio UI; it is not implemented as part of onboarding.
+
+
 **Goal:** a user can add a holding with ticker and shares only, and discovery never requires one.
 
 1. **Profile auto-fill.** Add `fetch_profile(ticker) -> dict` to `market_data.py` returning
@@ -1137,6 +1154,17 @@ changes. Needs the design-first step.
 
 Follow `frontend/CLAUDE.md` and `DESIGN.md`. **Design first:** three HTML directions per new flow
 in `docs/design/`, owner chooses, then build.
+
+Today already has an approved direction in merged [PR #137](https://github.com/Frigomia/trade-agent/pull/137):
+`v2-b-soft.html`, including blue light/dark theme tokens. Search behavior and Save/Discover
+semantics remain open. The implementation must retain relevant holdings alerts across scan
+states, keep the last saved scan visible on refresh failure, and include the required bear case.
+The portfolio empty-state alternatives in that PR do not replace the owner-selected Phase 8
+modal/full-screen holding form.
+Company overview also has an approved direction in merged [PR #138](https://github.com/Frigomia/trade-agent/pull/138):
+`co-c-workbench.html`, with an evidence tab layout and persistent decision controls, using the
+Soft light/dark themes. Its catalyst dates, price history, fit facts, named competitors, bull-claim
+statuses and Save/Discover semantics remain explicit Phase 9 scope decisions.
 
 - **Today** becomes the idea feed: ranked cards with ticker, region/country, size bucket,
   confidence, risk level, one-line thesis, one-line bear case, catalyst, suggested size. Holdings

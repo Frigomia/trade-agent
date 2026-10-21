@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 from collections.abc import Generator
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,6 +36,12 @@ TEST_DATABASE_URL = (
 APP_TEST_DATABASE_URL = (
     "postgresql+psycopg://trading_agent_app:trading_agent_app@localhost:5432/trading_agent_test"
 )
+
+
+@pytest.fixture(autouse=True)
+def _mock_holding_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
+    # API tests must not call Yahoo; market-data tests exercise the real cache/provider helper.
+    monkeypatch.setattr("app.holdings.fetch_profile", AsyncMock(return_value={}))
 
 
 @pytest.fixture(autouse=True)

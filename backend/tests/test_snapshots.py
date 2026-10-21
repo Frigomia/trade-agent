@@ -45,6 +45,7 @@ def test_record_snapshot_totals_priced_holdings(db_session):
 
     assert float(snapshot.total_market_value) == 2800.0  # 10*200 + 2*400
     assert float(snapshot.total_cost_basis) == 2100.0  # 10*150 + 2*300
+    assert snapshot.cost_basis_complete is True
     assert db_session.query(PortfolioSnapshot).filter_by(user_id=USER_ID).count() == 1
 
 
@@ -59,13 +60,14 @@ def test_record_snapshot_of_an_empty_portfolio_is_a_zero_snapshot(db_session):
 
 def test_record_snapshot_skips_zero_share_holdings(db_session):
     _holding(db_session, "AAPL", 10, 150.0)
-    _holding(db_session, "OLD", 0, 50.0)
+    _holding(db_session, "OLD", 0, None)
     quote = AsyncMock(return_value={"price": 200.0, "closes": []})
 
     snapshot = _record(db_session, quote)
 
     assert float(snapshot.total_market_value) == 2000.0
     quote.assert_awaited_once_with("AAPL")
+    assert snapshot.cost_basis_complete is True
 
 
 def test_record_snapshot_only_counts_the_users_own_holdings(db_session):

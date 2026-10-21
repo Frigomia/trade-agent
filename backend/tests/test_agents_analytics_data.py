@@ -122,6 +122,7 @@ def test_profile_cache_hit_avoids_yahoo():
     ):
         assert asyncio.run(fetch_profile("A")) == {"country": "Japan"}
     ticker.assert_not_called()
+    redis.get.assert_awaited_once_with("profile:v2:A")
 
 
 def test_profiles_bound_provider_strings_including_old_cache_entries():
@@ -178,3 +179,25 @@ def test_negative_cache_hits_skip_all_yahoo_retries():
         ):
             assert asyncio.run(fetch("A")) == {}
         ticker.assert_not_called()
+
+
+def test_profile_cache_namespace_ignores_legacy_entries_without_currency():
+    redis, ticker = AsyncMock(), MagicMock()
+    redis.get.side_effect = lambda key: '{"country":"Japan"}' if key == "profile:A" else None
+    ticker.info = {"longName": "A" * 180, "currency": "JPY"}
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+    ):
+        result = asyncio.run(fetch_profile("A"))
+    assert result["currency"] == "JPY"
+    assert result["name"] == "A" * 180
+    assert redis.set.call_args.args[0] == "profile:v2:A"
+
+
+def test_profile_cached_names_are_bounded_to_holding_name_column():
+    redis = AsyncMock()
+    redis.get.return_value = json.dumps({"name": "A" * 500, "sector": "s" * 500})
+    with patch("app.agents.market_data.get_redis", return_value=redis):
+        result = asyncio.run(fetch_profile("A"))
+    assert result == {"name": "A" * 200, "sector": "s" * 100}
