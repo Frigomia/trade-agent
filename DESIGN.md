@@ -397,13 +397,15 @@ phone); the search bar and Watchlist insights are not built. The page title is 3
 phone) on every screen.
 
 **Built on the company page** (`/today/[id]` for a discovery idea): the Workbench shell (identity, a
-decision rail beside the evidence, tabs, a phone action bar above the tab bar) with the Overview and
-Sources tabs: thesis, price chart, bull and bear cases at equal weight, negative developments with
-their status as shape plus word, every source, data limits and the unverified community view. The
-price chart is built but shows "not available" until the history endpoint exists. Numbers, Risk and
-fit (with the named-peer table) are the next slice.
+decision rail beside the evidence, tabs, a phone action bar above the tab bar) with four tabs.
+Overview: thesis, price chart, bull and bear cases at equal weight. Numbers: fundamentals tiles,
+valuation and quality against peers as bands (value, median tick, middle half of peers, position in
+words, neutral wording), and a named-peer table with this company first. Risk and fit: risk
+characteristics "measured, not scored" and the portfolio fit with its written reading. Sources:
+every source, data limits, unresolved evidence and the unverified community view. The price chart
+and the named peers are built against backend data that does not exist yet and say so until it does.
 
-**Not built yet:** the Numbers and Risk and fit tabs, the Portfolio explorer and Discover screens, the Discover
+**Not built yet:** the Portfolio explorer and Discover screens, the Discover
 navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.

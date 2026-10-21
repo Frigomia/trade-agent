@@ -1,5 +1,17 @@
 // Sample data for the workbench tests only; nothing in the app imports this file.
-import type { Claim, DiscoveryRecommendation, IdeaOut, PriceHistory } from "@/lib/api/discovery-types";
+import type { Claim, DiscoveryRecommendation, IdeaOut, PeerComparison, PriceHistory } from "@/lib/api/discovery-types";
+
+export const peer = (metric: string, over: Partial<PeerComparison> = {}): PeerComparison => ({
+  metric,
+  value: 0.2,
+  peer_group: "industry",
+  peer_count: 12,
+  peer_median: 0.15,
+  peer_p25: 0.1,
+  peer_p75: 0.2,
+  position: "above",
+  ...over,
+});
 
 export const claim = (over: Partial<Claim> = {}): Claim => ({
   text: "Revenue grew 12% in the quarter.",
@@ -26,7 +38,21 @@ export function testIdea(over: Partial<IdeaOut> = {}): IdeaOut {
     ],
     overall: 80,
     confidence: "high",
-    risk: { market_cap_eur: null, avg_daily_value_eur: null, size_bucket: "large", volatility_annualized: null, max_drawdown_1y: null, risk_flags: [], risk_level: "medium" },
+    risk: {
+      market_cap_eur: 38_200_000_000,
+      avg_daily_value_eur: 190_000_000,
+      size_bucket: "large",
+      volatility_annualized: 0.28,
+      max_drawdown_1y: -0.12,
+      risk_flags: ["thin_liquidity: 0.4M EUR traded a day"],
+      risk_level: "medium",
+    },
+    peers: [
+      peer("returnOnEquity", { value: 0.213, peer_median: 0.157, peer_p25: 0.1, peer_p75: 0.2, position: "above" }),
+      peer("trailingPE", { value: 24.6, peer_median: 29.8, peer_p25: 22, peer_p75: 36, position: "within" }),
+      peer("interestCoverage", { value: null, peer_median: null, peer_p25: null, peer_p75: null, position: "unavailable" }),
+    ],
+    competitors: ["Rival One Ltd"],
     thesis: "Recurring revenue and widening margins.",
     catalysts: ["Q3 results on 6 Nov."],
     outlook: "Margins should keep widening.",
@@ -43,7 +69,20 @@ export function testIdea(over: Partial<IdeaOut> = {}): IdeaOut {
       claim({ url: "javascript:alert(1)", text: "Odd link.", source_tier: "forum", kind: "forum", stance: "neutral" }),
     ],
     data_notes: ["Price date uncertain: the exchange did not report one."],
-    snapshot: { exchange: "NASDAQ", country: "United States", sector: "Software", industry: "Infrastructure", currency: "USD", price: 184.2, price_as_of: "2026-10-19T20:00:00" },
+    snapshot: {
+      exchange: "NASDAQ",
+      country: "United States",
+      sector: "Software",
+      industry: "Infrastructure",
+      currency: "USD",
+      price: 184.2,
+      price_as_of: "2026-10-19T20:00:00",
+      fundamentals: { returnOnEquity: 0.213, trailingPE: 24.6, debtToEquity: 140 },
+      peers: [
+        { ticker: "PEER1", name: "Peerco One", country: "Germany", currency: "EUR", market_cap_eur: 21_000_000_000, values: { returnOnEquity: 0.18, trailingPE: 31.2 } },
+        { ticker: "PEER2", name: "Peerco Two", country: null, currency: null, market_cap_eur: null, values: { returnOnEquity: null, trailingPE: 27.5 } },
+      ],
+    },
     headline: "Recurring revenue priced below peers.",
     ...over,
   };

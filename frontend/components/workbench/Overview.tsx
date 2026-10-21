@@ -82,15 +82,7 @@ export function Overview({ idea, recommendationId }: { idea: IdeaOut; recommenda
         <BullCase idea={idea} />
         <BearCase idea={idea} />
       </Box>
-      {idea.fit_summary && (
-        <Panel component="section" sx={{ p: "20px", display: "grid", gap: 1 }}>
-          <Typography component="h3" sx={H3}>
-            Fit with your portfolio
-          </Typography>
-          <Typography sx={BODY}>{idea.fit_summary}</Typography>
-          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>AI research summary</Typography>
-        </Panel>
-      )}
+
     </Box>
   );
 }
