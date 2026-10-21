@@ -39,6 +39,28 @@ export interface NegativeDevelopment {
   invalidates_thesis: boolean;
 }
 
+/** How one metric of the company compares with its peers (backend PeerComparison). */
+export interface PeerComparison {
+  metric: string;
+  value: number | null;
+  peer_group: "industry" | "sector" | "none";
+  peer_count: number;
+  peer_median: number | null;
+  peer_p25: number | null;
+  peer_p75: number | null;
+  position: "below" | "within" | "above" | "unavailable";
+}
+
+/** A named peer saved with the idea at scan time. Planned backend field: absent until it ships. */
+export interface PeerRow {
+  ticker: string;
+  name: string;
+  country: string | null;
+  currency: string | null;
+  market_cap_eur: number | null;
+  values: Record<string, number | null>; // keyed by the same metric names as PeerComparison.metric
+}
+
 export interface IdeaSnapshot {
   exchange: string | null;
   country: string | null; // listing country, not revenue exposure
@@ -47,6 +69,9 @@ export interface IdeaSnapshot {
   currency: string | null; // major unit (GBP, not GBp)
   price: number | null; // the quote at scan time, not live
   price_as_of: string | null;
+  fundamentals?: Record<string, number | null>; // raw provider metrics, saved with the scan
+  coverage?: { core_metrics_present: number; core_metrics_total: number; missing: string[] };
+  peers?: PeerRow[] | null; // named peers; planned backend field
 }
 
 export interface IdeaOut {
@@ -62,6 +87,8 @@ export interface IdeaOut {
   outlook: string;
   bear_case: string;
   negative_developments: NegativeDevelopment[];
+  peers?: PeerComparison[]; // absent on payloads from before the contract carried them
+  competitors?: string[]; // companies the research names; planned backend field
   fit_summary: string | null;
   community_note: string | null;
   conclusion: string;
