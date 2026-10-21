@@ -1,3 +1,5 @@
+import type { IdeaOut } from "./discovery-types";
+
 export type Action = "BUY" | "ADD" | "HOLD" | "TRIM" | "SELL" | "WATCH";
 export type TechnicalSignal = "NEUTRAL" | "OVERSOLD" | "STRONG_UPTREND" | "WEAK_DOWNTREND";
 export type RecommendationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
@@ -9,7 +11,8 @@ export interface RecommendationOut {
   ticker: string;
   asset_type: "ETF" | "STOCK";
   action: Action;
-  source?: "manual" | "scheduled"; // absent on older payloads: treat as manual
+  source?: "manual" | "scheduled" | "discovery"; // absent on older payloads: treat as manual
+  idea?: IdeaOut | null; // the saved research behind a discovery idea
   reasoning: string[];
   ai_analysis: string | null;
   suggested_position_pct: number | null;

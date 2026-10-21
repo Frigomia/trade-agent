@@ -389,9 +389,15 @@ active states, `--up-bg` and `--down-bg` are only for a price rising or falling,
 `accent` tone for status. Status pills (technical signal, fundamental score, Claude connection, usage
 "OK") no longer use green or red.
 
-**Not built yet:** the screens drawn in the mocks (Today feed, Company workbench, Portfolio
-explorer, Discover), the round monogram logos, the Discover navigation item, and the rem sizes in
-component `sx` props (only the theme is in rem so far). Existing screens keep their current layouts
+**Built on Today:** the discovery section (latest-scan bar, Top opportunity, Other opportunities,
+the scan states), the round monogram `Logo`, the `Meter` (confidence and risk as bars plus a word)
+and the `Change` (signed, arrowed price move). Save to Discover is shown disabled. The holdings
+recommendations sit under "Portfolio alerts" with their existing cards; the search bar and
+Watchlist insights are not built.
+
+**Not built yet:** the Company workbench, Portfolio explorer and Discover screens, the Discover
+navigation item, and the rem sizes in component `sx` props outside the new components (the theme
+and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
 
 Open items:
