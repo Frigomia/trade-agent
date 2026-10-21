@@ -230,9 +230,20 @@ def test_feed_ranks_before_limiting_and_matches_evaluation_order(client, db_sess
 def test_saved_display_fields_round_trip_without_live_enrichment(client_no_key, app_session_local):
     candidate = sample_candidate()
     idea = sample_idea()
-    idea.snapshot = IdeaSnapshot.model_validate(
-        candidate.model_dump(include=set(IdeaSnapshot.model_fields))
-    )
+    # The candidate's `peers` are comparisons; the snapshot's are the named peer rows.
+    snapshot = candidate.model_dump(include=set(IdeaSnapshot.model_fields) - {"peers"})
+    snapshot["peers"] = [
+        {
+            "ticker": "KHC",
+            "name": "Kraft Heinz",
+            "country": "United States",
+            "currency": "USD",
+            "market_cap_eur": 35e9,
+            "values": {"trailingPE": 17.0, "returnOnEquity": None},
+        }
+    ]
+    idea.snapshot = IdeaSnapshot.model_validate(snapshot)
+    idea.competitors = ["Danone", "Unilever"]
     idea.headline = "Saved thesis excerpt."
     with patch("app.db.SessionLocal", app_session_local):
         save_scan(USER_ID, [idea], universe_size=600, eligible=20, shortlisted=1, researched=1)

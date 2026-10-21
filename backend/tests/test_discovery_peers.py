@@ -1,9 +1,17 @@
+from decimal import Decimal
 from statistics import quantiles
 from typing import Any
 
 import pytest
 
-from app.discovery.peers import METRIC_SETS, MIN_PEERS, PeerRecord, compare_to_peers, metric_group
+from app.discovery.peers import (
+    METRIC_SETS,
+    MIN_PEERS,
+    PeerRecord,
+    compare_to_peers,
+    metric_group,
+    named_peers,
+)
 
 
 def rec(ticker: str, pe: float | None = 20.0, industry: str = "Software", **kw: Any) -> PeerRecord:
@@ -231,3 +239,112 @@ def test_winsorizing_at_five_percent_would_not_change_the_median_or_quartiles(si
     clipped = [min(max(v, low), high) for v in values]
 
     assert quantiles(clipped, n=4, method="inclusive") == quantiles(values, n=4, method="inclusive")
+
+
+# ---- named peers ----------------------------------------------------------------------------
+
+
+def named(
+    ticker: str, cap: float | None, currency: str = "USD", industry: str = "Software", **kw: Any
+) -> PeerRecord:
+    return PeerRecord(
+        ticker,
+        "STOCK",
+        kw.pop("sector", "Technology"),
+        industry,
+        {"trailingPE": kw.pop("pe", 20.0), "returnOnEquity": kw.pop("roe", 0.1)},
+        name=f"{ticker} Corp",
+        country=kw.pop("country", "United States"),
+        currency=currency,
+        market_cap=cap,
+    )
+
+
+RATES = {"USD": Decimal("1.0"), "GBp": Decimal("0.0085"), "GBP": Decimal("0.85")}
+
+
+def table(candidate: PeerRecord, universe: list[PeerRecord]):  # type: ignore[no-untyped-def]
+    return named_peers(candidate, universe, compare_to_peers(candidate, universe), RATES)
+
+
+def test_named_peers_are_the_five_largest_by_market_cap_without_the_candidate():
+    candidate = named("ME", 5e9)
+    universe = [candidate, *(named(f"P{i}", (i + 1) * 1e9) for i in range(9))]
+
+    rows = table(candidate, universe)
+
+    assert [r.ticker for r in rows] == ["P8", "P7", "P6", "P5", "P4"]
+    assert rows[0].name == "P8 Corp"
+    assert rows[0].country == "United States"
+    assert rows[0].market_cap_eur == 9e9
+
+
+def test_named_peers_use_the_metric_names_of_the_comparison_and_blank_invalid_values():
+    candidate = named("ME", 5e9)
+    universe = [candidate, *(named(f"P{i}", 1e9 + i, pe=20.0 + i) for i in range(8))]
+    universe.append(named("LOSS", 9e9, pe=-4.0))  # a multiple of a loss is not a P/E
+
+    top = table(candidate, universe)[0]
+
+    assert top.ticker == "LOSS"
+    assert top.values["trailingPE"] is None
+    assert top.values["returnOnEquity"] == 0.1
+    assert set(top.values) == {m.name for m in METRIC_SETS["general"]}
+
+
+def test_a_minor_unit_peer_reports_its_major_currency_and_a_euro_market_cap():
+    candidate = named("ME", 5e9)
+    universe = [candidate, *(named(f"P{i}", 1e9) for i in range(8)), named("UK", 1e10, "GBp")]
+
+    top = table(candidate, universe)[0]
+
+    # The market cap is in pounds already; the pence rate is scaled back up (0.0085 / 0.01).
+    assert (top.ticker, top.currency) == ("UK", "GBP")
+    assert round(top.market_cap_eur or 0) == 8_500_000_000
+
+
+def test_unknown_caps_come_last_and_ties_break_by_ticker():
+    candidate = named("ME", 5e9)
+    universe = [candidate, *(named(f"P{i}", None) for i in range(8)), named("BIG", 1e9)]
+
+    rows = table(candidate, universe)
+
+    assert [r.ticker for r in rows] == ["BIG", "P0", "P1", "P2", "P3"]
+    assert rows[1].market_cap_eur is None
+
+
+def test_named_peers_follow_the_group_the_comparison_used():
+    candidate = named("ME", 5e9)
+    # Too few in the industry, enough in the sector: the comparison fell back to the sector.
+    industry_peers = [named(f"I{i}", 1e9 * (i + 1)) for i in range(3)]
+    sector_peers = [named(f"S{i}", 1e9, industry="Hardware") for i in range(8)]
+
+    rows = table(candidate, [candidate, *industry_peers, *sector_peers])
+
+    assert {r.ticker for r in rows} <= {p.ticker for p in [*industry_peers, *sector_peers]}
+    assert any(r.ticker.startswith("S") for r in rows)  # the sector pool, not only the industry
+
+
+def test_nothing_is_named_when_the_comparison_had_no_peer_group():
+    candidate = named("ME", 5e9)
+    universe = [candidate, *(named(f"P{i}", 1e9) for i in range(MIN_PEERS - 2))]
+
+    assert table(candidate, universe) == []
+
+
+def test_peers_of_another_metric_group_are_not_named():
+    candidate = named("ME", 5e9)
+    bank = PeerRecord("BANK", "STOCK", "Technology", "Banks - Regional", {}, name="Bank")
+    universe = [candidate, bank, *(named(f"P{i}", 1e9) for i in range(8))]
+
+    assert "BANK" not in [r.ticker for r in table(candidate, universe)]
+
+
+def test_peers_that_gave_the_comparison_no_figure_are_not_named():
+    candidate = named("ME", 5e9)
+    empty = PeerRecord(
+        "EMPTY", "STOCK", "Technology", "Software", {}, name="Empty", market_cap=9e12
+    )
+    universe = [candidate, empty, *(named(f"P{i}", 1e9) for i in range(8))]
+
+    assert "EMPTY" not in [r.ticker for r in table(candidate, universe)]

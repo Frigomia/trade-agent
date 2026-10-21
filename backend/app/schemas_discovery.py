@@ -144,6 +144,18 @@ class PeerComparison(Contract):
     position: Literal["below", "within", "above", "unavailable"]
 
 
+class PeerRow(Contract):
+    """A named peer saved with the idea at scan time. Identity and figures come from the universe
+    snapshot, never from the model; `values` use the metric names of PeerComparison."""
+
+    ticker: str
+    name: str
+    country: str | None  # listing country
+    currency: str | None  # major quote unit (GBP rather than GBp)
+    market_cap_eur: float | None = Field(ge=0)
+    values: dict[str, float | None]
+
+
 class RiskProfile(Contract):
     """Measured and displayed. No eligibility gate or score penalty; risk breaks score ties."""
 
@@ -170,6 +182,8 @@ class CandidateMetrics(Contract):
     fundamentals: dict[str, float | None]  # raw values, shown when a peer comparison is unavailable
     coverage: Coverage
     peers: list[PeerComparison]
+    # Saved on the idea's snapshot. Left out of a dump, so the model's prompts never carry it.
+    named_peers: list[PeerRow] = Field(default_factory=list, exclude=True)
     risk: RiskProfile
     origin: Origin
     # Why it was found. Untrusted text from the web: zero scoring weight, and a prompt may only
@@ -289,6 +303,9 @@ class IdeaSnapshot(Contract):
     price_as_of: datetime | None
     fundamentals: dict[str, float | None]  # raw provider metrics; no currency conversion
     coverage: Coverage
+    # The largest peers the comparison drew on; None on ideas saved before this field, [] when the
+    # comparison had too few peers to name.
+    peers: list[PeerRow] | None = None
 
 
 class IdeaOut(Contract):
@@ -315,6 +332,13 @@ class IdeaOut(Contract):
     # Older persisted ideas predate these fields; missing data stays explicitly unavailable.
     snapshot: IdeaSnapshot | None = None
     headline: str | None = Field(default=None, min_length=1, max_length=180)
+    # Companies the research names. Plain names from the web, shown apart from the measured peers.
+    competitors: list[Annotated[str, StringConstraints(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=8
+    )
+    # What adding this company would do to the portfolio; None when not applicable (no holdings,
+    # or too few to compare) and on ideas saved before this field.
+    fit: CandidateFit | None = None
 
     @model_validator(mode="after")
     def _scores_are_complete_and_back_the_overall(self) -> Self:

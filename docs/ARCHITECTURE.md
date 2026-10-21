@@ -449,6 +449,20 @@ new claims. Full thesis, bear case and sources remain available.
 Legacy idea JSON validates with `snapshot=null` and `headline=null`; reads do not backfill it
 from current provider metadata.
 
+New ideas also save, at scan time and never fetched on read:
+- `snapshot.peers`: up to five named peers (`PeerRow`: ticker, name, country, major currency,
+  `market_cap_eur`, and `values` keyed by the same metric names as `PeerComparison.metric`).
+  They are the largest by EUR market cap in the group the comparison actually used (industry, else
+  sector, within the candidate's metric group), excluding the candidate, with names and figures
+  from the universe snapshot and never from the model. `[]` when no comparison had a peer group;
+  `null` on ideas saved before this field.
+- `competitors`: up to eight company names from the research (whitespace-normalized, at most 80
+  characters, deduplicated, without the company itself or a named peer). Untrusted web text, plain
+  names with no figures; `[]` on older ideas.
+- `fit`: the `CandidateFit` numbers (sector weight before and after, concentration, portfolio
+  volatility, correlation, hypothetical weight) when the fit was applicable; `null` when there
+  were no holdings to compare and on older ideas.
+
 `save_scan` writes the original qualifying count to `coverage_summary.opportunities`, overriding
 any caller-supplied value. `ScanRunOut.opportunities` exposes that saved count and `set_aside`
 is `researched - opportunities`; it includes researched exclusions and non-qualifying results,
