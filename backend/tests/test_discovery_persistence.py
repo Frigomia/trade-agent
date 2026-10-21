@@ -1,5 +1,6 @@
 """Discovery scan writes run through the real restricted Postgres role."""
 
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ from app.config import settings
 from app.db import open_user_session
 from app.discovery.persistence import save_scan
 from app.models import Recommendation, ScanRun
+from app.schemas import ScanRunOut
 from app.schemas_discovery import Exclusion, IdeaOut, Mention, RejectedMention
 from app.user_data import delete_user_data
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
@@ -52,6 +54,8 @@ def test_save_persists_full_idea_and_existing_position_sizing(
     assert scan.id > 0 and scan.created_at is not None
     assert scan.outcome == "ideas" and scan.status == "completed"
     assert scan.universe_size == 600 and scan.researched == 2
+    assert ScanRunOut.model_validate(scan).opportunities == 1
+    assert ScanRunOut.model_validate(scan).set_aside == 1
     saved = db_session.query(Recommendation).one()
     assert saved.source == "discovery" and saved.action == "BUY" and saved.status == "PENDING"
     assert IdeaOut.model_validate(saved.idea) == idea
@@ -133,6 +137,11 @@ def test_no_opportunity_retains_nearest_misses_exclusions_and_rejected_mentions(
     assert scan is not None and scan.outcome == "none"
     assert "No compelling opportunity" in scan.summary
     assert scan.coverage_summary["missing_prices"] == 4
+    assert ScanRunOut.model_validate(scan).opportunities == 0
+    assert ScanRunOut.model_validate(scan).set_aside == 2
+    assert all(
+        miss["name"] == sample_idea().name for miss in scan.coverage_summary["nearest_misses"]
+    )
     assert {miss["ticker"] for miss in scan.coverage_summary["nearest_misses"]} == {
         "LOW",
         "UNCERTAIN",
@@ -272,3 +281,55 @@ def test_duplicate_candidates_are_rejected_before_writing(db_session, app_sessio
         save_scan(USER_ID, [_idea(), _idea()], **COUNTS)
     assert db_session.query(ScanRun).count() == 0
     assert db_session.query(Recommendation).count() == 0
+
+
+def test_scan_counts_do_not_change_when_an_idea_is_reviewed(client, db_session, app_session_local):
+    with patch("app.db.SessionLocal", app_session_local):
+        scan = save_scan(USER_ID, [_idea()], coverage_summary={"opportunities": 999}, **COUNTS)
+    saved = db_session.query(Recommendation).one()
+    assert client.post(f"/analysis/recommendations/{saved.id}/reject").status_code == 200
+    response = client.get("/discovery/ideas").json()
+    assert response["recommendations"] == []
+    assert response["latest_scan"]["id"] == scan.id
+    assert response["latest_scan"]["opportunities"] == 1
+    assert response["latest_scan"]["set_aside"] == 1
+
+
+def test_opportunities_cannot_exceed_researched_candidates(db_session, app_session_local):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local), pytest.raises(ValueError, match="exceed"):
+        save_scan(USER_ID, [_idea()], **{**COUNTS, "researched": 0})
+    assert db_session.query(ScanRun).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [
+        (None, None),
+        (True, None),
+        (False, None),
+        (-1, None),
+        (3, None),
+        (1.5, None),
+        ("1", None),
+        (0, 0),
+        (1, 1),
+        (2, 2),
+    ],
+)
+def test_scan_count_requires_an_integer_within_researched_bounds(count, expected):
+    scan = ScanRunOut(
+        id=1,
+        user_id=USER_ID,
+        created_at=datetime(2026, 10, 21),
+        status="completed",
+        **COUNTS,
+        outcome="ideas",
+        summary="Saved scan",
+        excluded=[],
+        rejected_mentions=[],
+        coverage_summary={} if count is None else {"opportunities": count},
+    )
+    data = scan.model_dump()
+    assert data["opportunities"] == expected
+    assert data["set_aside"] == (None if expected is None else COUNTS["researched"] - expected)

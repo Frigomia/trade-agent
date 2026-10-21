@@ -2,6 +2,8 @@
 
 import logging
 from collections.abc import Collection
+from decimal import Decimal
+from textwrap import shorten
 from typing import Annotated, Any, NotRequired, TypedDict
 
 from anthropic import Anthropic
@@ -13,12 +15,14 @@ from app.analysis.discovery_score import Evaluation, evaluate
 from app.discovery.citations import prose_urls as _prose_urls
 from app.discovery.citations import validate_citations
 from app.discovery.thesis import exclusion_for, normalize_evidence, pending_development
+from app.fx import SUBUNITS
 from app.schemas_discovery import (
     CandidateFit,
     CandidateMetrics,
     Contract,
     Exclusion,
     IdeaOut,
+    IdeaSnapshot,
     ResearchEvidence,
     Url,
 )
@@ -348,6 +352,8 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
     if "not a licensed advisor" not in conclusion.casefold():
         conclusion += " Advisory research for human review only. Not a licensed advisor."
     # The model supplies prose only. All identity, risk and numeric output comes from code.
+    currency, unit = SUBUNITS.get(candidate.currency or "", (candidate.currency, Decimal(1)))
+    headline = shorten(prose.thesis, width=180, placeholder="...")
     idea = IdeaOut(
         ticker=candidate.ticker,
         name=candidate.name,
@@ -369,6 +375,20 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         sources=evidence.claims,
         style_tags=evaluation.style_tags,
         data_notes=list(dict.fromkeys(notes)),
+        headline=headline if headline not in ("", "...") else None,
+        snapshot=IdeaSnapshot(
+            exchange=candidate.exchange,
+            country=candidate.country,
+            sector=candidate.sector,
+            industry=candidate.industry,
+            currency=currency,
+            price=float(Decimal(str(candidate.price)) * unit)
+            if candidate.price is not None
+            else None,
+            price_as_of=candidate.price_as_of,
+            fundamentals=candidate.fundamentals,
+            coverage=candidate.coverage,
+        ),
     )
     return {"output": idea}
 

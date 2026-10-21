@@ -114,6 +114,62 @@ def test_missing_tavily_does_not_spend_claude_or_resolve_server_key(monkeypatch)
     server.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    ("currency", "price", "display_currency", "display_price"),
+    [
+        ("CHF", 95, "CHF", 95),
+        ("GBP", 50, "GBP", 50),
+        ("GBp", 5000, "GBP", 50),
+        ("GBX", 5000, "GBP", 50),
+        ("ZAc", 1234, "ZAR", 12.34),
+        ("ILA", 1234, "ILS", 12.34),
+        (None, None, None, None),
+    ],
+)
+def test_saved_snapshot_preserves_metadata_and_normalizes_only_quote_units(
+    currency, price, display_currency, display_price
+):
+    candidate = sample_candidate()
+    candidate.currency, candidate.price = currency, price
+    result = asyncio.run(discovery_graph.run_discovery_graph(candidate, None))
+    assert isinstance(result, IdeaOut)
+    snapshot = result.snapshot
+    assert snapshot is not None
+    assert (snapshot.currency, snapshot.price) == (display_currency, display_price)
+    assert snapshot.price_as_of == candidate.price_as_of
+    assert snapshot.exchange == candidate.exchange
+    assert snapshot.country == candidate.country
+    assert snapshot.sector == candidate.sector
+    assert snapshot.industry == candidate.industry
+    assert snapshot.fundamentals == candidate.fundamentals
+    assert snapshot.coverage == candidate.coverage
+    assert (candidate.currency, candidate.price) == (currency, price)
+
+
+def test_headline_is_a_bounded_excerpt_of_validated_thesis(providers):
+    _, _, extraction = providers
+    thesis = "Revenue growth supports further research. " * 20
+    extraction.return_value = {**prose(), "thesis": thesis}
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.thesis == thesis
+    assert result.headline is not None and len(result.headline) <= 180
+    assert result.headline.endswith("...")
+    assert thesis.startswith(result.headline.removesuffix("..."))
+    assert extraction.await_count == 1
+
+
+@pytest.mark.parametrize("thesis", ["x" * 181, "x" * 181 + " More research follows."])
+def test_headline_is_unavailable_when_no_word_fits(providers, thesis):
+    _, _, extraction = providers
+    extraction.return_value = {**prose(), "thesis": thesis}
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.thesis == thesis
+    assert result.headline is None
+    assert not any("Synthesis unavailable" in note for note in result.data_notes)
+
+
 def test_quant_and_research_run_in_parallel_and_join_before_normalization(monkeypatch, providers):
     original_quant = discovery_graph.quant
     original_extract = discovery_graph.extract_evidence
