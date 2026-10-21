@@ -134,6 +134,22 @@ async def _quote_for_ticker(ticker: str) -> tuple[float, float | None] | None:
     return price, change_pct
 
 
+def _attach_names(db: Session, user_id: uuid.UUID, recs: list[RecommendationOut]) -> None:
+    """Fill each recommendation's company name from its discovery idea, else from the holding."""
+    unnamed = {r.ticker for r in recs if r.idea is None}  # an idea carries its own name
+    held = (
+        dict(
+            db.query(Holding.ticker, Holding.name)
+            .filter(Holding.user_id == user_id, Holding.ticker.in_(unnamed))
+            .all()
+        )
+        if unnamed
+        else {}
+    )
+    for rec in recs:
+        rec.name = rec.idea.name if rec.idea is not None else held.get(rec.ticker)
+
+
 async def _attach_live_quotes(recs: list[RecommendationOut]) -> None:
     """Mutates PENDING rows in place with a live price/day-change; everything else, and any row
     whose fetch fails, is left at the schema's None default — degrading quietly rather than
@@ -164,6 +180,7 @@ async def list_recommendations(
     if status:
         query = query.filter_by(status=status)
     outs = [RecommendationOut.model_validate(r) for r in query.all()]
+    _attach_names(db, user.id, outs)
     # Rows are copied out; release the pooled connection before awaiting live quotes, which can
     # take seconds (retries) during a yfinance outage.
     db.close()
@@ -185,6 +202,7 @@ async def get_recommendation(
     if rec is None:
         raise HTTPException(status_code=404, detail="Recommendation not found")
     out = RecommendationOut.model_validate(rec)
+    _attach_names(db, user.id, [out])
     db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
     await _attach_live_quotes([out])
     return out
