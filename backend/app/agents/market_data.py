@@ -167,17 +167,30 @@ def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | N
     return text[:max_chars] or None
 
 
-async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
-    """Positive finite daily closes with their actual dates; no forward fill across markets."""
+async def fetch_dated_closes(
+    ticker: str, period: str = "1y", *, strict: bool = False
+) -> dict[str, float]:
+    """Positive finite daily closes with their actual dates; no forward fill across markets.
+
+    A provider failure gives {} (cached briefly) so analytics degrade quietly. With `strict` it is
+    raised instead and nothing is cached, for a caller that must tell an outage from no history.
+    """
     redis = get_redis()
     # New namespace ignores entries written with the former 24-hour valuation TTL.
     cache_key = f"dated_closes:v2:{ticker}:{period}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        return dict(json.loads(cached))
+        known = dict(json.loads(cached))
+        # A strict caller does not trust a cached empty answer: another caller may have stored it
+        # during an outage, and it would pass for "no history".
+        if known or not strict:
+            return known
 
     def _fetch() -> dict[str, float]:
-        closes = yf.Ticker(ticker).history(period=period)["Close"]
+        frame = yf.Ticker(ticker).history(period=period)
+        if "Close" not in frame:  # an unknown or delisted symbol: no history, not an outage
+            return {}
+        closes = frame["Close"]
         return {
             stamp.date().isoformat(): float(value)
             for stamp, value in closes.items()
@@ -188,6 +201,8 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
         result = await _retry_fetch(_fetch)
     except Exception as exc:
         logger.warning("Dated history unavailable (%s)", type(exc).__name__)
+        if strict:
+            raise
         result = {}
     ttl = QUOTE_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
     await redis.set(cache_key, json.dumps(result), ex=ttl)

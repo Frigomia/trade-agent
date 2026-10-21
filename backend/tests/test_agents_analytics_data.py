@@ -3,6 +3,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
+import pytest
 
 from app.agents.market_data import fetch_dated_closes, fetch_profile
 
@@ -26,6 +27,54 @@ def test_dated_history_preserves_dates_when_dropping_invalid_closes():
     assert redis.get.call_args.args == ("dated_closes:v2:A:6mo",)
     assert json.loads(redis.set.call_args.args[1]) == result
     assert redis.set.call_args.kwargs["ex"] == 300
+
+
+def test_dated_history_failure_is_empty_and_cached_briefly_unless_strict():
+    redis, ticker = AsyncMock(), MagicMock()
+    redis.get.return_value = None
+    ticker.history.side_effect = RuntimeError("yahoo down")
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+    ):
+        assert asyncio.run(fetch_dated_closes("A")) == {}
+        assert redis.set.call_count == 1  # the empty answer is cached for a short while
+
+        redis.set.reset_mock()
+        with pytest.raises(RuntimeError):
+            asyncio.run(fetch_dated_closes("A", strict=True))
+        redis.set.assert_not_called()  # an outage is not remembered as "no history"
+
+
+def test_dated_history_for_an_unknown_symbol_is_empty_not_an_error_even_when_strict():
+    redis, ticker = AsyncMock(), MagicMock()
+    redis.get.return_value = None
+    ticker.history.return_value = pd.DataFrame()  # what yfinance returns for a delisted symbol
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+    ):
+        assert asyncio.run(fetch_dated_closes("GONE", strict=True)) == {}
+
+
+def test_strict_dated_history_ignores_a_cached_empty_answer_but_not_a_cached_series():
+    redis, ticker = AsyncMock(), MagicMock()
+    ticker.history.return_value = pd.DataFrame(
+        {"Close": [100.0]}, index=pd.date_range("2026-10-01", periods=1)
+    )
+    with (
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+    ):
+        redis.get.return_value = "{}"  # stored by a caller during an outage
+        assert asyncio.run(fetch_dated_closes("A")) == {}
+        assert asyncio.run(fetch_dated_closes("A", strict=True)) == {"2026-10-01": 100.0}
+
+        redis.get.return_value = '{"2026-10-02": 7.0}'
+        ticker.history.reset_mock()
+        assert asyncio.run(fetch_dated_closes("A", strict=True)) == {"2026-10-02": 7.0}
+        ticker.history.assert_not_called()
 
 
 def test_dated_history_cache_hit_avoids_yahoo():
