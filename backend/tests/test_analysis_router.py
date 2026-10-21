@@ -723,3 +723,51 @@ def test_approve_racing_a_supersede_returns_409_and_keeps_superseded(
     db_session.refresh(rec)
     assert rec.status == "SUPERSEDED"
     assert rec.reviewed_at is None
+
+
+def test_recommendations_carry_the_company_name_from_the_holding_or_the_idea(client, db_session):
+    from datetime import date
+
+    from app.models import Holding
+    from tests.discovery_fixtures import sample_idea
+
+    db_session.add(
+        Holding(
+            user_id=USER_ID,
+            ticker="AAPL",
+            name="Apple Inc.",
+            asset_type="STOCK",
+            shares=1,
+            cost_basis=1,
+            first_purchase_date=date(2025, 1, 1),
+        )
+    )
+    idea = sample_idea()
+    for ticker, source, payload in (
+        ("AAPL", "manual", None),
+        ("WATCHED", "manual", None),
+        (idea.ticker, "discovery", idea.model_dump(mode="json")),
+    ):
+        db_session.add(
+            Recommendation(
+                user_id=USER_ID,
+                ticker=ticker,
+                asset_type="STOCK",
+                action="BUY",
+                reasoning=["r"],
+                status="PENDING",
+                source=source,
+                idea=payload,
+            )
+        )
+    db_session.commit()
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value={})):
+        response = client.get("/analysis/recommendations?status=PENDING")
+        names = {r["ticker"]: r["name"] for r in response.json()}
+        one = client.get(f"/analysis/recommendations/{response.json()[0]['id']}")
+
+    assert names["AAPL"] == "Apple Inc."
+    assert names["WATCHED"] is None  # only watched, so there is no stored name
+    assert names[idea.ticker] == idea.name
+    assert one.json()["name"] == names[one.json()["ticker"]]

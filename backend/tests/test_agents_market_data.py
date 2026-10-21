@@ -1,4 +1,5 @@
-from datetime import date
+import asyncio
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -7,8 +8,10 @@ import pytest
 from app.agents.market_data import (
     fetch_currency,
     fetch_fundamentals,
+    fetch_next_earnings,
     fetch_price_history,
     fetch_quote_and_history,
+    next_earnings_date,
 )
 
 
@@ -276,3 +279,127 @@ def test_empty_trailing_closes_are_dropped(fetch):
         else:
             result = asyncio.run(fetch_price_history("IWDA.L", date(2026, 9, 1), date(2026, 10, 9)))
             assert result == [100.0, 101.0]
+
+
+# --- next earnings ---------------------------------------------------------------------------
+
+TODAY = date(2026, 10, 21)
+
+
+def test_next_earnings_date_takes_the_earliest_date_from_today_on():
+    calendar = {"Earnings Date": [date(2026, 11, 5), date(2026, 10, 28), date(2026, 10, 1)]}
+
+    assert next_earnings_date(calendar, TODAY) == date(2026, 10, 28)
+
+
+def test_next_earnings_date_accepts_datetimes_timestamps_and_a_single_value():
+    assert next_earnings_date({"Earnings Date": [datetime(2026, 10, 22, 6)]}, TODAY) == date(
+        2026, 10, 22
+    )
+    assert next_earnings_date({"Earnings Date": [pd.Timestamp("2026-10-23")]}, TODAY) == date(
+        2026, 10, 23
+    )
+    assert next_earnings_date({"Earnings Date": date(2026, 10, 21)}, TODAY) == TODAY
+
+
+def test_next_earnings_date_is_none_when_there_is_nothing_usable():
+    assert next_earnings_date({"Earnings Date": [date(2026, 10, 1)]}, TODAY) is None
+    assert next_earnings_date({"Earnings Date": ["soon", None, 3]}, TODAY) is None
+    assert next_earnings_date({}, TODAY) is None
+    assert next_earnings_date(None, TODAY) is None
+    assert next_earnings_date(pd.DataFrame(), TODAY) is None
+
+
+def _earnings_redis(cached):
+    redis = AsyncMock()
+    redis.get.return_value = cached
+    return redis
+
+
+def test_fetch_next_earnings_cache_miss_looks_up_and_caches_the_date():
+    fake = MagicMock()
+    fake.calendar = {"Earnings Date": [date(2099, 1, 2)]}
+    redis = _earnings_redis(None)
+
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake),
+        patch("app.agents.market_data.get_redis", return_value=redis),
+    ):
+        found = asyncio.run(fetch_next_earnings("AAPL"))
+
+    assert found == date(2099, 1, 2)
+    assert redis.set.call_args.args[0] == "next_earnings:v1:AAPL"
+    assert redis.set.call_args.kwargs["ex"] == 21600
+
+
+def test_fetch_next_earnings_caches_no_date_too_and_cache_hits_skip_the_provider():
+    fake = MagicMock()
+    fake.calendar = {}
+    redis = _earnings_redis(None)
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake),
+        patch("app.agents.market_data.get_redis", return_value=redis),
+    ):
+        assert asyncio.run(fetch_next_earnings("SPY")) is None
+    assert redis.set.call_args.args[1] == "null"
+
+    for cached, expected in (('"2099-11-05"', date(2099, 11, 5)), ("null", None)):
+        with (
+            patch("app.agents.market_data.yf.Ticker") as yf_ticker,
+            patch("app.agents.market_data.get_redis", return_value=_earnings_redis(cached)),
+        ):
+            assert asyncio.run(fetch_next_earnings("AAPL")) == expected
+        yf_ticker.assert_not_called()
+
+
+def test_fetch_next_earnings_raises_when_the_provider_keeps_failing_and_caches_nothing():
+    redis = _earnings_redis(None)
+    with (
+        patch("app.agents.market_data.yf.Ticker", side_effect=RuntimeError("down")),
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+        pytest.raises(RuntimeError),
+    ):
+        asyncio.run(fetch_next_earnings("AAPL"))
+
+    redis.set.assert_not_called()
+
+
+def test_fetch_next_earnings_does_not_cache_or_report_an_unexpected_calendar_shape():
+    fake = MagicMock()
+    fake.calendar = pd.DataFrame({"x": [1]})  # not the dict yfinance normally returns
+    redis = _earnings_redis(None)
+
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake),
+        patch("app.agents.market_data.get_redis", return_value=redis),
+        pytest.raises(ValueError),
+    ):
+        asyncio.run(fetch_next_earnings("AAPL"))
+
+    redis.set.assert_not_called()
+
+
+def test_fetch_next_earnings_looks_again_when_the_cached_date_has_passed():
+    fake = MagicMock()
+    fake.calendar = {"Earnings Date": [date(2099, 1, 2)]}
+    redis = _earnings_redis('"2020-01-02"')
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake) as yf_ticker,
+        patch("app.agents.market_data.get_redis", return_value=redis),
+    ):
+        assert asyncio.run(fetch_next_earnings("AAPL")) == date(2099, 1, 2)
+    yf_ticker.assert_called_once()  # the expired entry was a miss, not an answer
+    assert redis.set.call_args.args[1] == '"2099-01-02"'
+
+
+def test_a_no_date_answer_is_cached_for_less_time_than_a_date():
+    fake = MagicMock()
+    fake.calendar = {}
+    redis = _earnings_redis(None)
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=fake),
+        patch("app.agents.market_data.get_redis", return_value=redis),
+    ):
+        assert asyncio.run(fetch_next_earnings("SPY")) is None
+    assert redis.set.call_args.kwargs["ex"] == 3600
