@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import type { DiscoveryIdeas, DiscoveryRecommendation, IdeaOut, ScanRun } from "@/lib/api/discovery-types";
+import type { Claim, DiscoveryIdeas, DiscoveryRecommendation, IdeaOut, ScanRun } from "@/lib/api/discovery-types";
+
+const claim = (url: string): Claim => ({ text: "A cited claim.", kind: "fact", stance: "bull", materiality: "high", source_tier: "official", url, published_at: null });
 import { DiscoveryFeed } from "./DiscoveryFeed";
 
 function idea(name: string, over: Partial<IdeaOut> = {}): IdeaOut {
@@ -24,8 +26,11 @@ function idea(name: string, over: Partial<IdeaOut> = {}): IdeaOut {
     catalysts: ["Q3 results on 6 Nov follow two quarters of margin expansion."],
     outlook: "o",
     bear_case: "Top customers are 38% of revenue. Other text.",
+    negative_developments: [],
+    fit_summary: null,
+    community_note: null,
     conclusion: "c",
-    sources: [{ url: "https://a.example" }, { url: "https://b.example" }],
+    sources: [claim("https://a.example"), claim("https://b.example")],
     data_notes: [],
     headline: "Recurring revenue priced below peers.",
     snapshot: {
@@ -45,7 +50,7 @@ function rec(id: number, name: string, over: Partial<IdeaOut> = {}, change: numb
   return {
     id,
     user_id: "u",
-    created_at: "2026-10-20T06:00:00",
+    created_at: "2026-10-20T06:12:00", // the same instant as SCAN: written by it
     ticker: name.slice(0, 4).toUpperCase(),
     asset_type: "STOCK",
     action: "WATCH",
@@ -125,6 +130,17 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent(/[+-]\d+\.\d%/);
   });
 
+  it("dates every saved price, so an older idea does not look current", () => {
+    const old = rec(2, "Brevik Medical", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
+    const none = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: null } });
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), old, none] });
+
+    const day = (iso: string) => new Date(Date.parse(iso + "Z")).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    expect(screen.getByRole("article", { name: "Top opportunity: Halden Systems" })).toHaveTextContent(`Scan quote · ${day("2026-10-19T20:00:00")}`);
+    expect(screen.getByRole("article", { name: "Brevik Medical" })).toHaveTextContent(`Scan quote · ${day("2026-10-09T20:00:00")}`);
+    expect(screen.getByRole("article", { name: "Tanaka Precision" })).toHaveTextContent("Scan quote · date unknown");
+  });
+
   it("describes the latest scan from the saved counts and the runs used", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
 
@@ -169,6 +185,48 @@ describe("DiscoveryFeed", () => {
 
     expect(screen.getByText("No compelling opportunity today")).toBeInTheDocument();
     expect(screen.getByText(/Norsk Verk/)).toBeInTheDocument();
+  });
+
+  it("shows a quiet latest scan and its nearest misses even while an older idea is still pending, and labels that idea", () => {
+    const quiet: ScanRun = { ...SCAN, outcome: "none", opportunities: 0, set_aside: 8, created_at: "2026-10-21T06:12:00", coverage_summary: { nearest_misses: [{ ticker: "NRSK", name: "Norsk Verk", overall: 58, confidence: "medium" }] } };
+    renderFeed({ latest_scan: quiet, recommendations: [rec(1, "Halden Systems")] });
+
+    expect(screen.getByText("No compelling opportunity today")).toBeInTheDocument();
+    expect(screen.getAllByText(/NRSK|Norsk Verk/).length).toBeGreaterThan(0); // the nearest miss is named
+    expect(screen.getByRole("article", { name: "Top opportunity: Halden Systems" })).toHaveTextContent("From an earlier scan");
+  });
+
+  it("does not call an idea written by the latest scan earlier", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
+
+    expect(screen.getByRole("article", { name: "Top opportunity: Halden Systems" })).not.toHaveTextContent("earlier scan");
+  });
+
+  it("says the progress can't be read, offers Check now, and does not claim the scan failed or enable another", () => {
+    const onRecheck = vi.fn();
+    renderFeed(
+      { latest_scan: SCAN, recommendations: [] },
+      { running: true, progressUnavailable: true, onRecheck, job: { status: "RUNNING", stage: "researching", total: 8, done: 3, error: null } },
+    );
+
+    expect(screen.getByText(/progress can't be read right now/i)).toBeInTheDocument();
+    expect(screen.queryByText("The scan did not finish")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /running/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Check now" }));
+    expect(onRecheck).toHaveBeenCalled();
+  });
+
+  it("says plainly that a scan's progress is no longer available, without calling it failed", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [] }, { lost: true });
+
+    expect(screen.getByText(/no longer available/i)).toBeInTheDocument();
+    expect(screen.queryByText("The scan did not finish")).not.toBeInTheDocument();
+  });
+
+  it("treats a zero run allowance as used up", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [] }, { usage: { used: 0, limit: 0 } });
+
+    expect(screen.getByRole("button", { name: /refresh scan, 0 of 0 runs/i })).toBeDisabled();
   });
 
   it("invites a first scan when none has ever run", () => {

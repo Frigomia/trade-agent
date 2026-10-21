@@ -64,6 +64,21 @@ describe("RecommendationDetailPage", () => {
     routeId = "1";
   });
 
+  it("shows a discovery idea's saved research, including the full bear case, instead of the web opinion box", async () => {
+    const idea = {
+      ticker: "HLDN", name: "Halden Systems", asset_type: "STOCK", scores: [], overall: 80, confidence: "high",
+      risk: { risk_level: "medium" }, thesis: "Recurring revenue and widening margins.", catalysts: [], outlook: "",
+      bear_case: "Top customers are 38% of revenue. " + "More risk text. ".repeat(30) + "Final risk sentence.",
+      negative_developments: [], fit_summary: null, community_note: null, conclusion: "c", sources: [], data_notes: [],
+    };
+    apiFetch.mockResolvedValue(rec({ source: "discovery", idea, ai_analysis: "Recurring revenue and widening margins." } as unknown as Partial<RecommendationOut>));
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByRole("heading", { name: "Risk to the thesis" })).toBeInTheDocument();
+    expect(screen.getByText(/Final risk sentence./)).toBeInTheDocument();
+    expect(screen.queryByText(/web second opinion/i)).not.toBeInTheDocument();
+  });
+
   it("never calls the API for a non-numeric id", () => {
     routeId = "..%2F..%2Fadmin%2Fusers";
     renderFresh(<RecommendationDetailPage />);

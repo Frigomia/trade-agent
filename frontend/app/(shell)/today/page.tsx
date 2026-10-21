@@ -159,6 +159,9 @@ export default function TodayPage() {
         job={discovery.job}
         running={discovery.running}
         startError={discovery.startError}
+        progressUnavailable={discovery.progressUnavailable}
+        lost={discovery.lost}
+        onRecheck={discovery.recheck}
         usage={usage?.analysis_runs}
         locked={lock !== null}
         now={now}

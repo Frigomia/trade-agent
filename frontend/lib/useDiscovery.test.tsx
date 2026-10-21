@@ -86,14 +86,35 @@ describe("useDiscovery", () => {
     expect(sessionStorage.getItem("discovery:job")).toBeNull(); // a reload will not show it again
   });
 
-  it("keeps the id and says the progress could not be read after a transient poll error", async () => {
+  it("treats a failing progress read as a read problem, not a failed scan: still running, id kept, no failure", async () => {
     sessionStorage.setItem("discovery:job", "j1");
     mockJob(() => Promise.reject(new FakeApiError(503, "Unavailable")));
     const { result } = renderHook(() => useDiscovery(() => {}), { wrapper });
 
-    await waitFor(() => expect(result.current.job?.status).toBe("FAILED"));
+    await waitFor(() => expect(result.current.progressUnavailable).toBe(true));
+    expect(result.current.running).toBe(true); // so a second scan cannot be started into the server's lock
+    expect(result.current.job?.status).not.toBe("FAILED");
     expect(sessionStorage.getItem("discovery:job")).toBe("j1"); // still resumable
-    expect(result.current.running).toBe(false);
+    expect(result.current.lost).toBe(false);
+  });
+
+  it("lets the progress read be retried on demand and recovers when it works", async () => {
+    sessionStorage.setItem("discovery:job", "j1");
+    let healthy = false;
+    mockJob(() =>
+      healthy
+        ? Promise.resolve({ status: "RUNNING", stage: "researching", total: 8, done: 5, error: null })
+        : Promise.reject(new FakeApiError(503, "Unavailable")),
+    );
+    const { result } = renderHook(() => useDiscovery(() => {}), { wrapper });
+    await waitFor(() => expect(result.current.progressUnavailable).toBe(true));
+
+    healthy = true;
+    await act(async () => result.current.recheck());
+
+    await waitFor(() => expect(result.current.job?.done).toBe(5));
+    expect(result.current.progressUnavailable).toBe(false);
+    expect(result.current.running).toBe(true);
   });
 
   it("drops an id the server no longer knows without showing an error", async () => {
@@ -104,6 +125,7 @@ describe("useDiscovery", () => {
     await waitFor(() => expect(sessionStorage.getItem("discovery:job")).toBeNull());
     expect(result.current.job).toBeUndefined();
     expect(result.current.running).toBe(false);
+    expect(result.current.lost).toBe(false); // an id left from an earlier visit is dropped without a message
   });
 
   it("starts one scan when tapped again before the first answer", async () => {
@@ -128,7 +150,7 @@ describe("useDiscovery", () => {
     expect(posts).toHaveLength(1);
   });
 
-  it("ends the scan with an unreadable-progress failure when polling errors, instead of spinning", async () => {
+  it("reports a started scan the server no longer knows as lost, not as failed, and frees the button", async () => {
     apiFetch.mockImplementation((path: string, init?: RequestInit) => {
       if (path === "/discovery/ideas") return Promise.resolve(IDEAS);
       if (path === "/discovery/run" && init?.method === "POST") return Promise.resolve({ job_id: "j1" });
@@ -140,8 +162,10 @@ describe("useDiscovery", () => {
     await act(async () => {
       await result.current.start();
     });
-    await waitFor(() => expect(result.current.job?.status).toBe("FAILED"));
+    await waitFor(() => expect(result.current.lost).toBe(true));
+    expect(result.current.job).toBeUndefined();
     expect(result.current.running).toBe(false);
+    expect(result.current.progressUnavailable).toBe(false);
   });
 
   it("calls onKeyRequired, and shows no error, when the scan is refused for want of a Claude key", async () => {

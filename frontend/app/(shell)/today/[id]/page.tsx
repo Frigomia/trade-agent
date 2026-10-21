@@ -15,6 +15,7 @@ import { AskAboutThis } from "@/components/recommendations/AskAboutThis";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
 import { EvidenceDetail } from "@/components/recommendations/EvidencePanel";
 import { WebOpinionBox } from "@/components/recommendations/WebOpinionBox";
+import { IdeaEvidence } from "@/components/discovery/IdeaEvidence";
 import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPanel";
 import { RecommendationDetailDesktop } from "@/components/recommendations/RecommendationDetailDesktop";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
@@ -119,7 +120,11 @@ function RecommendationDetail() {
       )}
       <EvidenceDetail recommendation={recommendation} />
       <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
-      {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
+      {recommendation.idea ? (
+        <IdeaEvidence idea={recommendation.idea} />
+      ) : (
+        recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />
+      )}
       {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
       <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
         <DecisionActions id={recommendation.id} onDecided={setDecided} />

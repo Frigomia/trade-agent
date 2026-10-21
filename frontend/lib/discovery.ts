@@ -95,3 +95,28 @@ export function scanCounts(scan: ScanRun): string[] {
 /** Cuts a block of text to `lines` lines with an ellipsis, in CSS, so no sentence is guessed at. */
 export const clampLines = (lines: number) =>
   ({ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }) as const;
+
+const formatDay = (ms: number) => new Date(ms).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+
+/**
+ * What the saved price is, always dated: "Scan quote · Mon 19 Oct". A scan that stored no quote
+ * date says so, and a date the research flagged as uncertain is marked as such. The price is never
+ * refreshed on read, so an older pending idea shows its own date.
+ */
+export function quoteLabel(idea: IdeaOut): string {
+  const asOf = idea.snapshot?.price_as_of;
+  const ms = asOf ? toTime(asOf) : Number.NaN;
+  const known = !Number.isNaN(ms);
+  const day = known ? formatDay(ms) : "date unknown";
+  const uncertain = idea.data_notes.some((note) => note.toLowerCase().startsWith("price date uncertain"));
+  return `Scan quote · ${day}${uncertain && known ? " (date uncertain)" : ""}`;
+}
+
+/**
+ * True for an idea saved by a scan before the latest one: pending ideas stay on Today across
+ * scans (the feed spans them), so the latest scan's own result must not be mistaken for them.
+ * Ideas written by one scan share its timestamp (both are set by the database in one transaction).
+ */
+export function isEarlier(rec: Pick<DiscoveryRecommendation, "created_at">, scan: Pick<ScanRun, "created_at"> | null): boolean {
+  return scan !== null && toTime(rec.created_at) < toTime(scan.created_at);
+}

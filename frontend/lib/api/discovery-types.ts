@@ -20,6 +20,25 @@ export interface RiskProfile {
   risk_level: RiskLevel;
 }
 
+export interface Claim {
+  text: string; // untrusted web text: render as plain text only
+  kind: "fact" | "opinion" | "forecast" | "forum";
+  stance: "bull" | "bear" | "neutral";
+  materiality: "high" | "medium" | "low";
+  source_tier: "official" | "reliable_reporting" | "other" | "forum";
+  url: string;
+  published_at: string | null;
+}
+
+export interface NegativeDevelopment {
+  summary: string;
+  occurred_on: string | null;
+  evidence: string[]; // claim urls
+  thesis_impact: string;
+  status: "confirmed" | "disputed" | "unverified";
+  invalidates_thesis: boolean;
+}
+
 export interface IdeaSnapshot {
   exchange: string | null;
   country: string | null; // listing country, not revenue exposure
@@ -42,8 +61,11 @@ export interface IdeaOut {
   catalysts: string[];
   outlook: string;
   bear_case: string;
+  negative_developments: NegativeDevelopment[];
+  fit_summary: string | null;
+  community_note: string | null;
   conclusion: string;
-  sources: { url: string }[];
+  sources: Claim[];
   data_notes: string[];
   // Absent on ideas saved before the display fields existed.
   snapshot?: IdeaSnapshot | null;

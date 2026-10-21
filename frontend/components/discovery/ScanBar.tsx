@@ -39,7 +39,8 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
   } else {
     text = <b>No scan yet</b>;
   }
-  const atLimit = !!usage && usage.limit > 0 && usage.used >= usage.limit;
+  // A limit of zero means no runs at all (the server refuses the first one), not unlimited.
+  const atLimit = !!usage && usage.used >= usage.limit;
   const label = failed ? "Try again" : usage ? `${usage.used} of ${usage.limit} runs` : "Run scan";
   return (
     <Panel sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "10px 14px", flexWrap: "wrap" }}>

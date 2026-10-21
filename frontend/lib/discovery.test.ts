@@ -6,6 +6,7 @@ import {
   meterFill,
   monogram,
   priceText,
+  quoteLabel,
   riskLabel,
   scanCounts,
   sectorText,
@@ -35,6 +36,9 @@ function idea(over: Partial<IdeaOut> = {}): IdeaOut {
     outlook: "o",
     bear_case: "b",
     conclusion: "c",
+    negative_developments: [],
+    fit_summary: null,
+    community_note: null,
     sources: [],
     data_notes: [],
     snapshot: {
@@ -132,3 +136,25 @@ describe("whenText", () => {
   });
 });
 
+
+describe("quoteLabel", () => {
+  const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  const withDate = (asOf: string | null, notes: string[] = []) => idea({ snapshot: { ...idea().snapshot!, price_as_of: asOf }, data_notes: notes });
+
+  it("dates the saved quote", () => {
+    expect(quoteLabel(withDate("2026-10-09T20:00:00Z"))).toBe(`Scan quote · ${day("2026-10-09T20:00:00Z")}`);
+  });
+
+  it("says when the scan saved no quote date, and when the research flagged the date as uncertain", () => {
+    expect(quoteLabel(withDate(null))).toBe("Scan quote · date unknown");
+    expect(quoteLabel(withDate("2026-10-09T20:00:00Z", ["Price date uncertain: no timestamp from the exchange"]))).toMatch(/\(date uncertain\)$/);
+    expect(quoteLabel(idea({ snapshot: null }))).toBe("Scan quote · date unknown");
+  });
+});
+
+describe("quoteLabel with an unusable date", () => {
+  it("says the date is unknown rather than printing Invalid Date", () => {
+    const bad = idea({ snapshot: { ...idea().snapshot!, price_as_of: "not a date" } });
+    expect(quoteLabel(bad)).toBe("Scan quote · date unknown");
+  });
+});

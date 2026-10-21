@@ -10,7 +10,7 @@ import { PriceBlock } from "./PriceBlock";
 import { SaveToDiscover } from "./SaveToDiscover";
 
 /** One of the other ranked ideas: identity, price, meters, one line of reasoning and the two actions. */
-export function OpportunityCard({ rec }: { rec: DiscoveryRecommendation }) {
+export function OpportunityCard({ rec, earlier = false }: { rec: DiscoveryRecommendation; earlier?: boolean }) {
   const idea = rec.idea!;
   return (
     <Panel component="article" aria-label={idea.name} sx={{ p: 2.5, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 1.5, alignContent: "start" }}>
@@ -21,6 +21,7 @@ export function OpportunityCard({ rec }: { rec: DiscoveryRecommendation }) {
             {idea.name}
           </Typography>
           <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{listingText(idea)}</Typography>
+          {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
         </Box>
         <PriceBlock rec={rec} />
       </Box>
