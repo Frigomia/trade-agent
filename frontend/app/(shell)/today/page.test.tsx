@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SWRConfig } from "swr";
-import type { RecommendationOut, JobStatus } from "@/lib/api/recommendation-types";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
 const apiFetch = vi.fn();
 const { FakeApiError } = vi.hoisted(() => {
@@ -56,77 +56,100 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 }
 
 const EMPTY_SUMMARY = { holdings: [], watchlist: [] };
-const SUMMARY_WITH_HOLDING = { holdings: [{ ticker: "AAPL", shares: 2 }], watchlist: [] };
+const SUMMARY_WITH_HOLDING = { holdings: [{ ticker: "AAPL", shares: 3 }], watchlist: [] };
+const USAGE = { analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } };
+const NO_IDEAS = { recommendations: [], latest_scan: null };
 
-function mockApi({ recs = [], summary }: { recs?: RecommendationOut[]; summary: unknown }) {
+interface Api {
+  recs?: RecommendationOut[] | Error;
+  summary?: unknown;
+  ideas?: unknown;
+  run?: (init?: RequestInit) => Promise<unknown>;
+  extra?: (path: string, init?: RequestInit) => Promise<unknown> | undefined;
+}
+
+// One router for every path Today asks for; a test overrides only what it is about.
+function mockApi({ recs = [], summary = SUMMARY_WITH_HOLDING, ideas = NO_IDEAS, run, extra }: Api = {}) {
   apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-    if (path.startsWith("/analysis/recommendations")) return Promise.resolve(recs);
+    const handled = extra?.(path, init);
+    if (handled) return handled;
+    if (path.startsWith("/analysis/recommendations")) return recs instanceof Error ? Promise.reject(recs) : Promise.resolve(recs);
     if (path === "/portfolio/summary") return Promise.resolve(summary);
-    if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
-    if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
-    if (path === "/analysis/run" && init?.method === "POST") return Promise.resolve({ job_id: "job-1" });
+    if (path === "/discovery/ideas") return Promise.resolve(ideas);
+    if (path === "/me/usage") return Promise.resolve(USAGE);
+    if (path === "/discovery/run" && init?.method === "POST") return run ? run(init) : Promise.resolve({ job_id: "job-1" });
+    if (path.startsWith("/discovery/run/")) return new Promise(() => {}); // a scan that never ends
     return Promise.reject(new Error("unexpected " + path));
   });
 }
 
+const scanButton = () => screen.getByRole("button", { name: /refresh scan|run scan|try the scan again|running/i });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  sessionStorage.clear();
+});
+
 describe("TodayPage", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it("shows the page title and its one-line subtitle, and no separate Run analysis button", async () => {
+    mockApi();
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Today" })).toBeInTheDocument();
+    expect(screen.getByText(/your latest research ideas and what needs attention on your holdings/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run analysis/i })).not.toBeInTheDocument();
   });
 
-  it("keeps discovery ideas out of the holdings alerts and shows them in the discovery section", async () => {
-    const discovery = rec({ id: 9, ticker: "HLDN", source: "discovery" });
-    apiFetch.mockImplementation((path: string) => {
-      if (path.startsWith("/analysis/recommendations")) return Promise.resolve([rec(), discovery]);
-      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
-      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
-      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
-      return Promise.reject(new Error("unexpected " + path));
-    });
+  it("lists pending holdings recommendations under Portfolio alerts", async () => {
+    mockApi({ recs: [rec()] });
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
+  });
+
+  it("keeps discovery ideas out of the holdings alerts and shows the discovery section", async () => {
+    mockApi({ recs: [rec(), rec({ id: 9, ticker: "HLDN", source: "discovery" })] });
     renderFresh(<TodayPage />);
 
     expect(await screen.findByText("AAPL")).toBeInTheDocument();
     expect(screen.queryByText("HLDN")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
     expect(screen.getByText("Run your first scan")).toBeInTheDocument();
   });
 
-  it("lists pending recommendations", async () => {
-    apiFetch.mockImplementation((path: string) =>
-      path.startsWith("/analysis/recommendations") ? Promise.resolve([rec()]) : Promise.reject(new Error("unexpected")),
-    );
-    renderFresh(<TodayPage />);
-
-    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
-  });
-
-  describe("last analysis line", () => {
-    afterEach(() => vi.useRealTimers());
-    const made = "2026-01-05T12:00:00"; // a Monday, UTC
-    const madeAt = new Date(Date.parse(made + "Z"));
-    const time = madeAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-    it("shows only the time when the newest call is from today", async () => {
-      vi.useFakeTimers({ toFake: ["Date"], now: new Date(madeAt.getTime() + 60_000) });
-      mockApi({ recs: [rec({ created_at: made })], summary: SUMMARY_WITH_HOLDING });
-      renderFresh(<TodayPage />);
-      expect(await screen.findByText(`Last analysis ${time}`)).toBeInTheDocument();
-    });
-
-    it("adds the weekday when the newest call is from an earlier day", async () => {
-      vi.useFakeTimers({ toFake: ["Date"], now: new Date(madeAt.getTime() + 2 * 86_400_000) });
-      mockApi({ recs: [rec({ created_at: made })], summary: SUMMARY_WITH_HOLDING });
-      renderFresh(<TodayPage />);
-      const weekday = madeAt.toLocaleDateString([], { weekday: "short" });
-      expect(await screen.findByText(`Last analysis ${weekday} ${time}`)).toBeInTheDocument();
-    });
-  });
-
   it("shows the portfolio tile", async () => {
-    mockApi({ summary: SUMMARY_WITH_HOLDING });
+    mockApi();
     renderFresh(<TodayPage />);
 
     await waitFor(() => expect(screen.getByText("portfolio-tile")).toBeInTheDocument());
+  });
+
+  it("shows an inline error when the list fails to load", async () => {
+    mockApi({ recs: new Error("boom") });
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByText("Could not load recommendations.")).toBeInTheDocument();
+  });
+
+  it("approving a card removes it from the list (no inline confirmation on Today)", async () => {
+    let listCall = 0;
+    mockApi({
+      extra: (path, init) => {
+        if (path === "/analysis/recommendations?status=PENDING") {
+          listCall += 1;
+          return Promise.resolve(listCall === 1 ? [rec()] : []);
+        }
+        if (path === "/analysis/recommendations/1/approve" && init?.method === "POST") return Promise.resolve(rec({ status: "APPROVED" }));
+        return undefined;
+      },
+    });
+    renderFresh(<TodayPage />);
+
+    await screen.findByText("AAPL");
+    fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
+
+    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
   });
 
   describe("empty states", () => {
@@ -140,21 +163,21 @@ describe("TodayPage", () => {
       expect(screen.queryByText(/nothing to decide right now/i)).not.toBeInTheDocument();
     });
 
-    it("runs the analysis from the second step", async () => {
+    it("points the first-run user at the scan bar instead of adding a second scan button", async () => {
       mockApi({ summary: EMPTY_SUMMARY });
       renderFresh(<TodayPage />);
 
       await screen.findByText(/get your first recommendation/i);
-      fireEvent.click(screen.getByRole("button", { name: /run an analysis now/i }));
-
-      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.objectContaining({ method: "POST" })));
+      expect(screen.getByText(/use refresh in the scan bar above/i)).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /refresh scan|run scan/i })).toHaveLength(1);
     });
 
-    it("shows the calm all-clear when there is a portfolio but nothing pending", async () => {
-      mockApi({ summary: SUMMARY_WITH_HOLDING });
+    it("shows the calm all-clear, pointing at the daily analysis, when there is a portfolio but nothing pending", async () => {
+      mockApi();
       renderFresh(<TodayPage />);
 
       expect(await screen.findByText(/nothing to decide right now/i)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /open preferences/i })).toHaveAttribute("href", "/more/preferences");
       expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
     });
 
@@ -167,9 +190,7 @@ describe("TodayPage", () => {
     });
 
     it("shows neither state while the portfolio is still loading", async () => {
-      apiFetch.mockImplementation((path: string) =>
-        path.startsWith("/analysis/recommendations") ? Promise.resolve([]) : new Promise(() => {}),
-      );
+      mockApi({ extra: (path) => (path === "/portfolio/summary" ? new Promise(() => {}) : undefined) });
       renderFresh(<TodayPage />);
 
       await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/summary"));
@@ -178,139 +199,55 @@ describe("TodayPage", () => {
     });
 
     it("shows no empty state when recommendations are waiting", async () => {
-      mockApi({ recs: [rec()], summary: SUMMARY_WITH_HOLDING });
+      mockApi({ recs: [rec()] });
       renderFresh(<TodayPage />);
 
-      await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
+      await screen.findByText("AAPL");
       expect(screen.queryByText(/nothing to decide right now/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/get your first recommendation/i)).not.toBeInTheDocument();
     });
   });
 
-  it("shows an inline error when the list fails to load", async () => {
-    apiFetch.mockRejectedValue(new Error("boom"));
-    renderFresh(<TodayPage />);
+  describe("the one scan button", () => {
+    it("starts a discovery scan with the refresh button", async () => {
+      mockApi();
+      renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText(/could not load/i)).toBeInTheDocument());
-  });
+      await screen.findByText(/nothing to decide right now/i);
+      await waitFor(() => expect(scanButton()).toBeEnabled());
+      fireEvent.click(scanButton());
 
-  it("approving a card removes it from the list (no inline confirmation on Today)", async () => {
-    let listCall = 0;
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/analysis/recommendations?status=PENDING") {
-        listCall += 1;
-        return Promise.resolve(listCall === 1 ? [rec()] : []);
-      }
-      if (path === "/analysis/recommendations/1/approve" && init?.method === "POST") {
-        return Promise.resolve(rec({ status: "APPROVED" }));
-      }
-      return Promise.reject(new Error("unexpected " + path));
-    });
-    renderFresh(<TodayPage />);
-
-    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
-
-    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
-    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
-  });
-
-  it("runs analysis, polls while running, and refreshes the list on completion", async () => {
-    vi.useFakeTimers();
-    const running: JobStatus = { status: "RUNNING", total: 1, done: 0, results: [] };
-    const done: JobStatus = { status: "DONE", total: 1, done: 1, results: [{ ticker: "AAPL", recommendation_id: 1 }] };
-    let listCall = 0;
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/analysis/recommendations?status=PENDING") {
-        listCall += 1;
-        return Promise.resolve(listCall === 1 ? [] : [rec()]);
-      }
-      if (path === "/analysis/run" && init?.method === "POST") {
-        return Promise.resolve({ job_id: "job-1" });
-      }
-      if (path === "/analysis/run/job-1") {
-        return Promise.resolve(running.status === "RUNNING" ? running : done);
-      }
-      return Promise.reject(new Error("unexpected " + path));
-    });
-    renderFresh(<TodayPage />);
-
-    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.objectContaining({ method: "POST" })));
-
-    running.status = "DONE";
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/discovery/run", expect.objectContaining({ method: "POST" })));
+      expect(await screen.findByText("Scanning the market")).toBeInTheDocument();
     });
 
-    await waitFor(() => expect(screen.getByText("AAPL")).toBeInTheDocument());
-    vi.useRealTimers();
-  });
+    it("shows that a scan failed while keeping the page usable", async () => {
+      mockApi({
+        extra: (path) =>
+          path === "/discovery/run/job-1"
+            ? Promise.resolve({ status: "FAILED", stage: "failed", total: 0, done: 0, error: "Scan interrupted. Please try again." })
+            : undefined,
+      });
+      renderFresh(<TodayPage />);
 
-  it("shows a distinct banner when the analysis job fails outright", async () => {
-    vi.useFakeTimers();
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/analysis/recommendations?status=PENDING") return Promise.resolve([]);
-      if (path === "/analysis/run" && init?.method === "POST") return Promise.resolve({ job_id: "job-1" });
-      if (path === "/analysis/run/job-1") {
-        return Promise.resolve({ status: "FAILED", total: 1, done: 0, results: [] });
-      }
-      return Promise.reject(new Error("unexpected " + path));
-    });
-    renderFresh(<TodayPage />);
+      await screen.findByText(/nothing to decide right now/i);
+      await waitFor(() => expect(scanButton()).toBeEnabled());
+      fireEvent.click(scanButton());
 
-    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
+      expect(await screen.findByText("The scan did not finish")).toBeInTheDocument();
+      expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument();
     });
 
-    await waitFor(() => expect(screen.getByText(/analysis failed/i)).toBeInTheDocument());
-    vi.useRealTimers();
-  });
+    it("shows the backend's detail message when the scan hits the monthly cap", async () => {
+      mockApi({ run: () => Promise.reject(new FakeApiError(429, "Monthly limit reached (100 analysis runs this month).")) });
+      renderFresh(<TodayPage />);
 
-  it("shows the backend's detail message when Run analysis hits the monthly cap", async () => {
-    apiFetch.mockImplementation((path: string) => {
-      if (path === "/analysis/recommendations?status=PENDING") return Promise.resolve([]);
-      if (path === "/analysis/run") {
-        return Promise.reject(new FakeApiError(429, "Monthly limit reached (100 analysis runs this month)."));
-      }
-      return Promise.reject(new Error("unexpected " + path));
+      await screen.findByText(/nothing to decide right now/i);
+      await waitFor(() => expect(scanButton()).toBeEnabled());
+      fireEvent.click(scanButton());
+
+      expect(await screen.findByText(/monthly limit reached/i)).toBeInTheDocument();
     });
-    renderFresh(<TodayPage />);
-
-    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
-
-    await waitFor(() => expect(screen.getByText(/monthly limit reached/i)).toBeInTheDocument());
-  });
-
-  it("does not warn on unmount while a job is still polling", async () => {
-    vi.useFakeTimers();
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/analysis/recommendations?status=PENDING") return Promise.resolve([]);
-      if (path === "/analysis/run" && init?.method === "POST") return Promise.resolve({ job_id: "job-1" });
-      if (path === "/analysis/run/job-1") {
-        return Promise.resolve({ status: "RUNNING", total: 1, done: 0, results: [] });
-      }
-      return Promise.reject(new Error("unexpected " + path));
-    });
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { unmount } = renderFresh(<TodayPage />);
-
-    await waitFor(() => expect(screen.getByText(/nothing to decide right now/i)).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /run analysis/i }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/run", expect.anything()));
-
-    unmount();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2000);
-    });
-
-    expect(consoleError).not.toHaveBeenCalled();
-    consoleError.mockRestore();
-    vi.useRealTimers();
   });
 });
 
@@ -320,37 +257,30 @@ describe("TodayPage without a usable Claude key", () => {
   let runError: unknown;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     keyStatus = { connected: false, last4: null, needs_attention: false };
     role = "user";
     runError = null;
-    apiFetch.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === "/me/claude-key") {
-        return keyStatus instanceof Error ? Promise.reject(keyStatus) : Promise.resolve(keyStatus);
-      }
-      if (path === "/me") return Promise.resolve({ role });
-      if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
-      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
-      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
-      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
-      if (path === "/analysis/run" && init?.method === "POST") {
+    mockApi({
+      extra: (path) => {
+        if (path === "/me/claude-key") return keyStatus instanceof Error ? Promise.reject(keyStatus) : Promise.resolve(keyStatus);
+        if (path === "/me") return Promise.resolve({ role });
+        return undefined;
+      },
+      run: () => {
         if (!runError) return Promise.resolve({ job_id: "job-1" });
         keyStatus = { connected: true, last4: "abcd", needs_attention: true };
         return Promise.reject(runError);
-      }
-      return Promise.reject(new Error("unexpected " + path));
+      },
     });
   });
 
-  it("shows the reminder and disables Run analysis with the explanation", async () => {
+  it("shows the reminder and disables the scan button with the explanation", async () => {
     renderFresh(<TodayPage />);
 
     expect(await screen.findByText("Connect Claude to start analyzing")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Set up" })).toHaveAttribute("href", "/more/connect-claude");
-    expect(screen.getByText(/connect claude to run an analysis\. everything else works without it/i)).toBeInTheDocument();
-    for (const button of screen.getAllByRole("button", { name: /run (an |a fresh )?analysis/i })) {
-      expect(button).toBeDisabled();
-    }
+    expect(screen.getByText(/connect claude to run a scan\. everything else works without it/i)).toBeInTheDocument();
+    expect(scanButton()).toBeDisabled();
   });
 
   it("asks to reconnect when the key is flagged", async () => {
@@ -358,7 +288,7 @@ describe("TodayPage without a usable Claude key", () => {
     renderFresh(<TodayPage />);
 
     expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
-    expect(screen.getByText(/reconnect claude to run an analysis/i)).toBeInTheDocument();
+    expect(screen.getByText(/reconnect claude to run a scan/i)).toBeInTheDocument();
   });
 
   it("shows nothing extra with a connected key", async () => {
@@ -367,7 +297,7 @@ describe("TodayPage without a usable Claude key", () => {
 
     await screen.findByText(/nothing to decide right now/i);
     expect(screen.queryByText("Connect Claude to start analyzing")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
+    await waitFor(() => expect(scanButton()).toBeEnabled());
   });
 
   it("never locks an admin with no personal key", async () => {
@@ -380,7 +310,7 @@ describe("TodayPage without a usable Claude key", () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
     });
     expect(screen.queryByText("Connect Claude to start analyzing")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
+    expect(scanButton()).toBeEnabled();
   });
 
   it("does not lock the user out when the status request fails", async () => {
@@ -389,7 +319,7 @@ describe("TodayPage without a usable Claude key", () => {
 
     await screen.findByText(/nothing to decide right now/i);
     expect(screen.queryByText("Connect Claude to start analyzing")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
+    await waitFor(() => expect(scanButton()).toBeEnabled());
   });
 
   it("turns into the reconnect variant on a 409 claude_key_required, with no generic error", async () => {
@@ -398,7 +328,8 @@ describe("TodayPage without a usable Claude key", () => {
     renderFresh(<TodayPage />);
 
     await screen.findByText(/nothing to decide right now/i);
-    fireEvent.click(screen.getByRole("button", { name: /^run analysis$/i }));
+    await waitFor(() => expect(scanButton()).toBeEnabled());
+    fireEvent.click(scanButton());
 
     expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
     expect(screen.queryByText("Connect Claude to use this.")).not.toBeInTheDocument();
@@ -411,19 +342,11 @@ describe("TodayPage without a usable Claude key", () => {
     renderFresh(<TodayPage />);
 
     expect(await screen.findByText("Your Claude key needs attention")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeDisabled();
+    expect(scanButton()).toBeDisabled();
   });
 
   it("shows no card while the status request is still pending", async () => {
-    keyStatus = undefined;
-    apiFetch.mockImplementation((path: string) => {
-      if (path === "/me/claude-key") return new Promise(() => {});
-      if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
-      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
-      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
-      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
-      return Promise.reject(new Error("unexpected " + path));
-    });
+    mockApi({ extra: (path) => (path === "/me/claude-key" ? new Promise(() => {}) : undefined) });
     renderFresh(<TodayPage />);
 
     await screen.findByText(/nothing to decide right now/i);
@@ -437,7 +360,8 @@ describe("TodayPage without a usable Claude key", () => {
     renderFresh(<TodayPage />);
 
     await screen.findByText(/nothing to decide right now/i);
-    fireEvent.click(screen.getByRole("button", { name: /^run analysis$/i }));
+    await waitFor(() => expect(scanButton()).toBeEnabled());
+    fireEvent.click(scanButton());
     await screen.findByText("Your Claude key needs attention");
 
     keyStatus = { connected: true, last4: "wxyz", needs_attention: false };
@@ -446,6 +370,6 @@ describe("TodayPage without a usable Claude key", () => {
     });
 
     await waitFor(() => expect(screen.queryByText("Your Claude key needs attention")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /^run analysis$/i })).toBeEnabled();
+    await waitFor(() => expect(scanButton()).toBeEnabled());
   });
 });

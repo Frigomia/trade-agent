@@ -18,7 +18,7 @@ export function FirstHolding({ onAdd }: { onAdd: () => void }) {
         A record of what you own. Nothing is bought or sold.
       </Typography>
       <Box component="ol" sx={{ color: "var(--muted)", fontSize: 12, mt: 2 }}>
-        <li>Add holdings</li><li>Run an analysis on Today</li><li>Decide</li>
+        <li>Add holdings</li><li>Run a scan on Today</li><li>Decide</li>
       </Box>
     </Panel>
   );

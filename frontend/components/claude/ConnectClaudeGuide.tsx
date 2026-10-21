@@ -215,7 +215,7 @@ function Connected({ last4, onToday }: { last4: string | null | undefined; onTod
             Claude is connected
           </Typography>
           <Typography sx={{ fontSize: 13.5, color: "var(--text2)", mt: 0.5 }}>
-            Chat and Run analysis now use your own Claude account.
+            Chat and scans now use your own Claude account.
           </Typography>
         </Box>
       </Box>

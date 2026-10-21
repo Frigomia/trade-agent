@@ -9,35 +9,31 @@ import { Ring } from "@/components/ui/Ring";
 interface Props {
   /** True for someone with no holdings and no watchlist yet: they get the first steps. */
   firstRun: boolean;
-  running: boolean;
-  /** No usable Claude key: the run buttons stay off. */
-  locked?: boolean;
-  onRun: () => void;
 }
 
 const STEPS = [
   {
     title: "Add what you own or want to watch",
-    text: "Holdings and a watchlist give the analysis something to look at. Add as few as one.",
+    text: "Holdings and a watchlist let the app compare each idea with what you own. Add as few as one.",
   },
   {
-    title: "Run an analysis",
-    text: "Each stock gets an action and the reasoning behind it. It takes about a minute.",
+    title: "Run a scan",
+    text: "Use Refresh in the scan bar above. It researches companies from a global list and keeps the few worth a look, each with its reasoning and its risks.",
   },
   {
     title: "Decide",
-    text: "Approve or dismiss each call. Approving only records your decision. Nothing is bought or sold.",
+    text: "Open an idea, read the evidence and the risks, then approve or dismiss it. Approving only records your decision. Nothing is bought or sold.",
   },
 ];
 
-function FirstSteps({ running, locked, onRun }: Omit<Props, "firstRun">) {
+function FirstSteps() {
   return (
     <Panel sx={{ maxWidth: 760, mt: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", px: 2.5, pt: 2, pb: 1 }}>
-        <Typography component="h2" sx={{ fontSize: 15, fontWeight: 650 }}>
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
           Get your first recommendation
         </Typography>
-        <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>3 steps</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>3 steps</Typography>
       </Box>
       {STEPS.map((step, i) => {
         const current = i === 0;
@@ -64,7 +60,7 @@ function FirstSteps({ running, locked, onRun }: Omit<Props, "firstRun">) {
                 display: "grid",
                 placeItems: "center",
                 flex: "none",
-                fontSize: 13,
+                fontSize: "0.8125rem",
                 fontWeight: 650,
                 border: "1px solid var(--line2)",
                 color: "var(--muted)",
@@ -79,21 +75,16 @@ function FirstSteps({ running, locked, onRun }: Omit<Props, "firstRun">) {
               {i + 1}
             </Box>
             <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 650, color: current ? "var(--text)" : "var(--text2)" }}>
+              <Typography sx={{ fontSize: "0.875rem", fontWeight: 650, color: current ? "var(--text)" : "var(--text2)" }}>
                 {step.title}
               </Typography>
-              <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mt: 0.25, maxWidth: 460 }}>
+              <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mt: 0.25, maxWidth: 460 }}>
                 {step.text}
               </Typography>
             </Box>
             {i === 0 && (
               <Button component={Link} href="/portfolio" variant="contained" size="small">
                 Open Portfolio
-              </Button>
-            )}
-            {i === 1 && (
-              <Button variant="outlined" size="small" disabled={running || locked} onClick={onRun}>
-                {running ? "Running…" : "Run an analysis now"}
               </Button>
             )}
           </Box>
@@ -103,27 +94,27 @@ function FirstSteps({ running, locked, onRun }: Omit<Props, "firstRun">) {
   );
 }
 
-function AllClear({ running, locked, onRun }: Omit<Props, "firstRun">) {
+function AllClear() {
   return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3, py: 5 }}>
       <Ring size={76} tone="done">
         <Check size={22} color="var(--accent)" aria-hidden />
       </Ring>
       <Box sx={{ maxWidth: 340 }}>
-        <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em" }}>
+        <Typography component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
           Nothing to decide right now
         </Typography>
-        <Typography sx={{ fontSize: 13, color: "var(--muted)", mt: 0.5, mb: 1.5 }}>
-          New calls appear here after an analysis. Run one for a fresh look.
+        <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", mt: 0.5, mb: 1.5 }}>
+          Calls on your holdings appear here when your daily analysis runs. You can change that in Preferences.
         </Typography>
-        <Button variant="outlined" size="small" disabled={running || locked} onClick={onRun}>
-          {running ? "Running…" : "Run a fresh analysis"}
+        <Button component={Link} href="/more/preferences" variant="outlined" size="small">
+          Open Preferences
         </Button>
       </Box>
     </Box>
   );
 }
 
-export function TodayEmpty({ firstRun, running, locked, onRun }: Props) {
-  return firstRun ? <FirstSteps running={running} locked={locked} onRun={onRun} /> : <AllClear running={running} locked={locked} onRun={onRun} />;
+export function TodayEmpty({ firstRun }: Props) {
+  return firstRun ? <FirstSteps /> : <AllClear />;
 }

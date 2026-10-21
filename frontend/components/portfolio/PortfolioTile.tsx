@@ -23,7 +23,7 @@ export function PortfolioTile() {
 
   return (
     <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Portfolio</Typography>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Portfolio</Typography>
       {hasPositions ? (
         <>
           <Box sx={{ mt: 0.5 }}>
@@ -40,16 +40,16 @@ export function PortfolioTile() {
             <PortfolioChart snapshots={snapshots ?? []} variant="sparkline" />
           </Box>
           {summary.unpriced_count > 0 && (
-            <Typography sx={{ fontSize: 12, color: "var(--warn)", mt: 0.5 }}>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--warn)", mt: 0.5 }}>
               {summary.unpriced_count} not priced
             </Typography>
           )}
           {(summary.unknown_basis_count ?? 0) > 0 && (
-            <Typography sx={{ fontSize: 12, color: "var(--warn)", mt: 0.5 }}>P/L has incomplete cost basis</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--warn)", mt: 0.5 }}>P/L has incomplete cost basis</Typography>
           )}
         </>
       ) : (
-        <Typography sx={{ fontSize: 13, mt: 0.5 }}>
+        <Typography sx={{ fontSize: "0.8125rem", mt: 0.5 }}>
           Add your holdings in <Link href="/portfolio">Portfolio</Link>.
         </Typography>
       )}

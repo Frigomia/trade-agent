@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Box, Typography } from "@mui/material";
-import { Globe } from "lucide-react";
+import { CircleMinus, CirclePlus, Eye, Globe, Pause, Plus, Scissors, type LucideIcon } from "lucide-react";
 import type { Action, RecommendationOut } from "@/lib/api/recommendation-types";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
@@ -10,34 +10,38 @@ import { AutomaticTag } from "./AutomaticTag";
 import { DecisionActions } from "./DecisionActions";
 import { EvidencePanel } from "./EvidencePanel";
 
-// The mockups' action badge: a small rounded square (not a pill). BUY/ADD/HOLD/WATCH share the
-// emerald fill, TRIM is amber, SELL is coral; the word is always shown.
-const ACCENT = { bg: "var(--accent-solid)", fg: "var(--on-accent)" };
-const ACTION_COLOR: Record<Action, { bg: string; fg: string }> = {
-  BUY: ACCENT,
-  ADD: ACCENT,
-  HOLD: ACCENT,
-  WATCH: ACCENT,
-  TRIM: { bg: "var(--warn)", fg: "var(--on-warn)" },
-  SELL: { bg: "var(--down)", fg: "#fff" },
+// The action is a neutral pill: an icon and the word, never a colour. Green and red mean a price
+// moved (DESIGN.md), so a SELL is not red and a BUY is not green; the word carries the meaning.
+const ACTION_ICON: Record<Action, LucideIcon> = {
+  BUY: CirclePlus,
+  ADD: Plus,
+  HOLD: Pause,
+  WATCH: Eye,
+  TRIM: Scissors,
+  SELL: CircleMinus,
 };
 
 export function ActionChip({ action }: { action: Action }) {
+  const Icon = ACTION_ICON[action];
   return (
     <Box
       component="span"
       sx={{
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: "0.06em",
-        px: "9px",
-        py: "3px",
-        borderRadius: "8px",
-        bgcolor: ACTION_COLOR[action].bg,
-        color: ACTION_COLOR[action].fg,
-        lineHeight: 1.45,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.5,
+        fontSize: "0.75rem",
+        fontWeight: 650,
+        letterSpacing: "0.04em",
+        px: 1.25,
+        minHeight: 26,
+        borderRadius: 999,
+        border: "1px solid var(--line2)",
+        color: "var(--text)",
+        bgcolor: "var(--track)",
       }}
     >
+      <Icon size={13} aria-hidden />
       {action}
     </Box>
   );
@@ -91,7 +95,7 @@ export function RecommendationCard({
           href={`/today/${recommendation.id}`}
           style={{ color: "inherit", textDecoration: "none" }}
         >
-          <Typography sx={{ fontSize: 26, fontWeight: 650, letterSpacing: "-.03em" }}>
+          <Typography sx={{ fontSize: "1.625rem", fontWeight: 650, letterSpacing: "-.03em" }}>
             {recommendation.ticker}
           </Typography>
         </Link>
@@ -105,9 +109,9 @@ export function RecommendationCard({
         <Box sx={{ mt: 1.5, pt: "11px", borderTop: "1px solid var(--line)" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "var(--muted)" }}>
             <Globe size={15} />
-            <Typography sx={{ fontSize: 12 }}>Second opinion, from web search</Typography>
+            <Typography sx={{ fontSize: "0.75rem" }}>Second opinion, from web search</Typography>
           </Box>
-          <Typography sx={{ fontSize: 13, color: "var(--text2)", mt: 0.625 }}>{line}</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", mt: 0.625 }}>{line}</Typography>
         </Box>
       )}
       <DecisionActions id={recommendation.id} onDecided={onDecided} />
