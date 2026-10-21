@@ -168,11 +168,16 @@ function HoldingRow({
       <Typography sx={cell}>
         {holding.shares}
         <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--muted)" }}>
-          avg {Number.isFinite(holding.cost_basis) ? formatAmount(holding.cost_basis) : DASH}
+          avg {holding.cost_basis !== null && Number.isFinite(holding.cost_basis) ? formatAmount(holding.cost_basis) : DASH}
         </Box>
       </Typography>
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
+        {holding.current_price !== null && holding.stale === true && (
+          <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--warn)" }}>
+            {holding.as_of ? `Stale quote · ${holding.as_of}` : "Quote date unavailable"}
+          </Box>
+        )}
       </Typography>
       <Box sx={{ textAlign: "right", display: { xs: "block", md: "none" } }}>
         <Typography sx={{ fontWeight: 600 }}>{value}</Typography>
@@ -328,11 +333,14 @@ export default function PortfolioPage() {
               <Amount value={summary.total_market_value} size={38} />
             </Stat>
             <Stat label="Cost basis">
-              <Amount value={summary.total_cost_basis} />
+              {summary.pl_covered_count === 0 ? DASH : <Amount value={summary.total_cost_basis} />}
+              {summary.pl_complete === false && summary.pl_covered_count !== 0 && (
+                <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Known costs only</Typography>
+              )}
             </Stat>
             <Stat label="Total P/L">
               <Box component="span" sx={{ color: plColor(summary.total_pl) }}>
-                {formatSigned(summary.total_pl)}
+                {summary.pl_covered_count === 0 ? DASH : formatSigned(summary.total_pl)}
                 {summary.total_pl_pct !== null && ` (${formatPct(summary.total_pl_pct)})`}
               </Box>
             </Stat>
@@ -344,6 +352,11 @@ export default function PortfolioPage() {
             <Typography sx={{ fontSize: 12, color: "var(--warn)" }}>
               {summary.unpriced_count} holding{summary.unpriced_count === 1 ? " has" : "s have"} no
               live price and {summary.unpriced_count === 1 ? "isn't" : "aren't"} in these totals.
+            </Typography>
+          )}
+          {(summary.unknown_basis_count ?? 0) > 0 && (
+            <Typography sx={{ fontSize: 12, color: "var(--warn)" }}>
+              {summary.unknown_basis_count} holding(s) have no average cost. P/L covers only priced holdings with a known cost basis.
             </Typography>
           )}
         </>
@@ -359,7 +372,7 @@ export default function PortfolioPage() {
           alignItems: "start",
         }}
       >
-      {summary && open.length === 0 && <FirstHolding onSaved={() => mutateSummary()} />}
+      {summary && open.length === 0 && <FirstHolding onAdd={() => setHoldingForm({ open: true })} />}
       {open.length > 0 && (
         <Panel sx={{ p: "8px 18px" }}>
           <Box

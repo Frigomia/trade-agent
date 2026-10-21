@@ -31,11 +31,18 @@ def apply_trade(db: Session, user_id: uuid.UUID, holding: Holding, payload: Trad
     shares = _as_stored(payload.shares)
     price = _as_stored(payload.price)
     if payload.action == "BUY":
-        prior_value = float(holding.shares) * float(holding.cost_basis)
-        added_value = shares * price
-        total_cost = prior_value + added_value
+        prior_shares = float(holding.shares)
+        basis = holding.cost_basis
         holding.shares = float(holding.shares) + shares
-        holding.cost_basis = total_cost / float(holding.shares)
+        if prior_shares == 0:
+            holding.cost_basis = price
+            if holding.first_purchase_date is None:
+                holding.first_purchase_date = payload.date
+        elif basis is not None:
+            holding.cost_basis = (prior_shares * float(basis) + shares * price) / float(
+                holding.shares
+            )
+        # An existing position with unknown basis stays unknown after adding shares.
     else:  # SELL (TradeIn.action is BUY or SELL)
         if shares > float(holding.shares):
             raise TradeRefused(f"Cannot sell {shares}; holding has {float(holding.shares)}")

@@ -47,6 +47,7 @@ function setup(props: Partial<React.ComponentProps<typeof HoldingForm>> = {}) {
 }
 
 function type(label: string, value: string) {
+  if (!screen.queryByLabelText(label)) fireEvent.click(screen.getByRole("button", { name: /purchase details and overrides/i }));
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
@@ -85,8 +86,6 @@ describe("HoldingForm", () => {
       shares: 40,
       cost_basis: 112.8,
       first_purchase_date: "2024-01-10",
-      sector: null,
-      target_weight: null,
     });
     expect(onClose).toHaveBeenCalled();
   });
@@ -158,10 +157,11 @@ describe("HoldingForm", () => {
     type("Ticker", "aapl");
 
     expect(screen.getByText(/you already hold AAPL/i)).toBeInTheDocument();
-    expect(screen.getByText(/replaces its shares and average cost/i)).toBeInTheDocument();
+    expect(screen.getByText(/update its total shares/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update position" })).toBeInTheDocument();
   });
 
-  it("edits in place: ticker locked, and sector, target weight and purchase date round-trip", async () => {
+  it("edits in place: ticker locked, target and purchase date round-trip without a sector override", async () => {
     apiFetch.mockResolvedValue({});
     const { onSaved } = setup({ holding: HELD, heldTickers: ["AAPL"] });
 
@@ -178,9 +178,16 @@ describe("HoldingForm", () => {
       shares: 12,
       cost_basis: 150,
       first_purchase_date: "2024-01-15",
-      sector: "Technology",
       target_weight: 0.2,
     });
+  });
+
+  it("omits unchanged sector on edit so the backend can backfill missing metadata", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: { ...HELD, sector: null } });
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).not.toHaveProperty("sector");
   });
 
   it("does not send a request when a required field is missing", () => {
@@ -189,7 +196,7 @@ describe("HoldingForm", () => {
     type("Ticker", "AAPL");
     fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
 
-    expect(screen.getByText(/enter a ticker, a name/i)).toBeInTheDocument();
+    expect(screen.getByText(/enter a ticker and valid shares/i)).toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -202,7 +209,7 @@ describe("HoldingForm", () => {
     type("Average cost", "10");
     fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
 
-    expect(screen.getByText(/enter a ticker, a name/i)).toBeInTheDocument();
+    expect(screen.getByText(/enter a ticker and valid shares/i)).toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -215,6 +222,37 @@ describe("HoldingForm", () => {
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
     expect(sentBody().shares).toBe(0);
+  });
+
+  it("saves fractional shares using only ticker and shares without inventing purchase data", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup();
+    expect(screen.queryByLabelText("Average cost")).not.toBeInTheDocument();
+    type("Ticker", "SAP.DE");
+    type("Shares", "0.125");
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).toEqual({ ticker: "SAP.DE", shares: .125 });
+  });
+
+  it("requires an explicit update action and preserves omitted details of an existing holding", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ heldTickers: ["AAPL"] });
+    type("Ticker", "AAPL");
+    type("Shares", "10.5");
+    fireEvent.click(screen.getByRole("button", { name: "Update position" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody()).toEqual({ ticker: "AAPL", shares: 10.5 });
+  });
+
+  it("edits an unknown cost basis without sending the string null", async () => {
+    apiFetch.mockResolvedValue({});
+    const { onSaved } = setup({ holding: { ...HELD, cost_basis: null, first_purchase_date: null } });
+    expect(screen.getByLabelText("Average cost")).toHaveValue(null);
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(sentBody().cost_basis).toBeNull();
+    expect(sentBody().first_purchase_date).toBeNull();
   });
 
   it("removes a holding only after an explicit confirm", async () => {
@@ -232,6 +270,25 @@ describe("HoldingForm", () => {
       expect.objectContaining({ method: "DELETE" }),
     );
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("reveals the manual type after validation fails and allows a successful retry", async () => {
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path !== "/portfolio/holdings") return [];
+      const body = JSON.parse(init?.body as string);
+      if (!body.asset_type) throw new FakeApiError(422, "Choose Stock or ETF when the security type is unavailable.");
+      return {};
+    });
+    const { onSaved } = setup();
+    type("Ticker", "MSFT");
+    type("Shares", "0.25");
+    expect(screen.queryByLabelText("Type")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    expect(await screen.findByLabelText("Type")).toBeVisible();
+    expect(screen.getByText(/choose stock or etf/i)).toBeInTheDocument();
+    type("Type", "STOCK");
+    fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
   });
 
   it("shows the backend's error inline and stays open", async () => {

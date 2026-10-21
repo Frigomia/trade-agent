@@ -493,6 +493,59 @@ describe("PortfolioPage", () => {
     });
   });
 
+  it.each([0, 1])("labels cost coverage when %i holdings have usable purchase costs", async (covered) => {
+    handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY,
+      pl_covered_count: covered, pl_complete: false,
+      total_cost_basis: covered ? 1500 : 0,
+    });
+    renderFresh();
+    const cost = (await screen.findByText("Cost basis")).parentElement!;
+    if (covered === 0) {
+      expect(cost).toHaveTextContent("\u2014");
+      expect(cost).not.toHaveTextContent("0.00");
+    } else {
+      expect(cost).toHaveTextContent("1,500.00");
+      expect(cost).toHaveTextContent("Known costs only");
+    }
+  });
+
+  it("requires Update position for a closed holding and preserves blank purchase details", async () => {
+    handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
+    renderFresh();
+    await screen.findByText("Apple Inc.");
+    fireEvent.click(screen.getByRole("button", { name: /^add holding$/i }));
+    fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "old" } });
+    fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "2.5" } });
+    expect(screen.getByText(/you already hold OLD/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Update position" }));
+    await waitFor(() => expect(count("POST /portfolio/holdings")).toBe(1));
+    const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
+    expect(JSON.parse(post[1].body)).toEqual({ ticker: "OLD", shares: 2.5 });
+  });
+
+  it("does not label a missing price as a stale quote", async () => {
+    handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, unpriced_count: 1,
+      holdings: [{ ...SUMMARY.holdings[0], current_price: null, market_value: null,
+        stale: true, as_of: null }],
+    });
+    renderFresh();
+    await screen.findByText("ASML");
+    expect(screen.queryByText("Quote date unavailable")).not.toBeInTheDocument();
+  });
+
+  it("shows unknown basis and stale-quote coverage without inventing a gain", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY, holdings: [{ ...SUMMARY.holdings[0], cost_basis: null, unrealized_pl: null,
+        unrealized_pl_pct: null, stale: true, as_of: "2024-01-01" }],
+      unknown_basis_count: 1, pl_covered_count: 0, pl_complete: false,
+      total_pl: 0, total_pl_pct: null, total_cost_basis: 0,
+    });
+    renderFresh();
+    expect(await screen.findByText(/P\/L covers only priced holdings with a known cost basis/)).toBeInTheDocument();
+    expect(screen.getByText("Stale quote · 2024-01-01")).toBeInTheDocument();
+    expect(screen.getByText("avg —")).toBeInTheDocument();
+  });
+
   describe("empty portfolio", () => {
     const EMPTY: PortfolioSummary = {
       ...SUMMARY,
@@ -504,9 +557,11 @@ describe("PortfolioPage", () => {
       total_pl_pct: null,
     };
 
-    // The page header has its own "Add holding" button; this is the one inside the first-holding form.
-    const addHoldingButton = () =>
-      within(screen.getByRole("form", { name: /first holding/i })).getByRole("button", { name: /^add holding$/i });
+    const addHoldingButton = () => screen.getByRole("button", { name: /^save holding$/i });
+    function openFirstHolding() {
+      fireEvent.click(screen.getByRole("button", { name: "Add your first holding" }));
+      fireEvent.click(screen.getByRole("button", { name: /purchase details and overrides/i }));
+    }
 
     function fillFirstHolding(ticker: string, shares: string, cost: string) {
       fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: ticker } });
@@ -514,15 +569,16 @@ describe("PortfolioPage", () => {
       fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: cost } });
     }
 
-    it("asks what you own with an inline form, and disables Log a trade and Record snapshot", async () => {
+    it("opens the first holding in a modal, and disables Log a trade and Record snapshot", async () => {
       handlers["GET /portfolio/summary"] = () => EMPTY;
       renderFresh();
 
       expect(await screen.findByText(/what do you own/i)).toBeInTheDocument();
-      expect(screen.getByLabelText("Ticker")).toBeInTheDocument();
       expect(screen.getByText(/nothing is bought or sold/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /log a trade/i })).toBeDisabled();
       expect(screen.getByRole("button", { name: /record snapshot/i })).toBeDisabled();
+      openFirstHolding();
+      expect(screen.getByLabelText("Ticker")).toBeInTheDocument();
     });
 
     it("saves the first holding with sensible defaults and refreshes the portfolio", async () => {
@@ -530,6 +586,7 @@ describe("PortfolioPage", () => {
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
       const before = count("GET /portfolio/summary");
 
       fillFirstHolding(" aapl ", "10", "150");
@@ -539,13 +596,8 @@ describe("PortfolioPage", () => {
       const post = apiFetch.mock.calls.find((c) => c[0] === "/portfolio/holdings" && c[1]?.method === "POST")!;
       expect(JSON.parse(post[1].body)).toEqual({
         ticker: "AAPL",
-        name: "AAPL",
-        asset_type: "STOCK",
         shares: 10,
         cost_basis: 150,
-        first_purchase_date: new Date().toISOString().slice(0, 10),
-        sector: null,
-        target_weight: null,
       });
       await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
     });
@@ -559,6 +611,7 @@ describe("PortfolioPage", () => {
       };
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
 
       fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "IE00BKM4GZ66" } });
       fireEvent.click(await screen.findByText("EIMI.L"));
@@ -579,6 +632,7 @@ describe("PortfolioPage", () => {
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
       const before = count("GET /portfolio/summary");
 
       fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "IE00BKM4GZ66" } });
@@ -598,9 +652,9 @@ describe("PortfolioPage", () => {
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
 
       fillFirstHolding("VWCE", "3", "100.5");
-      fireEvent.click(screen.getByRole("button", { name: /name, type and first purchase date/i }));
       fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Vanguard All-World" } });
       fireEvent.change(screen.getByLabelText("Type"), { target: { value: "ETF" } });
       fireEvent.change(screen.getByLabelText("First purchase date"), { target: { value: "2024-03-01" } });
@@ -624,6 +678,7 @@ describe("PortfolioPage", () => {
       handlers["POST /portfolio/holdings"] = () => ({ id: 1 });
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
 
       fireEvent.change(screen.getByLabelText("Ticker"), { target: { value: "vwce" } });
       fireEvent.click(await screen.findByText("VWCE.DE", {}, { timeout: 3000 }));
@@ -640,15 +695,16 @@ describe("PortfolioPage", () => {
       });
     });
 
-    it("does not save without a ticker, shares and an average cost", async () => {
+    it("does not save with zero shares", async () => {
       handlers["GET /portfolio/summary"] = () => EMPTY;
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
 
       fillFirstHolding("AAPL", "0", "150");
       fireEvent.click(addHoldingButton());
 
-      expect(await screen.findByText(/enter a ticker, shares and an average cost/i)).toBeInTheDocument();
+      expect(await screen.findByText(/enter a ticker and valid shares/i)).toBeInTheDocument();
       expect(count("POST /portfolio/holdings")).toBe(0);
     });
 
@@ -659,6 +715,7 @@ describe("PortfolioPage", () => {
       };
       renderFresh();
       await screen.findByText(/what do you own/i);
+      openFirstHolding();
 
       fillFirstHolding("???", "1", "1");
       fireEvent.click(addHoldingButton());

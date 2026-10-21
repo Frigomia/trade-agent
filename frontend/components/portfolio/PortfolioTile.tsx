@@ -44,6 +44,9 @@ export function PortfolioTile() {
               {summary.unpriced_count} not priced
             </Typography>
           )}
+          {(summary.unknown_basis_count ?? 0) > 0 && (
+            <Typography sx={{ fontSize: 12, color: "var(--warn)", mt: 0.5 }}>P/L has incomplete cost basis</Typography>
+          )}
         </>
       ) : (
         <Typography sx={{ fontSize: 13, mt: 0.5 }}>

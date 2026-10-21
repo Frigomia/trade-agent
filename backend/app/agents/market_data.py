@@ -3,7 +3,7 @@ import json
 import logging
 import math
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import yfinance as yf
@@ -17,6 +17,7 @@ FUNDAMENTALS_CACHE_TTL = 900
 HISTORY_CACHE_TTL = 86400
 SEARCH_CACHE_TTL = 3600
 SEARCH_MAX_RESULTS = 8
+STALE_DAYS = 5  # quote display fallback; discovery keeps its exchange-aware freshness rules
 
 RETRY_ATTEMPTS = 3
 RETRY_BASE_DELAY_SECONDS = 1.0
@@ -49,16 +50,34 @@ async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
     cache_key = f"quote:{ticker}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        return dict(json.loads(cached))
+        result = dict(json.loads(cached))
+        result.setdefault("as_of", None)
+        result["stale"] = quote_is_stale(result.get("as_of"))
+        return result
 
     def _fetch() -> dict[str, Any]:
         history = yf.Ticker(ticker).history(period="1y")
-        closes = _finite(history["Close"].tolist())
-        return {"price": closes[-1] if closes else None, "closes": closes}
+        values = history["Close"].tolist()
+        closes = _finite(values)
+        valid = [i for i, value in enumerate(values) if math.isfinite(value)]
+        as_of = history.index[valid[-1]].date().isoformat() if valid else None
+        return {"price": closes[-1] if closes else None, "closes": closes, "as_of": as_of}
 
     result = await _retry_fetch(_fetch)
     await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
+    result["stale"] = quote_is_stale(result.get("as_of"))
     return result
+
+
+def quote_is_stale(as_of: object) -> bool:
+    if not isinstance(as_of, str):
+        return True
+    try:
+        age = (datetime.now(UTC).date() - date.fromisoformat(as_of)).days
+    except ValueError:
+        return True
+    # Exchange-local bars may be one calendar day ahead of UTC.
+    return age < -1 or age > STALE_DAYS
 
 
 async def fetch_fundamentals(ticker: str) -> dict[str, Any]:
@@ -143,9 +162,9 @@ ANALYTICS_NEGATIVE_CACHE_TTL = 300
 PROFILE_TEXT_CHARS = 100
 
 
-def _profile_text(value: object) -> str | None:
+def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | None:
     text = " ".join(value.split()) if isinstance(value, str) else ""
-    return text[:PROFILE_TEXT_CHARS] or None
+    return text[:max_chars] or None
 
 
 async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
@@ -176,13 +195,16 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
 
 
 async def fetch_profile(ticker: str) -> dict[str, str | None]:
-    """Read-only metadata for analytics; holding auto-fill remains a separate phase."""
+    """Cached metadata for analytics and holding auto-fill; never invented when unavailable."""
     redis = get_redis()
-    cache_key = f"profile:{ticker}"
+    cache_key = f"profile:v2:{ticker}"
     cached = await redis.get(cache_key)
     if cached is not None:
         # Bound old cached entries too; a rollout must not preserve oversized provider strings.
-        return {field: _profile_text(value) for field, value in dict(json.loads(cached)).items()}
+        return {
+            field: _profile_text(value, 200 if field == "name" else PROFILE_TEXT_CHARS)
+            for field, value in dict(json.loads(cached)).items()
+        }
 
     def _fetch() -> dict[str, str | None]:
         info = yf.Ticker(ticker).info or {}
@@ -194,8 +216,12 @@ async def fetch_profile(ticker: str) -> dict[str, str | None]:
             "quote_type": "quoteType",
             "exchange": "exchange",
             "category": "category",
+            "currency": "currency",
         }
-        return {field: _profile_text(info.get(key)) for field, key in keys.items()}
+        return {
+            field: _profile_text(info.get(key), 200 if field == "name" else PROFILE_TEXT_CHARS)
+            for field, key in keys.items()
+        }
 
     try:
         result = await _retry_fetch(_fetch)

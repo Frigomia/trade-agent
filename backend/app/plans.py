@@ -442,7 +442,7 @@ def place_line(
                 name=line.name,
                 asset_type=payload.asset_type,
                 shares=0,
-                cost_basis=0,
+                cost_basis=None,
                 first_purchase_date=payload.date,
             )
             db.add(holding)

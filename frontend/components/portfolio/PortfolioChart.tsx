@@ -75,8 +75,9 @@ export function PortfolioChart({
   // One scale for both lines, so the cost basis sits where it really is relative to the value.
   const values = points.map((p) => p.total_market_value);
   const costs = points.map((p) => p.total_cost_basis);
-  const min = Math.min(...values, ...(full ? costs : []));
-  const span = Math.max(...values, ...(full ? costs : [])) - min || 1;
+  const showCosts = full && points.every((p) => p.cost_basis_complete !== false);
+  const min = Math.min(...values, ...(showCosts ? costs : []));
+  const span = Math.max(...values, ...(showCosts ? costs : [])) - min || 1;
   const y = (v: number) => 40 - ((v - min) / span) * 36;
   const coords = (series: number[]) =>
     series.map((v, i) => `${(i / (points.length - 1)) * 100},${y(v)}`).join(" ");
@@ -106,7 +107,7 @@ export function PortfolioChart({
           strokeWidth={1.5}
           vectorEffect="non-scaling-stroke"
         />
-        {full && (
+        {showCosts && (
           <polyline
             points={coords(costs)}
             fill="none"
@@ -123,11 +124,16 @@ export function PortfolioChart({
             <Box component="span" sx={{ width: 14, height: 0, borderTop: "2px solid var(--accent)" }} />
             Market value
           </Box>
-          <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+          {showCosts && <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
             <Box component="span" sx={{ width: 14, height: 0, borderTop: "2px dashed var(--muted)" }} />
             Cost basis
-          </Box>
+          </Box>}
         </Box>
+      )}
+      {full && !showCosts && (
+        <Typography sx={{ mt: 1, fontSize: 12, color: "var(--muted)" }}>
+          Cost comparison unavailable: purchase costs are incomplete in this period.
+        </Typography>
       )}
     </Box>
   );

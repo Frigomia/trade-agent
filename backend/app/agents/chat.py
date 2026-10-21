@@ -37,7 +37,8 @@ def _portfolio_context_sync(db: Session, user_id: uuid.UUID) -> str:
     if holdings:
         for h in holdings:
             weight = f"{h.target_weight:.0%}" if h.target_weight is not None else "unset"
-            holding_info = f"- {h.ticker}: {h.shares} shares, cost basis {h.cost_basis}"
+            basis = str(h.cost_basis) if h.cost_basis is not None else "unknown"
+            holding_info = f"- {h.ticker}: {h.shares} shares, cost basis {basis}"
             lines.append(f"{holding_info}, target weight {weight}")
     else:
         lines.append("No holdings.")

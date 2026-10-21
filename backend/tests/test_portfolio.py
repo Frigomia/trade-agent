@@ -492,6 +492,9 @@ def test_summary_empty_portfolio(client):
         "total_pl": 0,
         "total_pl_pct": None,
         "unpriced_count": 0,
+        "unknown_basis_count": 0,
+        "pl_covered_count": 0,
+        "pl_complete": True,
     }
     mock.assert_not_awaited()
 
