@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoveryRecommendation, IdeaOut, ScanRun } from "@/lib/api/discovery-types";
 import {
+  dateTimeText,
   holdingsOnly,
   listingText,
   meterFill,
@@ -187,5 +188,13 @@ describe("quoteLabel with an unusable date", () => {
   it("says the date is unknown rather than printing Invalid Date", () => {
     const bad = idea({ snapshot: { ...idea().snapshot!, price_as_of: "not a date" } });
     expect(quoteLabel(bad)).toBe("Scan quote · date unknown");
+  });
+});
+
+describe("dateTimeText", () => {
+  it("gives the day with its year and the time, not a relative word", () => {
+    const text = dateTimeText("2026-10-20T06:12:00Z");
+    expect(text).toMatch(/2026/);
+    expect(text).not.toMatch(/today/i);
   });
 });

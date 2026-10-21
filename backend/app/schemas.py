@@ -132,6 +132,9 @@ class RecommendationOut(BaseModel):
     user_id: UUID
     created_at: datetime
     ticker: str
+    # Computed on read from the user's holding (or the discovery idea), never stored; None for a
+    # ticker the user only watches.
+    name: str | None = None
     asset_type: str
     action: str
     reasoning: list[str]
@@ -620,3 +623,24 @@ class IsinIn(BaseModel):
 class IsinOut(BaseModel):
     ticker: str
     isin: str | None
+
+
+AlertKind = Literal["new_recommendation", "earnings_upcoming", "move_since_purchase"]
+
+
+class PortfolioAlertOut(BaseModel):
+    """One thing on a holding worth a look today. Text states a fact or a prior call, no amounts."""
+
+    ticker: str
+    name: str | None
+    kind: AlertKind
+    text: str
+    when: date | None = None  # the earnings date, for earnings_upcoming
+    direction: Literal["up", "down"] | None = None  # for move_since_purchase
+    recommendation_id: int | None = None  # for new_recommendation
+
+
+class PortfolioAlertsOut(BaseModel):
+    alerts: list[PortfolioAlertOut]
+    # What could not be looked up, so a missing alert is never silently a "nothing to report".
+    missing: list[Literal["earnings", "prices"]]

@@ -1,19 +1,21 @@
 import asyncio
 import logging
 import math
-from datetime import date
+from datetime import UTC, date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app import holdings as holding_service
-from app.agents.market_data import fetch_quote_and_history
+from app.agents.market_data import fetch_next_earnings, fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
 from app.http_headers import no_store
 from app.limits import cap_message
-from app.models import Holding, PortfolioSnapshot, Trade, WatchlistItem
+from app.models import Holding, PortfolioSnapshot, Recommendation, Trade, WatchlistItem
+from app.portfolio_alerts import HoldingFacts, PendingCall, build_alerts
 from app.portfolio_analytics import load_analytics
 from app.rate_limit import rate_limiter
 from app.schemas import (
@@ -22,6 +24,7 @@ from app.schemas import (
     HoldingSummaryOut,
     IsinIn,
     IsinOut,
+    PortfolioAlertsOut,
     PortfolioSnapshotOut,
     PortfolioSummaryOut,
     TradeIn,
@@ -266,6 +269,80 @@ async def _prices_for(
 
     results = await asyncio.gather(*(one(t) for t in ordered))
     return dict(zip(ordered, results, strict=True))
+
+
+async def _earnings_for(
+    tickers: set[str], sem: asyncio.Semaphore
+) -> dict[str, tuple[date | None, bool]]:
+    """Next earnings date per ticker, and whether the lookup worked (no date is not a failure)."""
+    ordered = sorted(tickers)
+
+    async def one(ticker: str) -> tuple[date | None, bool]:
+        try:
+            async with sem:
+                return await fetch_next_earnings(ticker), True
+        except Exception as exc:
+            logger.warning("Earnings lookup failed for %s: %s", ticker, type(exc).__name__)
+            return None, False
+
+    results = await asyncio.gather(*(one(t) for t in ordered))
+    return dict(zip(ordered, results, strict=True))
+
+
+@router.get(
+    "/alerts",
+    response_model=PortfolioAlertsOut,
+    dependencies=[Depends(rate_limiter("portfolio_alerts", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
+async def get_alerts(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> PortfolioAlertsOut:
+    """What on the user's holdings is worth a look: pending calls, upcoming earnings, big moves."""
+    held = (
+        db.query(Holding)
+        .filter(Holding.user_id == user.id, Holding.shares > 0)
+        .order_by(Holding.ticker)
+        .all()
+    )
+    pending = (
+        db.query(Recommendation)
+        .filter(
+            Recommendation.user_id == user.id,
+            Recommendation.status == "PENDING",
+            Recommendation.source != "discovery",  # discovery ideas have their own feed
+        )
+        .order_by(Recommendation.created_at.desc(), Recommendation.id.desc())
+        .all()
+    )
+    rows = [
+        (h.ticker, h.name, None if h.cost_basis is None else float(h.cost_basis), h.asset_type)
+        for h in held
+    ]
+    calls = [PendingCall(id=r.id, ticker=r.ticker, action=r.action) for r in pending]
+    # Everything needed is copied out; release the pooled connection before awaiting providers.
+    db.close()
+    tickers = {row[0] for row in rows}
+    stocks = {row[0] for row in rows if row[3] != "ETF"}  # an ETF has no earnings
+    sem = asyncio.Semaphore(8)  # one request budget for quotes and earnings lookups
+    prices, earnings = await asyncio.gather(_prices_for(tickers, sem), _earnings_for(stocks, sem))
+    facts = [
+        HoldingFacts(
+            ticker=ticker,
+            name=name,
+            cost_basis=cost,
+            # A quote older than the provider's freshness window is not today's price.
+            price=None if prices[ticker][2] else prices[ticker][0],
+            earnings=earnings.get(ticker, (None, True))[0],
+        )
+        for ticker, name, cost, _ in rows
+    ]
+    missing: list[Literal["earnings", "prices"]] = []
+    if any(not ok for _, ok in earnings.values()):
+        missing.append("earnings")
+    if any(f.cost_basis is not None and f.price is None for f in facts):
+        missing.append("prices")
+    alerts = build_alerts(facts, calls, datetime.now(UTC).date())
+    return PortfolioAlertsOut(alerts=alerts, missing=missing)
 
 
 @router.get(

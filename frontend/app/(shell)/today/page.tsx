@@ -9,37 +9,18 @@ import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import { TodayEmpty } from "@/components/recommendations/TodayEmpty";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { DriftCard } from "@/components/plan/DriftCard";
-import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Panel } from "@/components/ui/Panel";
-import { CostBasisTile, TodayDesktop } from "@/components/recommendations/TodayDesktop";
+import { TodayDesktop } from "@/components/recommendations/TodayDesktop";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { useClaudeLock } from "@/lib/claudeKey";
 import { DiscoveryFeed } from "@/components/discovery/DiscoveryFeed";
+import { alertRows, missingNote } from "@/lib/alerts";
 import { holdingsOnly } from "@/lib/discovery";
+import { useAlerts } from "@/lib/useAlerts";
+import { PortfolioAlerts } from "@/components/recommendations/PortfolioAlerts";
 import { useDiscovery } from "@/lib/useDiscovery";
 import type { Usage } from "@/lib/usage";
-
-const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
-
-function AwaitingTile({ recommendations }: { recommendations: RecommendationOut[] }) {
-  const parts = ACTION_ORDER.flatMap((action) => {
-    const count = recommendations.filter((r) => r.action === action).length;
-    return count > 0 ? [`${count} ${action}`] : [];
-  });
-  return (
-    <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
-      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Awaiting you</Typography>
-      <Typography sx={{ fontSize: "1.375rem", fontWeight: 650, letterSpacing: "-0.035em", mt: 0.5 }}>
-        {recommendations.length}
-      </Typography>
-      {parts.length > 0 && (
-        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 1 }}>{parts.join(" · ")}</Typography>
-      )}
-    </Panel>
-  );
-}
 
 export default function TodayPage() {
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
@@ -48,7 +29,6 @@ export default function TodayPage() {
     "/analysis/recommendations?status=PENDING",
     apiFetch,
   );
-  // Same key as PortfolioTile, so SWR shares one request.
   const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const { data: usage } = useSWR<Usage>("/me/usage", apiFetch);
   const [now] = useState(() => Date.now()); // lazy: the purity lint forbids Date.now() in render
@@ -57,6 +37,15 @@ export default function TodayPage() {
 
   // The pending table also holds discovery ideas; the holdings list below shows only the rest.
   const pending = holdingsOnly(recommendations ?? []);
+  // The panel's rows: the typed alerts once they load (calls, upcoming earnings, big moves), the
+  // pending calls until then.
+  const typed = useAlerts();
+  const rows = alertRows(typed, pending);
+  const otherRows = rows.filter((r) => r.kind !== "new_recommendation"); // a phone shows calls as cards
+  // What could not be checked is said inside the alerts panel; when no panel is mounted (no rows,
+  // or a phone with only call cards) it is said on its own, so a failed check never reads as quiet.
+  const missing = missingNote(typed?.missing ?? []);
+  const panelShown = isDesktop ? rows.length > 0 : otherRows.length > 0;
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
@@ -95,26 +84,31 @@ export default function TodayPage() {
         now={now}
         onRun={discovery.start}
       />
-      <Box sx={{ display: "flex", gap: 1.25, mt: 3 }}>
-        <PortfolioTile />
-        {isDesktop && <CostBasisTile />}
-        <AwaitingTile recommendations={pending} />
-      </Box>
       <DriftCard />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.
         </Alert>
       )}
+      {missing && !panelShown && (
+        <Typography sx={{ mt: 2, fontSize: "0.8125rem", color: "var(--text2)" }}>
+          {missing}
+        </Typography>
+      )}
       {recommendations && pending.length === 0 && emptyKind !== null && (
         <TodayEmpty firstRun={emptyKind === "first-run"} />
       )}
+      {!isDesktop && otherRows.length > 0 && (
+        <Box sx={{ mt: 3 }}>
+          <PortfolioAlerts rows={otherRows} missing={typed?.missing} />
+        </Box>
+      )}
       {!isDesktop && pending.length > 0 && (
         <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mt: 3 }}>
-          Portfolio alerts
+          {otherRows.length > 0 ? "New recommendations" : "Portfolio alerts"}
         </Typography>
       )}
-      {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
+      {isDesktop && rows.length > 0 && <TodayDesktop rows={rows} missing={typed?.missing} />}
       {!isDesktop &&
         pending.map((recommendation) => (
           // No inline confirmation here: approving or dismissing just revalidates the list, and the
