@@ -130,6 +130,21 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent(/[+-]\d+\.\d%/);
   });
 
+  it("names a shared quote day only when every other idea has it, not the newest date for all", () => {
+    const older = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical"), older] });
+
+    expect(screen.queryByText(/^Prices as of /)).not.toBeInTheDocument();
+  });
+
+  it("says when the other ideas' prices were saved, and offers no link when everything is shown", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
+
+    const day = new Date(Date.parse("2026-10-19T20:00:00Z")).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    expect(screen.getByText(`Prices as of ${day}`)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /view all/i })).not.toBeInTheDocument();
+  });
+
   it("dates every saved price, so an older idea does not look current", () => {
     const old = rec(2, "Brevik Medical", { snapshot: { ...idea("x").snapshot!, price_as_of: "2026-10-09T20:00:00" } });
     const none = rec(3, "Tanaka Precision", { snapshot: { ...idea("x").snapshot!, price_as_of: null } });
@@ -159,8 +174,10 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: SCAN, recommendations: recs });
 
     expect(screen.getAllByRole("article")).toHaveLength(4); // top + three
-    fireEvent.click(screen.getByRole("button", { name: "Show 2 more" }));
+    fireEvent.click(screen.getByRole("button", { name: "View all 5" }));
     expect(screen.getAllByRole("article")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getAllByRole("article")).toHaveLength(4);
   });
 
   it("leaves out price and meta for an idea saved before the display fields existed", () => {

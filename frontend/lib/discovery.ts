@@ -118,6 +118,21 @@ export function stageIndex(stage: string | undefined): number {
 /** The error the job stores when Anthropic rejected the user's key (jobs.py). */
 export const KEY_REJECTED_MESSAGE = "Your Claude key needs attention.";
 
+/**
+ * "Mon 19 Oct" when every idea shown has a saved quote from that same day, otherwise null: the
+ * feed spans scans, so quotes can differ or be missing, and one shared caption would make the
+ * older or undated ones look as fresh as the newest. Each card carries its own date regardless.
+ */
+export function commonQuoteDay(recs: DiscoveryRecommendation[]): string | null {
+  const days = recs.map((rec) => {
+    const asOf = rec.idea?.snapshot?.price_as_of;
+    const ms = asOf ? toTime(asOf) : Number.NaN;
+    return Number.isNaN(ms) ? null : formatDay(ms);
+  });
+  const first = days[0];
+  return first && days.every((day) => day === first) ? first : null;
+}
+
 const formatDay = (ms: number) => new Date(ms).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
 
 /**
