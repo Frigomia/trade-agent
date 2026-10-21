@@ -112,7 +112,7 @@ export function OrdersView() {
         sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: 14, color: "var(--text2)", outline: "none" } : visuallyHidden}
       >
         {status && (
-          <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--up)", pt: "2px" }}>
+          <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>
             <Check size={16} />
           </Box>
         )}

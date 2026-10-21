@@ -10,13 +10,13 @@ export const SIGNAL_LABEL: Record<TechnicalSignal, string> = {
   WEAK_DOWNTREND: "Weak downtrend",
 };
 
-// Matches the mockups' pill convention: oversold/strong-uptrend read as favorable (green),
-// weak-downtrend as unfavorable (red), neutral as neither (muted). The word is always shown.
+// A signal is a status, not a price move, so it never uses green or red (DESIGN.md): favorable reads
+// as the accent, unfavorable as a caution, neutral as muted. The word is always shown.
 export const SIGNAL_TONE: Record<TechnicalSignal, PillTone> = {
   NEUTRAL: "mute",
-  OVERSOLD: "up",
-  STRONG_UPTREND: "up",
-  WEAK_DOWNTREND: "down",
+  OVERSOLD: "accent",
+  STRONG_UPTREND: "accent",
+  WEAK_DOWNTREND: "warn",
 };
 
 const ROW = { display: "flex", alignItems: "center", py: 1.75, borderBottom: "1px solid var(--line)", "&:last-of-type": { borderBottom: 0 } };
@@ -29,7 +29,7 @@ export function EvidenceDetail({ recommendation }: { recommendation: Recommendat
       {fundamental_score !== null && (
         <Box>
           <Typography sx={{ fontWeight: 600, flex: 1 }}>Fundamentals</Typography>
-          <Pill tone={fundamental_score < 60 ? "down" : "up"}>{fundamental_score}/100</Pill>
+          <Pill tone={fundamental_score < 60 ? "warn" : "accent"}>{fundamental_score}/100</Pill>
         </Box>
       )}
       {technical_signal !== null && (

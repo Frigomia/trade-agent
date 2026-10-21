@@ -43,8 +43,8 @@ export function ConfirmationPanel({
           display: "grid",
           placeItems: "center",
           mx: "auto",
-          bgcolor: approved ? "var(--up-bg)" : "var(--down-bg)",
-          color: approved ? "var(--up)" : "var(--down)",
+          bgcolor: approved ? "var(--accent-wash)" : "var(--track)",
+          color: approved ? "var(--accent)" : "var(--text2)",
         }}
       >
         <CheckCircle2 size={30} />

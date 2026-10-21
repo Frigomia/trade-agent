@@ -23,8 +23,8 @@ function page(status: number, title: string, body: string): NextResponse {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
 <title>${title} - trade-agent</title><style>
-:root{--bg:#060d0c;--text:#e7f3ef;--muted:#8aa89f;--accent:#34e7a9;--on:#032116;--line:rgba(120,255,214,.11)}
-@media(prefers-color-scheme:light){:root{--bg:#f2f8f5;--text:#0b1f19;--muted:#52695f;--accent:#067a52;--on:#fff;--line:rgba(8,110,80,.15)}}
+:root{--bg:#0c1426;--text:#e9eefb;--muted:#92a0bd;--accent:#7ea3ff;--on:#0a1530;--line:rgba(255,255,255,.07)}
+@media(prefers-color-scheme:light){:root{--bg:#f5f7fb;--text:#0f1a2e;--muted:#5d6b85;--accent:#2457d6;--on:#fff;--line:rgba(15,26,46,.08)}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
 main{max-width:380px;padding:24px}h1{font-size:22px;letter-spacing:-.02em;margin:0 0 8px}p{color:var(--muted);line-height:1.5}
 .warn{border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text)}

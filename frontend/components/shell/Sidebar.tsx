@@ -53,7 +53,8 @@ export function Sidebar({ role }: { role: Role }) {
               fontWeight: on ? 600 : 400,
               textDecoration: "none",
               color: on ? "var(--accent)" : "var(--muted)",
-              background: on ? "var(--up-bg)" : "transparent",
+              background: on ? "var(--panel)" : "transparent",
+              boxShadow: on ? "var(--shadow)" : "none",
             }}
           >
             <Icon size={item.sub ? 15 : 18} strokeWidth={1.75} />

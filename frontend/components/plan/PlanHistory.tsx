@@ -106,7 +106,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
         {sorted.map((p) => {
           const m = planMonth(p.created_at);
           return (
-            <Box role="row" key={p.id} sx={{ ...rowSx, bgcolor: opened?.id === p.id ? "var(--up-bg)" : undefined }}>
+            <Box role="row" key={p.id} sx={{ ...rowSx, bgcolor: opened?.id === p.id ? "var(--accent-wash)" : undefined }}>
               <Box role="cell" sx={{ fontWeight: 650 }}>
                 {m}
               </Box>

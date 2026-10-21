@@ -107,7 +107,7 @@ function AllClear({ running, locked, onRun }: Omit<Props, "firstRun">) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 3, py: 5 }}>
       <Ring size={76} tone="done">
-        <Check size={22} color="var(--up)" aria-hidden />
+        <Check size={22} color="var(--accent)" aria-hidden />
       </Ring>
       <Box sx={{ maxWidth: 340 }}>
         <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650, letterSpacing: "-0.02em" }}>

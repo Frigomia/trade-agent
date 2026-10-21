@@ -123,8 +123,8 @@ export default function TodayPage() {
               py: 0.9,
               borderRadius: 999,
               fontSize: 12.5,
-              bgcolor: "var(--up-bg)",
-              "&:hover": { bgcolor: "var(--up-bg)", filter: "brightness(1.1)" },
+              bgcolor: "var(--accent-wash)",
+              "&:hover": { bgcolor: "var(--accent-wash)", filter: "brightness(1.1)" },
             }}
           >
             {running ? "Running…" : "Run analysis"}

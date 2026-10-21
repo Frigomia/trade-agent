@@ -13,15 +13,15 @@ export interface StatusColors {
 // Used before the DOM-reading effect below has run (first render / SSR), matching the dark
 // theme's own literal values in app/globals.css so there's no flash of the wrong color.
 export const DEFAULT_STATUS_COLORS: StatusColors = {
-  accentSolid: "#34e7a9",
+  accentSolid: "#7ea3ff",
   up: "#34e7a9",
   down: "#ff6b72",
   warn: "#f4c04f",
-  onAccent: "#032116",
-  textPrimary: "#e7f3ef",
-  textSecondary: "#cfe2dc",
-  bgDefault: "#060d0c",
-  bgPaper: "rgba(255, 255, 255, 0.035)",
+  onAccent: "#0a1530",
+  textPrimary: "#e9eefb",
+  textSecondary: "#c2cce3",
+  bgDefault: "#0c1426",
+  bgPaper: "#131d36",
 };
 
 // Resolves the live values of the handful of CSS custom properties buildMuiTheme needs as

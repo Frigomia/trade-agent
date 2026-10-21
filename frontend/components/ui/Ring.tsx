@@ -22,7 +22,7 @@ export function Ring({
         sx={{
           position: "absolute",
           inset: -size * 0.26,
-          background: "radial-gradient(closest-side, var(--up-bg), transparent 70%)",
+          background: "radial-gradient(closest-side, var(--accent-wash), transparent 70%)",
           pointerEvents: "none",
         }}
       />
@@ -33,7 +33,7 @@ export function Ring({
         sx={{ position: "absolute", inset: 0, width: size, height: size, transform: "rotate(-90deg)" }}
       >
         {tone === "done" ? (
-          <circle cx="66" cy="66" r="58" fill="none" stroke="var(--up)" strokeWidth="5" strokeLinecap="round" />
+          <circle cx="66" cy="66" r="58" fill="none" stroke="var(--accent)" strokeWidth="5" strokeLinecap="round" />
         ) : (
           <>
             <circle cx="66" cy="66" r="58" fill="none" stroke="var(--track)" strokeWidth="6" />

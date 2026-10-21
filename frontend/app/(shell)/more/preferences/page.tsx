@@ -229,7 +229,6 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
             alignItems: "center",
             gap: 1.5,
             bgcolor: "var(--tab-bg)",
-            backdropFilter: "blur(18px)",
           }}
         >
           <Box sx={{ flex: 1 }}>
