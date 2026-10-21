@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { ChevronRight } from "lucide-react";
 import type { DiscoveryIdeas, DiscoveryJob } from "@/lib/api/discovery-types";
-import { isEarlier, pricesAsOf, splitIdeas } from "@/lib/discovery";
+import { isEarlier, pricesAsOf, runsExhausted, splitIdeas } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
 import { OpportunityCard } from "./OpportunityCard";
 import { ScanBar } from "./ScanBar";
@@ -69,7 +69,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, prog
         </Alert>
       )}
       {running && <ScanRunning job={job} universe={scan?.universe_size} />}
-      {failed && <ScanFailed message={job?.error ?? null} locked={locked} onRetry={onRun} />}
+      {failed && <ScanFailed message={job?.error ?? null} locked={locked} exhausted={runsExhausted(usage)} onRetry={onRun} />}
       {!running && !failed && ideas && !scan && <FirstScan />}
       {/* The latest scan's result shows even when older ideas are still pending below. */}
       {!running && !failed && scan && scan.outcome === "none" && <NoOpportunity scan={scan} />}
