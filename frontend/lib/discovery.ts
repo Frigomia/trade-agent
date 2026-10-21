@@ -1,0 +1,97 @@
+import type {
+  DiscoveryRecommendation,
+  IdeaOut,
+  Level,
+  RiskLevel,
+  ScanRun,
+} from "@/lib/api/discovery-types";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { formatAmount, toTime } from "@/lib/format";
+
+/** Discovery ideas and holdings recommendations share one table; only the source tells them apart. */
+export function isDiscovery(rec: Pick<RecommendationOut, "source">): boolean {
+  return rec.source === "discovery";
+}
+
+/** The recommendations about holdings: everything the discovery scan did not write. */
+export function holdingsOnly<T extends Pick<RecommendationOut, "source">>(recs: T[]): T[] {
+  return recs.filter((rec) => !isDiscovery(rec));
+}
+
+export const OTHER_OPPORTUNITIES_SHOWN = 3;
+
+/**
+ * The feed arrives ranked (overall, risk, fit, ticker), so the first idea with its saved detail is
+ * the top opportunity and the next three are the others; `more` is how many are left to view.
+ */
+export function splitIdeas(recs: DiscoveryRecommendation[]): {
+  top: DiscoveryRecommendation | null;
+  others: DiscoveryRecommendation[];
+  more: number;
+} {
+  const ideas = recs.filter((rec) => rec.idea !== null);
+  return {
+    top: ideas[0] ?? null,
+    others: ideas.slice(1, 1 + OTHER_OPPORTUNITIES_SHOWN),
+    more: Math.max(0, ideas.length - 1 - OTHER_OPPORTUNITIES_SHOWN),
+  };
+}
+
+/** How many of the three meter segments are filled. Unknown risk fills none and says so in words. */
+export function meterFill(level: Level | RiskLevel): number {
+  return { low: 1, medium: 2, high: 3, unknown: 0 }[level];
+}
+
+const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+export const confidenceLabel = (level: Level) => `${cap(level)} confidence`;
+export const riskLabel = (level: RiskLevel) => (level === "unknown" ? "Risk unknown" : `${cap(level)} risk`);
+
+/** Two letters for the round logo: first letters of the first two words, or the first two letters. */
+export function monogram(name: string): string {
+  const words = name.replace(/[^\p{L}\p{N} ]/gu, "").split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  // Spreading splits by code point, so a character outside the basic plane is not cut in half.
+  const letters = words.length > 1 ? [...words[0]][0] + [...words[1]][0] : [...words[0]].slice(0, 2).join("");
+  return letters.toUpperCase();
+}
+
+/** "USD 184.20" from the saved snapshot, or null when the scan stored no price. */
+export function priceText(idea: IdeaOut): string | null {
+  const snap = idea.snapshot;
+  if (!snap || snap.price === null) return null;
+  return `${snap.currency ?? ""} ${formatAmount(snap.price)}`.trim();
+}
+
+/** The listing line: "HLDN · NASDAQ", or the ticker alone when the exchange is unknown. */
+export function listingText(idea: IdeaOut): string {
+  return [idea.ticker, idea.snapshot?.exchange].filter(Boolean).join(" · ");
+}
+
+/** "Software · Infrastructure"; sector alone when there is no industry. */
+export function sectorText(idea: IdeaOut): string | null {
+  const snap = idea.snapshot;
+  if (!snap?.sector) return null;
+  return snap.industry ? `${snap.sector} · ${snap.industry}` : snap.sector;
+}
+
+/** "today 06:12" for a time on the current day, otherwise "Mon 06:12". */
+export function whenText(iso: string, now: number): string {
+  const date = new Date(toTime(iso));
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === new Date(now).toDateString()) return `today ${time}`;
+  return `${date.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
+
+/** The scan bar's count words, from the saved counts only; empty parts when a legacy scan lacks them. */
+export function scanCounts(scan: ScanRun): string[] {
+  if (scan.opportunities === null) return [];
+  const n = scan.opportunities;
+  const parts = [`${n} opportunit${n === 1 ? "y" : "ies"}`];
+  if (scan.set_aside !== null && scan.set_aside > 0) parts.push(`${scan.set_aside} set aside`);
+  return parts;
+}
+
+/** Cuts a block of text to `lines` lines with an ellipsis, in CSS, so no sentence is guessed at. */
+export const clampLines = (lines: number) =>
+  ({ display: "-webkit-box", WebkitLineClamp: lines, WebkitBoxOrient: "vertical", overflow: "hidden" }) as const;

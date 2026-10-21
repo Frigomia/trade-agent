@@ -62,6 +62,8 @@ function mockApi({ recs = [], summary }: { recs?: RecommendationOut[]; summary: 
   apiFetch.mockImplementation((path: string, init?: RequestInit) => {
     if (path.startsWith("/analysis/recommendations")) return Promise.resolve(recs);
     if (path === "/portfolio/summary") return Promise.resolve(summary);
+    if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
+    if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
     if (path === "/analysis/run" && init?.method === "POST") return Promise.resolve({ job_id: "job-1" });
     return Promise.reject(new Error("unexpected " + path));
   });
@@ -70,6 +72,23 @@ function mockApi({ recs = [], summary }: { recs?: RecommendationOut[]; summary: 
 describe("TodayPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("keeps discovery ideas out of the holdings alerts and shows them in the discovery section", async () => {
+    const discovery = rec({ id: 9, ticker: "HLDN", source: "discovery" });
+    apiFetch.mockImplementation((path: string) => {
+      if (path.startsWith("/analysis/recommendations")) return Promise.resolve([rec(), discovery]);
+      if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
+      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
+      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
+      return Promise.reject(new Error("unexpected " + path));
+    });
+    renderFresh(<TodayPage />);
+
+    expect(await screen.findByText("AAPL")).toBeInTheDocument();
+    expect(screen.queryByText("HLDN")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Portfolio alerts" })).toBeInTheDocument();
+    expect(screen.getByText("Run your first scan")).toBeInTheDocument();
   });
 
   it("lists pending recommendations", async () => {
@@ -312,6 +331,8 @@ describe("TodayPage without a usable Claude key", () => {
       if (path === "/me") return Promise.resolve({ role });
       if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
       if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
+      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
+      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
       if (path === "/analysis/run" && init?.method === "POST") {
         if (!runError) return Promise.resolve({ job_id: "job-1" });
         keyStatus = { connected: true, last4: "abcd", needs_attention: true };
@@ -399,6 +420,8 @@ describe("TodayPage without a usable Claude key", () => {
       if (path === "/me/claude-key") return new Promise(() => {});
       if (path.startsWith("/analysis/recommendations")) return Promise.resolve([]);
       if (path === "/portfolio/summary") return Promise.resolve(SUMMARY_WITH_HOLDING);
+      if (path === "/discovery/ideas") return Promise.resolve({ recommendations: [], latest_scan: null });
+      if (path === "/me/usage") return Promise.resolve({ analysis_runs: { used: 3, limit: 100 }, chat_messages: { used: 0, limit: 100 } });
       return Promise.reject(new Error("unexpected " + path));
     });
     renderFresh(<TodayPage />);

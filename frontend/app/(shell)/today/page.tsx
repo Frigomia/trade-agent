@@ -18,6 +18,10 @@ import { CostBasisTile, TodayDesktop } from "@/components/recommendations/TodayD
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
+import { DiscoveryFeed } from "@/components/discovery/DiscoveryFeed";
+import { holdingsOnly } from "@/lib/discovery";
+import { useDiscovery } from "@/lib/useDiscovery";
+import type { Usage } from "@/lib/usage";
 
 const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
 
@@ -63,6 +67,8 @@ export default function TodayPage() {
   const [now] = useState(() => Date.now()); // lazy: the purity lint forbids Date.now() in render
   const [runError, setRunError] = useState<string | null>(null);
   const { lock, markRequired } = useClaudeLock();
+  const discovery = useDiscovery(markRequired);
+  const { data: usage } = useSWR<Usage>("/me/usage", apiFetch);
 
   // jobId is deliberately never cleared once set: `job` stays cached after polling stops, so the
   // FAILED/DONE banners below keep rendering. A second Run-analysis click just sets a new id.
@@ -92,8 +98,9 @@ export default function TodayPage() {
 
   const failedCount = job?.status === "DONE" ? job.results.filter((r) => r.error).length : 0;
 
-  const pending = recommendations ?? [];
-  const lastRun = lastAnalysis(recommendations, now);
+  // The pending table also holds discovery ideas; the holdings list below shows only the rest.
+  const pending = holdingsOnly(recommendations ?? []);
+  const lastRun = lastAnalysis(pending, now);
 
   // Nothing is pending. Someone with no holdings and no watchlist gets the first steps, everyone else
   // the all-clear. While the portfolio is still loading neither shows, so the wrong one never flashes;
@@ -146,6 +153,17 @@ export default function TodayPage() {
         <AwaitingTile recommendations={pending} />
       </Box>
       <DriftCard />
+      <DiscoveryFeed
+        ideas={discovery.ideas}
+        loadError={discovery.loadError}
+        job={discovery.job}
+        running={discovery.running}
+        startError={discovery.startError}
+        usage={usage?.analysis_runs}
+        locked={lock !== null}
+        now={now}
+        onRun={discovery.start}
+      />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Could not load recommendations.
@@ -166,11 +184,16 @@ export default function TodayPage() {
           {job.results.length - failedCount} analyzed, {failedCount} failed.
         </Alert>
       )}
-      {recommendations?.length === 0 && emptyKind !== null && (
+      {recommendations && pending.length === 0 && emptyKind !== null && (
         <TodayEmpty firstRun={emptyKind === "first-run"} running={running} locked={lock !== null} onRun={runAnalysis} />
       )}
+      {pending.length > 0 && (
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mt: 3, mb: 1 }}>
+          Portfolio alerts
+        </Typography>
+      )}
       {isDesktop && pending.length > 0 && <TodayDesktop recommendations={pending} />}
-      {!isDesktop && recommendations?.map((recommendation) => (
+      {!isDesktop && pending.map((recommendation) => (
         // No inline confirmation here — approving/dismissing just revalidates the list, and the
         // card disappears because it's no longer PENDING. The full "Decision recorded" screen is
         // the detail page's job (/today/[id], Task 7); "Back to Today" would be nonsensical copy
