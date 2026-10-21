@@ -1152,6 +1152,12 @@ changes. Needs the design-first step.
 
 ### Phase 9: Frontend (A and B, L)
 
+Backend preparation (2026-10-21): the discovery display API branch adds saved quote/company
+snapshots and raw fundamentals, a bounded thesis excerpt, immutable opportunity/set-aside
+counts, named nearest misses and ranked pending results before the 50-item limit. This is the
+API prerequisite for Today and Workbench; it does not complete the frontend or the live I1/I3
+integration checks. See `docs/ARCHITECTURE.md` for the contract and legacy-null behavior.
+
 Follow `frontend/CLAUDE.md` and `DESIGN.md`. **Design first:** three HTML directions per new flow
 in `docs/design/`, owner chooses, then build.
 

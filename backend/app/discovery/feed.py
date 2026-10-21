@@ -32,7 +32,7 @@ def saved_ideas(db: Session, user_id: UUID) -> DiscoveryIdeasOut:
             Recommendation.idea["overall"].as_integer().desc().nulls_last(),
             risk,
             fit_score.desc().nulls_last(),
-            Recommendation.ticker,
+            Recommendation.ticker.collate("C"),
             Recommendation.created_at.desc(),
             Recommendation.id.desc(),
         )

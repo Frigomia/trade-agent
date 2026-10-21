@@ -184,8 +184,8 @@ def test_feed_ranks_before_limiting_and_matches_evaluation_order(client, db_sess
     ideas = []
     for index in range(60):
         idea = sample_idea()
-        idea.ticker = f"STOCK{index:02d}"
-        idea.overall = 80 if index < 9 else 70
+        idea.ticker = ["BRK.A", "BRK-A", "BRKA"][(index // 3) % 3] + f"{index:02d}"
+        idea.overall = None if index == 59 else 80 if index < 9 else 70
         idea.risk.risk_level = ["unknown", "high", "medium", "low"][index % 4]
         fit = next(score for score in idea.scores if score.name == "fit")
         fit.score = [None, 0, 50][index % 3]
