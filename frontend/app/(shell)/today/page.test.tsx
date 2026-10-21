@@ -24,7 +24,6 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 // Each is tested on its own; here they would only add unrelated requests to the shared apiFetch mock.
-vi.mock("@/components/portfolio/PortfolioTile", () => ({ PortfolioTile: () => "portfolio-tile" }));
 vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} }));
 
 import TodayPage from "./page";
@@ -117,11 +116,15 @@ describe("TodayPage", () => {
     expect(screen.getByText("Run your first scan")).toBeInTheDocument();
   });
 
-  it("shows the portfolio tile", async () => {
-    mockApi();
+  it("has no portfolio, cost-basis or awaiting-you cards: they are not part of the new Today", async () => {
+    mockApi({ recs: [rec()] });
     renderFresh(<TodayPage />);
 
-    await waitFor(() => expect(screen.getByText("portfolio-tile")).toBeInTheDocument());
+    await screen.findByText("AAPL");
+    expect(screen.queryByText("Awaiting you")).not.toBeInTheDocument();
+    expect(screen.queryByText("Vs cost basis")).not.toBeInTheDocument();
+    expect(screen.queryByText("Portfolio")).not.toBeInTheDocument();
+    expect(apiFetch).not.toHaveBeenCalledWith("/portfolio/snapshots");
   });
 
   it("shows an inline error when the list fails to load", async () => {

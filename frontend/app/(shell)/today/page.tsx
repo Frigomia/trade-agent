@@ -9,10 +9,8 @@ import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import { TodayEmpty } from "@/components/recommendations/TodayEmpty";
 import { RecommendationCard } from "@/components/recommendations/RecommendationCard";
 import { DriftCard } from "@/components/plan/DriftCard";
-import { PortfolioTile } from "@/components/portfolio/PortfolioTile";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Panel } from "@/components/ui/Panel";
-import { CostBasisTile, TodayDesktop } from "@/components/recommendations/TodayDesktop";
+import { TodayDesktop } from "@/components/recommendations/TodayDesktop";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { useClaudeLock } from "@/lib/claudeKey";
@@ -21,26 +19,6 @@ import { holdingsOnly } from "@/lib/discovery";
 import { useDiscovery } from "@/lib/useDiscovery";
 import type { Usage } from "@/lib/usage";
 
-const ACTION_ORDER = ["BUY", "ADD", "HOLD", "TRIM", "SELL", "WATCH"] as const;
-
-function AwaitingTile({ recommendations }: { recommendations: RecommendationOut[] }) {
-  const parts = ACTION_ORDER.flatMap((action) => {
-    const count = recommendations.filter((r) => r.action === action).length;
-    return count > 0 ? [`${count} ${action}`] : [];
-  });
-  return (
-    <Panel sx={{ p: "12px 13px", flex: 1, minWidth: 0 }}>
-      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Awaiting you</Typography>
-      <Typography sx={{ fontSize: "1.375rem", fontWeight: 650, letterSpacing: "-0.035em", mt: 0.5 }}>
-        {recommendations.length}
-      </Typography>
-      {parts.length > 0 && (
-        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 1 }}>{parts.join(" · ")}</Typography>
-      )}
-    </Panel>
-  );
-}
-
 export default function TodayPage() {
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   useDailySnapshot();
@@ -48,7 +26,6 @@ export default function TodayPage() {
     "/analysis/recommendations?status=PENDING",
     apiFetch,
   );
-  // Same key as PortfolioTile, so SWR shares one request.
   const { data: summary, error: summaryError } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
   const { data: usage } = useSWR<Usage>("/me/usage", apiFetch);
   const [now] = useState(() => Date.now()); // lazy: the purity lint forbids Date.now() in render
@@ -95,11 +72,6 @@ export default function TodayPage() {
         now={now}
         onRun={discovery.start}
       />
-      <Box sx={{ display: "flex", gap: 1.25, mt: 3 }}>
-        <PortfolioTile />
-        {isDesktop && <CostBasisTile />}
-        <AwaitingTile recommendations={pending} />
-      </Box>
       <DriftCard />
       {loadError && (
         <Alert severity="error" sx={{ mb: 2 }}>
