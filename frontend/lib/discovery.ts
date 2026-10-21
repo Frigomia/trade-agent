@@ -83,6 +83,13 @@ export function whenText(iso: string, now: number): string {
   return `${date.toLocaleDateString([], { weekday: "short" })} ${time}`;
 }
 
+/** "20 Oct 2026, 06:12": an absolute date and time for a record that should not read as relative. */
+export function dateTimeText(iso: string): string {
+  const date = new Date(toTime(iso));
+  const day = date.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+  return `${day}, ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+}
+
 /** The scan bar's count words, from the saved counts only; empty parts when a legacy scan lacks them. */
 export function scanCounts(scan: ScanRun): string[] {
   if (scan.opportunities === null) return [];
@@ -156,4 +163,9 @@ export function quoteLabel(idea: IdeaOut): string {
  */
 export function isEarlier(rec: Pick<DiscoveryRecommendation, "created_at">, scan: Pick<ScanRun, "created_at"> | null): boolean {
   return scan !== null && toTime(rec.created_at) < toTime(scan.created_at);
+}
+
+/** The portfolio-fit score (0 to 100), or null when fit does not apply (no holdings to compare). */
+export function fitScore(idea: IdeaOut): number | null {
+  return idea.scores.find((s) => s.name === "fit")?.score ?? null;
 }
