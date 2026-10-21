@@ -277,6 +277,20 @@ class DimensionScore(Contract):
     reasons: list[str]  # derived from numbers, not from the LLM
 
 
+class IdeaSnapshot(Contract):
+    """Display data captured during evaluation, never refreshed when reading a saved idea."""
+
+    exchange: str | None
+    country: str | None  # listing country, not revenue exposure
+    sector: str | None
+    industry: str | None
+    currency: str | None  # major quote unit (GBP rather than GBp)
+    price: float | None = Field(gt=0)
+    price_as_of: datetime | None
+    fundamentals: dict[str, float | None]  # raw provider metrics; no currency conversion
+    coverage: Coverage
+
+
 class IdeaOut(Contract):
     ticker: str
     name: str
@@ -298,6 +312,9 @@ class IdeaOut(Contract):
     sources: list[Claim]
     style_tags: list[str]  # derived from fundamentals: quality, value, growth, income, defensive
     data_notes: list[str]  # stale prices, missing metrics, unavailable peers, conflicts
+    # Older persisted ideas predate these fields; missing data stays explicitly unavailable.
+    snapshot: IdeaSnapshot | None = None
+    headline: str | None = Field(default=None, min_length=1, max_length=180)
 
     @model_validator(mode="after")
     def _scores_are_complete_and_back_the_overall(self) -> Self:

@@ -11,10 +11,10 @@ from app.agents.news import _get_client
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.claude_keys import require_claude_key
+from app.discovery.feed import saved_ideas
 from app.discovery.jobs import DiscoveryAlreadyRunning, create_job, get_job_status, run_job
-from app.models import Recommendation, ScanRun
 from app.rate_limit import rate_limiter
-from app.schemas import DiscoveryIdeasOut, RecommendationOut, ScanRunOut
+from app.schemas import DiscoveryIdeasOut
 from app.usage import check_monthly_usage, refund_usage
 
 router = APIRouter(
@@ -82,27 +82,4 @@ def list_ideas(
     db: Session = Depends(get_user_db),
 ) -> DiscoveryIdeasOut:
     response.headers["Cache-Control"] = "no-store"
-    recommendations = (
-        db.query(Recommendation)
-        .filter_by(
-            user_id=user.id,
-            source="discovery",
-            status="PENDING",
-        )
-        .order_by(Recommendation.created_at.desc(), Recommendation.id.desc())
-        .limit(50)
-        .all()
-    )
-    latest = (
-        db.query(ScanRun)
-        .filter_by(user_id=user.id)
-        .order_by(
-            ScanRun.created_at.desc(),
-            ScanRun.id.desc(),
-        )
-        .first()
-    )
-    return DiscoveryIdeasOut(
-        recommendations=[RecommendationOut.model_validate(rec) for rec in recommendations],
-        latest_scan=ScanRunOut.model_validate(latest) if latest is not None else None,
-    )
+    return saved_ideas(db, user.id)

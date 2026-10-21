@@ -31,10 +31,18 @@ def save_scan(
     if len({idea.ticker for idea in ranked}) != len(ranked):
         raise ValueError("A scan must not contain duplicate candidate tickers")
     qualifying = [idea for idea in ranked if is_opportunity(idea)]
+    if len(qualifying) > researched:
+        raise ValueError("Opportunities cannot exceed researched candidates")
     coverage = dict(coverage_summary or {})
+    coverage["opportunities"] = len(qualifying)
     if not qualifying:
         coverage["nearest_misses"] = [
-            {"ticker": idea.ticker, "overall": idea.overall, "confidence": idea.confidence}
+            {
+                "ticker": idea.ticker,
+                "name": idea.name,
+                "overall": idea.overall,
+                "confidence": idea.confidence,
+            }
             for idea in ranked[:3]
         ]
     exclusions = [

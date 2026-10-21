@@ -433,6 +433,21 @@ class ScanRunOut(BaseModel):
     rejected_mentions: list[RejectedMention]
     coverage_summary: dict[str, Any]
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def opportunities(self) -> int | None:
+        """Immutable scan count; legacy scans did not store it."""
+        count = self.coverage_summary.get("opportunities")
+        if type(count) is int and 0 <= count <= self.researched:
+            return count
+        return None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def set_aside(self) -> int | None:
+        count = self.opportunities
+        return self.researched - count if count is not None else None
+
 
 class DiscoveryIdeasOut(BaseModel):
     recommendations: list[RecommendationOut]

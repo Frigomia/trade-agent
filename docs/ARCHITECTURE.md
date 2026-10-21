@@ -351,7 +351,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | POST | `/discovery/run` | — | Starts a manual discovery scan (202, `{job_id}`), including for an empty portfolio. Requires a usable Claude key, 2 requests/minute and one shared monthly `analysis_run` unit. A second concurrent scan returns 409 and refunds that unit. Admins without a saved key use an explicit server client; regular users never do. Reads cached universe snapshots and daily mentions; never starts the owner-funded global theme batch. |
 | GET | `/discovery/run/{job_id}` | — | Owner-only, no-store job status (`RUNNING` \| `DONE` \| `FAILED`), stage, `total`/`done`, evaluated `results`, completed `scan` or a safe `error`. Unknown and other users' UUIDs both return 404. |
-| GET | `/discovery/ideas` | — | Owner-only, no-store `{recommendations, latest_scan}`: up to 50 pending discovery recommendations, newest first, and the latest completed `ScanRun` with exclusions, rejected mentions and coverage. No Claude key needed to read stored results. |
+| GET | `/discovery/ideas` | — | Owner-only, no-store `{recommendations, latest_scan}`: up to 50 pending discovery recommendations, ordered by overall descending, lower risk, available fit descending, then ticker. Ranking precedes the limit and spans pending recommendations from all scans; identical ticker/rank ties use newest first. The latest completed `ScanRun` includes exclusions, rejected mentions, coverage and immutable `opportunities`/`set_aside` counts (null for legacy scans). No provider calls or Claude key needed to read stored results. |
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry two computed, never-persisted fields, `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only; `null` on any quote-fetch failure, never a 500. Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Allowed from `PENDING` or `REJECTED` (a decision can be reversed); from `APPROVED` (same decision again) or `SUPERSEDED` it returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
@@ -430,6 +430,28 @@ and older recommendation responses remain valid. The existing recommendation lis
 export expose stored discovery ideas when present. `GET /me/export` adds `scan_runs` (an empty
 list when none exist), and `DELETE /me/data` removes those rows through the shared user-table
 registry. Dedicated manual discovery endpoints start, poll and list scans (Phase 7 manual slice).
+
+New `IdeaOut` results include `snapshot` and `headline` for the approved Today and Workbench
+views. `snapshot` captures listing exchange/country, sector/industry, quote currency, price,
+quote timestamp, raw fundamentals and metric coverage during evaluation. Only the quote pair
+is normalized to major units using `fx.SUBUNITS` (5000 GBp becomes 50 GBP); raw fundamentals
+are unchanged, and their monetary reporting currency is not inferred from the quote currency.
+Country is the listing country, not issuer domicile or revenue exposure. Missing timestamps
+remain null and existing price-date uncertainty disclosures remain in `data_notes`.
+The saved price is a scan-time quote, not a live price or a change to outcome-evaluation inputs.
+`headline` is a whitespace-normalized, word-bounded thesis excerpt of at most 180 characters;
+it adds no model call or new claims. Full thesis, bear case and sources remain available.
+Legacy idea JSON validates with `snapshot=null` and `headline=null`; reads do not backfill it
+from current provider metadata.
+
+`save_scan` writes the original qualifying count to `coverage_summary.opportunities`, overriding
+any caller-supplied value. `ScanRunOut.opportunities` exposes that saved count and `set_aside`
+is `researched - opportunities`; it includes researched exclusions and non-qualifying results,
+but not failed research or screening rejections. Reviewing/superseding a recommendation never
+changes these counts. Legacy scans without a valid saved count expose null for both; the API
+does not guess from summary prose or current pending rows. Empty-opportunity scans also save
+company names alongside ticker, overall and confidence in `nearest_misses`. Existing JSON
+columns hold these additions, so no database migration is required.
 
 ### Contribution planner
 
