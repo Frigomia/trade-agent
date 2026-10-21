@@ -125,6 +125,14 @@ describe("DiscoveryFeed", () => {
     expect(top).not.toHaveTextContent(/[+-]\d+\.\d%/);
   });
 
+  it("says when the other ideas' prices were saved, and offers no link when everything is shown", () => {
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
+
+    const day = new Date(Date.parse("2026-10-19T20:00:00Z")).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    expect(screen.getByText(`Prices as of ${day}`)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /view all/i })).not.toBeInTheDocument();
+  });
+
   it("describes the latest scan from the saved counts and the runs used", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
 
@@ -143,8 +151,10 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: SCAN, recommendations: recs });
 
     expect(screen.getAllByRole("article")).toHaveLength(4); // top + three
-    fireEvent.click(screen.getByRole("button", { name: "Show 2 more" }));
+    fireEvent.click(screen.getByRole("button", { name: "View all 5" }));
     expect(screen.getAllByRole("article")).toHaveLength(6);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(screen.getAllByRole("article")).toHaveLength(4);
   });
 
   it("leaves out price and meta for an idea saved before the display fields existed", () => {

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
+import { ChevronRight } from "lucide-react";
 import type { DiscoveryIdeas, DiscoveryJob } from "@/lib/api/discovery-types";
-import { splitIdeas } from "@/lib/discovery";
+import { pricesAsOf, splitIdeas } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
 import { OpportunityCard } from "./OpportunityCard";
 import { ScanBar } from "./ScanBar";
@@ -35,6 +36,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, usag
   const { top, others, more } = splitIdeas(recs);
   // "Show more" lists the ideas beyond the top one and the three shown.
   const extra = showAll ? recs.filter((r) => r.idea).slice(1 + others.length) : [];
+  const asOf = pricesAsOf([...others, ...extra]);
   const failed = !running && job?.status === "FAILED";
 
   return (
@@ -54,21 +56,29 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, usag
           <TopOpportunity rec={top} />
           {others.length > 0 && (
             <>
-              <Typography component="h2" sx={heading}>
-                Other opportunities
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, flexWrap: "wrap", mt: 1 }}>
+                <Typography component="h2" sx={{ ...heading, mt: 0 }}>
+                  Other opportunities
+                </Typography>
+                {asOf && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Prices as of {asOf}</Typography>}
+                <Box sx={{ flex: 1 }} />
+                {more > 0 && (
+                  <Button
+                    size="small"
+                    variant="text"
+                    onClick={() => setShowAll((open) => !open)}
+                    endIcon={<ChevronRight size={14} aria-hidden style={{ transform: showAll ? "rotate(-90deg)" : "none" }} />}
+                    sx={{ minHeight: { xs: 44, md: 36 }, fontSize: "0.8125rem", fontWeight: 500 }}
+                  >
+                    {showAll ? "Show fewer" : `View all ${others.length + more}`}
+                  </Button>
+                )}
+              </Box>
               <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "repeat(3, minmax(0, 1fr))" } }}>
                 {[...others, ...extra].map((rec) => (
                   <OpportunityCard key={rec.id} rec={rec} />
                 ))}
               </Box>
-              {more > 0 && !showAll && (
-                <Box>
-                  <Button size="small" variant="text" onClick={() => setShowAll(true)} sx={{ minHeight: { xs: 44, md: 36 } }}>
-                    Show {more} more
-                  </Button>
-                </Box>
-              )}
             </>
           )}
         </>

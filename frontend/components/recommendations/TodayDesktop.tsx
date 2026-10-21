@@ -1,19 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import useSWR from "swr";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct, formatSigned } from "@/lib/format";
 import { PortfolioChart } from "@/components/portfolio/PortfolioChart";
-import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
-import { SIGNAL_LABEL } from "./EvidencePanel";
-import { AutomaticTag } from "./AutomaticTag";
-import { ActionChip } from "./RecommendationCard";
+import { PortfolioAlerts } from "./PortfolioAlerts";
 
 /** The desktop part of Today from the mockup: value over time beside the compact review list. */
 export function TodayDesktop({ recommendations }: { recommendations: RecommendationOut[] }) {
@@ -35,64 +31,7 @@ export function TodayDesktop({ recommendations }: { recommendations: Recommendat
         </Typography>
         <PortfolioChart snapshots={snapshots ?? []} />
       </Panel>
-      <Panel sx={{ p: "16px 18px" }}>
-        <Box sx={{ display: "flex", alignItems: "baseline" }}>
-          <Typography sx={{ fontSize: "1.0625rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
-            Portfolio alerts
-          </Typography>
-          <Box sx={{ flex: 1 }} />
-          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-            {recommendations.length} pending
-          </Typography>
-        </Box>
-        <Box component="ul" sx={{ listStyle: "none", p: 0, m: 0, mt: 1 }}>
-          {recommendations.map((rec) => (
-            <Box
-              component="li"
-              key={rec.id}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.25,
-                flexWrap: "wrap",
-                rowGap: 0.5,
-                py: 1.25,
-                borderBottom: "1px solid var(--line)",
-                "&:last-of-type": { borderBottom: 0 },
-              }}
-            >
-              <Logo name={rec.ticker} size={34} />
-              <Link
-                href={`/today/${rec.id}`}
-                style={{ color: "inherit", textDecoration: "none", flex: 1, minWidth: 0 }}
-              >
-                <Typography sx={{ fontWeight: 600, fontSize: "0.90625rem" }}>{rec.ticker}</Typography>
-                <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-                  {[
-                    rec.fundamental_score !== null ? `Fundamentals ${rec.fundamental_score}` : null,
-                    rec.technical_signal ? SIGNAL_LABEL[rec.technical_signal].toLowerCase() : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || "Open for the evidence"}
-                </Typography>
-              </Link>
-              <ActionChip action={rec.action} />
-              <AutomaticTag source={rec.source} />
-            </Box>
-          ))}
-        </Box>
-        {recommendations.length > 0 && (
-          <Button
-            component={Link}
-            href={`/today/${recommendations[0].id}`}
-            variant="contained"
-            fullWidth
-            sx={{ mt: 1.5 }}
-          >
-            Review first
-          </Button>
-        )}
-      </Panel>
+      <PortfolioAlerts recommendations={recommendations} />
     </Box>
   );
 }

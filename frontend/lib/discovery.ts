@@ -112,3 +112,13 @@ export function stageIndex(stage: string | undefined): number {
 
 /** The error the job stores when Anthropic rejected the user's key (jobs.py). */
 export const KEY_REJECTED_MESSAGE = "Your Claude key needs attention.";
+
+/** "Mon 19 Oct": the newest saved quote date among the ideas, or null when none saved one. */
+export function pricesAsOf(recs: DiscoveryRecommendation[]): string | null {
+  const times = recs.flatMap((rec) => {
+    const asOf = rec.idea?.snapshot?.price_as_of;
+    return asOf ? [toTime(asOf)] : [];
+  });
+  if (times.length === 0) return null;
+  return new Date(Math.max(...times)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}

@@ -6,6 +6,7 @@ import {
   meterFill,
   monogram,
   priceText,
+  pricesAsOf,
   riskLabel,
   scanCounts,
   sectorText,
@@ -51,8 +52,10 @@ function idea(over: Partial<IdeaOut> = {}): IdeaOut {
   };
 }
 
-function rec(id: number, source: string, withIdea = true): DiscoveryRecommendation {
-  return { id, source, idea: withIdea ? idea({ ticker: `T${id}` }) : null } as unknown as DiscoveryRecommendation;
+function rec(id: number, source: string, withIdea = true, asOf?: string | null): DiscoveryRecommendation {
+  const base = idea({ ticker: `T${id}` });
+  const withDate = asOf === undefined ? base : { ...base, snapshot: { ...base.snapshot!, price_as_of: asOf } };
+  return { id, source, idea: withIdea ? withDate : null } as unknown as DiscoveryRecommendation;
 }
 
 describe("holdingsOnly", () => {
@@ -139,5 +142,19 @@ describe("stageIndex", () => {
     expect(["screening", "admitting", "researching", "evaluating", "writing"].map(stageIndex)).toEqual([0, 1, 2, 3, 4]);
     expect(stageIndex("failed")).toBe(0);
     expect(stageIndex(undefined)).toBe(0);
+  });
+});
+
+describe("pricesAsOf", () => {
+  const at = (asOf: string | null) => rec(1, "discovery", true, asOf);
+
+  it("uses the newest saved quote date and ignores ideas that saved none", () => {
+    const day = (iso: string) => new Date(Date.parse(iso)).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+    expect(pricesAsOf([at("2026-10-19T20:00:00Z"), at("2026-10-20T20:00:00Z"), at(null)])).toBe(day("2026-10-20T20:00:00Z"));
+  });
+
+  it("is null when no idea saved a quote date", () => {
+    expect(pricesAsOf([at(null)])).toBeNull();
+    expect(pricesAsOf([])).toBeNull();
   });
 });
