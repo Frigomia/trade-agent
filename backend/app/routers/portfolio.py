@@ -26,6 +26,8 @@ from app.schemas import (
     PortfolioSummaryOut,
     TradeIn,
     TradeOut,
+    WatchlistInsightOut,
+    WatchlistInsightsOut,
     WatchlistItemIn,
     WatchlistItemOut,
     WatchlistSummaryOut,
@@ -332,3 +334,49 @@ async def get_summary(
         pl_covered_count=covered,
         pl_complete=not (unknown_basis or unpriced),
     )
+
+
+@router.get(
+    "/insights",
+    response_model=WatchlistInsightsOut,
+    dependencies=[Depends(rate_limiter("portfolio_insights", limit=QUOTE_LIMIT_PER_MINUTE))],
+)
+async def get_watchlist_insights(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_user_db)
+) -> WatchlistInsightsOut:
+    """Watchlist items whose live price sits inside the target range the person set.
+
+    Only rows with a range are priced. A stale or failed quote yields no insight and is reported
+    in `missing`, so a quiet answer is never mistaken for "outside the range".
+    """
+    items = (
+        db.query(WatchlistItem)
+        .filter(WatchlistItem.user_id == user.id, WatchlistItem.target_price_low.is_not(None))
+        .order_by(WatchlistItem.ticker)
+        .all()
+    )
+    ranges = {
+        i.ticker: (float(i.target_price_low), float(i.target_price_high))
+        for i in items
+        if i.target_price_low is not None and i.target_price_high is not None
+    }
+    db.close()  # release the pooled connection before awaiting quotes
+    prices = await _prices_for(set(ranges), asyncio.Semaphore(8))
+    insights = []
+    missing = False
+    for ticker, (low, high) in ranges.items():
+        price, _, stale = prices[ticker]
+        if price is None or stale:
+            missing = True
+        elif low <= price <= high:
+            insights.append(
+                WatchlistInsightOut(
+                    ticker=ticker,
+                    kind="in_target_range",
+                    text="Entered your target price range",
+                    current_price=price,
+                    target_price_low=low,
+                    target_price_high=high,
+                )
+            )
+    return WatchlistInsightsOut(insights=insights, missing=["prices"] if missing else [])

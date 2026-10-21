@@ -51,6 +51,13 @@ class WatchlistItem(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "ticker", name="uq_watchlist_user_ticker"),
         CheckConstraint(ISIN_CHECK, name="ck_watchlist_items_isin"),
+        # A target price range is both ends or neither, and low is not above high.
+        CheckConstraint(
+            "(target_price_low IS NULL AND target_price_high IS NULL) OR "
+            "(target_price_low IS NOT NULL AND target_price_high IS NOT NULL AND "
+            "target_price_low > 0 AND target_price_high >= target_price_low)",
+            name="ck_watchlist_items_target_price_range",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -60,6 +67,9 @@ class WatchlistItem(Base):
     note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     target_weight: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     isin: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    # The price range the user would like to see, in the quote's own unit; None when not set.
+    target_price_low: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    target_price_high: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
 
 
 class Trade(Base):
