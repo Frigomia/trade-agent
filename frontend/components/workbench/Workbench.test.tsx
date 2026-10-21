@@ -180,18 +180,25 @@ describe("Workbench tabs", () => {
     const sources = screen.getByRole("tab", { name: "Sources" });
     expect(overview).toHaveAttribute("tabindex", "0");
     expect(sources).toHaveAttribute("tabindex", "-1");
+    const numbers = screen.getByRole("tab", { name: "Numbers" });
     fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(numbers).toHaveAttribute("aria-selected", "true");
+    expect(numbers).toHaveFocus();
+    expect(numbers).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(numbers, { key: "End" });
     expect(sources).toHaveAttribute("aria-selected", "true");
-    expect(sources).toHaveFocus();
-    expect(sources).toHaveAttribute("tabindex", "0");
     fireEvent.keyDown(sources, { key: "ArrowRight" }); // wraps round
     expect(overview).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Numbers", "Risk and fit", "Sources"]);
   });
 
-  it("keeps the written portfolio-fit explanation on the page", async () => {
+  it("shows the written portfolio-fit explanation on the Risk and fit tab, not on Overview", async () => {
     show();
 
-    expect(await screen.findByText("It would add software exposure you do not have.")).toBeInTheDocument();
+    await screen.findByRole("tab", { name: "Overview" });
+    expect(screen.queryByText("It would add software exposure you do not have.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Risk and fit" }));
+    expect(screen.getByText("It would add software exposure you do not have.")).toBeInTheDocument();
   });
 
   it("opens Sources from the rail's See sources link", async () => {
