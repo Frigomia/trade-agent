@@ -341,7 +341,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 |---|---|---|---|
 | GET | `/health` | — | Liveness check |
 | GET | `/portfolio/holdings` | — | List all holdings |
-| GET | `/portfolio/analytics` | — | EUR exposure, concentration, aligned-history volatility/correlations and data notes (`PortfolioExposure`); caller's open holdings only, no-store, 5 requests/minute; no Claude key or paid research needed |
+| GET | `/portfolio/analytics` | — | EUR exposure, concentration, aligned-history volatility, biggest fall over the past year, correlations and data notes (`PortfolioExposure`); caller's open holdings only, no-store, 5 requests/minute; no Claude key or paid research needed |
 | POST | `/portfolio/holdings` | `HoldingIn` | Upsert by ticker, requiring only ticker and shares when security type resolves. Optional name/type/sector auto-fill from cached profile; missing type asks for Stock/ETF (`422`). Omitted update fields preserve stored values; explicit null clears purchase details. At most 100 holdings per user (`409` beyond that). After metadata awaits, rechecks active account under the shared per-user lock before writing; rollback on failure |
 | DELETE | `/portfolio/holdings/{ticker}` | — | |
 | GET | `/portfolio/watchlist` | — | |
@@ -877,6 +877,16 @@ pair's common sample; constant series have undefined correlation (`null`). Portf
 uses one common sample across every valued position (`sqrt(w' covariance w) * sqrt(252)`). A
 position lacking enough history keeps its weight/value while whole-portfolio volatility becomes
 unavailable; usable positions are never silently reweighted for risk. No forward fill is used.
+
+`max_drawdown_1y` is the largest peak-to-low fall (a fraction at or below 0, for example -0.18)
+of the portfolio over the past year, from the same common sample as the volatility. Each day's
+simple return is the weighted sum of the holdings' returns at today's weights (as if rebalanced
+daily), compounded into a value series. An interval that not every holding has (another
+market's holiday) is skipped, as for the volatility, so the real fall may be larger. It is the
+history of **today's holdings at today's weights**, not the portfolio the person actually held
+(trades made during the year are not known), and a note on the response says so. It is `null`,
+with the volatility, when fewer than 60 matching intervals exist, and it needs no extra provider
+call.
 
 `marginal_effect(exposure, candidate_returns, candidate_sector, hypothetical_weight=0.05, *,
 ticker, portfolio_returns)` returns `CandidateFit`. Callers retain interval-keyed returns from
