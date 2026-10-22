@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Alert, Box, Button, Dialog, TextField, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Alert, Box, Button, Drawer, TextField, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { AssetType, HoldingSummary } from "@/lib/api/portfolio-types";
 import { useAction } from "@/lib/useAction";
@@ -22,13 +22,14 @@ export interface HoldingFormProps {
   onSaved: () => void;
 }
 
-// The body lives in an inner component so its state resets each time the modal closes.
+// A side drawer on a computer and a bottom sheet on a phone, like Log a trade. The body lives in an
+// inner component so its state resets each time the drawer closes.
 export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
-  const fullScreen = useMediaQuery(useTheme().breakpoints.down("sm"));
+  const isPhone = useMediaQuery(useTheme().breakpoints.down("md"));
   return (
-    <Dialog open={open} onClose={onClose} fullScreen={fullScreen} fullWidth maxWidth="sm" aria-labelledby="holding-form-title">
+    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={onClose} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-labelledby": "holding-form-title" } }}>
       <HoldingFormBody onClose={onClose} {...rest} />
-    </Dialog>
+    </Drawer>
   );
 }
 
@@ -131,7 +132,7 @@ function HoldingFormBody({
   }
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%", p: 3 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ width: { xs: "auto", md: 400 }, p: 3, pb: { xs: 4, md: 3 } }}>
       <Typography id="holding-form-title" variant="h6" sx={{ fontWeight: 650 }}>
         {editing ? `Edit ${holding.ticker}` : "Add holding"}
       </Typography>

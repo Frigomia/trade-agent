@@ -3,7 +3,7 @@
 import { Box, Button, Typography } from "@mui/material";
 import { Panel } from "@/components/ui/Panel";
 
-/** First-time entry opens the same responsive modal used for every other holding. */
+/** First-time entry opens the same drawer used for every other holding. */
 export function FirstHolding({ onAdd }: { onAdd: () => void }) {
   return (
     <Panel sx={{ p: 3 }}>
