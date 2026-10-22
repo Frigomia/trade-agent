@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import useSWR from "swr";
 import {
   Alert,
@@ -28,7 +28,8 @@ import type {
 } from "@/lib/api/portfolio-types";
 import { formatAmount, formatPct, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
-import { Amount } from "@/components/portfolio/Amount";
+import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
+import { OverviewStrip } from "@/components/portfolio/OverviewStrip";
 import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
@@ -43,6 +44,7 @@ import { usePickedIsin } from "@/lib/usePickedIsin";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
+import { allocate, largestPositions, type AllocationDim } from "@/lib/portfolio/allocation";
 
 const DASH = "—";
 // A share count on the phone line, to one decimal at most ("1.4 sh"); a tiny one keeps its digits.
@@ -53,15 +55,6 @@ const WATCH_COL = 44;
 
 function plColor(value: number | null): string {
   return value !== null && value < 0 ? "var(--down)" : "var(--up)";
-}
-
-function Stat({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Box>
-      <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>{label}</Typography>
-      <Box sx={{ fontWeight: 600 }}>{children}</Box>
-    </Box>
-  );
 }
 
 type Target = ReturnType<typeof effectiveTarget>;
@@ -212,7 +205,7 @@ export default function PortfolioPage() {
     error: summaryError,
     mutate: mutateSummary,
   } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
-  const { mutate: mutateSnapshots } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
+  const { data: snapshots, error: snapshotsError, mutate: mutateSnapshots } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
   useDailySnapshot();
 
   const [tradeOpen, setTradeOpen] = useState(false);
@@ -229,6 +222,15 @@ export default function PortfolioPage() {
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
+  // The allocation donut's grouping, and the group a legend row selected: it filters the table.
+  const [dim, setDim] = useState<AllocationDim>("sector");
+  const [selected, setSelected] = useState<string | null>(null);
+  const allocation = allocate(open, dim);
+  const group = allocation.groups.find((g) => g.id === selected) ?? null;
+  // A selected group that is no longer there (a holding was sold, a price went missing) is dropped
+  // for good, so it cannot come back on its own with a later refresh.
+  if (selected !== null && group === null) setSelected(null);
+  const shown = group ? open.filter((h) => group.tickers.includes(h.ticker)) : open;
   // Nothing owned and nothing watched yet: the watchlist panel is the "or" next to the first-holding form.
   const justWatching = summary !== undefined && open.length === 0 && summary.watchlist.length === 0;
   const watchlist = summary?.watchlist ?? [];
@@ -328,39 +330,20 @@ export default function PortfolioPage() {
       )}
 
       {summary && open.length > 0 && (
-        <>
-          <Box sx={{ display: "flex", gap: 4, alignItems: "flex-end", flexWrap: "wrap", mb: 1 }}>
-            <Stat label="Portfolio value">
-              <Amount value={summary.total_market_value} size={38} />
-            </Stat>
-            <Stat label="Cost basis">
-              {summary.pl_covered_count === 0 ? DASH : <Amount value={summary.total_cost_basis} />}
-              {summary.pl_complete === false && summary.pl_covered_count !== 0 && (
-                <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Known costs only</Typography>
-              )}
-            </Stat>
-            <Stat label="Total P/L">
-              <Box component="span" sx={{ color: plColor(summary.total_pl) }}>
-                {summary.pl_covered_count === 0 ? DASH : formatSigned(summary.total_pl)}
-                {summary.total_pl_pct !== null && ` (${formatPct(summary.total_pl_pct)})`}
-              </Box>
-            </Stat>
-          </Box>
-          <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
-            Mixed currencies are not converted; totals add amounts as entered.
-          </Typography>
-          {summary.unpriced_count > 0 && (
-            <Typography sx={{ fontSize: 12, color: "var(--warn)" }}>
-              {summary.unpriced_count} holding{summary.unpriced_count === 1 ? " has" : "s have"} no
-              live price and {summary.unpriced_count === 1 ? "isn't" : "aren't"} in these totals.
-            </Typography>
-          )}
-          {(summary.unknown_basis_count ?? 0) > 0 && (
-            <Typography sx={{ fontSize: 12, color: "var(--warn)" }}>
-              {summary.unknown_basis_count} holding(s) have no average cost. P/L covers only priced holdings with a known cost basis.
-            </Typography>
-          )}
-        </>
+        <Box sx={{ display: "grid", gap: 2 }}>
+          <OverviewStrip summary={summary} openCount={open.length} snapshots={snapshots} snapshotsFailed={!!snapshotsError} />
+          <AllocationPanel
+            allocation={allocation}
+            dim={dim}
+            onDim={(next) => {
+              setDim(next);
+              setSelected(null);
+            }}
+            selected={group?.id ?? null}
+            onSelect={setSelected}
+            positions={largestPositions(open)}
+          />
+        </Box>
       )}
 
       <Box
@@ -396,7 +379,15 @@ export default function PortfolioPage() {
             <span>P/L</span>
             <span>Weight / Target</span>
           </Box>
-          {open.map((holding) => (
+          {group && (
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", py: 1 }}>
+              Showing holdings in {group.name}.{" "}
+              <ButtonBase onClick={() => setSelected(null)} sx={{ fontSize: "inherit", color: "var(--accent)", textDecoration: "underline", verticalAlign: "baseline" }}>
+                Show all
+              </ButtonBase>
+            </Typography>
+          )}
+          {shown.map((holding) => (
             <HoldingRow
               key={holding.ticker}
               holding={holding}

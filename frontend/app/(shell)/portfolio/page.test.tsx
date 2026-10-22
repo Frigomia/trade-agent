@@ -120,9 +120,9 @@ describe("PortfolioPage", () => {
     renderFresh();
 
     await waitFor(() => expect(screen.getByText("Apple Inc.")).toBeInTheDocument());
-    expect(screen.getByText("Portfolio value").parentElement).toHaveTextContent("3,900.00");
-    expect(screen.getByText("Cost basis").parentElement).toHaveTextContent("3,500.00");
-    expect(screen.getByText("Total P/L").parentElement).toHaveTextContent("+400.00");
+    expect(screen.getByText("Total value").parentElement).toHaveTextContent("3,900.00");
+    expect(screen.getByText("Total gain or loss").parentElement).toHaveTextContent("+400.00");
+    expect(screen.getByText("Today").parentElement).toHaveTextContent("Not available");
     expect(screen.getByText(/mixed currencies are not converted/i)).toBeInTheDocument();
     expect(screen.getByText("Microsoft")).toBeInTheDocument();
     expect(screen.queryByText("Sold Out Co")).not.toBeInTheDocument();
@@ -232,6 +232,88 @@ describe("PortfolioPage", () => {
     expect(screen.getByRole("button", { name: /remove aapl from watchlist/i })).toBeInTheDocument();
     expect(screen.getByText("Watching · target 5%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
+  });
+
+  describe("allocation", () => {
+    const withSectors = () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [
+          { ...SUMMARY.holdings[0], sector: "Technology", country: "United States", currency: "USD" },
+          { ...SUMMARY.holdings[1], sector: "Utilities", country: "United Kingdom", currency: "GBP" },
+          SUMMARY.holdings[2],
+        ],
+      });
+    };
+
+    it("shows the allocation by sector, and the largest positions", async () => {
+      withSectors();
+      renderFresh();
+
+      const panel = await screen.findByRole("region", { name: "Allocation" });
+      expect(within(panel).getByRole("button", { name: /Technology/ })).toHaveTextContent("51.3%");
+      expect(within(panel).getByRole("button", { name: /Utilities/ })).toHaveTextContent("48.7%");
+      expect(within(panel).getByRole("heading", { name: "Largest positions" })).toBeInTheDocument();
+    });
+
+    it("filters the holdings to the group a legend row selects, and shows all again", async () => {
+      withSectors();
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+      expect(screen.getByText("Microsoft")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Utilities/ }));
+
+      expect(screen.queryByText("Apple Inc.")).not.toBeInTheDocument();
+      expect(screen.getByText("Microsoft")).toBeInTheDocument();
+      expect(screen.getByText(/Showing holdings in Utilities/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+      expect(screen.queryByText(/Showing holdings in/)).not.toBeInTheDocument();
+    });
+
+    it("clears the filter when the grouping changes", async () => {
+      withSectors();
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+      fireEvent.click(screen.getByRole("button", { name: /Utilities/ }));
+      expect(screen.queryByText("Apple Inc.")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Country" }));
+
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /United Kingdom/ })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("keeps a holding with no live price in the table when its group is selected", async () => {
+      handlers["GET /portfolio/summary"] = () => ({
+        ...SUMMARY,
+        holdings: [
+          { ...SUMMARY.holdings[0], sector: "Technology" },
+          { ...SUMMARY.holdings[1], sector: "Technology", current_price: null, market_value: null, unrealized_pl: null, unrealized_pl_pct: null, weight: null },
+        ],
+      });
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      fireEvent.click(screen.getByRole("button", { name: /Technology/ }));
+
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+      expect(screen.getByText("Microsoft")).toBeInTheDocument(); // unpriced, but still a Technology holding
+    });
+
+    it("filters by currency too, and pressing the same row again clears it", async () => {
+      withSectors();
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      fireEvent.click(screen.getByRole("button", { name: "Currency" }));
+      fireEvent.click(screen.getByRole("button", { name: /GBP/ }));
+      expect(screen.queryByText("Apple Inc.")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /GBP/ }));
+
+      expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+    });
   });
 
   it("shows a watchlist item's target price range beside its note", async () => {
@@ -527,17 +609,18 @@ describe("PortfolioPage", () => {
 
   it.each([0, 1])("labels cost coverage when %i holdings have usable purchase costs", async (covered) => {
     handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY,
-      pl_covered_count: covered, pl_complete: false,
+      pl_covered_count: covered, pl_complete: false, unknown_basis_count: 1,
       total_cost_basis: covered ? 1500 : 0,
     });
     renderFresh();
-    const cost = (await screen.findByText("Cost basis")).parentElement!;
+    const gain = (await screen.findByText("Total gain or loss")).parentElement!;
     if (covered === 0) {
-      expect(cost).toHaveTextContent("\u2014");
-      expect(cost).not.toHaveTextContent("0.00");
+      expect(gain).toHaveTextContent("Not available");
+      expect(gain).toHaveTextContent("Add purchase prices to see it");
+      expect(gain).not.toHaveTextContent("0.00");
     } else {
-      expect(cost).toHaveTextContent("1,500.00");
-      expect(cost).toHaveTextContent("Known costs only");
+      expect(gain).toHaveTextContent("+400.00");
+      expect(gain).toHaveTextContent("1 holding without a purchase price is left out");
     }
   });
 
@@ -573,7 +656,7 @@ describe("PortfolioPage", () => {
       total_pl: 0, total_pl_pct: null, total_cost_basis: 0,
     });
     renderFresh();
-    expect(await screen.findByText(/P\/L covers only priced holdings with a known cost basis/)).toBeInTheDocument();
+    expect(await screen.findByText(/Add purchase prices to see it/)).toBeInTheDocument();
     expect(screen.getByText("Stale quote · 2024-01-01")).toBeInTheDocument();
     expect(screen.getByText("avg —")).toBeInTheDocument();
   });
