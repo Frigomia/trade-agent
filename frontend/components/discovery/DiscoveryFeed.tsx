@@ -78,7 +78,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, prog
           <Typography component="h2" sx={heading}>
             Top opportunity
           </Typography>
-          <TopOpportunity rec={top} earlier={isEarlier(top, scan)} />
+          <TopOpportunity key={top.id} rec={top}earlier={isEarlier(top, scan)} />
           {others.length > 0 && (
             <>
               <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, flexWrap: "wrap", mt: 1 }}>

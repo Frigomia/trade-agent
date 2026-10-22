@@ -45,7 +45,7 @@ export function OpportunityCard({ rec, earlier = false }: { rec: DiscoveryRecomm
         >
           Open research <ArrowRight size={14} aria-hidden />
         </Box>
-        <SaveToDiscover name={idea.name} label="Save" />
+        <SaveToDiscover idea={idea} label="Save" />
       </Box>
     </Panel>
   );

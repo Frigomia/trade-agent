@@ -1,6 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Claim, DiscoveryIdeas, DiscoveryRecommendation, IdeaOut, ScanRun } from "@/lib/api/discovery-types";
+
+const apiFetch = vi.fn();
+const { FakeApiError } = vi.hoisted(() => {
+  class FakeApiError extends Error {
+    status: number;
+    detail: string;
+    constructor(status: number, detail: string) {
+      super(detail);
+      this.status = status;
+      this.detail = detail;
+    }
+  }
+  return { FakeApiError };
+});
+vi.mock("@/lib/api/client", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args), ApiError: FakeApiError }));
+beforeEach(() => apiFetch.mockReset());
 
 const claim = (url: string): Claim => ({ text: "A cited claim.", kind: "fact", stance: "bull", materiality: "high", source_tier: "official", url, published_at: null });
 import { DiscoveryFeed } from "./DiscoveryFeed";
@@ -163,10 +179,31 @@ describe("DiscoveryFeed", () => {
     expect(screen.getByRole("button", { name: /refresh scan, 23 of 100 runs used this month\. costs 1 run/i })).toBeEnabled();
   });
 
-  it("shows Save to Discover disabled until Discover exists", () => {
+  it("saves a company to Discover from Today, then offers the way to the list", async () => {
+    apiFetch.mockResolvedValue({});
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save to Discover Halden Systems" }));
+
+    expect(await screen.findByRole("link", { name: "View in Discover" })).toHaveAttribute("href", "/discover");
+    expect(screen.getByRole("button", { name: "Halden Systems saved to Discover" })).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Halden Systems saved to Discover" }));
+    expect(apiFetch).toHaveBeenCalledTimes(1); // pressing the saved button again sends nothing
+    expect(apiFetch).toHaveBeenCalledWith("/discover", { method: "POST", body: JSON.stringify({ ticker: "HALD", asset_type: "STOCK", source: "today" }) });
+    expect(screen.getByRole("button", { name: "Save Brevik Medical" })).toBeEnabled(); // only that company was saved
+  });
+
+  it("says why a save failed and lets the person try again", async () => {
+    apiFetch.mockRejectedValueOnce(new FakeApiError(409, "Discover is full (100 companies)."));
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
 
-    expect(screen.getByRole("button", { name: /save to discover halden systems: coming soon/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Save to Discover Halden Systems" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Discover is full (100 companies).");
+    apiFetch.mockResolvedValueOnce({});
+    fireEvent.click(screen.getByRole("button", { name: "Save to Discover Halden Systems" }));
+    await waitFor(() => expect(screen.getByRole("link", { name: "View in Discover" })).toBeInTheDocument());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows only the three other ideas and reveals the rest on request", () => {
