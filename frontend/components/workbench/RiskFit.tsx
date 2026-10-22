@@ -82,17 +82,21 @@ function Risk({ idea }: { idea: IdeaOut }) {
 /** How the company would sit in the user's portfolio: the computed score, and the written reading of it. */
 function Fit({ idea }: { idea: IdeaOut }) {
   const fit = fitScore(idea);
-  const saved = fit !== null && idea.fit?.applicable ? idea.fit : null;
+  // The saved measurements and their notes do not depend on the score: the score needs every
+  // measurement, while a partial set (a constant return series has no correlation) is still shown.
+  const saved = idea.fit?.applicable ? idea.fit : null;
   const facts = saved ? fitFacts(saved, idea.snapshot?.sector) : [];
   return (
     <Section title="Portfolio fit">
       {fit === null ? (
         <Box sx={{ borderStyle: "dashed", borderWidth: "1px", borderColor: "var(--line2)", borderRadius: "14px", p: 2, display: "grid", gap: 0.5 }}>
           <Typography component="b" sx={{ fontSize: "1.25rem", fontWeight: 650 }}>
-            Not applicable
+            {saved ? "Score unavailable" : "Not applicable"}
           </Typography>
           <Typography sx={BODY}>
-            Fit is measured against your holdings, and there was nothing to measure against when this idea was saved. Add holdings and the next scan calculates it.
+            {saved
+              ? "The fit score needs every measurement and could not be calculated for this idea. Any figures the scan did compute are listed below."
+              : "Fit is measured against your holdings, and there was nothing to measure against when this idea was saved. Add holdings and the next scan calculates it."}
           </Typography>
         </Box>
       ) : (

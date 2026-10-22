@@ -185,6 +185,24 @@ describe("RiskFit", () => {
     expect(within(fit).queryByText(/assume this company/i)).not.toBeInTheDocument();
   });
 
+  it("keeps the saved figures and the scan's note when only the score is unavailable", () => {
+    const base = testIdea();
+    // A constant return series has no correlation, so the score cannot be built from every measurement.
+    const idea = testIdea({
+      scores: [{ name: "fit", score: null, reasons: ["Correlation, positive baseline volatility and positive baseline HHI required."] }],
+      fit: { ...base.fit!, avg_correlation_to_portfolio: null, notes: ["Correlation unavailable for a constant return series."] },
+    });
+    render(<RiskFit idea={idea} />);
+
+    const fit = screen.getByRole("heading", { name: "Portfolio fit" }).closest("section")!;
+    expect(within(fit).getByText("Score unavailable")).toBeInTheDocument();
+    expect(within(fit).queryByText(/nothing to measure against/i)).not.toBeInTheDocument();
+    expect(within(fit).queryByText("Not applicable")).not.toBeInTheDocument();
+    expect(within(fit).getByText("Software weight").parentElement).toHaveTextContent("3% → 7%");
+    expect(within(fit).queryByText("Correlation with your holdings")).not.toBeInTheDocument();
+    expect(within(fit).getByText("Correlation unavailable for a constant return series.")).toBeInTheDocument();
+  });
+
   it("shows the score alone for an idea saved before the fit facts existed", () => {
     render(<RiskFit idea={testIdea({ fit: undefined })} />);
 
