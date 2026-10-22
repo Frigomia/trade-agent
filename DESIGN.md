@@ -418,8 +418,20 @@ gains a monogram per company, "Add purchase price" where a holding has no cost, 
 holdings" while a group filters it) and a row menu (edit, log a trade for that holding, remove, which
 asks first and says it sells nothing).
 
-**Not built yet:** the Portfolio risk and analytics section, the Discover screen,
-the Discover navigation item, and the rem sizes in component `sx` props outside the new components (the theme
+**Built on Discover** (`/discover`, between Today and Portfolio in the sidebar and the phone tab bar):
+the List option. Search by name or ticker and add (the name, exchange and currency are filled in by
+the backend; no shares or cost), a company already there shows "Already in Discover", filters (All,
+AI analyzed, Not analyzed, with counts), a sort (recently added, name, daily change), and a card per
+company: monogram, name (opening its report when a scan researched it), status as a shape plus a
+word, the scan's one-line reading as plain text, price and daily change (green or red only for the
+move), when it was added and from where, View and Remove. Remove is shown at once and sent after
+eight seconds, so Undo only cancels it; leaving the page sends it. The empty, loading, load-error,
+no-match and "Price unavailable" states are built. Analyze (single-company research) and the simple
+company overview are not built: Discover only shows research a scan already produced, and a company
+without a report has no page to open. "Save to Discover" on Today is still disabled.
+
+**Not built yet:** the Portfolio risk and analytics section, single-company Analyze, the company
+overview for a company with no report, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
 

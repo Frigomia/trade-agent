@@ -7,8 +7,11 @@ vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 import { TabBar } from "./TabBar";
 
 describe("TabBar", () => {
-  it("renders the four phone tabs regardless of role", () => {
+  it("renders the five phone tabs regardless of role, Discover between Today and Portfolio", () => {
     render(<TabBar role="user" />);
+    const labels = screen.getAllByRole("link").map((l) => l.textContent);
+    expect(labels).toEqual(["Today", "Discover", "Portfolio", "Chat", "More"]);
+    expect(screen.getByRole("link", { name: /discover/i })).toHaveAttribute("href", "/discover");
     expect(screen.getByRole("link", { name: /today/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /portfolio/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /chat/i })).toBeInTheDocument();

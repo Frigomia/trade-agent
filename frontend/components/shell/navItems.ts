@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CalendarCheck,
   ChartPie,
+  Compass,
   Gauge,
   History,
   ListChecks,
@@ -30,6 +31,7 @@ export interface NavItem {
 // Chat, sliders for the secondary sections.
 export const PHONE_TABS: NavItem[] = [
   { label: "Today", href: "/today", icon: SquareCheckBig },
+  { label: "Discover", href: "/discover", icon: Compass },
   { label: "Portfolio", href: "/portfolio", icon: ChartPie },
   { label: "Chat", href: "/chat", icon: MessageSquare },
   { label: "More", href: "/more", icon: SlidersHorizontal },
@@ -38,6 +40,7 @@ export const PHONE_TABS: NavItem[] = [
 
 export const DESKTOP_SECTIONS: NavItem[] = [
   { label: "Today", href: "/today", icon: SquareCheckBig },
+  { label: "Discover", href: "/discover", icon: Compass },
   // Exact, so on the plan views only Plan is lit and Portfolio stays as its unlit parent.
   { label: "Portfolio", href: "/portfolio", icon: ChartPie, exact: true },
   { label: "Plan", href: "/portfolio/plan", icon: CalendarCheck, sub: true },
