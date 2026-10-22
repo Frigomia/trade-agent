@@ -32,7 +32,7 @@ export function WatchlistInsights({ insights, missing = [] }: { insights: Watchl
               href="/portfolio"
               sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.25, minHeight: 56, color: "inherit", textDecoration: "none" }}
             >
-              <Logo name={insight.ticker} size={34} />
+              <Logo ticker={insight.ticker} name={insight.ticker} size={34} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography sx={{ fontWeight: 650, fontSize: "0.8125rem" }}>{insight.ticker}</Typography>
                 <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)" }}>{insight.text}</Typography>

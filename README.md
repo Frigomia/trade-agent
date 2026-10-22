@@ -98,6 +98,12 @@ npm run dev                  # http://localhost:3000
 
 `NEXT_PUBLIC_API_URL` is already `http://localhost:8000` in the example.
 
+Optionally set `NEXT_PUBLIC_LOGO_DEV_TOKEN` to a Logo.dev CDN publishable key (`pk_`) for company
+logos. Without it, or when a logo is unavailable, the app shows company initials. Set this variable
+in your deployment provider before building too; Next.js embeds public variables at build time.
+The public sign-in page includes the [Logo.dev attribution link](https://www.logo.dev/docs/platform/attribution).
+For commercial use on the free plan, submit that production page's URL in the Logo.dev dashboard.
+
 ### 4. Create the first admin
 
 A new local database is empty, so nobody can sign in until an admin exists. Sign-ins live in

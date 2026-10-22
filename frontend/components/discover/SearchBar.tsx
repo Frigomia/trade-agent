@@ -96,7 +96,7 @@ export function SearchBar({
             const already = have.has(m.symbol.toUpperCase());
             return (
               <Box component="li" key={m.symbol} sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "6px 8px", borderRadius: "10px", minHeight: 52 }}>
-                <Logo name={m.name} size={32} />
+                <Logo ticker={m.symbol} name={m.name} size={32} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontWeight: 600, fontSize: "0.8125rem", overflowWrap: "anywhere" }}>{m.name}</Typography>
                   <Typography sx={muted}>{[m.symbol, m.exchange].filter(Boolean).join(" · ")}</Typography>
