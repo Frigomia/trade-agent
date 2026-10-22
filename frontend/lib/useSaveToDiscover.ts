@@ -20,8 +20,9 @@ export function useSaveToDiscover(ticker: string, assetType: string) {
     run(async () => {
       await apiFetch("/discover", { method: "POST", body: JSON.stringify({ ticker, asset_type: assetType, source: "today" }) });
       setSaved(true);
-      // Drop the cached list: Discover is not open here, so it would otherwise show the old list first.
-      void mutate("/discover", undefined, { revalidate: false });
+      // Drop the cached list and any read of it still in flight (a read started before this save would
+      // otherwise be reused when Discover opens). Nothing fetches here: no Discover list is mounted.
+      void mutate("/discover", undefined);
     });
 
   return { save, saving: submitting, saved, problem: error };
