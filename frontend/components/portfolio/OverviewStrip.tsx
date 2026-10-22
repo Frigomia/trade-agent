@@ -34,20 +34,33 @@ const NotAvailable = ({ children }: { children: ReactNode }) => (
   </Box>
 );
 
+const heading = (
+  <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
+    Value over time
+  </Typography>
+);
+
+/** The right column: the title (with the range control on its row once there is a chart), then the chart or why there is none. */
 function Chart({ snapshots, failed }: { snapshots: Snapshot[] | undefined; failed: boolean }) {
+  const titled = (body: ReactNode) => (
+    <>
+      <Box sx={{ mb: 1.5 }}>{heading}</Box>
+      {body}
+    </>
+  );
   if (failed && snapshots === undefined) {
-    return (
+    return titled(
       <Box sx={{ display: "grid", placeContent: "center", minHeight: 150, p: 2, textAlign: "center", border: "1px dashed var(--line2)", borderRadius: "14px" }}>
         <Typography sx={{ ...label, maxWidth: "34ch" }}>The saved values could not be loaded, so there is no chart. Reload to try again.</Typography>
-      </Box>
+      </Box>,
     );
   }
   if (snapshots === undefined) {
-    return <Box aria-busy sx={{ height: 150, borderRadius: "14px", bgcolor: "var(--track)" }} />;
+    return titled(<Box aria-busy sx={{ height: 150, borderRadius: "14px", bgcolor: "var(--track)" }} />);
   }
   const days = collapseByDay(snapshots).length;
   if (days < MIN_CHART_DAYS) {
-    return (
+    return titled(
       <Box sx={{ display: "grid", placeContent: "center", justifyItems: "center", textAlign: "center", gap: 0.75, minHeight: 150, p: 2, border: "1px dashed var(--line2)", borderRadius: "14px" }}>
         <Typography component="b" sx={{ fontSize: "0.8125rem", color: "var(--text2)" }}>
           The chart needs a little more history
@@ -55,10 +68,10 @@ function Chart({ snapshots, failed }: { snapshots: Snapshot[] | undefined; faile
         <Typography sx={{ ...label, maxWidth: "34ch" }}>
           It appears once there are at least {MIN_CHART_DAYS} days of saved values. You have {days} so far. A day is saved when you open the app and every holding has a price.
         </Typography>
-      </Box>
+      </Box>,
     );
   }
-  return <PortfolioChart snapshots={snapshots} />;
+  return <PortfolioChart snapshots={snapshots} heading={heading} />;
 }
 
 /**
@@ -116,9 +129,6 @@ export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed =
         </Stat>
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mb: 1 }}>
-          Value over time
-        </Typography>
         <Chart snapshots={snapshots} failed={snapshotsFailed} />
       </Box>
       {summary.unpriced_count > 0 && (
