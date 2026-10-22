@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Holding, Recommendation, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
@@ -632,3 +633,49 @@ def test_a_nul_character_in_a_note_is_a_422_not_a_500(client, db_session):
     added, _ = add(client, {"ticker": "NEWX", "asset_type": "STOCK", "note": "a\u0000b"})
 
     assert (edited.status_code, added.status_code) == (422, 422)
+
+
+@pytest.fixture()
+def removal_after_commit(engine, monkeypatch):
+    """Lets the company be removed by another session the instant the request's commit releases its
+    row lock, the window a waiting DELETE can win."""
+    original = Session.commit
+    done = []
+
+    def commit_then_remove(self):
+        # Only the commit that writes the company: one that finds it loaded in this session.
+        loaded = any(isinstance(obj, WatchlistItem) for obj in self.identity_map.values())
+        original(self)
+        if done or not loaded:
+            return
+        done.append(True)
+        with sessionmaker(bind=engine)() as other:
+            other.query(WatchlistItem).filter_by(user_id=USER_ID, ticker="HLDN").delete()
+            original(other)
+
+    return lambda: monkeypatch.setattr(Session, "commit", commit_then_remove)
+
+
+def test_an_edit_still_answers_when_the_company_is_removed_right_after_it_commits(
+    client, db_session, removal_after_commit
+):
+    seed(db_session, "HLDN", currency="USD")
+    removal_after_commit()
+
+    response, _ = edit(client, "HLDN", {"note": "kept", "target_weight": 0.05})
+
+    assert response.status_code == 200
+    assert (response.json()["note"], response.json()["target_weight"]) == ("kept", 0.05)
+    assert db_session.query(WatchlistItem).filter_by(ticker="HLDN").count() == 0
+
+
+def test_an_add_still_answers_when_the_company_is_removed_right_after_it_commits(
+    client, db_session, removal_after_commit
+):
+    seed(db_session, "HLDN", currency="USD")
+    removal_after_commit()
+
+    response, _ = add(client, {"ticker": "HLDN", "asset_type": "STOCK"})
+
+    assert response.status_code == 200
+    assert response.json()["ticker"] == "HLDN"

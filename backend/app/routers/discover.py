@@ -241,7 +241,7 @@ async def add_to_discover(
     payload: DiscoverAddIn,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
-) -> WatchlistItem:
+) -> WatchlistItemOut:
     """Adds a company to the list, filling in its name, exchange and currency from the provider's
     profile (never from the request). A company already in the list is returned as it is, with any
     of those fields it was missing filled in; its source and date are kept."""
@@ -271,9 +271,12 @@ async def add_to_discover(
             continue  # a cached value of the wrong type is not stored
         if getattr(item, field) is None and (field != "currency" or len(text) <= width):
             setattr(item, field, text[:width])
+    # The answer is copied out while the row is still locked: after the commit a removal waiting on
+    # it can win, and reading the row then would fail although the add succeeded.
+    db.flush()
+    out = WatchlistItemOut.model_validate(item)
     db.commit()
-    db.refresh(item)
-    return item
+    return out
 
 
 class DiscoverEditIn(BaseModel):
@@ -362,7 +365,15 @@ async def edit_discover_item(
         row.target_price_high = _stored_price(payload.target_price_high, unit)
         if sets_range and row.currency is None and currency and len(currency) <= 10:
             row.currency = currency  # the unit the range was converted with, kept with it
+    # The whole answer is built while the row is still locked: after the commit a removal waiting
+    # on it can win, and reading the row then would fail although the edit succeeded.
+    db.flush()
+    answer = _item_out(
+        WatchlistItemOut.model_validate(row),
+        _analysis(db, user.id, [ticker]).get(ticker),
+        currency,
+        None,
+        owned,
+    )
     db.commit()
-    db.refresh(row)
-    found = _analysis(db, user.id, [ticker]).get(ticker)
-    return _item_out(WatchlistItemOut.model_validate(row), found, currency, None, owned)
+    return answer
