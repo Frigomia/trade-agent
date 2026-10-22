@@ -70,7 +70,7 @@ function WeightCell({ weight, target, scale }: { weight: number | null; target: 
         {target ? (
           <Box
             component="span"
-            title={target.fromWatchlist ? "Target set on Discover" : undefined}
+            title={target.fromWatchlist ? "Target set on Discover. Change it there." : undefined}
             sx={{ color: "var(--muted)" }}
           >
             {" / "}

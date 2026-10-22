@@ -19,6 +19,7 @@ export interface DiscoverItem {
   status: "analyzed" | "none"; // analyzed: a scan saved an idea for it (never started from here)
   insight: string | null; // the idea's one-line reading, only when analyzed. Scan text: render as text.
   report_id: number | null; // the idea's id, to open its report at /today/{id}
+  owned: boolean; // the person holds shares of it: its weight target lives on the holding, not here
 }
 
 export interface DiscoverList {

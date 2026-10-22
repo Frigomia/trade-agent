@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Alert, Box, Button, IconButton, Typography } from "@mui/material";
 import { Compass, RefreshCw, Search } from "lucide-react";
 import { DiscoverCard } from "@/components/discover/DiscoverCard";
+import { TargetDialog } from "@/components/discover/TargetDialog";
 import { SearchBar } from "@/components/discover/SearchBar";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Panel } from "@/components/ui/Panel";
@@ -42,7 +43,10 @@ export default function DiscoverPage() {
   // past midnight says the right number of days after the next refresh.
   const [now, setNow] = useState(() => Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
+  // The ticker being edited; the dialog follows the live list, so it closes if the company leaves it.
+  const [editingTicker, setEditingTicker] = useState<string | null>(null);
 
+  const editing = list.items.find((i) => i.ticker === editingTicker) ?? null;
   const have = new Set(list.items.map((i) => i.ticker.toUpperCase()));
   const shown = visibleItems(list.items, filter, sort);
   const numbers = counts(list.items);
@@ -152,7 +156,7 @@ export default function DiscoverPage() {
             ) : (
               <Box component="ul" aria-label="Companies" sx={{ m: 0, p: 0, display: "grid", gap: 1.5 }}>
                 {shown.map((item) => (
-                  <DiscoverCard key={item.ticker} item={item} now={now} onRemove={() => list.remove(item)} />
+                  <DiscoverCard key={item.ticker} item={item} now={now} onRemove={() => list.remove(item)} onEdit={() => setEditingTicker(item.ticker)} />
                 ))}
               </Box>
             )}
@@ -163,6 +167,8 @@ export default function DiscoverPage() {
           Prices can be delayed. Insights come from the app&apos;s research and are not investment advice. Nothing here is sent to a broker.
         </Typography>
       </Box>
+
+      <TargetDialog item={editing} onClose={() => setEditingTicker(null)} onSaved={(updated) => void list.applyEdit(updated)} onStale={() => void list.refresh()} />
 
       {list.notice && (
         <Box

@@ -24,17 +24,19 @@ const item = (over: Partial<DiscoverItem> = {}): DiscoverItem => ({
   status: "analyzed",
   insight: "Recurring software revenue and widening margins.",
   report_id: 42,
+  owned: false,
   ...over,
 });
 
 const show = (over: Partial<DiscoverItem> = {}) => {
   const onRemove = vi.fn();
+  const onEdit = vi.fn();
   render(
     <ul>
-      <DiscoverCard item={item(over)} now={NOW} onRemove={onRemove} />
+      <DiscoverCard item={item(over)} now={NOW} onRemove={onRemove} onEdit={onEdit} />
     </ul>,
   );
-  return { onRemove };
+  return { onRemove, onEdit };
 };
 
 describe("DiscoverCard", () => {
@@ -120,5 +122,31 @@ describe("DiscoverCard", () => {
     expect(screen.getByText("-1.4%")).toHaveStyle({ color: "var(--down)" });
     expect(screen.getByText("AI analyzed")).not.toHaveStyle({ color: "var(--down)" });
     expect(screen.getByText("AI analyzed")).not.toHaveStyle({ color: "var(--up)" });
+  });
+});
+
+describe("DiscoverCard targets", () => {
+  it("says the saved weight target and price range in words, in the card's currency", () => {
+    show({ target_weight: 0.05, target_price_low: 90, target_price_high: 110.5 });
+
+    expect(screen.getByRole("listitem")).toHaveTextContent("Target 5% · Range USD 90.00 to 110.50");
+  });
+
+  it("shows nothing about targets when none is set, and leaves the weight out for an owned company", () => {
+    const { unmount } = render(<ul><DiscoverCard item={item()} now={NOW} onRemove={vi.fn()} onEdit={vi.fn()} /></ul>);
+    expect(screen.getByRole("listitem")).not.toHaveTextContent(/Target|Range/);
+    unmount();
+
+    show({ owned: true, target_weight: 0.3, target_price_low: 90, target_price_high: 110 });
+    expect(screen.getByRole("listitem")).toHaveTextContent("Range USD 90.00 to 110.00");
+    expect(screen.getByRole("listitem")).not.toHaveTextContent("Target");
+  });
+
+  it("opens the editor from an Edit button named for the company", () => {
+    const { onEdit } = show();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit target for Halden Systems" }));
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
   });
 });

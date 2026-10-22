@@ -49,6 +49,6 @@ How each came about: 1 follows the reference you gave, 2 is built around the mos
 2. Which analytics to build first, and whether a short history should still show the volatility and correlation figures.
 3. Whether country and currency come from stored fields or a lookup, and whether the summary total is always EUR.
 4. Whether the segmented views stay as they are, with Holdings as the redesigned view.
-5. Resolved 2026-10-22: the watchlist toggle and panel were removed from Portfolio. Editing a saved company's target and price range will move to Discover (not built yet).
+5. Resolved 2026-10-22: the watchlist toggle and panel were removed from Portfolio. Editing a saved company's target and price range moved to Discover (built, #174 and #175).
 
 The direction is approved (`direction-approved.md`); the open questions above still need answers before the build.

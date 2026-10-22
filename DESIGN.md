@@ -435,7 +435,10 @@ the backend; no shares or cost), a company already there shows "Already in Disco
 AI analyzed, Not analyzed, with counts), a sort (recently added, name, daily change), and a card per
 company: monogram, name (opening its report when a scan researched it), status as a shape plus a
 word, the scan's one-line reading as plain text, price and daily change (green or red only for the
-move), when it was added and from where, View and Remove. Remove is shown at once and sent after
+move), what the person set as a weight target and price range ("Target 5% · Range USD 90.00 to 110.00", in
+words), when it was added and from where, View, Edit and Remove. Edit opens a dialog for the weight
+target (not for a company that is owned, whose target lives on the holding) and the price range, in the
+currency the card shows; only what was changed is sent. Remove is shown at once and sent after
 eight seconds, so Undo only cancels it; leaving the page sends it. The empty, loading, load-error,
 no-match and "Price unavailable" states are built. Analyze (single-company research) and the simple
 company overview are not built: Discover only shows research a scan already produced, and a company

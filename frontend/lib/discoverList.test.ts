@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoverItem } from "@/lib/api/discover-types";
-import { addedText, counts, isAnalyzed, metaText, nameOf, priceText, visibleItems } from "./discoverList";
+import { addedText, counts, isAnalyzed, metaText, nameOf, priceText, targetsText, visibleItems } from "./discoverList";
 
 const item = (ticker: string, over: Partial<DiscoverItem> = {}): DiscoverItem => ({
   ticker,
@@ -21,6 +21,7 @@ const item = (ticker: string, over: Partial<DiscoverItem> = {}): DiscoverItem =>
   status: "none",
   insight: null,
   report_id: null,
+  owned: false,
   ...over,
 });
 
@@ -106,5 +107,35 @@ describe("text helpers", () => {
     expect(priceText({ price: 1284, currency: null })).toBe("1,284.00");
     expect(priceText({ price: null, currency: "USD" })).toBeNull();
     expect(priceText({ price: Number.NaN, currency: "USD" })).toBeNull();
+  });
+});
+
+describe("targetsText", () => {
+  const set = (over: Partial<DiscoverItem>) => targetsText(item("A", over));
+
+  it("puts the weight and the range in words, with the currency once", () => {
+    expect(set({ target_weight: 0.072, target_price_low: 90, target_price_high: 110 })).toBe("Target 7.2% · Range USD 90.00 to 110.00");
+    expect(set({ target_weight: 0.05 })).toBe("Target 5%");
+    expect(set({ target_price_low: 650, target_price_high: 720.5 })).toBe("Range USD 650.00 to 720.50");
+  });
+
+  it("keeps the decimals a small price has, and leaves the yen whole", () => {
+    expect(set({ target_price_low: 0.125, target_price_high: 0.2 })).toBe("Range USD 0.125 to 0.20");
+    expect(set({ currency: "JPY", target_price_low: 3800, target_price_high: 4100 })).toBe("Range JPY 3,800 to 4,100");
+  });
+
+  it("claims no unit when the currency is not known, and says nothing when nothing is set", () => {
+    expect(set({ currency: null, target_price_low: 90, target_price_high: 110 })).toBe("Range 90.00 to 110.00");
+    expect(set({})).toBeNull();
+    expect(set({ target_weight: 0 })).toBeNull(); // a zero weight is no target
+  });
+
+  it("leaves the weight out for an owned company, whose target lives on the holding, but keeps its range", () => {
+    expect(set({ owned: true, target_weight: 0.3 })).toBeNull();
+    expect(set({ owned: true, target_weight: 0.3, target_price_low: 90, target_price_high: 110 })).toBe("Range USD 90.00 to 110.00");
+  });
+
+  it("shows only a whole range, never one end", () => {
+    expect(set({ target_price_low: 90, target_price_high: null })).toBeNull();
   });
 });
