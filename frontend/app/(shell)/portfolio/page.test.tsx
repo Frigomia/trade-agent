@@ -234,6 +234,87 @@ describe("PortfolioPage", () => {
     expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
   });
 
+  describe("row menu", () => {
+    const openMenu = (ticker: string) => fireEvent.click(screen.getByRole("button", { name: `Actions for ${ticker}` }));
+
+    it("opens the holding form from Edit holding", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      openMenu("AAPL");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Edit holding" }));
+
+      expect(await screen.findByText("Edit AAPL")).toBeInTheDocument();
+    });
+
+    it("opens the trade sheet for that holding from Log a trade", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      openMenu("MSFT");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Log a trade" }));
+
+      const ticker = (await screen.findByLabelText("Ticker")) as HTMLSelectElement;
+      expect(ticker.value).toBe("MSFT");
+    });
+
+    it("keeps the header's Log a trade opening on the first holding", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      fireEvent.click(screen.getByRole("button", { name: "Log a trade" }));
+
+      expect(((await screen.findByLabelText("Ticker")) as HTMLSelectElement).value).toBe("AAPL");
+    });
+
+    it("asks before removing, says it sells nothing, and refreshes the portfolio after", async () => {
+      handlers["DELETE /portfolio/holdings/MSFT"] = () => undefined;
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+      const before = count("GET /portfolio/summary");
+
+      openMenu("MSFT");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Remove holding" }));
+      expect(await screen.findByText("Remove MSFT?")).toBeInTheDocument();
+      expect(screen.getByText(/does not sell anything/i)).toBeInTheDocument();
+      expect(count("DELETE /portfolio/holdings/MSFT")).toBe(0); // nothing is removed until it is confirmed
+      fireEvent.click(screen.getByRole("button", { name: "Remove holding" }));
+
+      await waitFor(() => expect(count("DELETE /portfolio/holdings/MSFT")).toBe(1));
+      await waitFor(() => expect(count("GET /portfolio/summary")).toBeGreaterThan(before));
+    });
+
+    it("keeps the holding when Keep it is pressed", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      openMenu("MSFT");
+      fireEvent.click(screen.getByRole("menuitem", { name: "Remove holding" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Keep it" }));
+
+      await waitFor(() => expect(screen.queryByText("Remove MSFT?")).not.toBeInTheDocument());
+      expect(count("DELETE /portfolio/holdings/MSFT")).toBe(0);
+      expect(screen.getByText("Microsoft")).toBeInTheDocument();
+    });
+  });
+
+  it("offers Add purchase price where a holding has no cost, in place of an empty gain", async () => {
+    handlers["GET /portfolio/summary"] = () => ({
+      ...SUMMARY,
+      holdings: [
+        SUMMARY.holdings[0],
+        { ...SUMMARY.holdings[1], cost_basis: null, unrealized_pl: null, unrealized_pl_pct: null },
+      ],
+    });
+    renderFresh();
+    await screen.findByText("Apple Inc.");
+
+    // Once in the desktop cell and once on the phone line; the row still opens the holding form.
+    expect(screen.getAllByText("Add purchase price").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText("Add purchase price")[0]);
+    expect(await screen.findByText("Edit MSFT")).toBeInTheDocument();
+  });
+
   describe("allocation", () => {
     const withSectors = () => {
       handlers["GET /portfolio/summary"] = () => ({
@@ -270,6 +351,18 @@ describe("PortfolioPage", () => {
       fireEvent.click(screen.getByRole("button", { name: "Show all" }));
       expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
       expect(screen.queryByText(/Showing holdings in/)).not.toBeInTheDocument();
+    });
+
+    it("counts the holdings, and how many are shown while a group filters them", async () => {
+      withSectors();
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+      const panel = screen.getByRole("region", { name: "Your holdings" });
+      expect(within(panel).getByText("2 holdings")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Utilities/ }));
+
+      expect(within(panel).getByText("1 of 2 holdings")).toBeInTheDocument();
     });
 
     it("clears the filter when the grouping changes", async () => {

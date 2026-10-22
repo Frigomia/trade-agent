@@ -29,6 +29,9 @@ import type {
 import { formatAmount, formatPct, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
+import { HoldingMenu } from "@/components/portfolio/HoldingMenu";
+import { RemoveHoldingDialog } from "@/components/portfolio/RemoveHoldingDialog";
+import { Logo } from "@/components/ui/Logo";
 import { OverviewStrip } from "@/components/portfolio/OverviewStrip";
 import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
@@ -52,6 +55,8 @@ const shortShares = (shares: number) => Math.round(shares * 10) / 10 || shares;
 // The watch icon sits outside the row's edit button (a button cannot hold a button), in its own
 // column; the header leaves the same room so the other columns stay lined up.
 const WATCH_COL = 44;
+// The row menu's own column, after the watch icon.
+const MENU_COL = 44;
 
 function plColor(value: number | null): string {
   return value !== null && value < 0 ? "var(--down)" : "var(--up)";
@@ -70,6 +75,15 @@ function SetTarget() {
       sx={{ color: "var(--muted)", textDecoration: "underline dotted", textUnderlineOffset: "3px" }}
     >
       Set target
+    </Box>
+  );
+}
+
+// Inside the row's edit button, so it is text, not a second button: a tap opens the holding form.
+function AddPurchasePrice() {
+  return (
+    <Box component="span" sx={{ color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "3px", fontSize: "0.75rem", fontWeight: 500 }}>
+      Add purchase price
     </Box>
   );
 }
@@ -116,6 +130,8 @@ function HoldingRow({
   watched,
   onEdit,
   onWatch,
+  onLogTrade,
+  onRemove,
 }: {
   holding: HoldingSummary;
   target: Target;
@@ -123,6 +139,8 @@ function HoldingRow({
   watched: boolean;
   onEdit: () => void;
   onWatch: () => void;
+  onLogTrade: () => void;
+  onRemove: () => void;
 }) {
   // minWidth 0 lets a cell shrink with its minmax(0, fr) track; a long number then wraps, never overflows.
   const cell = { display: { xs: "none", md: "block" }, textAlign: "right" as const, minWidth: 0, overflowWrap: "anywhere" as const };
@@ -131,6 +149,8 @@ function HoldingRow({
     holding.unrealized_pl !== null && holding.unrealized_pl_pct !== null
       ? `${formatSigned(holding.unrealized_pl)} · ${formatPct(holding.unrealized_pl_pct)}`
       : DASH;
+  // No purchase price: there is no gain to show, and the way to get one is the form.
+  const noCost = holding.cost_basis === null;
   return (
     <Box sx={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--line)" }}>
     <ButtonBase
@@ -147,6 +167,8 @@ function HoldingRow({
         py: 1.5,
       }}
     >
+      <Box sx={{ minWidth: 0, display: "flex", alignItems: "center", gap: 1.5 }}>
+      <Logo name={holding.name} size={34} />
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{holding.ticker}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>
@@ -158,6 +180,7 @@ function HoldingRow({
             <> · <SetTarget /></>
           )}
         </Typography>
+      </Box>
       </Box>
       <Typography sx={cell}>
         {holding.shares}
@@ -175,10 +198,10 @@ function HoldingRow({
       </Typography>
       <Box sx={{ textAlign: "right", display: { xs: "block", md: "none" } }}>
         <Typography sx={{ fontWeight: 600 }}>{value}</Typography>
-        <Typography sx={{ fontSize: 12, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
+        <Typography sx={{ fontSize: 12, color: plColor(holding.unrealized_pl) }}>{noCost ? <AddPurchasePrice /> : pl}</Typography>
       </Box>
       <Typography sx={{ ...cell, fontWeight: 600 }}>{value}</Typography>
-      <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{pl}</Typography>
+      <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{noCost ? <AddPurchasePrice /> : pl}</Typography>
       <WeightCell weight={holding.weight} target={target} scale={scale} />
     </ButtonBase>
     <Tooltip title={watched ? "On your watchlist" : "Add to watchlist"}>
@@ -195,6 +218,7 @@ function HoldingRow({
         </IconButton>
       </span>
     </Tooltip>
+    <HoldingMenu ticker={holding.ticker} onEdit={onEdit} onLogTrade={onLogTrade} onRemove={onRemove} />
     </Box>
   );
 }
@@ -208,7 +232,11 @@ export default function PortfolioPage() {
   const { data: snapshots, error: snapshotsError, mutate: mutateSnapshots } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
   useDailySnapshot();
 
-  const [tradeOpen, setTradeOpen] = useState(false);
+  // The trade sheet opens blank from the header, or for one holding from its row menu.
+  const [trade, setTrade] = useState<{ open: boolean; ticker?: string }>({ open: false });
+  // The holding in the removal dialog is kept after it closes, so the text does not blank mid-fade.
+  const [removingHolding, setRemovingHolding] = useState<HoldingSummary | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
   const [holdingForm, setHoldingForm] = useState<{ open: boolean; holding?: HoldingSummary }>({
     open: false,
   });
@@ -309,7 +337,7 @@ export default function PortfolioPage() {
         <Button
           variant="contained"
           disabled={holdings.length === 0}
-          onClick={() => setTradeOpen(true)}
+          onClick={() => setTrade({ open: true })}
         >
           Log a trade
         </Button>
@@ -358,13 +386,22 @@ export default function PortfolioPage() {
       >
       {summary && open.length === 0 && <FirstHolding onAdd={() => setHoldingForm({ open: true })} />}
       {open.length > 0 && (
-        <Panel sx={{ p: "8px 18px" }}>
+        <Panel component="section" aria-label="Your holdings" sx={{ p: "12px 18px 8px" }}>
+          <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, pt: 0.5 }}>
+            <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
+              Your holdings
+            </Typography>
+            <Box sx={{ flex: 1 }} />
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+              {group ? `${shown.length} of ${open.length} holdings` : `${open.length} holding${open.length === 1 ? "" : "s"}`}
+            </Typography>
+          </Box>
           <Box
             sx={{
               display: { xs: "none", md: "grid" },
               gridTemplateColumns: HOLDING_COLUMNS,
               gap: HOLDING_GAP,
-              pr: `${WATCH_COL}px`,
+              pr: `${WATCH_COL + MENU_COL}px`,
               py: 1,
               fontSize: 12,
               color: "var(--muted)",
@@ -396,6 +433,11 @@ export default function PortfolioPage() {
               watched={watched.has(holding.ticker.toUpperCase())}
               onEdit={() => setHoldingForm({ open: true, holding })}
               onWatch={() => void addToWatchlist(holding.ticker, holding.asset_type)}
+              onLogTrade={() => setTrade({ open: true, ticker: holding.ticker })}
+              onRemove={() => {
+                setRemovingHolding(holding);
+                setRemoveOpen(true);
+              }}
             />
           ))}
         </Panel>
@@ -521,9 +563,11 @@ export default function PortfolioPage() {
         </DialogActions>
       </Dialog>
 
+      <RemoveHoldingDialog holding={removingHolding} open={removeOpen} onClose={() => setRemoveOpen(false)} onRemoved={() => mutateSummary()} />
       <TradeSheet
-        open={tradeOpen}
-        onClose={() => setTradeOpen(false)}
+        open={trade.open}
+        prefill={trade.ticker ? { ticker: trade.ticker } : undefined}
+        onClose={() => setTrade({ open: false })}
         holdings={holdings.map((h) => ({ ticker: h.ticker, name: h.name }))}
         onLogged={() => mutateSummary()}
       />
