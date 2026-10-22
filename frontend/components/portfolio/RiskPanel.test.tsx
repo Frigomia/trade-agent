@@ -39,14 +39,13 @@ const ANALYTICS: PortfolioAnalytics = {
   notes: [],
 };
 
-const show = (over: Partial<PortfolioAnalytics> = {}, props: { failed?: boolean; loading?: boolean; none?: boolean; refreshFailed?: boolean; retrying?: boolean } = {}) => {
+const show = (over: Partial<PortfolioAnalytics> = {}, props: { failed?: boolean; none?: boolean; refreshFailed?: boolean; retrying?: boolean } = {}) => {
   const onRetry = vi.fn();
   render(
     <RiskPanel
       analytics={props.none ? undefined : { ...ANALYTICS, ...over }}
       failed={props.failed ?? false}
       refreshFailed={props.refreshFailed}
-      loading={props.loading ?? false}
       retrying={props.retrying}
       onRetry={onRetry}
     />,
@@ -135,9 +134,54 @@ describe("RiskPanel", () => {
     const { onRetry } = show({}, { refreshFailed: true });
 
     expect(screen.getByText("Volatility").parentElement).toHaveTextContent("17.4% a year");
-    expect(screen.getByText(/from before your last change; they could not be refreshed/i)).toBeInTheDocument();
+    expect(screen.getByText(/may be out of date: they could not be refreshed/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(onRetry).toHaveBeenCalled();
+  });
+
+  it("keeps the old figures on screen, saying they are being updated, while changed figures are read again", () => {
+    show({}, { retrying: true });
+
+    expect(screen.getByText("Volatility").parentElement).toHaveTextContent("17.4% a year");
+    expect(screen.getByRole("status")).toHaveTextContent("Updating these figures…");
+    expect(document.querySelector("[aria-busy='true']")).toHaveTextContent("Volatility"); // the figures themselves, not a skeleton
+  });
+
+  it("offers Try again for a failed refresh even when the cached result had nothing valued", () => {
+    const { onRetry } = show({ positions: [], total_value_eur: null, correlation: {} }, { refreshFailed: true });
+
+    expect(screen.getByText(/No holding could be valued/)).toBeInTheDocument();
+    expect(screen.getByText(/may be out of date: they could not be refreshed/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it("dims the old figures and marks them busy while they are read again, so they do not look current", () => {
+    show({}, { retrying: true });
+
+    expect(document.querySelector("[aria-busy='true']")).not.toBeNull();
+    expect(document.querySelector("[aria-busy='true']")).toHaveTextContent("Volatility");
+  });
+
+  it("keeps the status region in the page even when nothing is updating, so a screen reader hears it appear", () => {
+    show();
+
+    expect(screen.getByRole("status", { hidden: true })).toHaveTextContent("");
+  });
+
+  it("says Updating over a cached empty result too", () => {
+    show({ positions: [], total_value_eur: null, correlation: {} }, { retrying: true });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Updating these figures");
+  });
+
+  it("does not claim a year of observations: the figures use the daily changes the holdings share", () => {
+    show();
+
+    expect(screen.getByText("Volatility").parentElement).not.toHaveTextContent(/a year of daily changes|about a year/i);
+    expect(screen.getByText("Volatility").parentElement).toHaveTextContent("Annualised, from the daily changes the holdings share.");
+    expect(screen.getByText(/Based on the daily changes each pair shares, at least 60 days/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/about a year/i);
   });
 
   it("does not say anything is stale when the refresh worked", () => {
@@ -161,7 +205,7 @@ describe("RiskPanel", () => {
   });
 
   it("shows a placeholder while the figures load", () => {
-    show({}, { loading: true, none: true });
+    show({}, { none: true, retrying: true });
 
     expect(document.querySelector("[aria-busy]")).not.toBeNull();
     expect(screen.queryByText("Volatility")).not.toBeInTheDocument();

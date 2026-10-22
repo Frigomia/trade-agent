@@ -557,7 +557,7 @@ export default function PortfolioPage() {
 
       {summary && open.length > 0 && (
         <Box sx={{ mt: 2 }}>
-          <RiskPanel analytics={risk.analytics} failed={risk.failed} refreshFailed={risk.refreshFailed} loading={risk.loading} retrying={risk.retrying} onRetry={risk.retry} />
+          <RiskPanel analytics={risk.analytics} failed={risk.failed} refreshFailed={risk.refreshFailed} retrying={risk.retrying} onRetry={risk.retry} />
         </Box>
       )}
 

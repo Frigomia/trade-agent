@@ -294,6 +294,27 @@ describe("PortfolioPage", () => {
       await waitFor(() => expect(count("GET /portfolio/analytics")).toBe(2));
     });
 
+    it("keeps the previous figures on screen, marked as updating, while a changed holding is measured again", async () => {
+      let calls = 0;
+      handlers["GET /portfolio/analytics"] = () => (++calls === 1 ? ANALYTICS : new Promise(() => {})); // the second never answers
+      handlers["DELETE /portfolio/holdings/MSFT"] = () => {
+        handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[0], SUMMARY.holdings[2]] });
+        return undefined;
+      };
+      renderFresh();
+      const panel = await screen.findByRole("region", { name: "Risk and analytics" });
+      await waitFor(() => expect(within(panel).getByText("Volatility").parentElement).toHaveTextContent("20.0% a year"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Actions for MSFT" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Remove holding" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove holding" }));
+
+      await waitFor(() => expect(count("GET /portfolio/analytics")).toBe(2));
+      expect(within(panel).getByText("Volatility").parentElement).toHaveTextContent("20.0% a year");
+      expect(await within(panel).findByText(/Updating these figures/)).toBeInTheDocument();
+      expect(panel.querySelector("[aria-busy='true']")).toHaveTextContent("Volatility"); // dimmed figures, not a skeleton
+    });
+
     it("is not requested for a portfolio with no open holding", async () => {
       handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[2]], watchlist: [] });
       renderFresh();
