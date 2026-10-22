@@ -33,6 +33,7 @@ import { HoldingMenu } from "@/components/portfolio/HoldingMenu";
 import { RemoveHoldingDialog } from "@/components/portfolio/RemoveHoldingDialog";
 import { Logo } from "@/components/ui/Logo";
 import { OverviewStrip } from "@/components/portfolio/OverviewStrip";
+import { RiskPanel } from "@/components/portfolio/RiskPanel";
 import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { TargetWeightField } from "@/components/portfolio/TargetWeightField";
@@ -48,6 +49,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
 import { allocate, largestPositions, type AllocationDim } from "@/lib/portfolio/allocation";
+import { useAnalytics } from "@/lib/useAnalytics";
 
 const DASH = "—";
 // A share count on the phone line, to one decimal at most ("1.4 sh"); a tiny one keeps its digits.
@@ -254,6 +256,9 @@ export default function PortfolioPage() {
   const [dim, setDim] = useState<AllocationDim>("sector");
   const [selected, setSelected] = useState<string | null>(null);
   const allocation = allocate(open, dim);
+  // Measured risk is read only when there is something to measure (the route is costly and limited).
+  // The key follows the open positions, so a change to one reads the figures again.
+  const risk = useAnalytics(open.length > 0 ? open.map((h) => `${h.ticker}:${h.shares}`).sort().join(",") : null);
   const group = allocation.groups.find((g) => g.id === selected) ?? null;
   // A selected group that is no longer there (a holding was sold, a price went missing) is dropped
   // for good, so it cannot come back on its own with a later refresh.
@@ -549,6 +554,12 @@ export default function PortfolioPage() {
         )}
       </Panel>
       </Box>
+
+      {summary && open.length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <RiskPanel analytics={risk.analytics} failed={risk.failed} refreshFailed={risk.refreshFailed} retrying={risk.retrying} onRetry={risk.retry} />
+        </Box>
+      )}
 
       <WatchTargetDialog item={editingTarget} rangeOnly={editingTarget !== null && owned.has(editingTarget.ticker.toUpperCase())} onClose={() => setEditingTarget(null)} onSaved={() => mutateSummary()} />
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>

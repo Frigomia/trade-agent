@@ -416,9 +416,16 @@ blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amoun
 and the page says so. The holdings table keeps its columns, targets and the watchlist toggle, and
 gains a monogram per company, "Add purchase price" where a holding has no cost, a count ("N of M
 holdings" while a group filters it) and a row menu (edit, log a trade for that holding, remove, which
-asks first and says it sells nothing).
+asks first and says it sells nothing). Below the table, "Risk and analytics" (measured, not scored) reads
+`GET /portfolio/analytics`: volatility, largest position, top three together, effective holdings
+and average correlation with the most correlated pair, each with what it means; what could not be
+valued or measured is listed in the backend's own words; "Advanced analytics" opens a correlation
+table with every number printed and the spread across sectors, countries and currencies. There is no
+overall health score, and the biggest fall of the past year in the mock is not shown because the
+backend does not compute it. Risk figures use values converted to euro, so they can differ a little
+from the table's as-entered weights.
 
-**Not built yet:** the Portfolio risk and analytics section, the Discover screen,
+**Not built yet:** the Discover screen,
 the Discover navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
