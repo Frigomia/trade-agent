@@ -31,7 +31,8 @@ export function metricLabel(key: string): string {
   return METRICS[key]?.label ?? key;
 }
 
-// One decimal, but two below 1 so a small figure (a PEG of 0.04) does not read as zero.
+// One decimal, but two below 1 so a small figure (a PEG of 0.04) does not read as zero. A metric
+// shown in a table of mixed units keeps this rule on purpose; a plain share uses formatShare.
 const one = (n: number) => (n !== 0 && Math.abs(n) < 1 ? n.toFixed(2) : n.toFixed(1));
 
 /** "21.3%" or "24.6x" from the raw figure, or null when it is missing or not a finite number. */

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Box, ButtonBase, Typography } from "@mui/material";
 import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatShare } from "@/lib/format";
 import { ALLOCATION_DIMS, type Allocation, type AllocationDim, type Position } from "@/lib/portfolio/allocation";
 
 const SIZE = 220;
@@ -14,7 +14,6 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const GAP = 2; // a hairline between slices, in the dash length
 
 const color = (i: number) => `var(--c${(i % 6) + 1})`;
-const pct = (share: number) => `${(share * 100).toFixed(1)}%`;
 
 const label = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
@@ -31,7 +30,7 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
       height={SIZE}
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       role="img"
-      aria-label={`Allocation by ${dimLabel}: ${allocation.groups.map((g) => `${g.name} ${pct(g.share)}`).join(", ")}`}
+      aria-label={`Allocation by ${dimLabel}: ${allocation.groups.map((g) => `${g.name} ${formatShare(g.share)}`).join(", ")}`}
       style={{ flex: "none", maxWidth: "100%" }}
     >
       <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="var(--track)" strokeWidth={STROKE} />
@@ -55,7 +54,7 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
         );
       })}
       <text x="50%" y="46%" textAnchor="middle" style={{ fontSize: "1.1875rem", fontWeight: 650, fill: "var(--text)", letterSpacing: "-0.02em" }}>
-        {shown ? pct(shown.share) : allocation.groups.length}
+        {shown ? formatShare(shown.share) : allocation.groups.length}
       </text>
       <text x="50%" y="58%" textAnchor="middle" style={{ fontSize: "0.75rem", fill: "var(--muted)" }}>
         {shown ? shown.name : allocation.groups.length === 1 ? dimLabel : `${dimLabel}s`}
@@ -167,7 +166,7 @@ export function AllocationPanel({
                       >
                         <Box component="i" aria-hidden sx={{ width: 12, height: 12, borderRadius: "4px", bgcolor: color(i) }} />
                         <Box component="span" sx={{ overflowWrap: "anywhere", color: on ? "var(--text)" : undefined, fontWeight: on ? 650 : 400 }}>{g.name}</Box>
-                        <Box component="b" sx={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{pct(g.share)}</Box>
+                        <Box component="b" sx={{ color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{formatShare(g.share)}</Box>
                         <Box component="small" sx={{ ...label, minWidth: 64, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{formatAmount(g.value)}</Box>
                       </ButtonBase>
                     </li>
@@ -189,7 +188,7 @@ export function AllocationPanel({
                   <Box aria-hidden sx={{ height: 6, borderRadius: 999, bgcolor: "var(--track)", overflow: "hidden" }}>
                     <Box sx={{ height: "100%", width: `${Math.min(100, (p.share / (positions[0]?.share || 1)) * 100)}%`, bgcolor: "var(--accent)", borderRadius: 999 }} />
                   </Box>
-                  <Box component="b" sx={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pct(p.share)}</Box>
+                  <Box component="b" sx={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{formatShare(p.share)}</Box>
                 </Box>
               ))}
             </Box>

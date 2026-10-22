@@ -26,7 +26,7 @@ import type {
   Snapshot,
   WatchlistSummary,
 } from "@/lib/api/portfolio-types";
-import { formatAmount, formatPct, formatSigned } from "@/lib/format";
+import { DASH, formatAmount, formatPct, formatShare, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
 import { HoldingMenu } from "@/components/portfolio/HoldingMenu";
@@ -51,7 +51,6 @@ import { HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
 import { allocate, largestPositions, type AllocationDim } from "@/lib/portfolio/allocation";
 import { useAnalytics } from "@/lib/useAnalytics";
 
-const DASH = "—";
 // A share count on the phone line, to one decimal at most ("1.4 sh"); a tiny one keeps its digits.
 const shortShares = (shares: number) => Math.round(shares * 10) / 10 || shares;
 // The watch icon sits outside the row's edit button (a button cannot hold a button), in its own
@@ -66,7 +65,6 @@ function plColor(value: number | null): string {
 
 type Target = ReturnType<typeof effectiveTarget>;
 
-const pctText = (fraction: number) => `${(fraction * 100).toFixed(1)}%`;
 const targetText = (fraction: number) => `${fractionToPercentText(fraction)}%`;
 
 // Inside the row's edit button, so it is text, not a second button: a tap opens the same holding form.
@@ -96,7 +94,7 @@ function WeightCell({ weight, target, scale }: { weight: number | null; target: 
   return (
     <Box sx={{ display: { xs: "none", md: "flex" }, flexDirection: "column", alignItems: "flex-end", gap: 0.75, minWidth: 0, textAlign: "right" }}>
       <Typography component="span" sx={{ fontSize: "inherit" }}>
-        <b>{weight !== null ? pctText(weight) : DASH}</b>
+        <b>{formatShare(weight)}</b>
         {target ? (
           <Box
             component="span"
@@ -175,7 +173,7 @@ function HoldingRow({
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{holding.ticker}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", display: { md: "none" } }}>
-          {shortShares(holding.shares)} sh · {holding.weight !== null ? pctText(holding.weight) : DASH}
+          {shortShares(holding.shares)} sh · {formatShare(holding.weight)}
           {target ? (
             ` / target ${targetText(target.target)}${target.fromWatchlist ? " (watchlist)" : ""}`
           ) : (
