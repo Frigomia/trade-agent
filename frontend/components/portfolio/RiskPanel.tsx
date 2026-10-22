@@ -210,6 +210,11 @@ export function RiskPanel({
           value={facts.averageCorrelation === null ? null : corr(facts.averageCorrelation)}
           detail={facts.highestPair ? `Highest pair ${facts.highestPair.a} and ${facts.highestPair.b}, ${corr(facts.highestPair.value)}.` : "Needs two holdings with matching history."}
         />
+        <Metric
+          label="Biggest fall, last year"
+          value={facts.biggestFall === null ? null : formatShare(facts.biggestFall)}
+          detail={facts.biggestFall === null ? "Needs matching price history for every holding." : "From peak to low over the shared price history, up to a year, with today's holdings and weights."}
+        />
       </Box>
       <Gaps analytics={analytics} />
       <Typography sx={muted}>Values are converted to euro, so these shares can differ a little from the table above.</Typography>

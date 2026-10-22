@@ -18,8 +18,7 @@ production checklist is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
   web-search second opinion kept separate from the numbers), recommendations with approve/dismiss
   and 20-day outcomes, long-term memory, backtests with a stored equity curve, and a
   portfolio-aware chat.
-- **Portfolio:** holdings, watchlist (with ISIN search and target weights), trade log and daily
-  snapshots.
+- **Portfolio:** holdings, trade log and daily snapshots. The companies you watch are on Discover.
 - **Monthly contribution planner:** enter an amount and get a plan of how much to add to each
   ticker with a target weight, from the gap to target and the pending calls. Plain arithmetic, no
   Claude call. Plans convert to EUR at plan time, can be saved, and show the target tick and the

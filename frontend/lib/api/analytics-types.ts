@@ -28,6 +28,9 @@ export interface PortfolioAnalytics {
   hhi: number | null; // sum of squared weights, 0 to 1
   effective_n: number | null; // 1 / hhi: how many equal positions it is equivalent to
   volatility_annualized: number | null;
+  // The largest peak-to-low fall over the past year (a fraction at or below 0, e.g. -0.18) of today's
+  // holdings at today's weights, not the portfolio actually held; null with the volatility
+  max_drawdown_1y: number | null;
   // null: fewer than 60 overlapping days, so the pair cannot be estimated
   correlation: Record<string, Record<string, number | null>>;
   skipped: Record<string, string>; // ticker -> why it could not be valued

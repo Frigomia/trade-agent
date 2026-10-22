@@ -21,7 +21,7 @@ export function resetDailySnapshotGuard(): void {
  * opened — there is no backend scheduler, so this is what fills the value-over-time chart. Never
  * records a partial total (any unpriced holding) or an empty portfolio. Two tabs racing can create
  * two same-day snapshots; harmless, the chart keeps the last point per day. Failures are silent —
- * the manual Record snapshot button is where errors show.
+ * a failed attempt is not retried the same day.
  */
 export function useDailySnapshot(): void {
   const { data: summary } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);

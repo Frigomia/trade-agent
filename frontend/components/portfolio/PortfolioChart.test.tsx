@@ -36,7 +36,7 @@ describe("PortfolioChart", () => {
   it("explains itself instead of drawing a fake line with fewer than two points", () => {
     render(<PortfolioChart snapshots={[snap("2026-09-29T08:00:00", 100)]} />);
 
-    expect(screen.getByText(/record a snapshot to start your history/i)).toBeInTheDocument();
+    expect(screen.getByText(/your history starts when a day is saved/i)).toBeInTheDocument();
   });
 
   it("draws one point per day", () => {
@@ -77,7 +77,7 @@ describe("PortfolioChart", () => {
     fireEvent.click(screen.getByText("All"));
     expect(pointCount(container)).toBe(3);
     fireEvent.click(screen.getByText("1W"));
-    expect(screen.getByText(/record a snapshot to start your history/i)).toBeInTheDocument();
+    expect(screen.getByText(/your history starts when a day is saved/i)).toBeInTheDocument();
   });
 
   it("the sparkline variant has no range chips and draws nothing under two points", () => {

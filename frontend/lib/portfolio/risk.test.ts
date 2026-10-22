@@ -31,6 +31,7 @@ const analytics = (over: Partial<PortfolioAnalytics> = {}): PortfolioAnalytics =
   hhi: 0.3725,
   effective_n: 2.68,
   volatility_annualized: 0.174,
+  max_drawdown_1y: -0.182,
   correlation: {
     AAA: { AAA: 1, BBB: 0.4, CCC: 0.2, DDD: null },
     BBB: { AAA: 0.4, BBB: 1, CCC: 0.6, DDD: 0.1 },
@@ -58,6 +59,7 @@ describe("riskFacts", () => {
     expect(facts.topThree?.tickers).toEqual(["AAA", "BBB", "CCC"]);
     expect(facts.topThree?.weight).toBeCloseTo(0.9);
     expect(facts.volatility).toBe(0.174);
+    expect(facts.biggestFall).toBe(-0.182);
     expect(facts.effectiveHoldings).toBe(2.68);
   });
 
@@ -77,16 +79,17 @@ describe("riskFacts", () => {
   });
 
   it("leaves a figure null when the backend could not compute it, never zero", () => {
-    const facts = riskFacts(analytics({ volatility_annualized: null, effective_n: null, correlation: {}, positions: [pos("AAA", 1)] }));
+    const facts = riskFacts(analytics({ volatility_annualized: null, max_drawdown_1y: null, effective_n: null, correlation: {}, positions: [pos("AAA", 1)] }));
 
     expect(facts.volatility).toBeNull();
+    expect(facts.biggestFall).toBeNull();
     expect(facts.effectiveHoldings).toBeNull();
     expect(facts.averageCorrelation).toBeNull();
     expect(facts.highestPair).toBeNull();
   });
 
   it("ignores a non-finite number", () => {
-    const facts = riskFacts(analytics({ volatility_annualized: Number.NaN, effective_n: Number.POSITIVE_INFINITY }));
+    const facts = riskFacts(analytics({ volatility_annualized: Number.NaN, max_drawdown_1y: Number.NEGATIVE_INFINITY, effective_n: Number.POSITIVE_INFINITY }));
 
     expect(facts.volatility).toBeNull();
     expect(facts.effectiveHoldings).toBeNull();
