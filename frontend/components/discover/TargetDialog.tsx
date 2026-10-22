@@ -48,15 +48,23 @@ function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose
       open.current = false;
     };
   }, []);
-  const [text, setText] = useState(fractionToPercentText(item.target_weight));
-  const [lowText, setLowText] = useState(priceToText(item.target_price_low));
-  const [highText, setHighText] = useState(priceToText(item.target_price_high));
+  // What the fields held when the dialog opened. "Edited" is measured against this, not against the
+  // live list: a refresh of the same company (another tab, an earlier save) must not turn a field the
+  // person never touched into part of the request.
+  const [opened] = useState(() => ({
+    weight: fractionToPercentText(item.target_weight),
+    low: priceToText(item.target_price_low),
+    high: priceToText(item.target_price_high),
+  }));
+  const [text, setText] = useState(opened.weight);
+  const [lowText, setLowText] = useState(opened.low);
+  const [highText, setHighText] = useState(opened.high);
   const { run, submitting, error, setError } = useAction();
   const { mutate } = useSWRConfig();
   const [tried, setTried] = useState(false);
-  const weightEdited = !owned && text !== fractionToPercentText(item.target_weight);
+  const weightEdited = !owned && text !== opened.weight;
   // An untouched range is neither checked nor sent: what is saved stays as it is.
-  const rangeEdited = !rangeLocked && (lowText !== priceToText(item.target_price_low) || highText !== priceToText(item.target_price_high));
+  const rangeEdited = !rangeLocked && (lowText !== opened.low || highText !== opened.high);
   const range = textsToRange(lowText, highText);
   // One end alone is not an error while the other is still being typed; it is, once saving was tried.
   const bothTyped = lowText.trim() !== "" && highText.trim() !== "";

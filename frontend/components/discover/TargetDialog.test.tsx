@@ -260,6 +260,34 @@ describe("TargetDialog", () => {
     expect(body()).toEqual({ target_price_low: null, target_price_high: null });
   });
 
+  it("does not send a field the person never touched when the list refreshes it meanwhile", async () => {
+    const onSaved = vi.fn();
+    const props = { onClose: vi.fn(), onSaved, onStale: vi.fn() };
+    const { rerender } = render(<TargetDialog item={ITEM} {...props} />);
+    fireEvent.change(low(), { target: { value: "90" } });
+    fireEvent.change(high(), { target: { value: "110" } });
+
+    // Another tab changed the weight; the list refresh hands the dialog the newer company.
+    rerender(<TargetDialog item={{ ...ITEM, target_weight: 0.125 }} {...props} />);
+    save();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(body()).toEqual({ target_price_low: 90, target_price_high: 110 }); // no stale weight
+  });
+
+  it("and the other way: a refreshed range is not sent with an edited weight", async () => {
+    const onSaved = vi.fn();
+    const props = { onClose: vi.fn(), onSaved, onStale: vi.fn() };
+    const { rerender } = render(<TargetDialog item={{ ...ITEM, target_price_low: 90, target_price_high: 110 }} {...props} />);
+    fireEvent.change(field(), { target: { value: "3" } });
+
+    rerender(<TargetDialog item={{ ...ITEM, target_price_low: 95, target_price_high: 120 }} {...props} />);
+    save();
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(body()).toEqual({ target_weight: 0.03 }); // no stale range
+  });
+
   it("hands the backend's answer to onSaved, so the card can show it without reading the whole list", async () => {
     const answer = { ...ITEM, target_weight: 0.125 };
     apiFetch.mockResolvedValueOnce(answer);
