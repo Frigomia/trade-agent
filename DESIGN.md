@@ -413,9 +413,12 @@ loss, today's change as "Not available" until the previous close is saved, and t
 there are seven days of snapshots), and "Where your money is": a donut by sector, country or
 currency whose legend rows filter the holdings table, beside the largest positions. Slices use the
 blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amounts stay as entered
-and the page says so. The holdings table, its targets and the watchlist are unchanged for now.
+and the page says so. The holdings table keeps its columns, targets and the watchlist toggle, and
+gains a monogram per company, "Add purchase price" where a holding has no cost, a count ("N of M
+holdings" while a group filters it) and a row menu (edit, log a trade for that holding, remove, which
+asks first and says it sells nothing).
 
-**Not built yet:** the Portfolio row menu and the risk and analytics section, the Discover screen,
+**Not built yet:** the Portfolio risk and analytics section, the Discover screen,
 the Discover navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
