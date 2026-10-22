@@ -116,3 +116,37 @@ test("ruff hook fixes what it can, and reports what it cannot with exit 2", () =
     if (existsSync(probe)) rmSync(probe);
   }
 });
+
+// The review hook asks once per commit, not once per state of the working tree (a fix to what a
+// review found must not start another round).
+test("review hook asks once per commit, and again after a new commit", (t) => {
+  const repo = mkdtempSync(path.join(tmpdir(), "review-hook-"));
+  const session = `test-${process.pid}-${Date.now()}`;
+  t.after(() => {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(path.join(tmpdir(), `claude-review-${session}`), { force: true });
+    rmSync(`/tmp/claude-review-${session}`, { force: true });
+  });
+  const git = (...args) => spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", ...args], { cwd: repo, encoding: "utf8" });
+  const stop = (extra = {}) =>
+    spawnSync("bash", [path.join(HERE, "require-review.sh")], {
+      input: JSON.stringify({ session_id: session, ...extra }),
+      encoding: "utf8",
+      env: { ...process.env, CLAUDE_PROJECT_DIR: repo },
+    });
+  const blocked = (r) => r.stdout.includes('"decision": "block"') || r.stdout.includes('"decision":"block"');
+  git("init", "-q");
+  writeFileSync(path.join(repo, "a.txt"), "1");
+  git("add", "-A");
+  git("commit", "-qm", "first");
+
+  assert.equal(blocked(stop()), false, "a clean tree is never asked about");
+  writeFileSync(path.join(repo, "a.txt"), "2");
+  assert.equal(blocked(stop()), true, "the first change is asked about");
+  writeFileSync(path.join(repo, "a.txt"), "3"); // a fix made after the review
+  assert.equal(blocked(stop()), false, "a further change on the same commit is not");
+  assert.equal(blocked(stop({ stop_hook_active: true })), false, "an active stop hook is never blocked again");
+  git("commit", "-qam", "second");
+  writeFileSync(path.join(repo, "a.txt"), "4");
+  assert.equal(blocked(stop()), true, "new work on a new commit is asked about again");
+});
