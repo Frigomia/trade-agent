@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Recommendation, WatchlistItem
+from app.models import Holding, Recommendation, WatchlistItem
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 
 PROFILE = {"name": "Halden Systems", "exchange": "NASDAQ", "currency": "USD"}
@@ -416,3 +416,219 @@ def test_the_database_refuses_an_unknown_source(db_session):
     with pytest.raises(IntegrityError):
         db_session.commit()
     db_session.rollback()
+
+
+def edit(client, ticker, body, currency=None):
+    with patch("app.routers.discover.fetch_currency", AsyncMock(return_value=currency)) as mock:
+        return client.patch(f"/discover/{ticker}", json=body), mock
+
+
+def stored(db, ticker, user_id=USER_ID):
+    db.expire_all()
+    row = db.query(WatchlistItem).filter_by(user_id=user_id, ticker=ticker).one()
+    numbers = (row.target_weight, row.target_price_low, row.target_price_high)
+    weight, low, high = (None if n is None else float(n) for n in numbers)
+    return row.note, weight, low, high
+
+
+def hold(db, ticker, shares, user_id=USER_ID):
+    db.add(Holding(user_id=user_id, ticker=ticker, name=ticker, asset_type="STOCK", shares=shares))
+    db.commit()
+
+
+def test_a_pence_range_is_edited_and_read_back_in_pounds_and_stored_in_pence(client, db_session):
+    seed(db_session, "MRLW.L", currency="GBp", target_price_low=1200, target_price_high=1300)
+
+    body = {"target_price_low": 12.5, "target_price_high": 13.5}
+    response, provider = edit(client, "MRLW.L", body)
+    provider.assert_not_called()  # the stored currency is enough: no provider lookup
+
+    item = response.json()
+    assert response.status_code == 200
+    assert (item["currency"], item["target_price_low"], item["target_price_high"]) == (
+        "GBP",
+        12.5,
+        13.5,
+    )
+    assert stored(db_session, "MRLW.L")[2:] == (1250, 1350)
+    listed = listing(client, {"MRLW.L": (1284.0, [1280.0, 1284.0])}).json()["items"][0]
+    assert (listed["target_price_low"], listed["target_price_high"]) == (12.5, 13.5)
+
+
+def test_a_company_with_no_stored_currency_gets_its_unit_from_the_provider(client, db_session):
+    seed(db_session, "MRLW.L")
+
+    response, _ = edit(
+        client, "MRLW.L", {"target_price_low": 12, "target_price_high": 13}, currency="GBp"
+    )
+
+    assert response.json()["target_price_low"] == 12
+    assert stored(db_session, "MRLW.L")[2:] == (1200, 1300)
+
+
+def test_only_the_fields_sent_change_and_an_explicit_null_clears_one(client, db_session):
+    seed(
+        db_session,
+        "HLDN",
+        currency="USD",
+        note="chips",
+        target_weight=0.05,
+        target_price_low=90,
+        target_price_high=110,
+    )
+
+    edit(client, "HLDN", {})
+    assert stored(db_session, "HLDN") == ("chips", 0.05, 90, 110)
+    edit(client, "HLDN", {"note": "memory"})
+    assert stored(db_session, "HLDN") == ("memory", 0.05, 90, 110)
+    edit(client, "HLDN", {"target_weight": None})
+    assert stored(db_session, "HLDN") == ("memory", None, 90, 110)
+    edit(client, "HLDN", {"target_price_low": None, "target_price_high": None})
+    assert stored(db_session, "HLDN") == ("memory", None, None, None)
+    edit(client, "HLDN", {"note": "   "})
+    assert stored(db_session, "HLDN")[0] is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"target_price_low": 90},
+        {"target_price_high": 110},
+        {"target_price_low": 90, "target_price_high": None},
+        {"target_price_low": 120, "target_price_high": 110},
+        {"target_price_low": 0, "target_price_high": 110},
+        {"target_weight": 1.5},
+        {"target_weight": -0.1},
+        {"note": "x" * 501},
+        {"ticker": "OTHR"},
+        {"price": 1},
+    ],
+)
+def test_a_bad_edit_is_refused_and_changes_nothing(client, db_session, body):
+    seed(db_session, "HLDN", currency="USD", target_price_low=90, target_price_high=110)
+
+    response, _ = edit(client, "HLDN", body)
+
+    assert response.status_code == 422
+    assert stored(db_session, "HLDN") == (None, None, 90, 110)
+
+
+def test_a_price_too_large_for_the_stored_unit_is_refused(client, db_session):
+    seed(db_session, "MRLW.L", currency="GBp")
+
+    big = {"target_price_low": 5, "target_price_high": 999999999999}  # in pounds: 10^14 in pence
+    response, _ = edit(client, "MRLW.L", big)
+
+    assert response.status_code == 422
+    assert stored(db_session, "MRLW.L") == (None, None, None, None)
+
+
+def test_a_company_that_is_not_in_the_list_is_a_404_and_is_never_created(client, db_session):
+    response, _ = edit(client, "NOPE", {"note": "x"})
+
+    assert response.status_code == 404
+    assert db_session.query(WatchlistItem).filter_by(ticker="NOPE").count() == 0
+
+
+def test_another_persons_company_cannot_be_edited(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID)
+    seed(db_session, "THEIRS", user_id=OTHER_USER_ID, currency="USD", note="theirs")
+
+    response, _ = edit(client, "THEIRS", {"note": "mine now"})
+
+    assert response.status_code == 404
+    assert stored(db_session, "THEIRS", OTHER_USER_ID)[0] == "theirs"
+
+
+def test_the_ticker_in_the_path_is_matched_in_upper_case(client, db_session):
+    seed(db_session, "HLDN", currency="USD")
+
+    response, _ = edit(client, "hldn", {"note": "x"})
+
+    assert response.status_code == 200
+    assert stored(db_session, "HLDN")[0] == "x"
+
+
+def test_the_list_says_which_companies_are_owned_and_a_sold_out_one_is_not(client, db_session):
+    for ticker in ("OWNX", "SOLD", "NONE"):
+        seed(db_session, ticker, currency="USD")
+    hold(db_session, "OWNX", 3)
+    hold(db_session, "SOLD", 0)
+    quotes = dict.fromkeys(("OWNX", "SOLD", "NONE"), (1.0, [1.0, 1.0]))
+
+    items = {i["ticker"]: i["owned"] for i in listing(client, quotes).json()["items"]}
+
+    assert items == {"OWNX": True, "SOLD": False, "NONE": False}
+
+
+def test_an_owned_company_keeps_its_weight_target_on_the_holding_but_its_range_is_editable(
+    client, db_session
+):
+    seed(db_session, "OWNX", currency="USD", target_weight=0.3)
+    hold(db_session, "OWNX", 3)
+
+    refused, _ = edit(client, "OWNX", {"target_weight": 0.1})
+    ranged, _ = edit(client, "OWNX", {"target_price_low": 90, "target_price_high": 110})
+    cleared, _ = edit(client, "OWNX", {"target_weight": None})
+
+    assert refused.status_code == 409
+    assert "target on the holding" in refused.json()["detail"]
+    assert ranged.status_code == 200 and ranged.json()["owned"] is True
+    assert cleared.status_code == 200  # a stale saved weight can still be cleared
+    assert stored(db_session, "OWNX") == (None, None, 90, 110)
+
+
+def test_an_edit_does_not_look_up_a_quote_and_keeps_the_analysis(client, db_session):
+    seed(db_session, "HLDN", currency="USD")
+    idea(db_session, "HLDN", "Recurring revenue, priced below peers.")
+
+    with patch("app.routers.discover.fetch_quote_and_history", AsyncMock()) as quote:
+        response, _ = edit(client, "HLDN", {"note": "x"})
+
+    item = response.json()
+    quote.assert_not_called()
+    assert (item["price"], item["change_pct"], item["stale"]) == (None, None, True)
+    assert item["status"] == "analyzed" and item["insight"].startswith("Recurring")
+
+
+def test_a_range_is_refused_while_the_currency_is_unknown_never_stored_in_a_guessed_unit(
+    client, db_session
+):
+    seed(db_session, "MRLW.L", target_price_low=1200, target_price_high=1300)
+
+    refused, _ = edit(client, "MRLW.L", {"target_price_low": 12, "target_price_high": 13})
+    cleared, _ = edit(client, "MRLW.L", {"target_price_low": None, "target_price_high": None})
+    noted, _ = edit(client, "MRLW.L", {"note": "x"})
+
+    assert refused.status_code == 503
+    assert (cleared.status_code, noted.status_code) == (200, 200)  # these need no unit
+    assert stored(db_session, "MRLW.L") == ("x", None, None, None)
+
+
+def test_the_currency_a_range_was_converted_with_is_kept_with_it(client, db_session):
+    seed(db_session, "MRLW.L")
+
+    edit(client, "MRLW.L", {"target_price_low": 12, "target_price_high": 13}, currency="GBp")
+
+    row = db_session.query(WatchlistItem).filter_by(ticker="MRLW.L").one()
+    db_session.refresh(row)
+    assert row.currency == "GBp"
+
+
+def test_an_edit_with_a_refused_part_changes_nothing(client, db_session):
+    seed(db_session, "OWNX", currency="USD", note="old", target_weight=0.3)
+    hold(db_session, "OWNX", 3)
+
+    response, _ = edit(client, "OWNX", {"note": "new", "target_weight": 0.1})
+
+    assert response.status_code == 409
+    assert stored(db_session, "OWNX") == ("old", 0.3, None, None)
+
+
+def test_a_nul_character_in_a_note_is_a_422_not_a_500(client, db_session):
+    seed(db_session, "HLDN", currency="USD")
+
+    edited, _ = edit(client, "HLDN", {"note": "a\u0000b"})
+    added, _ = add(client, {"ticker": "NEWX", "asset_type": "STOCK", "note": "a\u0000b"})
+
+    assert (edited.status_code, added.status_code) == (422, 422)
