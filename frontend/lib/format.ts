@@ -51,6 +51,11 @@ export function formatPct(value: number): string {
   return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(1)}%`;
 }
 
+/** The time of day in the viewer's own zone, 24-hour and zero-padded ("09:05"). */
+export function formatClock(at: number): string {
+  return new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
 // The API returns naive UTC timestamps; Date.parse would otherwise read them as local time.
 export function toTime(iso: string): number {
   return Date.parse(/(Z|[+-]\d\d:?\d\d)$/i.test(iso) ? iso : `${iso}Z`);

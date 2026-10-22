@@ -57,6 +57,13 @@ describe("PortfolioTabs", () => {
     expect(screen.getByRole("link", { name: "Saved plansSaved" })).not.toHaveAttribute("aria-label");
   });
 
+  it("raises the current view in the accent colour and keeps the others quiet, as in the approved pill track", () => {
+    renderTabs("month");
+
+    expect(screen.getByRole("link", { name: /^This month/ })).toHaveStyle({ color: "var(--accent)", backgroundColor: "var(--panel)", fontWeight: "650" });
+    expect(screen.getByRole("link", { name: "Holdings" })).toHaveStyle({ color: "var(--text2)" });
+  });
+
   it("shows no badge at 0, while loading, or on error", async () => {
     renderTabs();
     expect(screen.getByRole("link", { name: "Orders" })).toHaveTextContent(/^Orders$/);

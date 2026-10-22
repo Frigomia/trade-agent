@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { DASH, formatAmount, formatPct, formatShare, formatSigned, localTodayIso, todayIso } from "./format";
+import { DASH, formatAmount, formatClock, formatPct, formatShare, formatSigned, localTodayIso, todayIso } from "./format";
 
 describe("format", () => {
   it("formats amounts with thousands separators and two decimals, no currency symbol", () => {
@@ -66,5 +66,13 @@ describe("formatShare", () => {
     expect(formatShare(0.285, 1)).toBe("28.5%");
     expect(formatShare(0.0625, 1)).toBe("6.3%"); // 6.25 is exact: up
     expect(formatPct(6.25)).toBe("+6.3%"); // the same rule for the signed one
+  });
+});
+
+describe("formatClock", () => {
+  it("gives the local time of day, 24-hour and zero-padded", () => {
+    expect(formatClock(new Date(2026, 9, 22, 14, 14).getTime())).toBe("14:14");
+    expect(formatClock(new Date(2026, 9, 22, 9, 5).getTime())).toBe("09:05");
+    expect(formatClock(new Date(2026, 9, 22, 0, 0).getTime())).toBe("00:00");
   });
 });

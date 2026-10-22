@@ -6,7 +6,7 @@ import { Alert, Box, Button, ButtonBase, Typography } from "@mui/material";
 import { Eye, Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { HoldingSummary, PortfolioSummary, Snapshot } from "@/lib/api/portfolio-types";
-import { DASH, formatAmount, formatPct, formatShare, formatSigned } from "@/lib/format";
+import { DASH, formatAmount, formatPct, formatClock, formatShare, formatSigned } from "@/lib/format";
 import { useDailySnapshot } from "@/lib/portfolio/useDailySnapshot";
 import { AllocationPanel } from "@/components/portfolio/AllocationPanel";
 import { HoldingMenu } from "@/components/portfolio/HoldingMenu";
@@ -178,11 +178,13 @@ function HoldingRow({
 }
 
 export default function PortfolioPage() {
+  // When the figures were last read: the subtitle says so, as the approved mock does.
+  const [read, setRead] = useState<number | null>(null);
   const {
     data: summary,
     error: summaryError,
     mutate: mutateSummary,
-  } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch);
+  } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch, { onSuccess: () => setRead(Date.now()) });
   const { data: snapshots, error: snapshotsError } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
   useDailySnapshot();
 
@@ -219,6 +221,7 @@ export default function PortfolioPage() {
     <Box>
       <PageHeader
         title="Portfolio"
+        subtitle={`Your holdings, allocation and risk.${read === null ? "" : ` Updated today, ${formatClock(read)}.`}`}
         actions={
           <>
         <Button
