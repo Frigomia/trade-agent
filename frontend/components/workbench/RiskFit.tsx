@@ -4,6 +4,7 @@ import { Panel } from "@/components/ui/Panel";
 import type { IdeaOut } from "@/lib/api/discovery-types";
 import { fitScore } from "@/lib/discovery";
 import { fitAssumption, fitFacts } from "@/lib/fitFacts";
+import { formatShare } from "@/lib/format";
 import { eurCompact, formatMetric, riskFlag, sizeWord } from "@/lib/metrics";
 import { BODY, H3 } from "./Cases";
 
@@ -24,7 +25,8 @@ function Section({ title, right, children }: { title: string; right?: ReactNode;
   );
 }
 
-const percent = (fraction: number | null, digits = 0) => (fraction === null || !Number.isFinite(fraction) ? null : `${(fraction * 100).toFixed(digits)}%`);
+// The shared text, or null where there is none (the row then says "Not available").
+const percent = (fraction: number | null, digits = 0) => (fraction === null || !Number.isFinite(fraction) ? null : formatShare(fraction, digits));
 
 function Row({ label, value, detail }: { label: string; value: string | null; detail: string }) {
   return (

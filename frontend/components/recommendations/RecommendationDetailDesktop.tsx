@@ -5,6 +5,7 @@ import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { Amount } from "@/components/portfolio/Amount";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
+import { formatShare } from "@/lib/format";
 import { AskAboutThis } from "./AskAboutThis";
 import { AutomaticTag } from "./AutomaticTag";
 import { DecisionActions } from "./DecisionActions";
@@ -85,7 +86,7 @@ export function RecommendationDetailDesktop({
           <Box>
             <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Suggested position</Typography>
             <Typography sx={BIG}>
-              {suggested_position_pct !== null ? `${(suggested_position_pct * 100).toFixed(1)}%` : "—"}
+              {formatShare(suggested_position_pct)}
             </Typography>
           </Box>
         </Box>

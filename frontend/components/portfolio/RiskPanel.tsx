@@ -5,11 +5,11 @@ import { Box, Button, Typography } from "@mui/material";
 import { ChevronDown } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { PortfolioAnalytics } from "@/lib/api/analytics-types";
+import { formatShare } from "@/lib/format";
 import { orderedPositions, riskFacts, spread } from "@/lib/portfolio/risk";
 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
-const pct = (fraction: number, digits = 1) => `${(fraction * 100).toFixed(digits)}%`;
 // Rounded first, then made positive-zero, so a tiny negative never reads "-0.00".
 const corr = (n: number) => (Math.round(n * 100) / 100 + 0).toFixed(2);
 
@@ -201,9 +201,9 @@ export function RiskPanel({
           include a holding that was just removed. */}
       <Box aria-busy={updating} sx={{ display: "grid", gap: 2, opacity: updating ? 0.55 : 1, transition: "opacity 120ms" }}>
       <Box sx={{ display: "grid", gap: 1.25, gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(3, minmax(0, 1fr))" } }}>
-        <Metric label="Volatility" value={facts.volatility === null ? null : `${pct(facts.volatility)} a year`} detail={facts.volatility === null ? "Needs matching price history for every holding." : "Annualised, from the daily changes the holdings share."} />
-        <Metric label="Largest position" value={facts.largest ? pct(facts.largest.weight) : null} detail={facts.largest?.name ?? "Nothing valued."} />
-        <Metric label="Top three together" value={facts.topThree ? pct(facts.topThree.weight) : null} detail={facts.topThree ? facts.topThree.tickers.join(", ") : "Needs at least three holdings."} />
+        <Metric label="Volatility" value={facts.volatility === null ? null : `${formatShare(facts.volatility)} a year`} detail={facts.volatility === null ? "Needs matching price history for every holding." : "Annualised, from the daily changes the holdings share."} />
+        <Metric label="Largest position" value={facts.largest ? formatShare(facts.largest.weight) : null} detail={facts.largest?.name ?? "Nothing valued."} />
+        <Metric label="Top three together" value={facts.topThree ? formatShare(facts.topThree.weight) : null} detail={facts.topThree ? facts.topThree.tickers.join(", ") : "Needs at least three holdings."} />
         <Metric label="Effective holdings" value={facts.effectiveHoldings === null ? null : facts.effectiveHoldings.toFixed(1)} detail="As if spread equally over this many." />
         <Metric
           label="Average correlation"
@@ -242,8 +242,8 @@ export function RiskPanel({
                 ["Sectors", String(spreadFacts.sectors)],
                 ["Countries", String(spreadFacts.countries)],
                 ["Currencies", String(spreadFacts.currencies)],
-                ...(spreadFacts.largestSector ? [["Largest sector", `${spreadFacts.largestSector.label}, ${pct(spreadFacts.largestSector.weight)}`]] : []),
-                ...(spreadFacts.unclassifiedSector !== null ? [["Sector not known", pct(spreadFacts.unclassifiedSector)]] : []),
+                ...(spreadFacts.largestSector ? [["Largest sector", `${spreadFacts.largestSector.label}, ${formatShare(spreadFacts.largestSector.weight)}`]] : []),
+                ...(spreadFacts.unclassifiedSector !== null ? [["Sector not known", formatShare(spreadFacts.unclassifiedSector)]] : []),
               ].map(([label, value]) => (
                 <Box key={label} sx={{ display: "flex", justifyContent: "space-between", gap: 2, py: 0.75, borderTop: "1px solid var(--line)", fontSize: "0.8125rem", "&:first-of-type": { borderTop: 0 } }}>
                   <Box component="dt" sx={{ color: "var(--text2)" }}>{label}</Box>

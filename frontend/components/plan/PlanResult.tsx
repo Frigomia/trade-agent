@@ -2,15 +2,13 @@ import type { ReactNode } from "react";
 import { Box, Typography } from "@mui/material";
 import { AlertTriangle } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatShare } from "@/lib/format";
 import { formatRate, type LeftOut, type Plan, type PlanLine } from "@/lib/plans";
 
 export const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "150px minmax(0, 1fr) 220px 130px 150px" };
 const BEFORE = "color-mix(in oklab, var(--accent-solid) 42%, var(--bg))";
-
-const pct = (fraction: number) => `${(fraction * 100).toFixed(1)}%`;
 
 /** The bar scale shared by every line of a plan: the largest weight or target plus some headroom, so a target tick is always inside the track. */
 export const weightScale = (plan: Plan) =>
@@ -65,8 +63,8 @@ export function LineWeight({ line, scale }: { line: PlanLine; scale: number }) {
     <>
       <WeightBar before={before} after={after} target={target} scale={scale} />
       <Typography component="span" sx={{ ...muted, display: "block", "& b": { color: "var(--text)", fontWeight: 650 } }}>
-        Weight <b>{pct(before)}</b> to <b>{pct(after)}</b>
-        {target !== null && ` · target ${pct(target)}`}
+        Weight <b>{formatShare(before)}</b> to <b>{formatShare(after)}</b>
+        {target !== null && ` · target ${formatShare(target)}`}
       </Typography>
     </>
   );

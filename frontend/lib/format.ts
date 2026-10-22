@@ -30,6 +30,22 @@ export function formatSigned(value: number): string {
   return `${round(value, 2) >= 0 ? "+" : ""}${formatAmount(value)}`;
 }
 
+/** Shown where there is no number to show (a missing or non-finite value). */
+export const DASH = "—";
+
+/**
+ * A share of a whole as text: a fraction (0 to 1) as a percent, no sign ("31.2%"). Use it for weights,
+ * allocations, volatility and falls. A missing or non-finite value gives DASH. Rounds to the shown
+ * precision first, so a tiny negative never reads "-0.0%". The rounding is `toFixed` of the value
+ * times 100, the same rule `formatPct` uses, so the two cannot disagree. For a signed move in
+ * percentage points (a price change) use `formatPct`.
+ */
+export function formatShare(fraction: number | null | undefined, digits = 1): string {
+  if (typeof fraction !== "number" || !Number.isFinite(fraction)) return DASH;
+  return `${round(fraction * 100, digits).toFixed(digits)}%`;
+}
+
+/** A signed move in percentage points ("+5.7%"): a price change. For a share of a whole use `formatShare`. */
 export function formatPct(value: number): string {
   const rounded = round(value, 1);
   return `${rounded >= 0 ? "+" : ""}${rounded.toFixed(1)}%`;

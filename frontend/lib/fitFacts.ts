@@ -1,4 +1,5 @@
 import type { CandidateFit } from "@/lib/api/discovery-types";
+import { formatShare } from "@/lib/format";
 
 export interface FitFact {
   label: string;
@@ -8,7 +9,7 @@ export interface FitFact {
 
 const finite = (n: number | null | undefined): n is number => typeof n === "number" && Number.isFinite(n);
 
-const percent = (n: number, extra: boolean) => `${(n * 100).toFixed(extra ? 1 : 0)}%`;
+const percent = (n: number, extra: boolean) => formatShare(n, extra ? 1 : 0);
 const index = (n: number, extra: boolean) => n.toFixed(extra ? 3 : 2);
 
 /** "3% → 7%": two figures, with one more decimal when the plain rounding would make them look equal. */
@@ -56,6 +57,7 @@ export function fitFacts(fit: CandidateFit, sector: string | null | undefined): 
 export function fitAssumption(fit: CandidateFit): string {
   const context = "They are context for your own review, not a recommendation.";
   if (!finite(fit.hypothetical_weight)) return `These figures assume a small position in this company. ${context}`;
-  const weight = Number((fit.hypothetical_weight * 100).toFixed(1));
-  return `These figures assume this company at ${weight}% of your portfolio. ${context}`;
+  const whole = Number.isInteger(Number((fit.hypothetical_weight * 100).toFixed(1))); // "5%", not "5.0%"
+  const weight = formatShare(fit.hypothetical_weight, whole ? 0 : 1);
+  return `These figures assume this company at ${weight} of your portfolio. ${context}`;
 }
