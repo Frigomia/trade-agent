@@ -11,7 +11,14 @@ from anthropic import AuthenticationError
 from app.agents import discovery_graph, research
 from app.analysis.discovery_score import evaluate
 from app.config import settings
-from app.schemas_discovery import CandidateFit, Claim, Exclusion, IdeaOut, NegativeDevelopment
+from app.schemas_discovery import (
+    CandidateFit,
+    Claim,
+    Exclusion,
+    IdeaOut,
+    NegativeDevelopment,
+    PeerRow,
+)
 from tests.discovery_fixtures import sample_candidate
 
 URL = "https://www.sec.gov/Archives/company-report"
@@ -627,3 +634,142 @@ def test_other_company_research_is_rejected(providers):
     assert result.sources == []
     assert result.ticker == sample_candidate().ticker
     extraction.assert_not_awaited()
+
+
+def test_the_named_peers_are_saved_on_the_snapshot_and_come_only_from_the_candidate(providers):
+    research_mock, _, _ = providers
+    research_mock.return_value = evidence()
+    research_mock.return_value.competitors = ["Invented Rival Inc"]
+    candidate = sample_candidate()
+    candidate.named_peers = [
+        PeerRow(
+            ticker="KHC",
+            name="Kraft Heinz",
+            country="United States",
+            currency="USD",
+            market_cap_eur=35e9,
+            values={"trailingPE": 17.0},
+        )
+    ]
+    candidate.price_as_of = datetime.now(UTC)
+
+    result = asyncio.run(discovery_graph.run_discovery_graph(candidate, MagicMock()))
+
+    assert isinstance(result, IdeaOut)
+    assert result.snapshot is not None
+    assert [p.ticker for p in result.snapshot.peers or []] == ["KHC"]
+    assert "Invented Rival Inc" not in [p.name for p in result.snapshot.peers or []]
+    assert result.competitors == ["Invented Rival Inc"]
+
+
+def test_a_scan_with_no_named_peers_saves_an_empty_list_not_none():
+    result = asyncio.run(discovery_graph.run_discovery_graph(sample_candidate(), None))
+
+    assert isinstance(result, IdeaOut)
+    assert result.snapshot is not None
+    assert result.snapshot.peers == []
+
+
+def test_competitors_are_tidy_deduplicated_capped_and_never_the_company_or_a_named_peer():
+    named = [
+        PeerRow(
+            ticker="KHC",
+            name="Kraft Heinz",
+            country=None,
+            currency=None,
+            market_cap_eur=None,
+            values={},
+        )
+    ]
+    names = [
+        "Danone",
+        "  danone  ",
+        "Kraft   Heinz",
+        "nestlé s.a.",
+        "",
+        "X" * 200,
+        *(f"Rival {i}" for i in range(20)),
+    ]
+
+    kept = discovery_graph._competitors(names, "Nestlé S.A.", named)
+
+    assert kept[0] == "Danone"
+    assert "Kraft Heinz" not in kept and "Kraft   Heinz" not in kept
+    assert all("nestl" not in k.casefold() for k in kept)
+    assert kept[1] == "X" * discovery_graph.COMPETITOR_CHARS
+    assert len(kept) == discovery_graph.MAX_COMPETITORS
+    assert len({k.casefold() for k in kept}) == len(kept)
+
+
+def test_the_portfolio_fit_is_saved_when_applicable_and_left_out_when_not(providers):
+    def fit(applicable):
+        return CandidateFit(
+            ticker=sample_candidate().ticker,
+            applicable=applicable,
+            avg_correlation_to_portfolio=0.3 if applicable else None,
+            portfolio_vol_before=0.12 if applicable else None,
+            portfolio_vol_after=0.11 if applicable else None,
+            hhi_before=0.2 if applicable else None,
+            hhi_after=0.18 if applicable else None,
+            sector_weight_before=0.03 if applicable else None,
+            sector_weight_after=0.07 if applicable else None,
+            hypothetical_weight=0.05,
+            notes=[] if applicable else ["No holdings to compare."],
+        )
+
+    saved = run(MagicMock(), fit=fit(True))
+    skipped = run(MagicMock(), fit=fit(False))
+    none = run(MagicMock())
+
+    assert isinstance(saved, IdeaOut) and saved.fit is not None
+    assert (saved.fit.sector_weight_before, saved.fit.sector_weight_after) == (0.03, 0.07)
+    assert isinstance(skipped, IdeaOut) and skipped.fit is None
+    assert isinstance(none, IdeaOut) and none.fit is None
+
+
+def test_an_idea_saved_before_these_fields_still_loads():
+    idea = asyncio.run(discovery_graph.run_discovery_graph(sample_candidate(), None))
+    assert isinstance(idea, IdeaOut)
+    old = idea.model_dump(mode="json", exclude={"competitors", "fit"})
+    old["snapshot"].pop("peers")
+
+    loaded = IdeaOut.model_validate(old)
+
+    assert loaded.competitors == [] and loaded.fit is None
+    assert loaded.snapshot is not None and loaded.snapshot.peers is None
+
+
+def test_competitor_names_match_the_company_and_peers_despite_legal_suffixes_and_punctuation():
+    named = [
+        PeerRow(
+            ticker="MSFT",
+            name="Microsoft Corp",
+            country=None,
+            currency=None,
+            market_cap_eur=None,
+            values={},
+        )
+    ]
+
+    kept = discovery_graph._competitors(
+        ["Apple", "Microsoft Corporation", "Apple Inc.", "Alphabet Inc"], "Apple Inc", named
+    )
+
+    assert kept == ["Alphabet Inc"]
+
+
+def test_the_named_peers_never_reach_the_models_prompts():
+    candidate = sample_candidate()
+    candidate.named_peers = [
+        PeerRow(
+            ticker="KHC",
+            name="Kraft Heinz",
+            country=None,
+            currency=None,
+            market_cap_eur=None,
+            values={},
+        )
+    ]
+
+    assert "named_peers" not in candidate.model_dump(mode="json")
+    assert candidate.named_peers[0].ticker == "KHC"

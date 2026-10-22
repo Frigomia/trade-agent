@@ -538,6 +538,9 @@ class IdeaOut(BaseModel):
     style_tags: list[str]           # derived from fundamentals: quality, value, growth, income, defensive
     risk: RiskProfile
     peers: list[PeerComparison]
+    competitors: list[str]          # research-named companies (plain text, at most 8); [] on older ideas
+    fit: CandidateFit | None        # saved when applicable; None otherwise and on older ideas
+    # snapshot.peers: list[PeerRow] | None -- up to 5 named peers from the universe snapshot
     thesis: str                     # LLM
     catalysts: list[str]            # LLM, each tied to a Claim url
     outlook: str                    # LLM, qualitative; not a score

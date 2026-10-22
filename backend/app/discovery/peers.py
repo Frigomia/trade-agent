@@ -11,14 +11,18 @@ the sign of the ratio itself is not trusted to say so.
 """
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from statistics import quantiles
 from typing import Any, Literal
 
-from app.schemas_discovery import PeerComparison
+from app.discovery.risk import market_cap_to_eur
+from app.fx import SUBUNITS
+from app.schemas_discovery import PeerComparison, PeerRow
 
 MIN_PEERS = 8  # approved: fewer suitable peers means "peer comparison unavailable"
+NAMED_PEERS = 5  # the largest peers named on an idea
 
 
 Domain = Literal["any", "positive", "nonnegative"]
@@ -91,6 +95,11 @@ class PeerRecord:
     sector: str | None
     industry: str | None
     metrics: dict[str, Any]
+    # Identity from the universe row, for naming peers; the comparison itself never reads them.
+    name: str = ""
+    country: str | None = None
+    currency: str | None = None  # the quote currency as Yahoo gives it, possibly a minor unit
+    market_cap: float | None = None  # in the major unit even when the price is in a minor one
 
     @property
     def group(self) -> str:
@@ -188,3 +197,52 @@ def _compare(spec: MetricSpec, candidate: PeerRecord, peers: list[PeerRecord]) -
         peer_p75=p75,
         position=position,
     )
+
+
+def _compared(spec: MetricSpec, comparisons: Sequence[PeerComparison]) -> bool:
+    return any(c.metric == spec.name and c.peer_group != "none" for c in comparisons)
+
+
+def named_peers(
+    candidate: PeerRecord,
+    universe: Sequence[PeerRecord],
+    comparisons: Sequence[PeerComparison],
+    rates: Mapping[str, Decimal],
+) -> list[PeerRow]:
+    """The largest peers the comparison drew on, by market cap in EUR, for the idea's peer table.
+
+    The group is the finest one a comparison actually used (industry, else sector), within the
+    candidate's metric group, so the table lists companies behind the figures above it. Empty
+    when no comparison had a peer group: nothing is named that was not compared. Names, countries
+    and figures come from the universe snapshot, never from the research model.
+    """
+    levels = {c.peer_group for c in comparisons}
+    if not levels - {"none"}:
+        return []
+    by_industry = "industry" in levels
+    pool = [
+        p
+        for p in universe
+        if p.ticker != candidate.ticker
+        and p.group == candidate.group
+        and (p.industry == candidate.industry if by_industry else p.sector == candidate.sector)
+    ]
+    specs = METRIC_SETS[candidate.group]
+    # Only peers with a figure for a metric that produced a comparison were behind one: a metric
+    # with too few peers (peer_group "none") used none of its values.
+    compared = [s for s in specs if s.obtainable and _compared(s, comparisons)]
+    pool = [p for p in pool if any(_usable(s, p.metrics) is not None for s in compared)]
+    ranked = [(market_cap_to_eur(p.market_cap, p.currency or "", dict(rates)), p) for p in pool]
+    ranked.sort(key=lambda row: (row[0] is None, -(row[0] or 0.0), row[1].ticker))
+    return [
+        PeerRow(
+            ticker=p.ticker,
+            name=p.name,
+            country=p.country,
+            currency=SUBUNITS.get(p.currency or "", (p.currency, Decimal(1)))[0],
+            market_cap_eur=cap,
+            # Only the metrics that were compared: a column nothing was compared on is not shown.
+            values={s.name: _usable(s, p.metrics) for s in compared},
+        )
+        for cap, p in ranked[:NAMED_PEERS]
+    ]

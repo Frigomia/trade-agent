@@ -13,7 +13,7 @@ from statistics import mean
 from typing import Literal
 
 from app.discovery.eligibility import is_eligible
-from app.discovery.peers import PeerRecord, compare_to_peers, metric_group
+from app.discovery.peers import PeerRecord, compare_to_peers, metric_group, named_peers
 from app.discovery.risk import build_risk_profile
 from app.discovery.scoring import dimension_score
 from app.discovery.snapshot import Freshness, SymbolSnapshot, coverage_of
@@ -26,6 +26,20 @@ PEER_DATA_NOTE = (
     "Peer fundamentals may use different fiscal periods and accounting standards; "
     "no adjustments are made."
 )
+
+
+def peer_record(snap: SymbolSnapshot) -> PeerRecord:
+    return PeerRecord(
+        snap.ticker,
+        snap.asset_type,
+        snap.sector,
+        snap.industry,
+        snap.metrics,
+        snap.name,
+        snap.country,
+        snap.currency,
+        snap.market_cap,
+    )
 
 
 @dataclass(frozen=True)
@@ -86,6 +100,7 @@ def build_candidate(
         fundamentals=snap.metrics,
         coverage=coverage_of(snap.metrics),
         peers=peers,
+        named_peers=named_peers(record, records, peers, rates),
         risk=risk,
         origin=origin,
         origin_note=origin_note,
@@ -114,9 +129,7 @@ def shortlist_for_user(
     """
     held = {t.casefold() for t in holdings}
     avoided = {s.casefold() for s in avoid_sectors}
-    records = [
-        PeerRecord(s.ticker, s.asset_type, s.sector, s.industry, s.metrics) for s in snapshots
-    ]
+    records = [peer_record(s) for s in snapshots]
     excluded: list[Exclusion] = []
     candidates: list[CandidateMetrics] = []
     for snap, record in zip(snapshots, records, strict=True):

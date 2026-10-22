@@ -1,6 +1,7 @@
 """One bounded discovery graph per candidate; numeric decisions stay outside the model."""
 
 import logging
+import re
 from collections.abc import Collection
 from decimal import Decimal
 from textwrap import shorten
@@ -23,6 +24,7 @@ from app.schemas_discovery import (
     Exclusion,
     IdeaOut,
     IdeaSnapshot,
+    PeerRow,
     ResearchEvidence,
     Url,
 )
@@ -91,6 +93,45 @@ class DiscoveryState(TypedDict):
     evaluation: NotRequired[Evaluation]
     exclusion: NotRequired[Exclusion | None]
     output: NotRequired[IdeaOut | Exclusion]
+
+
+MAX_COMPETITORS = 8
+COMPETITOR_CHARS = 80
+
+
+_LEGAL_SUFFIXES = {
+    "inc",
+    "corp",
+    "corporation",
+    "co",
+    "company",
+    "ltd",
+    "plc",
+    "sa",
+    "ag",
+    "nv",
+    "se",
+}
+
+
+def _company_key(name: str) -> str:
+    """A name without case, punctuation or a legal suffix, so "Apple Inc." matches "Apple"."""
+    words = re.sub(r"[^\w\s]", " ", name.casefold()).split()
+    while len(words) > 1 and words[-1] in _LEGAL_SUFFIXES:
+        words.pop()
+    return " ".join(words)
+
+
+def _competitors(names: list[str], own: str, named: list[PeerRow]) -> list[str]:
+    """The research's competitor names as plain text: tidy, deduplicated, capped, and without the
+    company itself or a company the peer table already names. They are untrusted web text."""
+    skip = {_company_key(own), *(_company_key(p.name) for p in named)}
+    kept: dict[str, str] = {}
+    for name in names:
+        text = " ".join(name.split())[:COMPETITOR_CHARS]
+        if text and _company_key(text) not in skip:
+            kept.setdefault(text.casefold(), text)
+    return list(kept.values())[:MAX_COMPETITORS]
 
 
 def _empty_evidence(candidate: CandidateMetrics, note: str | None = None) -> ResearchEvidence:
@@ -376,6 +417,8 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         style_tags=evaluation.style_tags,
         data_notes=list(dict.fromkeys(notes)),
         headline=headline if headline not in ("", "...") else None,
+        competitors=_competitors(evidence.competitors, candidate.name, candidate.named_peers),
+        fit=fit if fit is not None and fit.applicable else None,
         snapshot=IdeaSnapshot(
             exchange=candidate.exchange,
             country=candidate.country,
@@ -388,6 +431,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
             price_as_of=candidate.price_as_of,
             fundamentals=candidate.fundamentals,
             coverage=candidate.coverage,
+            peers=candidate.named_peers,
         ),
     )
     return {"output": idea}

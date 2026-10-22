@@ -20,7 +20,7 @@ from app.agents.market_data import search_symbols
 from app.discovery.eligibility import is_eligible
 from app.discovery.fetching import Fetch, fetch_yfinance
 from app.discovery.peers import PeerRecord
-from app.discovery.screen import build_candidate
+from app.discovery.screen import build_candidate, peer_record
 from app.discovery.snapshot import SymbolSnapshot, check_freshness, to_snapshot
 from app.schemas_discovery import CandidateMetrics, Mention, RejectedMention
 
@@ -87,10 +87,6 @@ def _pick(mention: Mention, hits: list[dict[str, str]]) -> dict[str, str] | str:
     return matches[0] if len(matches) == 1 else ("unresolved" if not matches else "ambiguous")
 
 
-def _record(snap: SymbolSnapshot) -> PeerRecord:
-    return PeerRecord(snap.ticker, snap.asset_type, snap.sector, snap.industry, snap.metrics)
-
-
 async def admit_mentions(
     mentions: Sequence[Mention],
     known: Collection[str],
@@ -107,7 +103,7 @@ async def admit_mentions(
     The entrant is compared with the `universe` snapshot and does not join it.
     """
     taken = {_key(t) for t in known} | {_key(s.ticker) for s in universe}
-    records = [_record(s) for s in universe]
+    records = [peer_record(s) for s in universe]
     admitted: list[CandidateMetrics] = []
     rejected: list[RejectedMention] = []
     for examined, mention in enumerate(mentions):
@@ -163,7 +159,7 @@ async def _admit_one(
             return _REASON_FOR.get(why.reason, "insufficient_data")
         candidate, scores = build_candidate(
             snap,
-            _record(snap),
+            peer_record(snap),
             records,
             rates,
             freshness.uncertain.get(symbol),
