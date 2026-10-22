@@ -58,6 +58,7 @@ class WatchlistItem(Base):
             "target_price_low > 0 AND target_price_high >= target_price_low)",
             name="ck_watchlist_items_target_price_range",
         ),
+        CheckConstraint("source IN ('manual', 'today')", name="ck_watchlist_items_source"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -70,6 +71,14 @@ class WatchlistItem(Base):
     # The price range the user would like to see, in the quote's own unit; None when not set.
     target_price_low: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     target_price_high: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    # Filled in when the company is added from Discover, from the provider's profile, never typed.
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    exchange: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(10), nullable=True)  # as quoted, e.g. GBp
+    # Where it came from: added by the person ("manual") or saved from a Today idea ("today").
+    source: Mapped[str] = mapped_column(String(10), server_default="manual")
+    # NULL for items added before Discover existed: their date is not known, and none is invented.
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Trade(Base):
