@@ -64,7 +64,10 @@ application builds do not establish that instruction files load correctly.
 Read the Ponytail review skill and review the final diff plus connected callers. Fix concrete
 findings and rerun affected checks. Record the target and actual test results in the handoff.
 Do not mark a review complete merely because a tool requested one; changed code after a review
-needs a fresh look. Claude users also retain their existing `/code-review` stop-hook step.
+needs a fresh look. Claude users also retain their existing `/code-review` stop-hook step. That hook
+asks once for each commit the work sits on top of, not each time the working tree changes, so fixing
+what a review found does not start another round; judge for yourself whether a larger later change
+needs its own review, and committing starts a new unit of work that is asked about again.
 
 For auth, RLS or AI prompt changes, use an independent security-reviewer subagent with the
 [shared checklist](../.agents/security-review.md). Claude's adapter is
