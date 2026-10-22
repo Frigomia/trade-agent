@@ -27,7 +27,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 | [empty-states](empty-states/direction-approved.md) | Empty Today and empty Portfolio | Quiet ring (Today), inline first holding (Portfolio); inferred from the code | before 2026-10-20 (recorded 2026-10-21) | Built; choice not recorded at the time |
 | [today-discovery](today-discovery/direction-approved.md) | Today with discovery sections | Soft (`v2-b-soft`) | 2026-10-20 | Designed (PR #137) |
 | [company-overview](company-overview/direction-approved.md) | Company detail page | Workbench | 2026-10-20 | Designed (PR #138) |
-| [portfolio](portfolio/direction-approved.md) | Portfolio page | Explorer | 2026-10-20 | Designed (PR #139); overview strip and allocation built |
+| [portfolio](portfolio/direction-approved.md) | Portfolio page | Explorer | 2026-10-20 | Built (no "biggest fall": the backend does not compute it) |
 | [discover](discover/direction-approved.md) | Discover (watchlist) | List | 2026-10-20 | Designed (PR #140) |
 
 Palette note: everything above the 2026-10-20 rows uses the teal "Emerald Glass" palette; the four newest folders use the Soft palette (blue accent), which changes `DESIGN.md` when it is built.

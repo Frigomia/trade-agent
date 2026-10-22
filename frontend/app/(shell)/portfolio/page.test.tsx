@@ -234,6 +234,76 @@ describe("PortfolioPage", () => {
     expect(screen.getByRole("button", { name: /edit target for asml/i })).toBeInTheDocument();
   });
 
+  describe("risk and analytics", () => {
+    const ANALYTICS = {
+      as_of: "2026-10-22T10:00:00Z",
+      total_value_eur: 3900,
+      positions: [
+        { ticker: "AAPL", name: "Apple Inc.", value_eur: 2000, weight: 0.513, currency: "USD", price: 200, price_as_of: null, stale: false },
+        { ticker: "MSFT", name: "Microsoft", value_eur: 1900, weight: 0.487, currency: "USD", price: 380, price_as_of: null, stale: false },
+      ],
+      by_sector: [{ label: "Technology", weight: 1 }],
+      by_industry: [],
+      by_country: [{ label: "United States", weight: 1 }],
+      by_currency: [{ label: "USD", weight: 1 }],
+      top_position_weight: 0.513,
+      hhi: 0.5,
+      effective_n: 2,
+      volatility_annualized: 0.2,
+      correlation: { AAPL: { AAPL: 1, MSFT: 0.5 }, MSFT: { AAPL: 0.5, MSFT: 1 } },
+      skipped: {},
+      notes: [],
+    };
+
+    it("shows the measured risk for the open holdings", async () => {
+      handlers["GET /portfolio/analytics"] = () => ANALYTICS;
+      renderFresh();
+
+      const panel = await screen.findByRole("region", { name: "Risk and analytics" });
+      await waitFor(() => expect(within(panel).getByText("Volatility").parentElement).toHaveTextContent("20.0% a year"));
+      expect(within(panel).getByText("Largest position").parentElement).toHaveTextContent("Apple Inc.");
+      expect(count("GET /portfolio/analytics")).toBe(1);
+    });
+
+    it("says the figures could not be calculated, and asks again only when told to", async () => {
+      renderFresh(); // /portfolio/analytics is not handled here: the request fails
+      expect(await screen.findByText(/could not be calculated right now/i)).toBeInTheDocument();
+      expect(count("GET /portfolio/analytics")).toBe(1); // not retried in a loop
+
+      handlers["GET /portfolio/analytics"] = () => ANALYTICS;
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      await waitFor(() => expect(count("GET /portfolio/analytics")).toBe(2));
+      expect(await screen.findByText("Volatility")).toBeInTheDocument();
+    });
+
+    it("reads the figures again when a holding changes", async () => {
+      handlers["GET /portfolio/analytics"] = () => ANALYTICS;
+      handlers["DELETE /portfolio/holdings/MSFT"] = () => {
+        handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[0], SUMMARY.holdings[2]] });
+        return undefined;
+      };
+      renderFresh();
+      await screen.findByRole("region", { name: "Risk and analytics" });
+      await waitFor(() => expect(count("GET /portfolio/analytics")).toBe(1));
+
+      fireEvent.click(screen.getByRole("button", { name: "Actions for MSFT" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Remove holding" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Remove holding" }));
+
+      await waitFor(() => expect(count("GET /portfolio/analytics")).toBe(2));
+    });
+
+    it("is not requested for a portfolio with no open holding", async () => {
+      handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[2]], watchlist: [] });
+      renderFresh();
+      await screen.findByText("Add your first holding");
+
+      expect(count("GET /portfolio/analytics")).toBe(0);
+      expect(screen.queryByRole("region", { name: "Risk and analytics" })).not.toBeInTheDocument();
+    });
+  });
+
   describe("row menu", () => {
     const openMenu = (ticker: string) => fireEvent.click(screen.getByRole("button", { name: `Actions for ${ticker}` }));
 
