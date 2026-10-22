@@ -128,6 +128,12 @@ describe("PortfolioPage", () => {
     expect(screen.queryByText("Sold Out Co")).not.toBeInTheDocument();
   });
 
+  it("says what the page is and when the figures were read, like the approved mock", async () => {
+    renderFresh();
+
+    expect(await screen.findByText(/^Your holdings, allocation and risk\. Updated today, \d\d:\d\d\.$/)).toBeInTheDocument();
+  });
+
   it("shows the view strip with Holdings current, and no separate plan link", async () => {
     renderFresh();
     await screen.findByText("Apple Inc.");
