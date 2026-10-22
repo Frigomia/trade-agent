@@ -25,6 +25,7 @@ from app.routers import (
     backtest,
     chat,
     claude_key,
+    discover,
     discovery,
     market,
     me,
@@ -65,6 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(portfolio.router)
+app.include_router(discover.router)
 app.include_router(market.router)
 app.include_router(analysis.router)
 app.include_router(discovery.router)

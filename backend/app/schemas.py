@@ -96,6 +96,11 @@ class WatchlistItemOut(WatchlistItemBase):
     id: int
     user_id: UUID
     isin: str | None = None
+    name: str | None = None
+    exchange: str | None = None
+    currency: str | None = None
+    source: Literal["manual", "today"] = "manual"
+    created_at: datetime | None = None  # None for items added before Discover existed
 
 
 # A share count or price as a trade stores it (Numeric(18,6)): finite and at least the smallest

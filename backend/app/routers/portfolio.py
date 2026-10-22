@@ -158,7 +158,12 @@ def upsert_watchlist_item(
             raise HTTPException(
                 status_code=409, detail=cap_message("watchlist items", MAX_WATCHLIST)
             )
-        item = WatchlistItem(user_id=user.id, **payload.model_dump())
+        # Dated like an add from Discover, so the item is not mistaken for one from before it.
+        item = WatchlistItem(
+            user_id=user.id,
+            created_at=datetime.now(UTC).replace(tzinfo=None),
+            **payload.model_dump(),
+        )
         db.add(item)
     else:
         for field, value in payload.model_dump(exclude_unset=True).items():
