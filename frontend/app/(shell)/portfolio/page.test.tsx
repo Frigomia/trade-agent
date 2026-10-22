@@ -575,7 +575,7 @@ describe("PortfolioPage", () => {
       fireEvent.change(screen.getByLabelText("Average cost"), { target: { value: cost } });
     }
 
-    it("opens the first holding in a modal", async () => {
+    it("opens the first holding in the drawer", async () => {
       handlers["GET /portfolio/summary"] = () => EMPTY;
       renderFresh();
 

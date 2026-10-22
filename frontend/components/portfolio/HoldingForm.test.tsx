@@ -21,6 +21,10 @@ vi.mock("@/lib/api/client", () => ({
   ApiError: FakeApiError,
 }));
 
+// useMediaQuery(down "md") is true on a phone.
+let phone = false;
+vi.mock("@mui/material", async (importOriginal) => ({ ...(await importOriginal<typeof import("@mui/material")>()), useMediaQuery: () => phone }));
+
 import { HoldingForm } from "./HoldingForm";
 
 const HELD: HoldingSummary = {
@@ -376,5 +380,37 @@ describe("HoldingForm", () => {
       await waitFor(() => expect(onClose).toHaveBeenCalled());
       expect(onSaved).toHaveBeenCalled();
     });
+  });
+});
+
+describe("HoldingForm as a drawer", () => {
+  beforeEach(() => {
+    phone = false;
+  });
+
+  it("on a computer is pinned to the right edge, and on a phone is a bottom sheet like Log a trade", () => {
+    const { unmount } = render(<HoldingForm open onClose={vi.fn()} heldTickers={[]} onSaved={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "Add holding" })).toHaveStyle({ right: "0px" });
+    unmount();
+
+    phone = true;
+    render(<HoldingForm open onClose={vi.fn()} heldTickers={[]} onSaved={vi.fn()} />);
+    const sheet = screen.getByRole("dialog", { name: "Add holding" });
+    expect(sheet).toHaveStyle({ bottom: "0px", left: "0px", right: "0px" });
+  });
+
+  it("is a side drawer that is a named modal dialog, not a centred or full-screen one", () => {
+    setup();
+
+    const panel = screen.getByRole("dialog", { name: "Add holding" });
+    expect(panel).toHaveClass("MuiDrawer-paper");
+    expect(panel).not.toHaveClass("MuiDialog-paper");
+    expect(panel).toHaveAttribute("aria-modal", "true");
+  });
+
+  it("names the drawer for the holding being edited", () => {
+    setup({ holding: HELD });
+
+    expect(screen.getByRole("dialog", { name: "Edit AAPL" })).toHaveClass("MuiDrawer-paper");
   });
 });
