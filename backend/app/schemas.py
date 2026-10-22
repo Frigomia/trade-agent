@@ -62,6 +62,9 @@ class HoldingOut(HoldingIn):
     isin: str | None = None
 
 
+# A watchlist note: matches WatchlistItem.note String(500); no NUL, which the database refuses.
+Note = Annotated[str, Field(max_length=500, pattern=r"^[^\x00]*$")]
+
 # A target price as the column stores it (Numeric(18,6)): finite, positive, at least one step and
 # below 10^12 (12 integer digits).
 TargetPrice = Annotated[float, Field(ge=0.000001, le=999999999999, allow_inf_nan=False)]
@@ -70,23 +73,27 @@ TargetPrice = Annotated[float, Field(ge=0.000001, le=999999999999, allow_inf_nan
 class WatchlistItemBase(BaseModel):
     ticker: Ticker
     asset_type: AssetType
-    note: str | None = Field(default=None, max_length=500)  # matches WatchlistItem.note String(500)
+    note: Note | None = None
     target_weight: float | None = Field(default=None, ge=0, le=1)
     # The price range the user would like to see, in the quote's own unit. Both ends or neither.
     target_price_low: TargetPrice | None = None
     target_price_high: TargetPrice | None = None
 
 
+def check_price_range(low: float | None, high: float | None, fields_set: set[str]) -> None:
+    """A price range is both ends or neither, low not above high. Sent together too, so a request
+    naming one end can never leave the other behind."""
+    sent = {"target_price_low", "target_price_high"} & fields_set
+    if len(sent) == 1 or (low is None) != (high is None):
+        raise ValueError("target_price_low and target_price_high must be set together")
+    if low is not None and high is not None and low > high:
+        raise ValueError("target_price_low must not be above target_price_high")
+
+
 class WatchlistItemIn(WatchlistItemBase):
     @model_validator(mode="after")
     def _range_is_both_ends_in_order(self) -> Self:
-        # Sent together too, so a request naming one end can never leave the other behind.
-        sent = {"target_price_low", "target_price_high"} & self.model_fields_set
-        low, high = self.target_price_low, self.target_price_high
-        if len(sent) == 1 or (low is None) != (high is None):
-            raise ValueError("target_price_low and target_price_high must be set together")
-        if low is not None and high is not None and low > high:
-            raise ValueError("target_price_low must not be above target_price_high")
+        check_price_range(self.target_price_low, self.target_price_high, self.model_fields_set)
         return self
 
 
