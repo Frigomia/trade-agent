@@ -391,7 +391,8 @@ active states, `--up-bg` and `--down-bg` are only for a price rising or falling,
 
 **Built on Today:** the discovery section (latest-scan bar, Top opportunity, Other opportunities,
 the scan states), the round monogram `Logo`, the `Meter` (confidence and risk as bars plus a word)
-and the `Change` (signed, arrowed price move). Save to Discover is shown disabled. The holdings
+and the `Change` (signed, arrowed price move). Save to Discover adds the company to Discover (also
+from the workbench's decision rail and phone bar), then becomes a link to the list. The holdings
 recommendations sit under "Portfolio alerts" (a list with monogram logos on desktop, cards on a
 phone); the search bar and Watchlist insights are not built. The page title is 30px (26px on a
 phone) on every screen.
@@ -435,7 +436,8 @@ move), when it was added and from where, View and Remove. Remove is shown at onc
 eight seconds, so Undo only cancels it; leaving the page sends it. The empty, loading, load-error,
 no-match and "Price unavailable" states are built. Analyze (single-company research) and the simple
 company overview are not built: Discover only shows research a scan already produced, and a company
-without a report has no page to open. "Save to Discover" on Today is still disabled.
+without a report has no page to open. "Save to Discover" on Today and in the workbench adds the
+company here as "saved from Today".
 
 **Not built yet:** single-company Analyze, the company
 overview for a company with no report, and the rem sizes in component `sx` props outside the new components (the theme

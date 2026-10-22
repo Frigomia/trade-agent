@@ -10,6 +10,7 @@ import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { confidenceLabel, dateTimeText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
 import { useDecision } from "@/lib/useDecision";
+import { useSaveToDiscover } from "@/lib/useSaveToDiscover";
 
 const NOTE = "Approving records your decision. Nothing is sent to a broker.";
 
@@ -69,8 +70,25 @@ export function DecisionSummary({ rec, onSeeSources }: { rec: DiscoveryRecommend
 }
 
 /**
+ * What saving to Discover said: the reason it failed, or that it worked with the way to the list. The
+ * Save button stays where it is (keyboard focus is kept); this is what is announced.
+ */
+function SaveNotes({ save }: { save: ReturnType<typeof useSaveToDiscover> }) {
+  return (
+    <>
+      {save.problem && <Alert severity="error">{save.problem}</Alert>}
+      {save.saved && (
+        <Alert severity="success" role="status" action={<Button component={Link} href="/discover" color="inherit" size="small">View in Discover</Button>}>
+          Saved to Discover.
+        </Alert>
+      )}
+    </>
+  );
+}
+
+/**
  * The decision rail: the summary, the portfolio fit and the four actions. Approve and Dismiss only
- * record the decision; Save to Discover is shown disabled until Discover exists.
+ * record the decision; Save to Discover adds the company to the Discover list and records nothing.
  */
 export function DecisionRail({
   rec,
@@ -83,6 +101,7 @@ export function DecisionRail({
 }) {
   const idea = rec.idea!;
   const { decide, submitting, error } = useDecision(rec.id, onDecided);
+  const save = useSaveToDiscover(idea.ticker, idea.asset_type);
   return (
     <Panel component="aside" aria-label="Decision" sx={{ p: "20px", display: "grid", gap: 2, position: { md: "sticky" }, top: 16 }}>
       <DecisionSummary rec={rec} />
@@ -90,12 +109,13 @@ export function DecisionRail({
       <FitLine idea={idea} />
       <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />
       {error && <Alert severity="error">{error}</Alert>}
+      <SaveNotes save={save} />
       <Box sx={{ display: "grid", gap: 1 }}>
         <Button variant="contained" disabled={submitting} onClick={() => decide("approve")} startIcon={<Check size={16} aria-hidden />}>
           Approve
         </Button>
-        <Button variant="outlined" disabled startIcon={<Bookmark size={16} aria-hidden />} aria-label="Save to Discover: coming soon" title="Coming soon">
-          Save to Discover
+        <Button variant="outlined" aria-disabled={save.saving || save.saved || undefined} onClick={save.saved ? undefined : () => void save.save()} startIcon={save.saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}>
+          {save.saved ? "Saved" : "Save to Discover"}
         </Button>
         <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} startIcon={<X size={16} aria-hidden />}>
           Dismiss
@@ -121,15 +141,17 @@ export function DecisionRail({
 export function PhoneActions({ rec, onDecided }: { rec: DiscoveryRecommendation; onDecided: (updated: RecommendationOut) => void }) {
   const idea = rec.idea!;
   const { decide, submitting, error } = useDecision(rec.id, onDecided);
+  const save = useSaveToDiscover(idea.ticker, idea.asset_type);
   return (
     <Box sx={{ position: "sticky", bottom: "var(--tabbar-h, 66px)", zIndex: 2, mx: -2, px: 2, py: 1.25, display: "grid", gap: 1, borderTop: "1px solid var(--line)", bgcolor: "var(--panel)" }}>
       {error && <Alert severity="error">{error}</Alert>}
+      <SaveNotes save={save} />
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px", gap: 1 }}>
         <Button variant="contained" disabled={submitting} onClick={() => decide("approve")} startIcon={<Check size={16} aria-hidden />} sx={{ minHeight: 44 }}>
           Approve
         </Button>
-        <Button variant="outlined" disabled aria-label="Save to Discover: coming soon" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
-          <Bookmark size={16} aria-hidden />
+        <Button variant="outlined" aria-disabled={save.saving || save.saved || undefined} onClick={save.saved ? undefined : () => void save.save()} aria-label={save.saved ? "Saved to Discover" : "Save to Discover"} sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
+          {save.saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
         </Button>
         <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} aria-label="Dismiss" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
           <X size={16} aria-hidden />

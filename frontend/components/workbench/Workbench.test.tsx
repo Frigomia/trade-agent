@@ -68,7 +68,7 @@ describe("Workbench identity and rail", () => {
     expect(await screen.findByText("Not applicable")).toBeInTheDocument();
   });
 
-  it("approves and dismisses through the rail, and keeps Save to Discover disabled", async () => {
+  it("approves and dismisses through the rail", async () => {
     const decided = { ...testRec(), status: "APPROVED" };
     apiFetch.mockImplementation((path: string, init?: RequestInit) => {
       if (path === "/analysis/recommendations/1/approve" && init?.method === "POST") return Promise.resolve(decided);
@@ -77,11 +77,38 @@ describe("Workbench identity and rail", () => {
     });
     const { onDecided } = show();
 
-    expect(await screen.findByRole("button", { name: /save to discover: coming soon/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     await waitFor(() => expect(onDecided).toHaveBeenCalledWith(decided));
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     await waitFor(() => expect(onDecided).toHaveBeenCalledTimes(2));
+  });
+
+  it("saves to Discover through the rail without recording a decision", async () => {
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/discover" && init?.method === "POST" ? Promise.resolve({}) : Promise.resolve(testHistory()),
+    );
+    const { onDecided } = show();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save to Discover" }));
+
+    const link = await screen.findByRole("link", { name: "View in Discover" });
+    expect(link).toHaveAttribute("href", "/discover");
+    expect(screen.getByRole("button", { name: "Saved" })).toHaveAttribute("aria-disabled", "true");
+    expect(apiFetch).toHaveBeenCalledWith("/discover", { method: "POST", body: JSON.stringify({ ticker: "HLDN", asset_type: "STOCK", source: "today" }) });
+    expect(onDecided).not.toHaveBeenCalled();
+    expect(apiFetch).not.toHaveBeenCalledWith(expect.stringContaining("/analysis/recommendations"), expect.anything());
+  });
+
+  it("shows why a save was refused next to the decision errors", async () => {
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      init?.method === "POST" ? Promise.reject(new FakeApiError(409, "Discover is full (100 companies).")) : Promise.resolve(testHistory()),
+    );
+    show();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Save to Discover" }));
+
+    expect(await screen.findByText("Discover is full (100 companies).")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save to Discover" })).not.toHaveAttribute("aria-disabled");
   });
 
   it("shows why a decision was refused, as with the other detail pages", async () => {
@@ -297,7 +324,7 @@ describe("Workbench on a phone", () => {
     fireEvent.click(screen.getByRole("button", { name: "See sources" }));
     expect(screen.getByRole("tab", { name: "Sources" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /save to discover: coming soon/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save to Discover" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask AI" })).toBeInTheDocument();
   });

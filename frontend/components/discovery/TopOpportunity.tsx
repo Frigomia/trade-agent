@@ -85,7 +85,7 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
         </Box>
       </Box>
       <Box>
-        <SaveToDiscover name={idea.name} />
+        <SaveToDiscover idea={idea} />
       </Box>
     </Box>
   );
