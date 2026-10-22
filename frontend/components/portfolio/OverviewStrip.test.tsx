@@ -51,12 +51,37 @@ describe("OverviewStrip", () => {
   });
 
   it("says Not available with how to fix it when no holding has a purchase price", () => {
-    show({ pl_covered_count: 0, total_pl: 0, total_pl_pct: null });
+    show({ pl_covered_count: 0, unknown_basis_count: 7, total_pl: 0, total_pl_pct: null });
 
     const gain = screen.getByText("Total gain or loss").parentElement!;
     expect(gain).toHaveTextContent("Not available");
     expect(gain).toHaveTextContent("Add purchase prices to see it");
     expect(gain).not.toHaveTextContent("0.00");
+  });
+
+  it("blames the quotes, not the costs, when every cost is known but the prices are missing", () => {
+    show({ pl_covered_count: 0, unknown_basis_count: 0, unpriced_count: 3, total_pl: 0, total_pl_pct: null });
+
+    const gain = screen.getByText("Total gain or loss").parentElement!;
+    expect(gain).toHaveTextContent("Not available");
+    expect(gain).toHaveTextContent(/have no live price, so there is no gain or loss/);
+    expect(gain).not.toHaveTextContent(/Add purchase prices/);
+  });
+
+  it("names both causes when some purchase prices and some quotes are missing", () => {
+    show({ pl_covered_count: 0, unknown_basis_count: 2, unpriced_count: 1, total_pl: 0, total_pl_pct: null });
+
+    const gain = screen.getByText("Total gain or loss").parentElement!;
+    expect(gain).toHaveTextContent(/missing a purchase price or a live price/);
+    expect(gain).toHaveTextContent(/Add the purchase prices/);
+  });
+
+  it("does not guess a cause when nothing is missing", () => {
+    show({ pl_covered_count: 0, unknown_basis_count: 0, unpriced_count: 0, total_pl: 0, total_pl_pct: null });
+
+    const gain = screen.getByText("Total gain or loss").parentElement!;
+    expect(gain).toHaveTextContent(/not enough price and cost data/i);
+    expect(gain).not.toHaveTextContent(/Add purchase prices/);
   });
 
   it("names the holdings left out of the gain, and the ones with no live price", () => {

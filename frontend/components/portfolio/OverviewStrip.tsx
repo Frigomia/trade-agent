@@ -62,6 +62,22 @@ function Chart({ snapshots, failed }: { snapshots: Snapshot[] | undefined; faile
 }
 
 /**
+ * Why there is no gain or loss to show. A holding counts only with both a live price and a known
+ * purchase cost, so none counting is either cause, or both. The two counts overlap (a holding with
+ * neither is in both), so when both are set the note names both causes without counting holdings.
+ */
+function gainUnavailableNote(summary: Pick<PortfolioSummary, "unknown_basis_count" | "unpriced_count">): string {
+  const noCost = (summary.unknown_basis_count ?? 0) > 0;
+  const noQuote = summary.unpriced_count > 0;
+  if (noCost && noQuote) {
+    return "Some holdings are missing a purchase price or a live price. Add the purchase prices (edit a holding); quotes return on their own.";
+  }
+  if (noCost) return "Add purchase prices to see it. Edit a holding to add one.";
+  if (noQuote) return "Some holdings have no live price, so there is no gain or loss to show yet. It returns when quotes do.";
+  return "There is not enough price and cost data to work out a gain or loss yet.";
+}
+
+/**
  * The slim strip above the allocation: total value, gain or loss, today's change and the value
  * chart. Gain or loss and the day's change say "Not available" and why, never a made-up zero.
  */
@@ -77,7 +93,7 @@ export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed =
           <Amount value={summary.total_market_value} size={32} />
         </Stat>
         {noCosts ? (
-          <Stat title="Total gain or loss" note="Add purchase prices to see it. Edit a holding to add one.">
+          <Stat title="Total gain or loss" note={gainUnavailableNote(summary)}>
             <NotAvailable>Not available</NotAvailable>
           </Stat>
         ) : (
