@@ -7,6 +7,7 @@ import pytest
 from app.discovery.peers import (
     METRIC_SETS,
     MIN_PEERS,
+    NAMED_PEERS,
     PeerRecord,
     compare_to_peers,
     metric_group,
@@ -289,7 +290,8 @@ def test_named_peers_use_the_metric_names_of_the_comparison_and_blank_invalid_va
     assert top.ticker == "LOSS"
     assert top.values["trailingPE"] is None
     assert top.values["returnOnEquity"] == 0.1
-    assert set(top.values) == {m.name for m in METRIC_SETS["general"]}
+    # Only the metrics that produced a comparison: the others had no peer group.
+    assert set(top.values) == {"trailingPE", "returnOnEquity"}
 
 
 def test_a_minor_unit_peer_reports_its_major_currency_and_a_euro_market_cap():
@@ -338,6 +340,24 @@ def test_peers_of_another_metric_group_are_not_named():
     universe = [candidate, bank, *(named(f"P{i}", 1e9) for i in range(8))]
 
     assert "BANK" not in [r.ticker for r in table(candidate, universe)]
+
+
+def test_a_peer_whose_only_figure_is_for_a_metric_with_too_few_peers_is_not_named():
+    candidate = named("ME", 5e9)
+    # Eight peers with a P/E make an industry comparison; ROE has one observation: none.
+    universe = [candidate, *(named(f"P{i}", 1e9, roe=None) for i in range(8))]
+    universe.append(named("BIG", 9e12, pe=None, roe=0.2))
+
+    comparisons = compare_to_peers(candidate, universe)
+    assert {c.metric: c.peer_group for c in comparisons}["trailingPE"] == "industry"
+    assert {c.metric: c.peer_group for c in comparisons}["returnOnEquity"] == "none"
+
+    rows = named_peers(candidate, universe, comparisons, RATES)
+
+    assert "BIG" not in [r.ticker for r in rows]
+    assert {r.ticker for r in rows} <= {f"P{i}" for i in range(8)}  # only real contributors
+    assert len(rows) == NAMED_PEERS
+    assert set(rows[0].values) == {"trailingPE"}  # ROE made no comparison, so it is not shown
 
 
 def test_peers_that_gave_the_comparison_no_figure_are_not_named():

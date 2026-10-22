@@ -453,7 +453,7 @@ New ideas also save, at scan time and never fetched on read:
 - `snapshot.peers`: up to five named peers (`PeerRow`: ticker, name, country, major currency,
   `market_cap_eur`, and `values` keyed by the same metric names as `PeerComparison.metric`).
   They are the largest by EUR market cap in the group the comparison actually used (industry, else
-  sector, within the candidate's metric group), excluding the candidate, with names and figures
+  sector, within the candidate's metric group), excluding the candidate and any peer without a figure for a metric that produced a comparison, with names and figures
   from the universe snapshot and never from the model. `[]` when no comparison had a peer group;
   `null` on ideas saved before this field.
 - `competitors`: up to eight company names from the research (whitespace-normalized, at most 80

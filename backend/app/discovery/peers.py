@@ -199,6 +199,10 @@ def _compare(spec: MetricSpec, candidate: PeerRecord, peers: list[PeerRecord]) -
     )
 
 
+def _compared(spec: MetricSpec, comparisons: Sequence[PeerComparison]) -> bool:
+    return any(c.metric == spec.name and c.peer_group != "none" for c in comparisons)
+
+
 def named_peers(
     candidate: PeerRecord,
     universe: Sequence[PeerRecord],
@@ -224,10 +228,10 @@ def named_peers(
         and (p.industry == candidate.industry if by_industry else p.sector == candidate.sector)
     ]
     specs = METRIC_SETS[candidate.group]
-    # Only peers that gave the comparison at least one figure were behind it.
-    pool = [
-        p for p in pool if any(_usable(s, p.metrics) is not None for s in specs if s.obtainable)
-    ]
+    # Only peers with a figure for a metric that produced a comparison were behind one: a metric
+    # with too few peers (peer_group "none") used none of its values.
+    compared = [s for s in specs if s.obtainable and _compared(s, comparisons)]
+    pool = [p for p in pool if any(_usable(s, p.metrics) is not None for s in compared)]
     ranked = [(market_cap_to_eur(p.market_cap, p.currency or "", dict(rates)), p) for p in pool]
     ranked.sort(key=lambda row: (row[0] is None, -(row[0] or 0.0), row[1].ticker))
     return [
@@ -237,7 +241,8 @@ def named_peers(
             country=p.country,
             currency=SUBUNITS.get(p.currency or "", (p.currency, Decimal(1)))[0],
             market_cap_eur=cap,
-            values={s.name: _usable(s, p.metrics) if s.obtainable else None for s in specs},
+            # Only the metrics that were compared: a column nothing was compared on is not shown.
+            values={s.name: _usable(s, p.metrics) for s in compared},
         )
         for cap, p in ranked[:NAMED_PEERS]
     ]
