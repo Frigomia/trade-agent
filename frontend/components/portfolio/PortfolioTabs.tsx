@@ -14,30 +14,33 @@ const VIEWS: { view: PortfolioView; label: string; short?: string; href: string 
   { view: "orders", label: "Orders", href: "/portfolio/plan?tab=orders" },
 ];
 
-// The approved segmented control: a bordered pill track, the current view filled with the accent tint.
+// The approved Explorer segmented control: a rounded track, the current view a raised panel-coloured
+// pill with the accent text. On a phone the four views share the full width.
 const SEGMENTED = {
-  display: "flex",
+  display: { xs: "grid", md: "flex" },
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "4px",
   mb: 2,
-  maxWidth: { md: 620 },
-  p: "3px",
-  border: "1px solid var(--line2)",
-  borderRadius: "12px",
+  p: "4px",
+  width: { xs: "100%", md: "max-content" },
+  maxWidth: "100%",
+  borderRadius: 999,
+  bgcolor: "var(--track)",
   "& a": {
-    flex: 1,
     minWidth: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     gap: { xs: "4px", md: "7px" },
-    py: 1,
-    px: { xs: "2px", md: 1 },
-    borderRadius: "9px",
-    fontSize: 13,
+    minHeight: { xs: 44, md: 36 },
+    px: { xs: "4px", md: "18px" },
+    borderRadius: 999,
+    fontSize: { xs: "0.75rem", md: "0.875rem" },
     fontWeight: 500,
     whiteSpace: "nowrap",
     textDecoration: "none",
-    color: "var(--muted)",
-    "&[aria-current='page']": { bgcolor: "var(--accent-wash)", color: "var(--accent)", fontWeight: 650 },
+    color: "var(--text2)",
+    "&[aria-current='page']": { bgcolor: "var(--panel)", color: "var(--accent)", fontWeight: 650, boxShadow: "var(--shadow)" },
     "&:focus-visible": { outline: "2px solid var(--accent)", outlineOffset: 1 },
   },
   "& [data-badge]": {

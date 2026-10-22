@@ -417,7 +417,9 @@ blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amoun
 and the page says so. The holdings table keeps its columns and targets (a target saved on Discover
 is marked as such), gains a monogram per company, "Add purchase price" where a holding has no cost, a count ("N of M
 holdings" while a group filters it) and a row menu (edit, log a trade for that holding, remove, which
-asks first and says it sells nothing). The page header has only Add holding; the
+asks first and says it sells nothing). The Holdings header reads "Your holdings, allocation and risk.
+Updated today, 14:14." (the time the figures were last read) and the four views are the Soft pill track
+(Holdings, This month, Saved plans, Orders), as in the Explorer mock. The page header has only Add holding; the
 watchlist panel, the per-row watch toggle, the header's Log a trade and Record snapshot are gone:
 watching a company is Discover's job, a trade is logged from the row menu, and the value history is
 saved by itself once a day when Today or Portfolio is opened. Below the table, "Risk and analytics" (measured, not scored) reads
