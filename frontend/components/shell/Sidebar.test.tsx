@@ -24,6 +24,18 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Portfolio" })).toBeInTheDocument();
   });
 
+  it("puts Discover between Today and Portfolio, and lights it on its own page", () => {
+    pathname = "/discover";
+    render(<Sidebar role="user" />);
+    const links = screen.getAllByRole("link").map((l) => l.textContent);
+    expect(links.indexOf("Discover")).toBe(links.indexOf("Today") + 1);
+    expect(links.indexOf("Portfolio")).toBe(links.indexOf("Discover") + 1);
+    expect(screen.getByRole("link", { name: "Discover" })).toHaveAttribute("href", "/discover");
+    expect(screen.getByRole("link", { name: "Discover" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Today" })).not.toHaveAttribute("aria-current");
+    pathname = "/today";
+  });
+
   it("puts Plan under Portfolio, linking to the plan views", () => {
     render(<Sidebar role="user" />);
     const links = screen.getAllByRole("link").map((l) => l.textContent);
