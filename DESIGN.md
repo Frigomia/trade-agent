@@ -411,7 +411,9 @@ lacks.
 
 **Built on Portfolio (first slice of the Explorer):** a slim overview strip (total value, gain or
 loss, today's change as "Not available" until the previous close is saved, and the value chart once
-there are seven days of snapshots), and "Where your money is": a donut by sector, country or
+there are seven days of snapshots; its title sits on the left of the row that holds the 1M, 6M, 1Y and
+All range track, with the value scale at the left of the plot, the months under it and a dot on the latest
+value), and "Where your money is": a donut by sector, country or
 currency whose legend rows filter the holdings table, beside the largest positions. Slices use the
 blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amounts stay as entered
 and the page says so. The holdings table keeps its columns and targets (a target saved on Discover
