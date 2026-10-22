@@ -2,15 +2,21 @@ import asyncio
 import json
 import logging
 import math
+import warnings
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Any
 
 import yfinance as yf
+from yfinance.exceptions import YFPricesMissingError
 
 from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
+
+# `history(raise_errors=True)` is the per-call way to see request failures (the alternative is a
+# process-wide flag other callers would feel); yfinance 1.x only marks it as deprecated.
+warnings.filterwarnings("ignore", message="'raise_errors' deprecated", category=DeprecationWarning)
 
 QUOTE_CACHE_TTL = 300
 FUNDAMENTALS_CACHE_TTL = 900
@@ -167,17 +173,47 @@ def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | N
     return text[:max_chars] or None
 
 
-async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float]:
-    """Positive finite daily closes with their actual dates; no forward fill across markets."""
+def _symbol_has_no_prices(exc: YFPricesMissingError) -> bool:
+    """True when Yahoo answered that the symbol has no data, not that it failed to answer."""
+    reason = (exc.yahoo_reason or "").lower()
+    if reason:
+        return "no data found" in reason or "delisted" in reason
+    return "status_code" not in str(exc.debug_info)  # an HTTP error body is not "no prices"
+
+
+async def fetch_dated_closes(
+    ticker: str, period: str = "1y", *, strict: bool = False
+) -> dict[str, float]:
+    """Positive finite daily closes with their actual dates; no forward fill across markets.
+
+    A provider failure gives {} (cached briefly) so analytics degrade quietly. With `strict` it is
+    raised instead and nothing is cached, for a caller that must tell an outage from no history:
+    yfinance itself swallows a timeout or a bad response into an empty frame, so a strict read
+    asks it to raise, and only "Yahoo has no prices for this symbol" stays an empty result.
+    """
     redis = get_redis()
     # New namespace ignores entries written with the former 24-hour valuation TTL.
     cache_key = f"dated_closes:v2:{ticker}:{period}"
     cached = await redis.get(cache_key)
     if cached is not None:
-        return dict(json.loads(cached))
+        known = dict(json.loads(cached))
+        # A strict caller does not trust a cached empty answer: another caller may have stored it
+        # during an outage, and it would pass for "no history".
+        if known or not strict:
+            return known
 
     def _fetch() -> dict[str, float]:
-        closes = yf.Ticker(ticker).history(period=period)["Close"]
+        try:
+            frame = yf.Ticker(ticker).history(
+                period=period, **({"raise_errors": True} if strict else {})
+            )
+        except YFPricesMissingError as exc:  # only raised for a strict read
+            if _symbol_has_no_prices(exc):
+                return {}
+            raise  # Yahoo named another reason (throttled, server error): an outage
+        if "Close" not in frame:  # an unknown or delisted symbol: no history, not an outage
+            return {}
+        closes = frame["Close"]
         return {
             stamp.date().isoformat(): float(value)
             for stamp, value in closes.items()
@@ -188,6 +224,8 @@ async def fetch_dated_closes(ticker: str, period: str = "1y") -> dict[str, float
         result = await _retry_fetch(_fetch)
     except Exception as exc:
         logger.warning("Dated history unavailable (%s)", type(exc).__name__)
+        if strict:
+            raise
         result = {}
     ttl = QUOTE_CACHE_TTL if result else ANALYTICS_NEGATIVE_CACHE_TTL
     await redis.set(cache_key, json.dumps(result), ex=ttl)

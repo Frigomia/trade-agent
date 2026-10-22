@@ -496,6 +496,24 @@ class DiscoveryIdeasOut(BaseModel):
     latest_scan: ScanRunOut | None
 
 
+HistoryRange = Literal["1w", "1m", "6m", "1y", "5y"]
+
+
+class PricePointOut(BaseModel):
+    date: date
+    close: float
+
+
+class PriceHistoryOut(BaseModel):
+    """Dated daily closes behind a saved idea, oldest first, in the major currency unit."""
+
+    ticker: str
+    currency: str | None  # major unit (GBP, not GBp); None when it could not be told
+    as_of: date | None  # the last close's date
+    range: HistoryRange
+    points: list[PricePointOut]  # may be empty; never filled in or invented
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]
