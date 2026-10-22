@@ -8,12 +8,14 @@ from statistics import covariance, variance
 import pytest
 
 from app.analysis.portfolio import (
+    DRAWDOWN_NOTE,
     PositionInput,
     analyze_portfolio,
     annualized_volatility,
     log_returns,
     marginal_effect,
     pairwise_correlation,
+    portfolio_max_drawdown,
 )
 from app.fx import EurPrice
 
@@ -326,3 +328,106 @@ def test_existing_position_cannot_be_counted_twice_as_a_new_candidate():
 def test_hypothetical_weight_must_be_a_finite_positive_share(weight):
     with pytest.raises(ValueError, match="hypothetical_weight"):
         fit(analysis(), {}, {}, hypothetical_weight=weight)
+
+
+def moves_curve(moves: list[float]) -> dict[str, float]:
+    """Closes on consecutive weekdays ending at AS_OF; each day closes the given fraction away."""
+    days: list[str] = []
+    day = AS_OF.date()
+    while len(days) < len(moves) + 1:
+        if day.weekday() < 5:
+            days.append(day.isoformat())
+        day -= timedelta(days=1)
+    value, closes = 100.0, {}
+    for i, day_text in enumerate(reversed(days)):
+        value *= 1 + (moves[i - 1] if i else 0.0)
+        closes[day_text] = value
+    return closes
+
+
+FLAT = [0.0] * 62
+
+
+def drawdown(histories: dict[str, dict[str, float]], weights: dict[str, float]) -> float | None:
+    return portfolio_max_drawdown({t: log_returns(h) for t, h in histories.items()}, weights)
+
+
+def test_max_drawdown_is_the_largest_peak_to_low_fall_not_the_fall_to_the_end():
+    # Up 0.5% a day for 59 days, then two falls of 10% (the low, 19% under the peak), then a partial
+    # recovery that stays below the peak.
+    history = moves_curve([0.005] * 59 + [-0.10, -0.10, 0.05])
+    assert drawdown({"A": history}, {"A": 1.0}) == pytest.approx(-0.19)
+
+
+def test_max_drawdown_of_a_rising_only_series_is_zero_never_positive():
+    assert drawdown({"A": moves_curve([0.01] * 62)}, {"A": 1.0}) == 0
+
+
+def test_max_drawdown_weights_the_holdings_moves_on_the_same_day():
+    # A falls 10% on the day B rises 10%: at half each the portfolio does not move. The mean of the
+    # holdings' own falls would say -5%.
+    a = moves_curve([0.0] * 60 + [-0.10, 0.0])
+    b = moves_curve([0.0] * 60 + [0.10, 0.0])
+    assert drawdown({"A": a, "B": b}, {"A": 0.5, "B": 0.5}) == pytest.approx(0)
+    assert drawdown({"A": a, "B": moves_curve(FLAT)}, {"A": 0.5, "B": 0.5}) == pytest.approx(-0.05)
+
+
+def test_max_drawdown_uses_one_common_sample_not_each_holdings_own():
+    # A fell 30% early, before B has any history. Only the days both cover count, so the portfolio
+    # never fell; A on its own would show it.
+    a = moves_curve([-0.30] + [0.0] * 90)
+    b = moves_curve(FLAT[:70])
+    assert drawdown({"A": a}, {"A": 1.0}) == pytest.approx(-0.30)
+    assert drawdown({"A": a, "B": b}, {"A": 0.5, "B": 0.5}) == pytest.approx(0)
+
+
+def test_max_drawdown_is_unavailable_below_sixty_matching_intervals():
+    assert drawdown({"A": moves_curve([0.01] * 59)}, {"A": 1.0}) is None
+    assert drawdown({"A": moves_curve([0.01] * 60)}, {"A": 1.0}) is not None
+
+
+def test_analysis_reports_the_drawdown_with_the_honest_note():
+    histories = {"A": moves_curve([0.005] * 59 + [-0.10, -0.10, 0.05]), "B": moves_curve(FLAT)}
+    exposure = analysis(
+        histories,
+        holdings=[
+            PositionInput("A", "Alpha", 1, "STOCK"),
+            PositionInput("B", "Beta", 0.0001, "STOCK"),
+        ],
+    )
+    assert exposure.max_drawdown_1y == pytest.approx(-0.19, abs=0.002)
+    assert any("today's holdings at today's weights" in note for note in exposure.notes)
+
+
+def test_analysis_leaves_a_skipped_position_out_of_the_drawdown():
+    histories = {"A": moves_curve([0.005] * 59 + [-0.10, -0.10, 0.05]), "B": moves_curve(FLAT)}
+    prices = {"A": EurPrice(Decimal(100), "EUR", Decimal(1))}  # no price for B: it is skipped
+    exposure = analysis(histories, prices=prices)
+    assert "B" in exposure.skipped
+    assert exposure.max_drawdown_1y == pytest.approx(-0.19)
+
+
+def test_analysis_without_enough_history_has_no_drawdown_and_says_why():
+    exposure = analysis({"A": curve(count=40), "B": curve(1, count=40)})
+    assert exposure.max_drawdown_1y is None
+    assert any("biggest fall unavailable" in note for note in exposure.notes)
+    assert not any("today's weights" in note for note in exposure.notes)
+
+
+def test_max_drawdown_skips_an_interval_another_market_does_not_have_and_the_note_says_so():
+    # A crashes 20% on one day; B's market was closed the day before, so B has one two-day interval
+    # there and no interval matches A's crash day. Nothing is filled in, so the fall is not seen.
+    a = moves_curve([0.0] * 40 + [-0.20] + [0.0] * 40)
+    days = sorted(a)
+    b = {day: 100.0 for day in days if day != days[40]}
+    assert drawdown({"A": a}, {"A": 1.0}) == pytest.approx(-0.20)
+    assert drawdown({"A": a, "B": b}, {"A": 0.5, "B": 0.5}) == pytest.approx(0)
+    exposure = analysis({"A": a, "B": b})
+    assert exposure.max_drawdown_1y == pytest.approx(0)
+    assert DRAWDOWN_NOTE in exposure.notes and "may be larger" in DRAWDOWN_NOTE
+
+
+def test_max_drawdown_is_unavailable_rather_than_an_error_for_an_absurd_close():
+    glitch = moves_curve([0.0] * 80)
+    glitch[sorted(glitch)[40]] = 1e-310  # a provider glitch: a return of about e^-713, then e^713
+    assert drawdown({"A": glitch}, {"A": 1.0}) is None

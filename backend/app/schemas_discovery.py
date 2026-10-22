@@ -93,6 +93,9 @@ class PortfolioExposure(Contract):
     hhi: float | None  # sum of squared weights, 0..1
     effective_n: float | None  # 1 / hhi: the number of equal-sized positions it is equivalent to
     volatility_annualized: float | None
+    # The largest peak-to-low fall (a fraction at or below 0, e.g. -0.18) of today's holdings at
+    # today's weights over the past year, on the volatility's common sample. None when that is.
+    max_drawdown_1y: float | None
     # None: fewer than 60 overlapping days, so the pair cannot be estimated
     correlation: dict[str, dict[str, float | None]]
     skipped: dict[str, str]  # ticker -> why it could not be valued

@@ -72,6 +72,7 @@ def test_analytics_values_only_the_authenticated_users_open_holdings(client, db_
     assert [position["ticker"] for position in body["positions"]] == ["A"]
     assert body["by_country"] == [{"label": "Japan", "weight": 1.0}]
     assert body["total_value_eur"] > 0 and body["volatility_annualized"] > 0
+    assert body["max_drawdown_1y"] is not None and body["max_drawdown_1y"] <= 0
     assert body["positions"][0]["weight"] == 1
     assert response.headers["Cache-Control"] == "no-store"
     prices.assert_awaited_once_with({"A"})
@@ -100,7 +101,7 @@ def test_history_and_profile_failures_preserve_valuation_and_sanitize_logs(clien
     assert body["total_value_eur"] == 100
     assert body["positions"][0]["price_as_of"] is None
     assert body["positions"][0]["stale"] is True
-    assert body["volatility_annualized"] is None
+    assert body["volatility_annualized"] is None and body["max_drawdown_1y"] is None
     assert body["by_sector"] == [{"label": "Unclassified", "weight": 1.0}]
     assert "secret-token" not in caplog.text and "secret-token" not in response.text
 
