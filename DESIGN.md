@@ -414,16 +414,19 @@ loss, today's change as "Not available" until the previous close is saved, and t
 there are seven days of snapshots), and "Where your money is": a donut by sector, country or
 currency whose legend rows filter the holdings table, beside the largest positions. Slices use the
 blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amounts stay as entered
-and the page says so. The holdings table keeps its columns, targets and the watchlist toggle, and
-gains a monogram per company, "Add purchase price" where a holding has no cost, a count ("N of M
+and the page says so. The holdings table keeps its columns and targets (a target saved on Discover
+is marked as such), gains a monogram per company, "Add purchase price" where a holding has no cost, a count ("N of M
 holdings" while a group filters it) and a row menu (edit, log a trade for that holding, remove, which
-asks first and says it sells nothing). Below the table, "Risk and analytics" (measured, not scored) reads
-`GET /portfolio/analytics`: volatility, largest position, top three together, effective holdings
-and average correlation with the most correlated pair, each with what it means; what could not be
+asks first and says it sells nothing). The page header has only Add holding; the
+watchlist panel, the per-row watch toggle, the header's Log a trade and Record snapshot are gone:
+watching a company is Discover's job, a trade is logged from the row menu, and the value history is
+saved by itself once a day when Today or Portfolio is opened. Below the table, "Risk and analytics" (measured, not scored) reads
+`GET /portfolio/analytics`: volatility, largest position, top three together, effective holdings,
+average correlation with the most correlated pair, and the biggest fall of the past year (a plain
+negative percent, from peak to low over the shared price history, up to a year, with today's holdings and weights), each with what it means; what could not be
 valued or measured is listed in the backend's own words; "Advanced analytics" opens a correlation
 table with every number printed and the spread across sectors, countries and currencies. There is no
-overall health score, and the biggest fall of the past year in the mock is not shown because the
-backend does not compute it. Risk figures use values converted to euro, so they can differ a little
+overall health score. Risk figures use values converted to euro, so they can differ a little
 from the table's as-entered weights.
 
 **Built on Discover** (`/discover`, between Today and Portfolio in the sidebar and the phone tab bar):

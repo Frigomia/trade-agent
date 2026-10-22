@@ -39,9 +39,9 @@ How each came about: 1 follows the reference you gave, 2 is built around the mos
 | Value chart | `/portfolio/snapshots` (value and cost per snapshot) | Exists; "enough history" needs a rule |
 | Country and currency per holding | Not on `HoldingSummary` (sector is) | New fields, or look them up from the instrument data |
 | Allocation by sector | Computed from sector and market value | Exists |
-| Volatility, correlation, effective holdings, biggest fall | Not computed anywhere | New: an analytics endpoint from price history |
+| Volatility, correlation, effective holdings, biggest fall | Not computed anywhere | New: an analytics endpoint from price history (built, #165 and #172) |
 | Edit, remove, log a trade, add holding, add purchase price | Existing `HoldingForm`, `TradeSheet`, `FirstHolding` | Exists; the remove confirmation copy is new |
-| Watchlist, targets | Existing (`target_weight`, watchlist toggle) | Not shown in these mocks; keep in whichever option is chosen |
+| Watchlist, targets | Existing (`target_weight`, watchlist toggle) | Not shown in these mocks. Resolved 2026-10-22: the watchlist panel and toggle left Portfolio (watching is Discover's job); a holding keeps its own target |
 
 ## Decisions for you
 
@@ -49,6 +49,6 @@ How each came about: 1 follows the reference you gave, 2 is built around the mos
 2. Which analytics to build first, and whether a short history should still show the volatility and correlation figures.
 3. Whether country and currency come from stored fields or a lookup, and whether the summary total is always EUR.
 4. Whether the segmented views stay as they are, with Holdings as the redesigned view.
-5. The watchlist toggle and target weights: keep as today, or move into the row menu.
+5. Resolved 2026-10-22: the watchlist toggle and panel were removed from Portfolio. Editing a saved company's target and price range will move to Discover (not built yet).
 
 The direction is approved (`direction-approved.md`); the open questions above still need answers before the build.

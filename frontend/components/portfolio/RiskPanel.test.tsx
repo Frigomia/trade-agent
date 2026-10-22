@@ -29,6 +29,7 @@ const ANALYTICS: PortfolioAnalytics = {
   hhi: 0.3725,
   effective_n: 2.68,
   volatility_annualized: 0.174,
+  max_drawdown_1y: -0.182,
   correlation: {
     HLDN: { HLDN: 1, TNKP: 0.41, AURL: 0.22, NVKC: 0.78 },
     TNKP: { HLDN: 0.41, TNKP: 1, AURL: 0.19, NVKC: 0.38 },
@@ -66,13 +67,16 @@ describe("RiskPanel", () => {
     expect(within(panel).getByText("Top three together").parentElement).toHaveTextContent("HLDN, TNKP, AURL");
     expect(within(panel).getByText("Effective holdings").parentElement).toHaveTextContent("2.7");
     expect(within(panel).getByText("Average correlation").parentElement).toHaveTextContent("Highest pair HLDN and NVKC, 0.78");
+    expect(within(panel).getByText("Biggest fall, last year").parentElement).toHaveTextContent("-18.2%");
+    expect(within(panel).getByText("Biggest fall, last year").parentElement).toHaveTextContent("From peak to low over the shared price history, up to a year, with today's holdings and weights.");
   });
 
   it("says Not available, and why, for a figure the backend could not compute", () => {
-    show({ volatility_annualized: null, effective_n: null, positions: [pos("HLDN", 1, "Halden Systems")], correlation: {} });
+    show({ volatility_annualized: null, max_drawdown_1y: null, effective_n: null, positions: [pos("HLDN", 1, "Halden Systems")], correlation: {} });
 
     expect(screen.getByText("Volatility").parentElement).toHaveTextContent("Not available");
     expect(screen.getByText("Volatility").parentElement).toHaveTextContent("Needs matching price history");
+    expect(screen.getByText("Biggest fall, last year").parentElement).toHaveTextContent("Not available");
     expect(screen.getByText("Top three together").parentElement).toHaveTextContent("Needs at least three holdings");
     expect(screen.getByText("Average correlation").parentElement).toHaveTextContent("Needs two holdings with matching history");
   });

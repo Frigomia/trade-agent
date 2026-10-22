@@ -53,7 +53,7 @@ function Chart({ snapshots, failed }: { snapshots: Snapshot[] | undefined; faile
           The chart needs a little more history
         </Typography>
         <Typography sx={{ ...label, maxWidth: "34ch" }}>
-          It appears once there are at least {MIN_CHART_DAYS} days of saved values. You have {days} so far. Record a snapshot to add today.
+          It appears once there are at least {MIN_CHART_DAYS} days of saved values. You have {days} so far. A day is saved when you open the app and every holding has a price.
         </Typography>
       </Box>
     );

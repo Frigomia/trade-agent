@@ -66,7 +66,7 @@ export function PortfolioChart({
       <Box>
         {chips}
         <Typography sx={{ fontSize: 13, color: "var(--muted)", py: 3 }}>
-          Record a snapshot to start your history.
+          Your history starts when a day is saved: when you open the app and every holding has a price.
         </Typography>
       </Box>
     );

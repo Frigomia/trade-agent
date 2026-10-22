@@ -28,6 +28,8 @@ export function correlationPairs(analytics: PortfolioAnalytics): CorrelationPair
 
 export interface RiskFacts {
   volatility: number | null;
+  /** The biggest fall of the past year, a fraction at or below 0. */
+  biggestFall: number | null;
   largest: { ticker: string; name: string; weight: number } | null;
   /** Needs three holdings: for fewer, "the top three together" is simply everything. */
   topThree: { weight: number; tickers: string[] } | null;
@@ -43,6 +45,7 @@ export function riskFacts(analytics: PortfolioAnalytics): RiskFacts {
   const top3 = positions.slice(0, 3);
   return {
     volatility: finite(analytics.volatility_annualized) ? analytics.volatility_annualized : null,
+    biggestFall: finite(analytics.max_drawdown_1y) ? analytics.max_drawdown_1y : null,
     largest: positions[0] ? { ticker: positions[0].ticker, name: positions[0].name, weight: positions[0].weight } : null,
     topThree: positions.length >= 3 ? { weight: top3.reduce((sum, p) => sum + p.weight, 0), tickers: top3.map((p) => p.ticker) } : null,
     effectiveHoldings: finite(analytics.effective_n) ? analytics.effective_n : null,
