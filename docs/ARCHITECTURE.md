@@ -845,8 +845,8 @@ days are stale. One day ahead is allowed for exchange-local bar dates; old cache
 entries without dates are supported. This is quote-display metadata; discovery retains its
 exchange-aware freshness rules. Quotes are not silently replaced or discarded by this display flag.
 
-The selected holding UI uses a desktop modal and full-screen mobile form, initially ticker and
-fractional shares, with optional purchase details/overrides. An existing ticker offers an explicit
+The selected holding UI is a right-hand side drawer (400px wide) on a computer and a bottom sheet on
+a phone, like Log a trade, initially ticker and fractional shares, with optional purchase details/overrides. An existing ticker offers an explicit
 Update position action and preserves blank purchase details. See the [owner-selected portfolio
 direction](superpowers/specs/2026-10-20-portfolio-onboarding-design.md) for the later EUR overview,
 allocation charts and expandable analytics. Those sections remain frontend-phase work.
