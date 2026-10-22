@@ -35,6 +35,13 @@ body {
   --tab-bg: #131d36;
   --bubble: var(--accent-wash);
   --focus: #7ea3ff;
+  /* Chart series for the allocation donut: blue, violet and cyan tones, never green or red. */
+  --c1: #7ea3ff;
+  --c2: #4f7de0;
+  --c3: #a78bfa;
+  --c4: #7c5cd6;
+  --c5: #38bdf8;
+  --c6: #64748b;
   /* The phone tab bar's height; TabBar overwrites it with the measured value. */
   --tabbar-h: 66px;
   /* One soft shadow level; the primary button has its own short blue shadow in light only. */
@@ -68,6 +75,12 @@ body {
   --on-warn: #ffffff;
   --tab-bg: #ffffff;
   --focus: #2457d6;
+  --c1: #2457d6;
+  --c2: #6f9bff;
+  --c3: #7a5af8;
+  --c4: #b6a2fb;
+  --c5: #0e8fa3;
+  --c6: #94a3b8;
   --shadow: 0 1px 2px rgba(15, 26, 46, 0.04), 0 12px 32px -14px rgba(15, 26, 46, 0.14);
   --btn-shadow: 0 8px 18px -8px rgba(36, 87, 214, 0.5);
   --pop: 0 30px 60px -22px rgba(15, 26, 46, 0.35), 0 0 0 1px rgba(15, 26, 46, 0.14);

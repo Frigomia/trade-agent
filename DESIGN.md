@@ -403,10 +403,20 @@ valuation and quality against peers as bands (value, median tick, middle half of
 words, neutral wording), and a named-peer table with this company first. Risk and fit: risk
 characteristics "measured, not scored" and the portfolio fit with its written reading. Sources:
 every source, data limits, unresolved evidence and the unverified community view. The price chart
-and the named peers are built against backend data that does not exist yet and say so until it does.
+(`GET /discovery/ideas/{id}/history`), the named peers, the research-named competitors and the fit
+facts (sector weight, concentration, volatility and correlation, before and after) come from data
+the backend saves with each new idea; an idea saved before that shows what it has and says what it
+lacks.
 
-**Not built yet:** the Portfolio explorer and Discover screens, the Discover
-navigation item, and the rem sizes in component `sx` props outside the new components (the theme
+**Built on Portfolio (first slice of the Explorer):** a slim overview strip (total value, gain or
+loss, today's change as "Not available" until the previous close is saved, and the value chart once
+there are seven days of snapshots), and "Where your money is": a donut by sector, country or
+currency whose legend rows filter the holdings table, beside the largest positions. Slices use the
+blue, violet and cyan chart tokens (`--c1` to `--c6`), never green or red; amounts stay as entered
+and the page says so. The holdings table, its targets and the watchlist are unchanged for now.
+
+**Not built yet:** the Portfolio row menu and the risk and analytics section, the Discover screen,
+the Discover navigation item, and the rem sizes in component `sx` props outside the new components (the theme
 and the new Today components are in rem). Existing screens keep their current layouts
 and sizes until each is restyled.
 
