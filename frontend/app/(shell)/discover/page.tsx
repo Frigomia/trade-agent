@@ -129,10 +129,11 @@ export default function DiscoverPage() {
                   );
                 })}
               </Box>
-              <Box sx={{ flex: 1 }} />
-              <Box component="label" sx={{ display: "inline-flex", alignItems: "center", gap: 1, ...muted }}>
+              <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
+              {/* On a phone the sort has its own row and the select takes the width left of its label. */}
+              <Box component="label" sx={{ display: "inline-flex", alignItems: "center", gap: 1, width: { xs: "100%", md: "auto" }, ...muted }}>
                 Sort by
-                <Box component="select" value={sort} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSort(e.target.value as DiscoverSort)} aria-label="Sort by" sx={{ minHeight: 40, px: 1, borderRadius: "10px", border: "1px solid var(--line2)", bgcolor: "var(--field)", color: "var(--text)", fontSize: "0.8125rem" }}>
+                <Box component="select" value={sort} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSort(e.target.value as DiscoverSort)} aria-label="Sort by" sx={{ flex: { xs: 1, md: "none" }, minWidth: 0, minHeight: { xs: 44, md: 36 }, px: "14px", borderRadius: 999, border: "1px solid var(--line2)", bgcolor: "var(--panel)", color: "var(--text)", fontSize: "0.875rem" }}>
                   {SORTS.map((s) => (
                     <option key={s.key} value={s.key}>
                       {s.label}

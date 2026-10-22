@@ -441,7 +441,13 @@ move), what the person set as a weight target and price range ("Target 5% · Ran
 words), when it was added and from where, View, Edit and Remove. Edit opens a dialog for the weight
 target (not for a company that is owned, whose target lives on the holding) and the price range, in the
 currency the card shows; only what was changed is sent. Remove is shown at once and sent after
-eight seconds, so Undo only cancels it; leaving the page sends it. The empty, loading, load-error,
+eight seconds, so Undo only cancels it; leaving the page sends it. On a phone the page follows the
+approved phone mock: the search field, then a full-width Add button with its helper line; the filter
+track across the full width; Sort by on its own row with a wide select; and each card as three rows,
+who it is (monogram, name and status, one line of where it is listed and when it was added, the
+reading), the price with its change and the quote date on one line, and the actions, where View (or
+Edit target for a company no scan has researched) takes the width and Edit and Remove are square
+44px outlined buttons (outlined on a computer too, as in the mock). There is no Analyze button: Discover does not start research. The empty, loading, load-error,
 no-match and "Price unavailable" states are built. Analyze (single-company research) and the simple
 company overview are not built: Discover only shows research a scan already produced, and a company
 without a report has no page to open. "Save to Discover" on Today and in the workbench adds the

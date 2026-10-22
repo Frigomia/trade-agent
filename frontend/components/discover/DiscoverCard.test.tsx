@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { DiscoverItem } from "@/lib/api/discover-types";
 import { DiscoverCard } from "./DiscoverCard";
 
@@ -148,5 +148,33 @@ describe("DiscoverCard targets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit target for Halden Systems" }));
 
     expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("DiscoverCard phone layout", () => {
+  it("puts where it is listed and when it was added on one line, with the reading under it", () => {
+    show();
+
+    const card = screen.getByRole("listitem");
+    const meta = within(card).getByText(/^HLDN · NASDAQ · USD · Added 2 days ago · saved from Today$/);
+    const reading = within(card).getByText("Recurring software revenue and widening margins.");
+    expect(meta.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("gives a company no scan has researched a wide Edit target button, and one that is researched View with a square edit", () => {
+    const { unmount } = render(<ul><DiscoverCard item={item({ status: "none", insight: null, report_id: null })} now={NOW} onRemove={vi.fn()} onEdit={vi.fn()} /></ul>);
+    expect(screen.getByRole("button", { name: "Edit target for Halden Systems" })).toHaveTextContent("Edit target");
+    expect(screen.queryByRole("link", { name: /View the report/ })).not.toBeInTheDocument();
+    unmount();
+
+    show();
+    expect(screen.getByRole("link", { name: "View the report for Halden Systems" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit target for Halden Systems" })).not.toHaveTextContent("Edit target"); // a square icon
+  });
+
+  it("never offers a button that starts research", () => {
+    show({ status: "none", insight: null, report_id: null });
+
+    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
   });
 });

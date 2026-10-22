@@ -53,7 +53,7 @@ export function SearchBar({
       <Box sx={{ display: "flex", gap: 1.25, flexWrap: "wrap" }}>
         <Box
           component="label"
-          sx={{ flex: "1 1 260px", minWidth: 0, display: "flex", alignItems: "center", gap: 1, px: 1.75, minHeight: 48, borderRadius: "14px", border: "1px solid var(--line2)", bgcolor: "var(--field)", "&:focus-within": { outline: "2px solid var(--focus)" } }}
+          sx={{ flex: "1 1 260px", minWidth: 0, display: "flex", alignItems: "center", gap: 1.25, px: 2, minHeight: 48, borderRadius: 999, border: "1px solid var(--line2)", bgcolor: "var(--panel)", boxShadow: "var(--shadow)", "&:focus-within": { outline: "2px solid var(--focus)", outlineOffset: 2 } }}
         >
           <Search size={16} aria-hidden color="var(--muted)" />
           <InputBase
@@ -67,7 +67,7 @@ export function SearchBar({
             inputProps={{ "aria-label": "Search a company by name or ticker", "aria-describedby": typed ? undefined : hintId }}
           />
         </Box>
-        <Button variant="contained" startIcon={<Plus size={16} aria-hidden />} onClick={addFirst} sx={{ minHeight: 48 }}>
+        <Button variant="contained" startIcon={<Plus size={16} aria-hidden />} onClick={addFirst} sx={{ minHeight: 48, width: { xs: "100%", md: "auto" } }}>
           Add company
         </Button>
       </Box>
