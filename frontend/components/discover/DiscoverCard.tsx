@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Box, Button, Typography } from "@mui/material";
-import { Check, CircleDashed, Eye, Sparkles, Trash2 } from "lucide-react";
+import { Check, CircleDashed, Eye, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { Change } from "@/components/ui/Change";
 import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoverItem } from "@/lib/api/discover-types";
-import { addedText, isAnalyzed, metaText, nameOf, priceText } from "@/lib/discoverList";
+import { addedText, isAnalyzed, metaText, nameOf, priceText, targetsText } from "@/lib/discoverList";
 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
@@ -70,10 +70,12 @@ function PriceBlock({ item }: { item: DiscoverItem }) {
 /**
  * One company in the Discover list: who it is, whether a scan researched it (with the one-line
  * reading when it did, shown as text), its price and daily change, and what can be done: open the
- * report when there is one, or remove it from the list (which only leaves the list).
+ * report when there is one, edit its target and price range, or remove it from the list (which only
+ * leaves the list).
  */
-export function DiscoverCard({ item, now, onRemove }: { item: DiscoverItem; now: number; onRemove: () => void }) {
+export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverItem; now: number; onRemove: () => void; onEdit: () => void }) {
   const name = nameOf(item);
+  const targets = targetsText(item);
   const analyzed = isAnalyzed(item);
   const report = `/today/${item.report_id}`;
   return (
@@ -100,6 +102,7 @@ export function DiscoverCard({ item, now, onRemove }: { item: DiscoverItem; now:
               <span>{item.insight}</span>
             </Box>
           )}
+          {targets && <Typography sx={{ ...muted, color: "var(--text2)" }}>{targets}</Typography>}
           <Typography sx={muted}>{addedText(item, now)}</Typography>
         </Box>
       </Box>
@@ -110,6 +113,9 @@ export function DiscoverCard({ item, now, onRemove }: { item: DiscoverItem; now:
             View
           </Button>
         )}
+        <Button variant="text" size="small" onClick={onEdit} aria-label={`Edit target for ${name}`} title="Edit target and price range" sx={{ minHeight: { xs: 44, md: 36 }, minWidth: 44, color: "var(--text2)" }}>
+          <Pencil size={16} aria-hidden />
+        </Button>
         <Button variant="text" size="small" onClick={onRemove} aria-label={`Remove ${name} from Discover`} title="Remove from Discover" sx={{ minHeight: { xs: 44, md: 36 }, minWidth: 44, color: "var(--text2)" }}>
           <Trash2 size={16} aria-hidden />
         </Button>

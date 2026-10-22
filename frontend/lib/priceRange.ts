@@ -13,12 +13,6 @@ export function priceToText(price: number | null | undefined): string {
 /** A price as it is read on screen: its own decimals up to the six stored, never rounded to two. */
 export const priceText = (price: number) => price.toLocaleString("en-US", { maximumFractionDigits: 6 });
 
-/** "90 to 110", the saved range as words; null when the item has none. */
-export function rangeText(item: { target_price_low?: number | null; target_price_high?: number | null }): string | null {
-  const { target_price_low: low, target_price_high: high } = item;
-  return low == null || high == null ? null : `${priceText(low)} to ${priceText(high)}`;
-}
-
 export interface PriceRange {
   low: number;
   high: number;

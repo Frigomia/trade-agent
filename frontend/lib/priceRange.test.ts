@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priceText, priceToText, rangeText, textsToRange } from "./priceRange";
+import { priceText, priceToText, textsToRange } from "./priceRange";
 
 describe("textsToRange", () => {
   it("is null when both fields are blank, which means no range", () => {
@@ -32,11 +32,5 @@ describe("range text helpers", () => {
     expect(priceText(98.4)).toBe("98.4");
     expect(priceText(15250)).toBe("15,250");
     expect(priceText(0.000123)).toBe("0.000123");
-  });
-
-  it("words a saved range, or nothing when either end is missing", () => {
-    expect(rangeText({ target_price_low: 90, target_price_high: 110 })).toBe("90 to 110");
-    expect(rangeText({ target_price_low: null, target_price_high: null })).toBeNull();
-    expect(rangeText({})).toBeNull();
   });
 });

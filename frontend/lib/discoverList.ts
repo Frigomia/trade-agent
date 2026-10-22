@@ -1,5 +1,6 @@
 import type { DiscoverItem } from "@/lib/api/discover-types";
 import { toTime } from "@/lib/format";
+import { fractionToPercentText } from "@/lib/targetWeight";
 
 export type DiscoverFilter = "all" | "analyzed" | "none";
 export type DiscoverSort = "new" | "name" | "change";
@@ -65,10 +66,27 @@ export function metaText(item: DiscoverItem): string {
 // A currency quoted in whole units has no cents on a stock price page (the yen).
 const WHOLE_UNITS = new Set(["JPY", "KRW", "IDR", "VND", "CLP", "HUF"]);
 
+/** A price as a number: two decimals (none for the yen), or up to `most` when it has more. */
+function amountText(price: number, currency: string | null, most = 0): string {
+  const digits = currency && WHOLE_UNITS.has(currency) ? 0 : 2;
+  return price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: Math.max(digits, most) });
+}
+
 /** "USD 184.20" or "JPY 3,845"; just the number when the currency is not known (no unit is claimed). */
 export function priceText(item: Pick<DiscoverItem, "price" | "currency">): string | null {
   if (item.price === null || !Number.isFinite(item.price)) return null;
-  const digits = item.currency && WHOLE_UNITS.has(item.currency) ? 0 : 2;
-  const number = item.price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const number = amountText(item.price, item.currency);
   return item.currency ? `${item.currency} ${number}` : number;
+}
+
+/**
+ * What the person set, in words: "Target 5% · Range USD 90.00 to 110.00". The weight is left out for an
+ * owned company (its target lives on the holding). Null when nothing is set.
+ */
+export function targetsText(item: Pick<DiscoverItem, "owned" | "target_weight" | "target_price_low" | "target_price_high" | "currency">): string | null {
+  const parts: string[] = [];
+  if (!item.owned && item.target_weight !== null && item.target_weight > 0) parts.push(`Target ${fractionToPercentText(item.target_weight)}%`);
+  const { target_price_low: low, target_price_high: high, currency } = item;
+  if (low !== null && high !== null) parts.push(`Range ${currency ? `${currency} ` : ""}${amountText(low, currency, 6)} to ${amountText(high, currency, 6)}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
 }

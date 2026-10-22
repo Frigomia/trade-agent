@@ -40,6 +40,7 @@ const item = (ticker: string, over: Partial<DiscoverItem> = {}): DiscoverItem =>
   status: "none",
   insight: null,
   report_id: null,
+  owned: false,
   ...over,
 });
 
@@ -494,5 +495,54 @@ describe("DiscoverPage", () => {
       expect(count("POST /discover")).toBe(0);
       expect(count("DELETE /portfolio/watchlist/HLDN")).toBe(0);
     });
+  });
+});
+
+describe("DiscoverPage editing targets", () => {
+  const edit = async () => {
+    await screen.findByText("Halden Systems");
+    fireEvent.click(screen.getByRole("button", { name: "Edit target for Halden Systems" }));
+    return screen.findByRole("dialog");
+  };
+
+  it("opens the editor for that company, saves the range with a PATCH and shows it on the card without reading the whole list again", async () => {
+    handlers["PATCH /discover/HLDN"] = () => ({ ...LIST.items.find((i) => i.ticker === "HLDN")!, target_price_low: 90, target_price_high: 110, price: null, change_pct: null, stale: true });
+    renderPage();
+    const dialog = await edit();
+    fireEvent.change(within(dialog).getByLabelText("Lowest price"), { target: { value: "90" } });
+    fireEvent.change(within(dialog).getByLabelText("Highest price"), { target: { value: "110" } });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save target" }));
+
+    await waitFor(() => expect(count("PATCH /discover/HLDN")).toBe(1));
+    expect(await screen.findByText(/Range USD 90\.00 to 110\.00/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(count("GET /discover")).toBe(1); // the answer has no quote: the card keeps its price
+  });
+
+  it("reads the list again when the company turns out to be gone, and closes the editor once it has left the list", async () => {
+    handlers["PATCH /discover/HLDN"] = () => {
+      throw new FakeApiError(404, "Not in your Discover list");
+    };
+    renderPage();
+    const dialog = await edit();
+    fireEvent.change(within(dialog).getByLabelText("Target weight (%)"), { target: { value: "3" } });
+    handlers["GET /discover"] = () => ({ ...LIST, items: LIST.items.filter((i) => i.ticker !== "HLDN") });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save target" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.queryByText("Halden Systems")).not.toBeInTheDocument();
+    expect(count("GET /discover")).toBe(2);
+  });
+
+  it("closes without a request when nothing was changed", async () => {
+    renderPage();
+    const dialog = await edit();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save target" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(count("PATCH /discover/HLDN")).toBe(0);
   });
 });

@@ -83,6 +83,21 @@ export function useDiscoverList() {
     }
   };
 
+  /** Puts a saved edit on the shared list at once: the answer has no quote, so only the edited fields. */
+  const applyEdit = (updated: DiscoverItem) =>
+    mutate(
+      (cur) =>
+        cur && {
+          ...cur,
+          items: cur.items.map((i) =>
+            i.ticker === updated.ticker
+              ? { ...i, note: updated.note, target_weight: updated.target_weight, target_price_low: updated.target_price_low, target_price_high: updated.target_price_high, owned: updated.owned }
+              : i,
+          ),
+        },
+      { revalidate: false },
+    );
+
   const sendRemoval = async (item: DiscoverItem) => {
     timers.current.delete(item.ticker);
     setRemoved((list) => list.map((r) => (r.item.ticker === item.ticker ? { ...r, sent: true } : r)));
@@ -173,6 +188,7 @@ export function useDiscoverList() {
     problem,
     dismissNotice: () => setMessage(null),
     refresh: () => mutate(),
+    applyEdit,
     add,
     remove,
     undo,
