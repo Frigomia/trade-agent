@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { SWRConfig } from "swr";
+import { SWRConfig, type Cache } from "swr";
 import type { DiscoverItem, DiscoverList } from "@/lib/api/discover-types";
 
 const apiFetch = vi.fn();
@@ -56,9 +56,10 @@ let handlers: Record<string, () => unknown>;
 const count = (key: string) => apiFetch.mock.calls.filter((c) => `${(c[1] as RequestInit | undefined)?.method ?? "GET"} ${c[0]}` === key).length;
 const post = () => JSON.parse((apiFetch.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "POST" && c[0] === "/discover")![1] as RequestInit).body as string);
 
-function renderPage() {
+// `cache` lets two renders share one list, as the app's pages do when you leave Discover and come back.
+function renderPage(cache: Cache = new Map(), config: { revalidateIfStale?: boolean } = {}) {
   return render(
-    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+    <SWRConfig value={{ provider: () => cache, dedupingInterval: 0, ...config }}>
       <DiscoverPage />
     </SWRConfig>,
   );
@@ -375,9 +376,87 @@ describe("DiscoverPage", () => {
       await waitFor(() => expect(count("DELETE /portfolio/watchlist/HLDN")).toBe(1));
 
       view.unmount();
-      finish();
+      await act(async () => {
+        finish(); // completes after the page is gone: it must not touch it, nor leak into the next test
+      });
 
       expect(count("DELETE /portfolio/watchlist/HLDN")).toBe(1);
+    });
+
+    it("keeps a removed company out of the list even when reading the list again fails", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      handlers["GET /market/search?q=hal"] = () => [{ symbol: "HLDN", name: "Halden Systems", type: "STOCK", exchange: "NASDAQ" }];
+      handlers["DELETE /portfolio/watchlist/HLDN"] = () => {
+        handlers["GET /discover"] = () => {
+          throw new FakeApiError(500, "boom"); // the list cannot be read after the removal
+        };
+        return undefined;
+      };
+      renderPage();
+      await screen.findByText("Halden Systems");
+      removeHalden();
+
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_MS + 100);
+      });
+
+      await waitFor(() => expect(count("DELETE /portfolio/watchlist/HLDN")).toBe(1));
+      await waitFor(() => expect(count("GET /discover")).toBeGreaterThanOrEqual(2)); // the read that failed
+      expect(screen.queryByText("Halden Systems")).not.toBeInTheDocument();
+      expect(names()).toEqual(["Pellman Stores", "Norvik Cloud"]);
+      // And it can be added again: it is not "Already in Discover".
+      fireEvent.change(screen.getByRole("textbox", { name: "Search a company by name or ticker" }), { target: { value: "hal" } });
+      await act(async () => {
+        vi.advanceTimersByTime(400);
+      });
+      expect(await screen.findByRole("button", { name: "Add Halden Systems to Discover" })).toBeInTheDocument();
+    });
+
+    it("takes a company out of the list shown after returning to the page while its removal was still on its way", async () => {
+      const cache: Cache = new Map();
+      let finish: () => void = () => {};
+      handlers["DELETE /portfolio/watchlist/HLDN"] = () =>
+        new Promise<void>((resolve) => {
+          finish = () => {
+            // Once the removal is done the server no longer lists the company.
+            handlers["GET /discover"] = () => ({ items: LIST.items.filter((i) => i.ticker !== "HLDN"), missing: [] });
+            resolve();
+          };
+        });
+      const first = renderPage(cache);
+      await screen.findByText("Halden Systems");
+      removeHalden();
+      first.unmount(); // leaving sends the removal, which is still on its way
+      await waitFor(() => expect(count("DELETE /portfolio/watchlist/HLDN")).toBe(1));
+
+      // Back on Discover: the cached list (read before the removal finished) is shown, and not read
+      // again by itself, so only the finishing removal can correct it.
+      renderPage(cache, { revalidateIfStale: false });
+      expect(await screen.findByText("Halden Systems")).toBeInTheDocument();
+      await act(async () => {
+        finish();
+      });
+
+      await waitFor(() => expect(screen.queryByText("Halden Systems")).not.toBeInTheDocument());
+      expect(names()).toEqual(["Pellman Stores", "Norvik Cloud"]);
+    });
+
+    it("keeps the company, with a message, when the removal truly fails, and does not drop it from the list", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      handlers["DELETE /portfolio/watchlist/HLDN"] = () => {
+        throw new FakeApiError(500, "Server error");
+      };
+      renderPage();
+      await screen.findByText("Halden Systems");
+      removeHalden();
+
+      await act(async () => {
+        vi.advanceTimersByTime(UNDO_MS + 100);
+      });
+
+      expect(await screen.findByText("Halden Systems")).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("Could not remove Halden Systems: Server error.");
+      expect(names()).toContain("Halden Systems");
     });
 
     it("will not add a company whose removal is on its way, and says so", async () => {

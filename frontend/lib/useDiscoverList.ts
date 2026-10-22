@@ -27,6 +27,10 @@ const removalText = (item: DiscoverItem) => `Removed ${nameOf(item)} from Discov
  * that fails brings the company back with a message, and one that finds the company already gone
  * counts as done. Adding a company that is waiting to be removed cancels the removal instead; one
  * already being sent is not added until it is gone.
+ *
+ * A removal that succeeded is taken out of the shared list itself (the SWR cache), before the local
+ * hiding is let go, so the company cannot return when the list is read again and fails, or when the
+ * page was left and opened again while the removal was on its way.
  */
 export function useDiscoverList() {
   const { data, error, isLoading, isValidating, mutate } = useSWR<DiscoverList>("/discover", apiFetch, {
@@ -53,20 +57,40 @@ export function useDiscoverList() {
     timers.current.delete(ticker);
   };
 
+  /** Sends the removal. True when the company is gone (removed, or already not there). */
+  const deleteOnServer = async (item: DiscoverItem): Promise<boolean> => {
+    try {
+      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(item.ticker)}`, { method: "DELETE" });
+      return true;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return true; // already gone is what was wanted
+      if (alive.current) setProblem(`Could not remove ${nameOf(item)}: ${err instanceof ApiError ? err.detail : "something went wrong"}.`);
+      return false;
+    }
+  };
+
+  /**
+   * Takes the company out of the shared list at once, then reads the list again in the background (a
+   * read that started before the removal finished may still have it). A failure of either is
+   * ignored: the cache already says it is gone, and the next read confirms.
+   */
+  const forget = async (ticker: string) => {
+    try {
+      await mutate((cur) => cur && { ...cur, items: cur.items.filter((i) => i.ticker !== ticker) }, { revalidate: false });
+      void mutate().catch(() => undefined);
+    } catch {
+      /* the list is read again next time */
+    }
+  };
+
   const sendRemoval = async (item: DiscoverItem) => {
     timers.current.delete(item.ticker);
     setRemoved((list) => list.map((r) => (r.item.ticker === item.ticker ? { ...r, sent: true } : r)));
-    try {
-      await apiFetch(`/portfolio/watchlist/${encodeURIComponent(item.ticker)}`, { method: "DELETE" });
-    } catch (err) {
-      // Already gone is what was wanted. Anything else: it comes back, and the person is told.
-      if (!(err instanceof ApiError && err.status === 404)) {
-        if (alive.current) setProblem(`Could not remove ${nameOf(item)}: ${err instanceof ApiError ? err.detail : "something went wrong"}.`);
-      }
-    }
+    const gone = await deleteOnServer(item);
+    if (gone) await forget(item.ticker); // before the local hiding is let go
     if (!alive.current) return;
     drop(item.ticker);
-    void mutate();
+    if (!gone) void mutate().catch(() => undefined); // a failed removal: read the list to be sure of it
   };
 
   const remove = (item: DiscoverItem) => {
@@ -114,18 +138,27 @@ export function useDiscoverList() {
   };
 
   // Leaving the page sends what is still waiting: nothing the person removed comes back later.
-  // One already being sent is left to finish.
+  // One already being sent is left to finish. `leave` always holds the latest closure, so the
+  // cleanup below, which runs once, never uses a stale one.
+  const leave = useRef(() => {});
   useEffect(() => {
-    const live = timers.current;
-    alive.current = true;
-    return () => {
+    leave.current = () => {
       alive.current = false;
-      for (const timer of live.values()) clearTimeout(timer);
-      live.clear();
+      for (const timer of timers.current.values()) clearTimeout(timer);
+      timers.current.clear();
+      // They finish after the page is gone: each takes itself out of the shared list when it is done.
       for (const { item, sent } of latest.current) {
-        if (!sent) void apiFetch(`/portfolio/watchlist/${encodeURIComponent(item.ticker)}`, { method: "DELETE" }).catch(() => undefined);
+        if (!sent) {
+          void deleteOnServer(item).then(async (gone) => {
+            if (gone) await forget(item.ticker);
+          });
+        }
       }
     };
+  });
+  useEffect(() => {
+    alive.current = true;
+    return () => leave.current();
   }, []);
 
   const items = (data?.items ?? []).filter((i) => !removed.some((r) => r.item.ticker === i.ticker));
