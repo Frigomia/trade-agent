@@ -40,6 +40,8 @@ export function useDiscoverList() {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   // The latest removals, for the cleanup that runs when the page is left.
   const latest = useRef<Removal[]>([]);
+  // False once the page is left: what a removal finishing later would update is gone.
+  const alive = useRef(true);
   useEffect(() => {
     latest.current = removed;
   }, [removed]);
@@ -59,9 +61,10 @@ export function useDiscoverList() {
     } catch (err) {
       // Already gone is what was wanted. Anything else: it comes back, and the person is told.
       if (!(err instanceof ApiError && err.status === 404)) {
-        setProblem(`Could not remove ${nameOf(item)}: ${err instanceof ApiError ? err.detail : "something went wrong"}.`);
+        if (alive.current) setProblem(`Could not remove ${nameOf(item)}: ${err instanceof ApiError ? err.detail : "something went wrong"}.`);
       }
     }
+    if (!alive.current) return;
     drop(item.ticker);
     void mutate();
   };
@@ -114,7 +117,9 @@ export function useDiscoverList() {
   // One already being sent is left to finish.
   useEffect(() => {
     const live = timers.current;
+    alive.current = true;
     return () => {
+      alive.current = false;
       for (const timer of live.values()) clearTimeout(timer);
       live.clear();
       for (const { item, sent } of latest.current) {
