@@ -3,6 +3,7 @@ import { Box, Typography } from "@mui/material";
 import { Panel } from "@/components/ui/Panel";
 import type { IdeaOut } from "@/lib/api/discovery-types";
 import { fitScore } from "@/lib/discovery";
+import { fitAssumption, fitFacts } from "@/lib/fitFacts";
 import { eurCompact, formatMetric, riskFlag, sizeWord } from "@/lib/metrics";
 import { BODY, H3 } from "./Cases";
 
@@ -81,21 +82,48 @@ function Risk({ idea }: { idea: IdeaOut }) {
 /** How the company would sit in the user's portfolio: the computed score, and the written reading of it. */
 function Fit({ idea }: { idea: IdeaOut }) {
   const fit = fitScore(idea);
+  // The saved measurements and their notes do not depend on the score: the score needs every
+  // measurement, while a partial set (a constant return series has no correlation) is still shown.
+  const saved = idea.fit?.applicable ? idea.fit : null;
+  const facts = saved ? fitFacts(saved, idea.snapshot?.sector) : [];
   return (
     <Section title="Portfolio fit">
       {fit === null ? (
         <Box sx={{ borderStyle: "dashed", borderWidth: "1px", borderColor: "var(--line2)", borderRadius: "14px", p: 2, display: "grid", gap: 0.5 }}>
           <Typography component="b" sx={{ fontSize: "1.25rem", fontWeight: 650 }}>
-            Not applicable
+            {saved ? "Score unavailable" : "Not applicable"}
           </Typography>
           <Typography sx={BODY}>
-            Fit is measured against your holdings, and there was nothing to measure against when this idea was saved. Add holdings and the next scan calculates it.
+            {saved
+              ? "The fit score needs every measurement and could not be calculated for this idea. Any figures the scan did compute are listed below."
+              : "Fit is measured against your holdings, and there was nothing to measure against when this idea was saved. Add holdings and the next scan calculates it."}
           </Typography>
         </Box>
       ) : (
         <Typography sx={BODY}>
           <Box component="b" sx={{ fontSize: "1.625rem", fontWeight: 650, letterSpacing: "-0.03em", color: "var(--text)" }}>{fit}</Box> fit, of 100 · computed
         </Typography>
+      )}
+      {saved && (facts.length > 0 || saved.notes.length > 0) && (
+        <Box>
+          {facts.length > 0 && (
+            <>
+              <Box component="dl" sx={{ m: 0 }}>
+                {facts.map((f) => (
+                  <Row key={f.label} label={f.label} value={f.value} detail={f.detail} />
+                ))}
+              </Box>
+              <Typography sx={{ ...muted, mt: 1 }}>{fitAssumption(saved)}</Typography>
+            </>
+          )}
+          {saved.notes.length > 0 && (
+            <Box component="ul" sx={{ ...muted, m: 0, mt: 0.5, pl: 2.25 }}>
+              {saved.notes.map((note, i) => (
+                <li key={`${i}-${note}`}>{note}</li>
+              ))}
+            </Box>
+          )}
+        </Box>
       )}
       {idea.fit_summary && (
         <Box sx={{ borderStyle: "dashed", borderWidth: "1px", borderColor: "var(--line2)", borderRadius: "14px", p: "12px 14px", display: "grid", gap: 0.75 }}>
