@@ -1,6 +1,7 @@
 import { Box, Typography, LinearProgress } from "@mui/material";
 import type { RecommendationOut, TechnicalSignal } from "@/lib/api/recommendation-types";
 import { Panel } from "@/components/ui/Panel";
+import { formatShare } from "@/lib/format";
 import { Pill, type PillTone } from "@/components/ui/Pill";
 
 export const SIGNAL_LABEL: Record<TechnicalSignal, string> = {
@@ -42,7 +43,7 @@ export function EvidenceDetail({ recommendation }: { recommendation: Recommendat
         <Box>
           <Typography sx={{ fontWeight: 600, flex: 1 }}>Suggested position</Typography>
           <Typography sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-            {(suggested_position_pct * 100).toFixed(1)}% of portfolio
+            {formatShare(suggested_position_pct)} of portfolio
           </Typography>
         </Box>
       )}
@@ -80,7 +81,7 @@ export function EvidencePanel({ recommendation }: { recommendation: Recommendati
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
           <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Suggested size</Typography>
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
-            {(suggested_position_pct * 100).toFixed(1)}% of portfolio
+            {formatShare(suggested_position_pct)} of portfolio
           </Typography>
         </Box>
       )}
