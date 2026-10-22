@@ -115,6 +115,19 @@ describe("DiscoverPage", () => {
     expect(names()).toEqual(["Pellman Stores", "Norvik Cloud"]);
   });
 
+  it("draws the filters as the approved pill track: the chosen one raised in plain text, every count a round chip, the chosen chip tinted", async () => {
+    renderPage();
+    await screen.findByText("Halden Systems");
+    const group = screen.getByRole("group", { name: "Show" });
+    const all = within(group).getByRole("button", { name: /^All\s*3/ });
+    const analyzed = within(group).getByRole("button", { name: /AI analyzed\s*1/ });
+
+    expect(all).toHaveStyle({ color: "var(--text)", backgroundColor: "var(--panel)", fontWeight: "650" });
+    expect(analyzed).toHaveStyle({ color: "var(--text2)", fontWeight: "500" }); // quiet, never the link blue
+    expect(within(all).getByText("3")).toHaveStyle({ backgroundColor: "var(--accent-wash)", color: "var(--accent)" });
+    expect(within(analyzed).getByText("1")).toHaveStyle({ backgroundColor: "var(--track)", color: "var(--text2)" });
+  });
+
   it("explains an empty filter and offers to show all", async () => {
     handlers["GET /discover"] = () => ({ items: [item("NVKC", { name: "Norvik Cloud" })], missing: [] });
     renderPage();
