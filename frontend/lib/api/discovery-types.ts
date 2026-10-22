@@ -74,6 +74,21 @@ export interface IdeaSnapshot {
   peers?: PeerRow[] | null; // named peers; planned backend field
 }
 
+/** What adding the company would do to the portfolio (backend CandidateFit). Saved only when it applied. */
+export interface CandidateFit {
+  ticker: string;
+  applicable: boolean;
+  avg_correlation_to_portfolio: number | null;
+  portfolio_vol_before: number | null;
+  portfolio_vol_after: number | null; // with the company at hypothetical_weight
+  hhi_before: number | null; // concentration: 1 is everything in one holding
+  hhi_after: number | null;
+  sector_weight_before: number | null; // fractions 0..1
+  sector_weight_after: number | null;
+  hypothetical_weight: number;
+  notes: string[];
+}
+
 export interface IdeaOut {
   ticker: string;
   name: string;
@@ -89,6 +104,7 @@ export interface IdeaOut {
   negative_developments: NegativeDevelopment[];
   peers?: PeerComparison[]; // absent on payloads from before the contract carried them
   competitors?: string[]; // companies the research names; planned backend field
+  fit?: CandidateFit | null; // absent on ideas saved before the field; null when fit did not apply
   fit_summary: string | null;
   community_note: string | null;
   conclusion: string;

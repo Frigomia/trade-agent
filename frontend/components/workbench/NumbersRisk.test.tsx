@@ -155,10 +155,50 @@ describe("RiskFit", () => {
     expect(within(fit).getByText("AI research summary")).toBeInTheDocument();
   });
 
+  it("lists the fit facts the scan saved, as neutral before and after figures, with what they assume", () => {
+    render(<RiskFit idea={testIdea()} />);
+
+    const fit = screen.getByRole("heading", { name: "Portfolio fit" }).closest("section")!;
+    expect(within(fit).getByText("Software weight").parentElement).toHaveTextContent("3% → 7%");
+    expect(within(fit).getByText("Concentration").parentElement).toHaveTextContent("0.20 → 0.19");
+    expect(within(fit).getByText("Portfolio volatility").parentElement).toHaveTextContent("12.4% → 11.8%");
+    expect(within(fit).getByText("Correlation with your holdings").parentElement).toHaveTextContent("0.31");
+    expect(within(fit).getByText(/assume this company at 5% of your portfolio/i)).toBeInTheDocument();
+  });
+
+  it("leaves out a fit figure the scan could not compute and shows the scan's own notes", () => {
+    const base = testIdea();
+    render(<RiskFit idea={testIdea({ fit: { ...base.fit!, portfolio_vol_before: null, portfolio_vol_after: null, notes: ["Only two holdings could be priced."] } })} />);
+
+    const fit = screen.getByRole("heading", { name: "Portfolio fit" }).closest("section")!;
+    expect(within(fit).queryByText("Portfolio volatility")).not.toBeInTheDocument();
+    expect(within(fit).getByText("Only two holdings could be priced.")).toBeInTheDocument();
+  });
+
+  it("still shows the scan's notes when no fit figure could be computed", () => {
+    const base = testIdea();
+    const none = { sector_weight_before: null, sector_weight_after: null, hhi_before: null, hhi_after: null, portfolio_vol_before: null, portfolio_vol_after: null, avg_correlation_to_portfolio: null };
+    render(<RiskFit idea={testIdea({ fit: { ...base.fit!, ...none, notes: ["Only two holdings could be priced."] } })} />);
+
+    const fit = screen.getByRole("heading", { name: "Portfolio fit" }).closest("section")!;
+    expect(within(fit).getByText("Only two holdings could be priced.")).toBeInTheDocument();
+    expect(within(fit).queryByText(/assume this company/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the score alone for an idea saved before the fit facts existed", () => {
+    render(<RiskFit idea={testIdea({ fit: undefined })} />);
+
+    const fit = screen.getByRole("heading", { name: "Portfolio fit" }).closest("section")!;
+    expect(fit).toHaveTextContent("61 fit, of 100 · computed");
+    expect(within(fit).queryByText("Concentration")).not.toBeInTheDocument();
+    expect(within(fit).queryByText(/assume this company/i)).not.toBeInTheDocument();
+  });
+
   it("says Not applicable for fit when there is nothing to compare with", () => {
-    render(<RiskFit idea={testIdea({ scores: [{ name: "fit", score: null, reasons: [] }], fit_summary: null })} />);
+    render(<RiskFit idea={testIdea({ scores: [{ name: "fit", score: null, reasons: [] }], fit_summary: null, fit: null })} />);
 
     expect(screen.getByText("Not applicable")).toBeInTheDocument();
+    expect(screen.queryByText("Concentration")).not.toBeInTheDocument();
     expect(screen.queryByText(/computed/)).not.toBeInTheDocument();
   });
 });
