@@ -244,7 +244,7 @@ colour, at most 72 characters wide.
 
 Phone-first. On a phone the page is a single column with 16px side padding and a sticky bottom
 tab bar (Today, Discover, Portfolio, Chat, More), each a 20px icon over a label. From 900px a
-204px sidebar appears with the brand mark (a 34px rounded square in Cobalt) and the full list:
+204px sidebar appears with the brand mark (the two-bulls SVG in a 34px square) and the full list:
 Today, Discover (with a small "new" badge), Portfolio, Chat, Track record, Backtests, Preferences,
 Account; the main area has 24px top and 34px side padding. Desktop mocks are drawn at 1280px and phone mocks at 390px.
 
@@ -275,7 +275,10 @@ coloured shadows except the primary button's, no stacked cards with different he
 Round and friendly, in two sizes. Panels are 22px; buttons, tiles, the web box and inputs are 14px.
 Pills (search bar, status pills, segmented controls, filter chips, the circular go button) are
 fully round. Company logos are circles showing the Logo.dev image where available, otherwise a
-two- or three-letter monogram on the Track colour; the app brand mark is a 12px-radius square.
+two- or three-letter monogram on the Track colour. The app brand mark uses
+`frontend/public/los_trading_hermanos_logo.svg`, contained in a square without stretching, in the
+sidebar and signed-out screens. The browser icon uses the same SVG, with a raster favicon fallback
+and a 180px Apple touch icon generated from it.
 Borders are 1px. Dashed and dotted borders carry
 meaning (see below); nothing else is dashed.
 

@@ -2,26 +2,18 @@
 
 import type { ReactNode } from "react";
 import { Box, Link, Typography } from "@mui/material";
-import { SquareCheckBig } from "lucide-react";
+import Image from "next/image";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
 export function BrandMark({ size = 38 }: { size?: number }) {
   return (
-    <Box
-      aria-hidden
-      sx={{
-        width: size,
-        height: size,
-        borderRadius: "12px",
-        bgcolor: "var(--accent-solid)",
-        color: "var(--on-accent)",
-        display: "grid",
-        placeItems: "center",
-        flex: "none",
-      }}
-    >
-      <SquareCheckBig size={Math.round(size * 0.52)} strokeWidth={1.75} />
-    </Box>
+    <Image
+      src="/los_trading_hermanos_logo.svg"
+      alt=""
+      width={size}
+      height={size}
+      style={{ objectFit: "contain", flex: "none" }}
+    />
   );
 }
 
