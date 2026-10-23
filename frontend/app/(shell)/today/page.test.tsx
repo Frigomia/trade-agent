@@ -24,7 +24,7 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 // Each is tested on its own; here they would only add unrelated requests to the shared apiFetch mock.
-vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} }));
+vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => ({ note: null }) }));
 
 // A phone unless a test says otherwise; the layouts differ in where the alerts panel is mounted.
 let desktop = false;

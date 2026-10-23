@@ -21,7 +21,8 @@ vi.mock("@/lib/api/client", () => ({
   ApiError: FakeApiError,
 }));
 // Tested on its own; here it would only add unrelated POSTs.
-vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => {} }));
+const daily = vi.hoisted(() => ({ note: null as string | null }));
+vi.mock("@/lib/portfolio/useDailySnapshot", () => ({ useDailySnapshot: () => ({ note: daily.note }) }));
 
 import PortfolioPage from "./page";
 
@@ -101,6 +102,7 @@ function count(key: string): number {
 describe("PortfolioPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    daily.note = null;
     handlers = {
       "GET /portfolio/summary": () => SUMMARY,
       "GET /portfolio/snapshots": () => SNAPSHOTS,
@@ -132,6 +134,13 @@ describe("PortfolioPage", () => {
     renderFresh();
 
     expect(await screen.findByText(/^Your holdings, allocation and risk\. Updated today, \d\d:\d\d\.$/)).toBeInTheDocument();
+  });
+
+  it("shows the note about a day that was not saved under the chart", async () => {
+    daily.note = "Today's value could not be saved. It is tried again the next time you open Today or Portfolio.";
+    renderFresh();
+
+    expect(await screen.findByText(/Today's value could not be saved/)).toBeInTheDocument();
   });
 
   it("shows the view strip with Holdings current, and no separate plan link", async () => {
