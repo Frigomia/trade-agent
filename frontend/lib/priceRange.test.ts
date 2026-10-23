@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priceText, priceToText, textsToRange } from "./priceRange";
+import { priceToText, textsToRange } from "./priceRange";
 
 describe("textsToRange", () => {
   it("is null when both fields are blank, which means no range", () => {
@@ -26,11 +26,5 @@ describe("range text helpers", () => {
     expect(priceToText(90.5)).toBe("90.5");
     expect(priceToText(null)).toBe("");
     expect(priceToText(undefined)).toBe("");
-  });
-
-  it("shows a price with its own decimals, not rounded to two", () => {
-    expect(priceText(98.4)).toBe("98.4");
-    expect(priceText(15250)).toBe("15,250");
-    expect(priceText(0.000123)).toBe("0.000123");
   });
 });

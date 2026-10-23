@@ -87,6 +87,11 @@ export function targetsText(item: Pick<DiscoverItem, "owned" | "target_weight" |
   const parts: string[] = [];
   if (!item.owned && item.target_weight !== null && item.target_weight > 0) parts.push(`Target ${fractionToPercentText(item.target_weight)}%`);
   const { target_price_low: low, target_price_high: high, currency } = item;
-  if (low !== null && high !== null) parts.push(`Range ${currency ? `${currency} ` : ""}${amountText(low, currency, 6)} to ${amountText(high, currency, 6)}`);
+  if (low !== null && high !== null) parts.push(rangeText(low, high, currency));
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** "Range USD 90.00 to 110.00": the unit once, then both ends with their own decimals. */
+export function rangeText(low: number, high: number, currency: string | null): string {
+  return `Range ${currency ? `${currency} ` : ""}${amountText(low, currency, 6)} to ${amountText(high, currency, 6)}`;
 }
