@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Alert, Box, Button, ButtonBase, IconButton, Typography } from "@mui/material";
+import { Alert, Box, Button, IconButton, Typography } from "@mui/material";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Compass, RefreshCw, Search } from "lucide-react";
 import { DiscoverCard } from "@/components/discover/DiscoverCard";
 import { TargetDialog } from "@/components/discover/TargetDialog";
@@ -109,26 +110,13 @@ export default function DiscoverPage() {
         {list.items.length > 0 && (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-              {/* The approved segmented control: a rounded track, the chosen option a raised panel pill, each
-                  count a small round chip (accent-tinted on the chosen one). A phone spreads the three over the width. */}
-              <Box role="group" aria-label="Show" sx={{ display: { xs: "grid", md: "inline-flex" }, gridTemplateColumns: `repeat(${FILTERS.length}, minmax(0, 1fr))`, gap: "2px", p: "3px", width: { xs: "100%", md: "auto" }, borderRadius: 999, bgcolor: "var(--track)", maxWidth: "100%" }}>
-                {FILTERS.map((f) => {
-                  const on = f.key === filter;
-                  return (
-                    <ButtonBase
-                      key={f.key}
-                      aria-pressed={on}
-                      onClick={() => setFilter(f.key)}
-                      sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: { xs: "4px", md: 1 }, minHeight: { xs: 44, md: 36 }, px: { xs: "4px", md: "14px" }, borderRadius: 999, fontSize: { xs: "0.75rem", md: "0.875rem" }, fontWeight: on ? 650 : 500, whiteSpace: "nowrap", color: on ? "var(--text)" : "var(--text2)", bgcolor: on ? "var(--panel)" : "transparent", boxShadow: on ? "var(--shadow)" : "none" }}
-                    >
-                      {f.label}
-                      <Box component="span" sx={{ minWidth: { xs: 18, md: 22 }, px: { xs: "5px", md: "7px" }, py: "1px", textAlign: "center", borderRadius: 999, fontSize: "0.75rem", fontWeight: 500, fontVariantNumeric: "tabular-nums", bgcolor: on ? "var(--accent-wash)" : "var(--track)", color: on ? "var(--accent)" : "var(--text2)" }}>
-                        {numbers[f.key]}
-                      </Box>
-                    </ButtonBase>
-                  );
-                })}
-              </Box>
+              <SegmentedControl
+                label="Show"
+                fill
+                segments={FILTERS.map((f) => ({ key: f.key, label: f.label, count: numbers[f.key] }))}
+                value={filter}
+                onChange={setFilter}
+              />
               <Box sx={{ flex: 1, display: { xs: "none", md: "block" } }} />
               {/* On a phone the sort has its own row and the select takes the width left of its label. */}
               <Box component="label" sx={{ display: "inline-flex", alignItems: "center", gap: 1, width: { xs: "100%", md: "auto" }, ...muted }}>

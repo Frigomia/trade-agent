@@ -4,6 +4,7 @@ import { useId, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { Box, Typography } from "@mui/material";
 import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 import { Change } from "@/components/ui/Change";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { formatAmount } from "@/lib/format";
 import { buildPriceChart, CHART_HEIGHT, CHART_LEFT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
 
@@ -41,35 +42,16 @@ export function PriceChart({
   const money = (v: number) => `${currency} ${formatAmount(v)}`.trim();
 
   const ranges = (
-    <Box role="group" aria-label="Range" sx={{ display: "inline-flex", gap: "2px", p: "3px", borderRadius: 999, bgcolor: "var(--track)" }}>
-      {RANGES.map((r) => (
-        <Box
-          key={r.key}
-          component="button"
-          type="button"
-          aria-pressed={range === r.key}
-          onClick={() => {
-            setPicked(null);
-            onRange(r.key);
-          }}
-          sx={{
-            minWidth: 36,
-            minHeight: { xs: 36, md: 28 },
-            px: 1,
-            borderRadius: 999,
-            border: 0,
-            fontSize: "0.75rem",
-            fontWeight: range === r.key ? 650 : 500,
-            color: range === r.key ? "var(--text)" : "var(--text2)",
-            bgcolor: range === r.key ? "var(--panel)" : "transparent",
-            boxShadow: range === r.key ? "var(--shadow)" : "none",
-            cursor: "pointer",
-          }}
-        >
-          {r.label}
-        </Box>
-      ))}
-    </Box>
+    <SegmentedControl
+      label="Range"
+      size="compact"
+      segments={RANGES.map((r) => ({ key: r.key, label: r.label }))}
+      value={range}
+      onChange={(key) => {
+        setPicked(null);
+        onRange(key);
+      }}
+    />
   );
 
   if (!geo) {

@@ -147,4 +147,22 @@ describe("TradeSheet", () => {
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
   });
+
+  it("cannot be dismissed while a trade is being logged, and closes once it lands", async () => {
+    let finish: (value: unknown) => void = () => {};
+    apiFetch.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const { onClose, onLogged } = setup();
+
+    fill("3", "121.6");
+    fireEvent.click(screen.getByRole("button", { name: /save to log/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /save to log/i })).toBeDisabled());
+
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    finish({});
+    await waitFor(() => expect(onLogged).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

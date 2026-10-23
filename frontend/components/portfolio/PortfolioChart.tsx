@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, type ReactNode } from "react";
-import { Box, ButtonBase, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { Snapshot } from "@/lib/api/portfolio-types";
 import { toTime } from "@/lib/format";
 
@@ -12,6 +13,7 @@ const RANGES = [
   { label: "All", days: null },
 ] as const;
 type RangeLabel = (typeof RANGES)[number]["label"];
+const RANGE_SEGMENTS = RANGES.map((r) => ({ key: r.label, label: r.label }));
 
 export { toTime };
 
@@ -83,21 +85,7 @@ export function PortfolioChart({
   const header = full && (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5, minWidth: 0 }}>
       {heading}
-      <Box role="group" aria-label="Chart range" sx={{ display: "inline-flex", gap: "2px", ml: "auto", p: "3px", borderRadius: 999, bgcolor: "var(--track)" }}>
-        {RANGES.map((r) => {
-          const on = range === r.label;
-          return (
-            <ButtonBase
-              key={r.label}
-              aria-pressed={on}
-              onClick={() => setRange(r.label)}
-              sx={{ minWidth: 36, minHeight: { xs: 44, md: 28 }, px: 1, borderRadius: 999, fontSize: "0.75rem", fontWeight: on ? 650 : 500, color: on ? "var(--text)" : "var(--text2)", bgcolor: on ? "var(--panel)" : "transparent", boxShadow: on ? "var(--shadow)" : "none" }}
-            >
-              {r.label}
-            </ButtonBase>
-          );
-        })}
-      </Box>
+      <SegmentedControl label="Chart range" size="compact" segments={RANGE_SEGMENTS} value={range} onChange={setRange} sx={{ ml: "auto" }} />
     </Box>
   );
 

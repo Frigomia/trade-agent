@@ -50,11 +50,11 @@ New or sharper in this round:
 
 ## Decisions for you
 
-1. Which option, or a mix (for example 1's layout with 3's Top opportunity).
-2. For option 2: accept a blue accent, which changes DESIGN.md, or keep teal.
-3. Keep the search bar, and what it does.
-4. Keep Save and the Discover destination in this plan.
-5. Wording: "confidence" (recommended) or "conviction".
+1. Resolved 2026-10-20: option 2, Soft (`v2-b-soft`), see `direction-approved.md`.
+2. Resolved 2026-10-21 (#145): the blue accent was accepted and DESIGN.md now describes it (Cobalt, Periwinkle in dark).
+3. Open: the Today search bar is not built (`DESIGN.md`, "Built on Today"). Discover has its own search bar (#169). Decision and build: [#211](https://github.com/Frigomia/trade-agent/issues/211).
+4. Resolved 2026-10-22: Save and the Discover destination are in the plan and built (#168, #169, #170).
+5. Resolved 2026-10-21 (#145): the app says "confidence".
 
 `direction-approved.md` is written only after a choice.
 

@@ -26,9 +26,11 @@ export interface HoldingFormProps {
 // inner component so its state resets each time the drawer closes.
 export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
   const isPhone = useMediaQuery(useTheme().breakpoints.down("md"));
+  // A save or removal in flight cannot be dismissed: the form would unmount with no error display.
+  const [busy, setBusy] = useState(false);
   return (
-    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={onClose} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-labelledby": "holding-form-title" } }}>
-      <HoldingFormBody onClose={onClose} {...rest} />
+    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : onClose} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-labelledby": "holding-form-title", "aria-busy": busy } }}>
+      <HoldingFormBody onClose={onClose} onBusyChange={setBusy} {...rest} />
     </Drawer>
   );
 }
@@ -39,7 +41,8 @@ function HoldingFormBody({
   prefillTicker,
   onClose,
   onSaved,
-}: Omit<HoldingFormProps, "open">) {
+  onBusyChange,
+}: Omit<HoldingFormProps, "open"> & { onBusyChange: (busy: boolean) => void }) {
   const editing = holding !== undefined;
   const [ticker, setTicker] = useState(holding?.ticker ?? prefillTicker ?? "");
   const [name, setName] = useState(holding?.name ?? "");
@@ -49,7 +52,7 @@ function HoldingFormBody({
   const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? "");
   const [showMore, setShowMore] = useState(editing);
   const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
-  const { run, submitting, error, setError } = useAction();
+  const { run, submitting, error, setError } = useAction(onBusyChange);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const { pick, isinFor } = usePickedIsin();
 
@@ -208,7 +211,7 @@ function HoldingFormBody({
       <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={submitting}>
         {replacesExisting ? "Update position" : "Save holding"}
       </Button>
-      <Button type="button" fullWidth sx={{ mt: 1 }} onClick={onClose}>Cancel</Button>
+      <Button type="button" fullWidth sx={{ mt: 1 }} onClick={onClose} disabled={submitting}>Cancel</Button>
       {editing &&
         (confirmingRemove ? (
           <Box sx={{ mt: 2 }}>
