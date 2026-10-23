@@ -16,11 +16,10 @@ from statistics import StatisticsError, correlation, stdev
 from app.discovery.snapshot import SymbolSnapshot, check_freshness
 from app.fx import MAX_PRICE_EUR, MIN_PRICE_EUR, SUPPORTED, EurPrice
 from app.schemas_discovery import CandidateFit, Exposure, PortfolioExposure, PositionValue
-from app.sectors import SECTOR_ALIASES
+from app.sectors import SECTOR_ALIASES, UNCLASSIFIED
 
 MIN_RETURNS = 60
 TRADING_DAYS = 252
-UNCLASSIFIED = "Unclassified"
 RETURN_NOTE = "Risk uses local-currency returns with current EUR weights; FX moves are excluded."
 DRAWDOWN_NOTE = (
     "Biggest fall uses today's holdings at today's weights over the past year, not the portfolio "
