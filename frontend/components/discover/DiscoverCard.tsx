@@ -107,7 +107,7 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
       }}
     >
       <Box sx={{ alignSelf: "start" }}>
-        <Logo name={name} size={48} />
+        <Logo ticker={item.ticker} name={name} size={48} />
       </Box>
       <Box sx={{ minWidth: 0, display: "grid", gap: 0.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>

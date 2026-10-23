@@ -15,7 +15,7 @@ export function OpportunityCard({ rec, earlier = false }: { rec: DiscoveryRecomm
   return (
     <Panel component="article" aria-label={idea.name} sx={{ p: 2.5, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 1.5, alignContent: "start" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-        <Logo name={idea.name} size={40} />
+        <Logo ticker={idea.ticker} name={idea.name} size={40} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography component="h3" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
             {idea.name}

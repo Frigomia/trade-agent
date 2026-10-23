@@ -45,7 +45,7 @@ export function Workbench({ recommendation, onDecided }: { recommendation: Disco
   return (
     <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
-        <Logo name={idea.name} size={isDesktop ? 56 : 44} />
+        <Logo ticker={idea.ticker} name={idea.name} size={isDesktop ? 56 : 44} />
         <Box sx={{ minWidth: 0 }}>
           <Typography component="h1" sx={{ fontSize: { xs: "1.375rem", md: "1.625rem" }, fontWeight: 650, letterSpacing: "-0.025em", lineHeight: 1.15 }}>
             {idea.name}

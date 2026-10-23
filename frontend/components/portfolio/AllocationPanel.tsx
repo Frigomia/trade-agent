@@ -183,7 +183,7 @@ export function AllocationPanel({
             <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0, display: "grid" }}>
               {positions.map((p) => (
                 <Box component="li" key={p.ticker} sx={{ display: "grid", gridTemplateColumns: "28px minmax(0, 1fr) 56px 52px", gap: 1.25, alignItems: "center", py: 0.75, fontSize: "0.8125rem" }}>
-                  <Logo name={p.name} size={28} />
+                  <Logo ticker={p.ticker} name={p.name} size={28} />
                   <Box component="span" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{p.ticker}</Box>
                   <Box aria-hidden sx={{ height: 6, borderRadius: 999, bgcolor: "var(--track)", overflow: "hidden" }}>
                     <Box sx={{ height: "100%", width: `${Math.min(100, (p.share / (positions[0]?.share || 1)) * 100)}%`, bgcolor: "var(--accent)", borderRadius: 999 }} />
