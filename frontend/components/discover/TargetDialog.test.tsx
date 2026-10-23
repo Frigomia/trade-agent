@@ -22,6 +22,8 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 import { TargetDialog } from "./TargetDialog";
+import { RANGE_ERROR } from "@/lib/priceRange";
+import { TARGET_ERROR } from "@/lib/targetWeight";
 
 const ITEM: DiscoverItem = {
   ticker: "ASML",
@@ -49,8 +51,9 @@ function setup(item: DiscoverItem = ITEM) {
   const onSaved = vi.fn();
   const onClose = vi.fn();
   const onStale = vi.fn();
-  render(<TargetDialog item={item} onClose={onClose} onSaved={onSaved} onStale={onStale} />);
-  return { onSaved, onClose, onStale };
+  const view = render(<TargetDialog item={item} onClose={onClose} onSaved={onSaved} onStale={onStale} />);
+  const show = (next: DiscoverItem | null) => view.rerender(<TargetDialog item={next} onClose={onClose} onSaved={onSaved} onStale={onStale} />);
+  return { onSaved, onClose, onStale, show };
 }
 const call = () => apiFetch.mock.calls[0] as [string, RequestInit];
 const body = () => JSON.parse(call()[1].body as string);
@@ -136,7 +139,7 @@ describe("TargetDialog", () => {
     fireEvent.change(low(), { target: { value: "90" } });
     save();
     expect(apiFetch).not.toHaveBeenCalled();
-    expect(screen.getAllByText(/both ends of the range/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/both ends of the range/i)).toHaveLength(1); // under the fields, not repeated in an alert
 
     fireEvent.change(high(), { target: { value: "80" } });
     save();
@@ -160,6 +163,17 @@ describe("TargetDialog", () => {
     save();
     expect(apiFetch).not.toHaveBeenCalled();
     expect(screen.getAllByText(/0 to 100/).length).toBeGreaterThan(0);
+  });
+
+  it("shows both problems at once: the weight in the alert and the range under its fields", () => {
+    setup();
+    fireEvent.change(field(), { target: { value: "101" } });
+    fireEvent.change(low(), { target: { value: "5" } }); // one end alone
+    save();
+
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.getAllByText(TARGET_ERROR).length).toBeGreaterThan(0);
+    expect(screen.getByText(RANGE_ERROR)).toBeInTheDocument();
   });
 
   it("for an owned company, hides the weight, says where it is set, and sends only the range", async () => {
@@ -211,6 +225,67 @@ describe("TargetDialog", () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: /save target/i })).toBeDisabled();
+  });
+
+  it("keeps the dialog open with the reason after the refreshed list no longer has the company, until it is closed", async () => {
+    apiFetch.mockRejectedValueOnce(new FakeApiError(404, "Not in your Discover list"));
+    const { onClose, show } = setup();
+    fireEvent.change(field(), { target: { value: "3" } });
+    save();
+    expect(await screen.findByText("Not in your Discover list")).toBeInTheDocument();
+
+    show(null); // the list was read again and the company is not in it
+    await new Promise((resolve) => setTimeout(resolve, 400)); // longer than the dialog's exit transition
+
+    expect(screen.getByText("Not in your Discover list")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("does not reopen when a save is refused as gone after the dialog was left", async () => {
+    let refuse: (reason: Error) => void = () => {};
+    apiFetch.mockReturnValueOnce(new Promise((_, reject) => (refuse = reject)));
+    const { onStale, show } = setup();
+    fireEvent.change(field(), { target: { value: "3" } });
+    save();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" })); // left before the answer
+    show(null);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    refuse(new FakeApiError(404, "Not in your Discover list"));
+    await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("starts a fresh form when the same company is reopened while the last one is still fading out", () => {
+    const { show } = setup();
+    fireEvent.change(field(), { target: { value: "9" } });
+    show(null);
+
+    show(ITEM);
+
+    expect(field().value).toBe("7.2");
+  });
+
+  it("does not blank the dialog while it fades out", () => {
+    const { show } = setup();
+
+    show(null);
+
+    expect(screen.getByText("Target for ASML Holding")).toBeInTheDocument();
+  });
+
+  it("says so when the company changed elsewhere meanwhile, and keeps the untouched fields as opened", () => {
+    const { show } = setup();
+    expect(screen.queryByText(/changed elsewhere/i)).not.toBeInTheDocument();
+
+    show({ ...ITEM, target_weight: 0.1 });
+
+    expect(screen.getByText(/changed elsewhere while you were editing/i)).toBeInTheDocument();
+    expect(field().value).toBe("7.2"); // what it held when it opened
   });
 
   it("reads the list again, keeping the reason, when the company turned out to be owned (409)", async () => {

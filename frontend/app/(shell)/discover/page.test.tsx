@@ -533,7 +533,7 @@ describe("DiscoverPage editing targets", () => {
     expect(count("GET /discover")).toBe(1); // the answer has no quote: the card keeps its price
   });
 
-  it("reads the list again when the company turns out to be gone, and closes the editor once it has left the list", async () => {
+  it("reads the list again when the company turns out to be gone, and keeps the editor open with the reason until it is closed", async () => {
     handlers["PATCH /discover/HLDN"] = () => {
       throw new FakeApiError(404, "Not in your Discover list");
     };
@@ -544,9 +544,16 @@ describe("DiscoverPage editing targets", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Save target" }));
 
+    // The company has left the list behind the dialog, but the reason stays on screen until it is closed.
+    await waitFor(() => expect(count("GET /discover")).toBe(2));
+    await waitFor(() => expect(screen.queryByText("Halden Systems")).not.toBeInTheDocument()); // the card is gone
+    expect(within(dialog).getByText("Target for Halden Systems")).toBeInTheDocument(); // the dialog still names it
+    await new Promise((resolve) => setTimeout(resolve, 400)); // longer than the dialog's exit transition
+    expect(within(dialog).getByText("Not in your Discover list")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Save target" })).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(screen.queryByText("Halden Systems")).not.toBeInTheDocument();
-    expect(count("GET /discover")).toBe(2);
   });
 
   it("closes without a request when nothing was changed", async () => {
