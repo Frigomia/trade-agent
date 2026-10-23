@@ -20,11 +20,31 @@ interface Props {
   onStale: () => void;
 }
 
-// The body is keyed by ticker so its text resets for each item.
+// The body is keyed by ticker so its text resets for each item. The last item stays in the body while
+// the dialog fades out, so it does not blank first; and a company found to be gone keeps the dialog open
+// with its message, even though the refreshed list no longer has it, until the person closes it.
 export function TargetDialog({ item, onClose, onSaved, onStale }: Props) {
+  const [kept, setKept] = useState(item);
+  if (item !== null && item !== kept) setKept(item);
+  const [gone, setGone] = useState(false);
+  const active = item !== null || gone;
+  // Each time the dialog opens is a new session, so reopening the same company while the last one is
+  // still fading out starts with a fresh form.
+  const [session, setSession] = useState(0);
+  const [wasActive, setWasActive] = useState(active);
+  if (active !== wasActive) {
+    setWasActive(active);
+    if (active) setSession(session + 1);
+  }
+  const close = () => {
+    setGone(false);
+    onClose();
+  };
   return (
-    <Dialog open={item !== null} onClose={onClose} fullWidth maxWidth="xs">
-      {item && <Body key={item.ticker} item={item} onClose={onClose} onSaved={onSaved} onStale={onStale} />}
+    <Dialog open={active} onClose={close} fullWidth maxWidth="xs">
+      {kept && (
+        <Body key={`${kept.ticker}:${session}`} item={kept} active={active} onClose={close} onSaved={onSaved} onStale={onStale} onGone={() => setGone(true)} />
+      )}
     </Dialog>
   );
 }
@@ -34,7 +54,7 @@ export function TargetDialog({ item, onClose, onSaved, onStale }: Props) {
  * not pence): the backend converts. For a company that is owned the weight target lives on the holding,
  * so only the range is offered. Only what was edited is sent.
  */
-function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose: () => void; onSaved: (updated: DiscoverItem) => void; onStale: () => void }) {
+function Body({ item, active, onClose, onSaved, onStale, onGone }: { item: DiscoverItem; active: boolean; onClose: () => void; onSaved: (updated: DiscoverItem) => void; onStale: () => void; onGone: () => void }) {
   const owned = item.owned;
   // The unit of a range is the card's currency: without it no range can be set. One already saved
   // can still be changed or cleared (the backend refuses a new value it cannot convert).
@@ -43,11 +63,8 @@ function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose
   // False once the dialog was left (Esc, Cancel): a save finishing later must not close the next one.
   const open = useRef(true);
   useEffect(() => {
-    open.current = true;
-    return () => {
-      open.current = false;
-    };
-  }, []);
+    open.current = active;
+  }, [active]);
   // What the fields held when the dialog opened. "Edited" is measured against this, not against the
   // live list: a refresh of the same company (another tab, an earlier save) must not turn a field the
   // person never touched into part of the request.
@@ -70,16 +87,23 @@ function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose
   const bothTyped = lowText.trim() !== "" && highText.trim() !== "";
   const rangeInvalid = rangeEdited && range === undefined && (tried || bothTyped);
   const name = nameOf(item);
+  // The list read again while this was open (another tab, an earlier save): untouched fields keep what
+  // they held when it opened, so the person is told rather than left to wonder.
+  const changedMeanwhile =
+    active &&
+    !submitting &&
+    (fractionToPercentText(item.target_weight) !== opened.weight ||
+      priceToText(item.target_price_low) !== opened.low ||
+      priceToText(item.target_price_high) !== opened.high);
 
   async function save() {
     const target = weightEdited ? percentTextToFraction(text) : undefined;
-    if (weightEdited && target === undefined) {
-      setError(TARGET_ERROR);
-      return;
-    }
-    if (rangeEdited && range === undefined) {
-      setTried(true);
-      setError(RANGE_ERROR);
+    const weightBad = weightEdited && target === undefined;
+    const rangeBad = rangeEdited && range === undefined;
+    // Both problems are shown at once: the weight in the alert, the range under its fields.
+    if (weightBad || rangeBad) {
+      if (rangeBad) setTried(true);
+      setError(weightBad ? TARGET_ERROR : null);
       return;
     }
     if (!weightEdited && !rangeEdited) {
@@ -102,6 +126,7 @@ function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
           setGone(true); // removed elsewhere: say so, and do not offer the same failing save again
+          if (open.current) onGone(); // and keep this open: the list is about to stop having the company (not if it was left)
           onStale();
         } else if (err instanceof ApiError && err.status === 409) {
           onStale(); // now owned: the list says so on its next read and the weight field goes
@@ -156,6 +181,11 @@ function Body({ item, onClose, onSaved, onStale }: { item: DiscoverItem; onClose
         {rangeInvalid && (
           <Typography role="alert" sx={{ fontSize: "0.75rem", color: "error.main" }}>
             {RANGE_ERROR}
+          </Typography>
+        )}
+        {changedMeanwhile && (
+          <Typography role="status" sx={{ fontSize: "0.75rem", color: "var(--text2)", mt: 1 }}>
+            This company changed elsewhere while you were editing. Fields you have not touched still show what you opened. Close this to see the current values.
           </Typography>
         )}
         {error && (
