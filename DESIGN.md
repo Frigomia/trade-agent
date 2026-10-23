@@ -394,7 +394,7 @@ the scan states), the round monogram `Logo`, the `Meter` (confidence and risk as
 and the `Change` (signed, arrowed price move). Save to Discover adds the company to Discover (also
 from the workbench's decision rail and phone bar), then becomes a link to the list. The holdings
 recommendations sit under "Portfolio alerts" (a list with monogram logos on desktop, cards on a
-phone); the search bar and Watchlist insights are not built. The page title is 30px (26px on a
+phone), and Watchlist insights sit beside them; the search bar is not built. The page title is 30px (26px on a
 phone) on every screen.
 
 **Built on the company page** (`/today/[id]` for a discovery idea): the Workbench shell (identity, a

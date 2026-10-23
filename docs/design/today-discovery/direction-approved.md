@@ -12,6 +12,6 @@ Choice history:
 
 Chosen: option 2, Soft, exactly as in `v2-b-soft.html` (screenshots `shots/v2b-*`), with no restyling from the visual brief. `v3-evidence.html` and the `v2-c` file are kept only as unchosen alternatives.
 
-What this choice means: light-first soft look with a blue accent (a navy dark variant), search bar, Discover navigation item, Save to Discover, round logos and the circular go button, all as shown in the mock. It changes the app palette from teal to blue, so DESIGN.md needs updating when it is built.
+What this choice means: light-first soft look with a blue accent (a navy dark variant), search bar, Discover navigation item, Save to Discover, round logos and the circular go button, all as shown in the mock. It changed the app palette from teal to blue; DESIGN.md was updated when it was built (#145).
 
-Open items that this choice leaves undecided (see `SPEC-v2.md`, "Decisions for you"): what the search bar does, whether Save and the Discover screen are in this plan, "confidence" versus "conviction" wording (the mock uses confidence).
+Open items this choice left (see `SPEC-v2.md`, "Decisions for you", for where each landed): only the Today search bar is still open (#211).
