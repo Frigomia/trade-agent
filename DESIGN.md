@@ -319,6 +319,11 @@ Logo circle (48px list, 56 to 64px header), name (Lead, 650) and ticker, exchang
 in muted label text, price and daily change on the right (signed, arrowed, coloured by movement),
 a status pill, one line of AI insight with the spark icon, and the actions at the end.
 
+Sector labels in Today cards and the company header use the shared `Sector` type and
+`SECTOR_ICONS` mapping in `frontend/lib/sectors.ts`. Each of the 11 provider sectors has its own
+Lucide icon; unknown sectors use Layers. Icons are decorative and the sector/industry text stays
+visible. Select the icon from the sector alone, not the combined sector and industry label.
+
 ### Status pills (shape plus word)
 - **AI analyzed:** check icon, Cobalt Wash fill, Cobalt text.
 - **Not analyzed:** dashed circle icon, dashed edge, no fill.

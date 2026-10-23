@@ -2,11 +2,12 @@
 
 import { useId, useState, type KeyboardEvent } from "react";
 import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { Globe, Layers } from "lucide-react";
+import { Globe } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { listingText, sectorText } from "@/lib/discovery";
+import { SectorIcon } from "@/components/ui/SectorIcon";
 import { DecisionRail, DecisionSummary, PhoneActions } from "./DecisionRail";
 import { Numbers } from "./Numbers";
 import { Overview } from "./Overview";
@@ -54,7 +55,7 @@ export function Workbench({ recommendation, onDecided }: { recommendation: Disco
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5, fontSize: "0.75rem", color: "var(--text2)" }}>
             {sector && (
               <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-                <Layers size={13} aria-hidden /> {sector}
+                <SectorIcon sector={idea.snapshot?.sector} size={13} /> {sector}
               </Box>
             )}
             {country && (

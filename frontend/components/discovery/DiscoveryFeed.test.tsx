@@ -120,6 +120,14 @@ function renderFeed(ideas: DiscoveryIdeas | undefined, over: Partial<Parameters<
 }
 
 describe("DiscoveryFeed", () => {
+  it("uses the sector icon even when the label includes an industry", () => {
+    const snapshot = { ...idea("Halden").snapshot!, sector: "Consumer Defensive", industry: "Farm Products" };
+    renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden", { snapshot })] });
+
+    const label = screen.getByText("Consumer Defensive · Farm Products");
+    expect(label.querySelector("svg.lucide-shopping-basket")).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("shows the top opportunity with its reasoning, risk, meters and saved price", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems"), rec(2, "Brevik Medical")] });
 
