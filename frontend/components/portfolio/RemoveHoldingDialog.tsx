@@ -42,7 +42,9 @@ export function RemoveHoldingDialog({
           <DialogTitle>Remove {holding.ticker}?</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              This removes {holding.name} from your portfolio, with its shares and purchase details. It does not sell anything.
+              {holding.shares <= 0
+                ? `This removes ${holding.name} from your closed positions, with its purchase details. It does not sell anything.`
+                : `This removes ${holding.name} from your portfolio, with its shares and purchase details. It does not sell anything.`}
             </DialogContentText>
             {error && (
               <Alert severity="error" sx={{ mt: 1.5 }}>

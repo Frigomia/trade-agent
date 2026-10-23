@@ -17,6 +17,7 @@ import { RiskPanel } from "@/components/portfolio/RiskPanel";
 import { FirstHolding } from "@/components/portfolio/FirstHolding";
 import { HoldingForm } from "@/components/portfolio/HoldingForm";
 import { effectiveTarget, fractionToPercentText } from "@/lib/targetWeight";
+import { ClosedPositions } from "@/components/portfolio/ClosedPositions";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -188,17 +189,23 @@ export default function PortfolioPage() {
   const { data: snapshots, error: snapshotsError } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
   const { note: snapshotNote } = useDailySnapshot();
 
-  // The trade sheet opens for one holding, from its row menu.
+  // The trade sheet opens for one holding, from its row menu or the closed positions list.
   const [trade, setTrade] = useState<{ open: boolean; ticker?: string }>({ open: false });
   // The holding in the removal dialog is kept after it closes, so the text does not blank mid-fade.
   const [removingHolding, setRemovingHolding] = useState<HoldingSummary | null>(null);
   const [removeOpen, setRemoveOpen] = useState(false);
+  const askRemove = (holding: HoldingSummary) => {
+    setRemovingHolding(holding);
+    setRemoveOpen(true);
+  };
   const [holdingForm, setHoldingForm] = useState<{ open: boolean; holding?: HoldingSummary }>({
     open: false,
   });
 
   const holdings = summary?.holdings ?? [];
   const open = holdings.filter((h) => h.shares > 0);
+  // Sold-out holdings have no row above; they are listed apart so a trade can still be logged for one.
+  const closed = holdings.filter((h) => h.shares <= 0);
   // The allocation donut's grouping, and the group a legend row selected: it filters the table.
   const [dim, setDim] = useState<AllocationDim>("sector");
   const [selected, setSelected] = useState<string | null>(null);
@@ -260,7 +267,12 @@ export default function PortfolioPage() {
       )}
 
       <Box sx={{ mt: "20px" }}>
-      {summary && open.length === 0 && <FirstHolding onAdd={() => setHoldingForm({ open: true })} />}
+      {summary && holdings.length === 0 && <FirstHolding onAdd={() => setHoldingForm({ open: true })} />}
+      {summary && open.length === 0 && closed.length > 0 && (
+        <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", mb: 1.5 }}>
+          You have no open positions. Add a holding to start again, or log a trade for a closed one below.
+        </Typography>
+      )}
       {open.length > 0 && (
         <Panel component="section" aria-label="Your holdings" sx={{ p: "12px 18px 8px" }}>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, pt: 0.5 }}>
@@ -308,14 +320,16 @@ export default function PortfolioPage() {
               scale={scale}
               onEdit={() => setHoldingForm({ open: true, holding })}
               onLogTrade={() => setTrade({ open: true, ticker: holding.ticker })}
-              onRemove={() => {
-                setRemovingHolding(holding);
-                setRemoveOpen(true);
-              }}
+              onRemove={() => askRemove(holding)}
             />
           ))}
         </Panel>
       )}
+      <ClosedPositions
+        holdings={closed}
+        onLogTrade={(holding) => setTrade({ open: true, ticker: holding.ticker })}
+        onRemove={askRemove}
+      />
 
       </Box>
 
