@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 760" role="img" aria-label="Los Trading Hermanos two bulls logo">
+<defs>
+ <linearGradient id="left" x1="0" y1="1" x2=".85" y2="0"><stop stop-color="#052477"/><stop offset=".48" stop-color="#0750cc"/><stop offset="1" stop-color="#1599ff"/></linearGradient>
+ <linearGradient id="right" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#1269e9"/><stop offset=".53" stop-color="#4aa9ff"/><stop offset="1" stop-color="#a3eeff"/></linearGradient>
+ <linearGradient id="leftHorn" x1="0" y1="1" x2=".9" y2="0"><stop stop-color="#00318f"/><stop offset=".7" stop-color="#0876f6"/><stop offset="1" stop-color="#6bdeff"/></linearGradient>
+ <linearGradient id="rightHorn" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#1377f7"/><stop offset=".7" stop-color="#66caff"/><stop offset="1" stop-color="#c4f8ff"/></linearGradient>
+ <linearGradient id="bar" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#1682ee"/><stop offset="1" stop-color="#a6e8ff"/></linearGradient>
+ <linearGradient id="bar2" x1="0" y1="1" x2=".8" y2="0"><stop stop-color="#0b49c4"/><stop offset="1" stop-color="#33c8ff"/></linearGradient>
+</defs>
+<!-- left bull -->
+<path fill="url(#left)" d="M438 244 C391 211 349 192 298 198 C249 205 218 237 176 268 C140 294 113 309 104 334 C98 350 118 371 142 381 C165 390 180 371 206 366 C237 360 262 362 283 377 C312 400 311 434 293 474 C275 514 256 550 273 596 C281 619 297 634 310 643 C292 606 306 574 332 544 C376 492 425 462 463 415 C492 379 491 335 471 299 C463 280 451 259 438 244Z"/>
+<path fill="url(#leftHorn)" d="M175 268 C188 219 227 190 289 170 C361 147 409 124 424 66 C434 119 416 156 376 184 C344 205 305 219 277 240 C243 254 211 264 175 268Z"/>
+<path fill="#073895" opacity=".62" d="M105 336 C158 345 215 325 261 313 C319 296 370 302 401 342 C431 384 408 427 369 466 C339 496 307 535 290 574 C299 510 327 464 308 420 C290 376 250 353 206 366 C160 380 139 393 105 350Z"/>
+<path fill="#46bdff" opacity=".52" d="M175 269 C218 247 269 234 314 223 C355 211 398 175 419 111 C417 159 389 186 346 208 C286 238 232 266 175 269Z"/>
+<!-- right bull -->
+<path fill="url(#right)" d="M562 244 C609 211 651 192 702 198 C751 205 782 237 824 268 C860 294 887 309 896 334 C902 350 882 371 858 381 C835 390 820 371 794 366 C763 360 738 362 717 377 C688 400 689 434 707 474 C725 514 744 550 727 596 C719 619 703 634 690 643 C708 606 694 574 668 544 C624 492 575 462 537 415 C508 379 509 335 529 299 C537 280 549 259 562 244Z"/>
+<path fill="url(#rightHorn)" d="M825 268 C812 219 773 190 711 170 C639 147 591 124 576 66 C566 119 584 156 624 184 C656 205 695 219 723 240 C757 254 789 264 825 268Z"/>
+<path fill="#c6f6ff" opacity=".5" d="M895 337 C842 344 785 326 739 313 C681 296 630 302 599 342 C569 384 592 427 631 466 C661 496 693 535 710 574 C701 510 673 464 692 420 C710 376 750 353 794 366 C840 380 861 393 895 350Z"/>
+<path fill="#b3f1ff" opacity=".65" d="M825 269 C782 247 731 234 686 223 C645 211 602 175 581 111 C583 159 611 186 654 208 C714 238 768 266 825 269Z"/>
+<!-- bars -->
+<path fill="url(#bar)" d="M364 530 Q364 521 371 516 L414 482 Q428 472 428 490 L428 684 Q428 693 419 693 L373 693 Q364 693 364 684Z"/>
+<path fill="url(#bar2)" d="M445 452 Q445 442 454 435 L493 405 Q508 394 508 414 L508 684 Q508 693 499 693 L454 693 Q445 693 445 684Z"/>
+<path fill="url(#bar)" d="M525 494 Q525 479 539 488 L587 522 Q595 528 595 539 L595 684 Q595 693 586 693 L534 693 Q525 693 525 684Z"/>
+<path fill="#c5f4ff" opacity=".32" d="M364 530 Q364 521 371 516 L414 482 Q428 472 428 490 L428 510 L364 579Z"/>
+</svg>

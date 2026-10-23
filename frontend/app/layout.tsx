@@ -8,6 +8,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Trade Agent",
   description: "A personal, advisory-only trading assistant.",
+  icons: {
+    icon: { url: "/los_trading_hermanos_logo.svg", type: "image/svg+xml", sizes: "any" },
+    apple: { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
