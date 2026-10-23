@@ -318,7 +318,7 @@ describe("PortfolioPage", () => {
     it("is not requested for a portfolio with no open holding", async () => {
       handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[2]], watchlist: [] });
       renderFresh();
-      await screen.findByText("Add your first holding");
+      await screen.findByText(/you have no open positions/i);
 
       expect(count("GET /portfolio/analytics")).toBe(0);
       expect(screen.queryByRole("region", { name: "Risk and analytics" })).not.toBeInTheDocument();
@@ -347,6 +347,39 @@ describe("PortfolioPage", () => {
 
       const ticker = (await screen.findByLabelText("Ticker")) as HTMLSelectElement;
       expect(ticker.value).toBe("MSFT");
+    });
+
+    it("lists a sold-out holding apart from Your holdings, and opens the trade sheet for it", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      const holdings = screen.getByRole("region", { name: "Your holdings" });
+      expect(within(holdings).queryByText("OLD")).not.toBeInTheDocument();
+      const closed = screen.getByRole("region", { name: "Closed positions" });
+      expect(within(closed).getByText("Sold Out Co · Closed")).toBeInTheDocument();
+
+      fireEvent.click(within(closed).getByRole("button", { name: "Log a trade for OLD" }));
+      const ticker = (await screen.findByLabelText("Ticker")) as HTMLSelectElement;
+      expect(ticker.value).toBe("OLD");
+    });
+
+    it("still lists the closed positions when every holding has been sold", async () => {
+      handlers["GET /portfolio/summary"] = () => ({ ...SUMMARY, holdings: [SUMMARY.holdings[2]], total_market_value: 0 });
+      renderFresh();
+
+      expect(await screen.findByRole("region", { name: "Closed positions" })).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Your holdings" })).not.toBeInTheDocument();
+      // Not the first-run prompt: this person has held companies before.
+      expect(screen.queryByText(/add your first holding/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/you have no open positions/i)).toBeInTheDocument();
+    });
+
+    it("asks before removing a closed position too", async () => {
+      renderFresh();
+      await screen.findByText("Apple Inc.");
+
+      fireEvent.click(within(screen.getByRole("region", { name: "Closed positions" })).getByRole("button", { name: "Remove OLD" }));
+      expect(await screen.findByText("Remove OLD?")).toBeInTheDocument();
     });
 
     it("asks before removing, says it sells nothing, and refreshes the portfolio after", async () => {

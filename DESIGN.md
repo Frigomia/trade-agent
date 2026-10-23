@@ -435,7 +435,9 @@ Updated today, 14:14." (the time the figures were last read) and the four views 
 (Holdings, This month, Saved plans, Orders), as in the Explorer mock. The page header has only Add holding; the
 watchlist panel, the per-row watch toggle, the header's Log a trade and Record snapshot are gone:
 watching a company is Discover's job, a trade is logged from the row menu, and the value history is
-saved by itself once a day when Today or Portfolio is opened. Below the table, "Risk and analytics" (measured, not scored) reads
+saved by itself once a day when Today or Portfolio is opened. A holding sold down to zero has no row in the
+table; a collapsed "Closed positions" line under it lists each with Log a trade and Remove, so a re-buy can still
+be logged (a sale is refused: there are no shares to sell). Below that, "Risk and analytics" (measured, not scored) reads
 `GET /portfolio/analytics`: volatility, largest position, top three together, effective holdings,
 average correlation with the most correlated pair, and the biggest fall of the past year (a plain
 negative percent, from peak to low over the shared price history, up to a year, with today's holdings and weights), each with what it means; what could not be
