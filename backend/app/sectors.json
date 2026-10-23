@@ -1,0 +1,13 @@
+{
+  "Basic Materials": ["materials"],
+  "Communication Services": [],
+  "Consumer Cyclical": ["consumer discretionary"],
+  "Consumer Defensive": ["consumer staples"],
+  "Energy": [],
+  "Financial Services": ["financials", "finance"],
+  "Healthcare": ["health care"],
+  "Industrials": [],
+  "Real Estate": [],
+  "Technology": ["tech", "information technology", "software"],
+  "Utilities": []
+}
