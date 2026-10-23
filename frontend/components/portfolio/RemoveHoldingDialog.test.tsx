@@ -33,6 +33,13 @@ describe("RemoveHoldingDialog", () => {
     expect(screen.getByText(/does not sell anything/i)).toBeInTheDocument();
   });
 
+  it("says a sold-out holding is removed from the closed positions, with no shares to remove", () => {
+    show({ ...HOLDING, shares: 0 });
+
+    expect(screen.getByText(/removes Berkshire Hathaway from your closed positions, with its purchase details/i)).toBeInTheDocument();
+    expect(screen.queryByText(/its shares/i)).not.toBeInTheDocument();
+  });
+
   it("is closed for no holding, and while open is false", () => {
     show(null);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
