@@ -70,13 +70,13 @@ All three keep the app's tokens (Geist, the teal palette, 18 px panels, 14 px co
 
 ## Decisions for you
 
-1. Which direction, or a mix (for example B's phone feed with C's table on desktop).
-2. The type ramp: the mocks add a 15 px "lead" step for the main reading text, and A adds a 32 px display step for the featured name. Both are outside DESIGN.md's ramp; keep them (and update DESIGN.md), or snap to the existing steps.
-3. A new **Discover** destination appears in the navigation (marked "new"). It does not exist yet. Keep it in this plan or drop "Save to Discover" for now.
-4. Whether the scan can say "you can leave this page": true on the server (the job keeps running), but the current Today page keeps the job id only in memory, so the front end must store it.
-5. Refresh costs one monthly run. The mocks say so on the button ("1 of 100 runs"); confirm that is the wording you want.
+1. Resolved 2026-10-20: Soft (`v2-b-soft`), see `direction-approved.md`.
+2. Resolved 2026-10-21 (#145): the 15 px lead step is in DESIGN.md's ramp (Lead, 0.9375rem). The 32 px display step was not added: the Top opportunity name uses the Title step (1.25rem).
+3. Resolved 2026-10-22: the Discover destination is in the plan and built (#168, #169), with Save to Discover (#170).
+4. Resolved 2026-10-21 (b7e813b): the job id is kept in `sessionStorage` (`frontend/lib/useDiscovery.ts`), so the scan resumes after the person leaves Today, and the page says the scan keeps running.
+5. Resolved 2026-10-21 (#145): the refresh button reads "N of M runs" (`ScanBar`).
 
 ## Next step
 
-No `direction-approved.md` is written yet: it is created once a direction is chosen. After that the plan is to build the chosen
-direction in `frontend/` against the gaps above, starting with Gaps 3, 4 and 6, which change what the Top opportunity card can show.
+Done. `direction-approved.md` records the choice (Soft, 2026-10-20) and Today is built; the open question, the Today search bar, is
+[#211](https://github.com/Frigomia/trade-agent/issues/211). The pull requests are listed in the README; the gap table above is the original analysis and is not re-checked row by row.

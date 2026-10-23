@@ -48,9 +48,9 @@ Open `dc-a-list.html`, `dc-b-table.html` or `dc-c-cards.html` (add `?theme=dark`
 ## Decisions for you
 
 1. Resolved: option 1, List, was chosen (see `direction-approved.md`).
-2. Whether single-company "Analyze" is in the first version (it needs a new backend path and spends a monthly run), or whether Discover only shows research that a scan already produced.
-3. What the simple company overview contains when no report exists (price, chart, facts, and an Analyze button), since it is not designed yet.
-4. Whether Remove needs a confirm step (the mocks use Undo instead).
-5. How many companies the watchlist can hold, which decides whether the table or the cards are the better fit.
+2. Open: single-company Analyze is not in the built version; Discover only shows research a scan already produced. Decision and build: [#193](https://github.com/Frigomia/trade-agent/issues/193).
+3. Open: the overview of a company with no report is not designed. Design: [#194](https://github.com/Frigomia/trade-agent/issues/194).
+4. Resolved 2026-10-22 (#169): Remove has no confirm step; it uses Undo for eight seconds, as in the mocks.
+5. Resolved 2026-10-22 (#168): the list holds at most 100 companies (`MAX_DISCOVER`, the watchlist cap), and the cards fit that.
 
-The direction is approved (`direction-approved.md`); the open questions above still need answers before the build.
+The direction is approved (`direction-approved.md`) and built; decisions 2 and 3 are open in #193 and #194.

@@ -46,9 +46,9 @@ How each came about: 1 follows the reference you gave, 2 is built around the mos
 ## Decisions for you
 
 1. Resolved: option 3, Explorer, was chosen (see `direction-approved.md`).
-2. Which analytics to build first, and whether a short history should still show the volatility and correlation figures.
-3. Whether country and currency come from stored fields or a lookup, and whether the summary total is always EUR.
-4. Whether the segmented views stay as they are, with Holdings as the redesigned view.
+2. Resolved 2026-10-22 (#165, #172): volatility, correlation, effective holdings and the biggest fall are built. With a short history they show as unavailable, not as a partial figure: fewer than 60 matching return intervals gives no volatility or biggest fall (`backend/app/analysis/portfolio.py`).
+3. Resolved 2026-10-22 (#165): country comes from the instrument's profile lookup and currency from the quote, not stored fields. Risk weights use each holding's current EUR value; a holding with no usable conversion is left out and named.
+4. Resolved 2026-10-22 (#180): the four views stay and are the Soft pill track (Holdings, This month, Saved plans, Orders), with Holdings as the redesigned view.
 5. Resolved 2026-10-22: the watchlist toggle and panel were removed from Portfolio. Editing a saved company's target and price range moved to Discover (built, #174 and #175).
 
-The direction is approved (`direction-approved.md`); the open questions above still need answers before the build.
+The direction is approved (`direction-approved.md`) and built; every decision above is resolved.
