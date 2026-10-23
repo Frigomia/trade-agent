@@ -320,7 +320,9 @@ in muted label text, price and daily change on the right (signed, arrowed, colou
 a status pill, one line of AI insight with the spark icon, and the actions at the end.
 
 Sector labels in Today cards and the company header use the shared `Sector` type and
-`SECTOR_ICONS` mapping in `frontend/lib/sectors.ts`. Each of the 11 provider sectors has its own
+`SECTOR_ICONS` mapping in `frontend/lib/sectors.ts`, using the canonical catalog and aliases in
+`backend/app/sectors.json`. The mocks' Software, Health Care and Consumer Staples labels resolve
+to Technology, Healthcare and Consumer Defensive. Each of the 11 provider sectors has its own
 Lucide icon; unknown sectors use Layers. Icons are decorative and the sector/industry text stays
 visible. Select the icon from the sector alone, not the combined sector and industry label.
 

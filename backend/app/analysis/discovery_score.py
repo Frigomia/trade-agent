@@ -18,6 +18,7 @@ from app.schemas_discovery import (
     IdeaOut,
     ResearchEvidence,
 )
+from app.sectors import Sector
 
 OVERALL_WEIGHTS = {"quality": 1, "valuation": 1}
 NO_OPPORTUNITY_MIN_OVERALL = 60
@@ -28,7 +29,7 @@ VALUE_STYLE_MIN = 70
 GROWTH_STYLE_MIN = 0.1
 INCOME_STYLE_MIN = 0.03
 DEFENSIVE_MIN_ROE = 0.0
-DEFENSIVE_SECTORS = {"Consumer Defensive", "Healthcare", "Utilities"}
+DEFENSIVE_SECTORS: set[Sector] = {"Consumer Defensive", "Healthcare", "Utilities"}
 FIT_COMPONENT_WEIGHTS = {"correlation": 1, "volatility": 1, "concentration": 1}
 
 
