@@ -94,7 +94,7 @@ function gainUnavailableNote(summary: Pick<PortfolioSummary, "unknown_basis_coun
  * The slim strip above the allocation: total value, gain or loss, today's change and the value
  * chart. Gain or loss and the day's change say "Not available" and why, never a made-up zero.
  */
-export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed = false }: { summary: PortfolioSummary; openCount: number; snapshots: Snapshot[] | undefined; snapshotsFailed?: boolean }) {
+export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed = false, snapshotNote = null }: { summary: PortfolioSummary; openCount: number; snapshots: Snapshot[] | undefined; snapshotsFailed?: boolean; snapshotNote?: string | null }) {
   const noCosts = summary.pl_covered_count === 0;
   const left = summary.unknown_basis_count ?? 0;
   const up = summary.total_pl >= 0;
@@ -130,6 +130,7 @@ export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed =
       </Box>
       <Box sx={{ minWidth: 0 }}>
         <Chart snapshots={snapshots} failed={snapshotsFailed} />
+        {snapshotNote && <Typography role="status" sx={{ ...label, color: "var(--warn)", mt: 1 }}>{snapshotNote}</Typography>}
       </Box>
       {summary.unpriced_count > 0 && (
         <Typography sx={{ ...label, color: "var(--warn)", gridColumn: "1 / -1" }}>

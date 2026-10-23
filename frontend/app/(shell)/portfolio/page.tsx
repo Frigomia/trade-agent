@@ -186,7 +186,7 @@ export default function PortfolioPage() {
     mutate: mutateSummary,
   } = useSWR<PortfolioSummary>("/portfolio/summary", apiFetch, { onSuccess: () => setRead(Date.now()) });
   const { data: snapshots, error: snapshotsError } = useSWR<Snapshot[]>("/portfolio/snapshots", apiFetch);
-  useDailySnapshot();
+  const { note: snapshotNote } = useDailySnapshot();
 
   // The trade sheet opens for one holding, from its row menu.
   const [trade, setTrade] = useState<{ open: boolean; ticker?: string }>({ open: false });
@@ -244,7 +244,7 @@ export default function PortfolioPage() {
 
       {summary && open.length > 0 && (
         <Box sx={{ display: "grid", gap: 2 }}>
-          <OverviewStrip summary={summary} openCount={open.length} snapshots={snapshots} snapshotsFailed={!!snapshotsError} />
+          <OverviewStrip summary={summary} openCount={open.length} snapshots={snapshots} snapshotsFailed={!!snapshotsError} snapshotNote={snapshotNote} />
           <AllocationPanel
             allocation={allocation}
             dim={dim}

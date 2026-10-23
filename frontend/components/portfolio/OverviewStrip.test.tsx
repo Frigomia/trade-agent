@@ -128,4 +128,12 @@ describe("OverviewStrip", () => {
     expect(document.querySelector("[aria-busy]")).not.toBeNull();
     expect(screen.queryByText(/needs a little more history/i)).not.toBeInTheDocument();
   });
+
+  it("shows the note about a missing day under the chart, and nothing when there is none", () => {
+    const { rerender } = render(<OverviewStrip summary={SUMMARY} openCount={7} snapshots={days(8)} snapshotNote="Today's value was not saved because MSFT has no live price." />);
+    expect(screen.getByText("Today's value was not saved because MSFT has no live price.")).toBeInTheDocument();
+
+    rerender(<OverviewStrip summary={SUMMARY} openCount={7} snapshots={days(8)} />);
+    expect(screen.queryByText(/was not saved/)).not.toBeInTheDocument();
+  });
 });
