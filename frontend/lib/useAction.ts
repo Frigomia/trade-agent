@@ -8,15 +8,17 @@ import { ApiError } from "@/lib/api/client";
  * call while one is in flight is ignored), the error message cleared at the start and taken from
  * `ApiError.detail` on failure, the in-flight flag cleared at the end. Anything the caller wants
  * to happen on success (refetch, close, callback) goes inside the action, so a throw there is shown
- * the same way. `setError` is for validation messages the caller raises itself.
+ * the same way. `setError` is for validation messages the caller raises itself. `onBusyChange` lets a
+ * parent that owns the surface (a drawer) know when a request starts and ends, so it can refuse to close.
  */
-export function useAction() {
+export function useAction(onBusyChange?: (busy: boolean) => void) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function run(action: () => Promise<unknown>): Promise<void> {
     if (submitting) return;
     setSubmitting(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       await action();
@@ -24,6 +26,7 @@ export function useAction() {
       setError(err instanceof ApiError ? err.detail : "Something went wrong.");
     } finally {
       setSubmitting(false);
+      onBusyChange?.(false);
     }
   }
 

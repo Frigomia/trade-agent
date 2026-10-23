@@ -413,4 +413,64 @@ describe("HoldingForm as a drawer", () => {
 
     expect(screen.getByRole("dialog", { name: "Edit AAPL" })).toHaveClass("MuiDrawer-paper");
   });
+
+  it("closes on the backdrop and Escape when nothing is being saved", () => {
+    const { onClose } = setup();
+
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("cannot be dismissed while a save is in flight, and closes once it lands", async () => {
+    let finish: (value: unknown) => void = () => {};
+    apiFetch.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const { onClose, onSaved } = setup();
+
+    type("Ticker", "aapl");
+    type("Shares", "5");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled());
+
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    finish({});
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("cannot be dismissed while a removal is in flight", async () => {
+    let finish: (value: unknown) => void = () => {};
+    apiFetch.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const { onClose, onSaved } = setup({ holding: HELD });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove holding" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm remove" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Confirm remove" })).toBeDisabled());
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
+
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    expect(onClose).not.toHaveBeenCalled();
+
+    finish({});
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("can be dismissed again after a failed save", async () => {
+    apiFetch.mockRejectedValue(new FakeApiError(500, "Server error"));
+    const { onClose } = setup();
+
+    type("Ticker", "aapl");
+    type("Shares", "5");
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    expect(await screen.findByText("Server error")).toBeInTheDocument();
+
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

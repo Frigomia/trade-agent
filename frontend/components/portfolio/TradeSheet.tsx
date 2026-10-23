@@ -32,9 +32,11 @@ export interface TradeSheetProps {
 export function TradeSheet({ open, onClose, holdings, prefill, onLogged }: TradeSheetProps) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down("md"));
+  // A trade being logged cannot be dismissed: the form would unmount with no error display.
+  const [busy, setBusy] = useState(false);
   return (
-    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={onClose}>
-      <TradeForm holdings={holdings} prefill={prefill} onClose={onClose} onLogged={onLogged} />
+    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : onClose} slotProps={{ paper: { "aria-busy": busy } }}>
+      <TradeForm holdings={holdings} prefill={prefill} onClose={onClose} onLogged={onLogged} onBusyChange={setBusy} />
     </Drawer>
   );
 }
@@ -44,13 +46,14 @@ function TradeForm({
   prefill,
   onClose,
   onLogged,
-}: Pick<TradeSheetProps, "holdings" | "prefill" | "onClose" | "onLogged">) {
+  onBusyChange,
+}: Pick<TradeSheetProps, "holdings" | "prefill" | "onClose" | "onLogged"> & { onBusyChange: (busy: boolean) => void }) {
   const [ticker, setTicker] = useState(prefill?.ticker ?? holdings[0]?.ticker ?? "");
   const [action, setAction] = useState<TradeAction>(prefill?.action ?? "BUY");
   const [shares, setShares] = useState("");
   const [price, setPrice] = useState("");
   const [date, setDate] = useState(todayIso);
-  const { run, submitting, error, setError } = useAction();
+  const { run, submitting, error, setError } = useAction(onBusyChange);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
