@@ -61,9 +61,9 @@ How each came about: 1 follows the reference you gave, 2 is built like an articl
 ## Decisions for you
 
 1. Resolved: option 3, Workbench, was chosen (see `direction-approved.md`).
-2. Whether to add upcoming catalyst dates, a price history and fit facts to the backend, or drop them from the first version.
-3. Whether a named-competitor table is wanted (the reference shows one); it needs peer rows with their own values.
-4. Whether bull claims should carry confirmed, disputed or unverified like the bear side.
-5. Save to Discover stays only if the Discover destination is in the plan.
+2. Partly resolved 2026-10-22: the price history (#159) and the fit facts (#160, #161) were added to the backend and built. Upcoming catalyst dates are open: [#198](https://github.com/Frigomia/trade-agent/issues/198).
+3. Resolved 2026-10-22 (#160): the named-peer table is built, from the peer rows the backend saves with each idea (Numbers tab).
+4. Open: bull claims carry no confirmed, disputed or unverified status: [#198](https://github.com/Frigomia/trade-agent/issues/198).
+5. Resolved 2026-10-22: the Discover destination is in the plan, so Save to Discover stays (#170).
 
-The direction is approved (`direction-approved.md`); the open questions above still need answers before the build.
+The direction is approved (`direction-approved.md`) and built; decisions 2 (catalyst dates) and 4 are open in #198.
