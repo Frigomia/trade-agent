@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Box, ButtonBase, Typography } from "@mui/material";
 import { Logo } from "@/components/ui/Logo";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount, formatShare } from "@/lib/format";
 import { ALLOCATION_DIMS, type Allocation, type AllocationDim, type Position } from "@/lib/portfolio/allocation";
@@ -63,34 +64,8 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
   );
 }
 
-/** The mock's segmented control: a pill track, the chosen option lifted on a panel. */
 function DimTabs({ dim, onDim }: { dim: AllocationDim; onDim: (dim: AllocationDim) => void }) {
-  return (
-    <Box role="group" aria-label="Group allocation by" sx={{ display: "inline-flex", gap: "2px", p: "3px", borderRadius: 999, bgcolor: "var(--track)", width: "max-content", maxWidth: "100%" }}>
-      {ALLOCATION_DIMS.map((d) => {
-        const on = d.key === dim;
-        return (
-          <ButtonBase
-            key={d.key}
-            aria-pressed={on}
-            onClick={() => onDim(d.key)}
-            sx={{
-              minHeight: { xs: 40, md: 32 },
-              px: 1.75,
-              borderRadius: 999,
-              fontSize: "0.75rem",
-              fontWeight: on ? 650 : 500,
-              color: on ? "var(--text)" : "var(--text2)",
-              bgcolor: on ? "var(--panel)" : "transparent",
-              boxShadow: on ? "var(--shadow)" : "none",
-            }}
-          >
-            {d.label}
-          </ButtonBase>
-        );
-      })}
-    </Box>
-  );
+  return <SegmentedControl label="Group allocation by" segments={ALLOCATION_DIMS} value={dim} onChange={onDim} />;
 }
 
 /**

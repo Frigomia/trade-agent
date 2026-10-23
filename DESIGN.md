@@ -303,6 +303,13 @@ shadow and 650 weight, optionally with a count badge. Used for Holdings / This m
 plans, Overview / Numbers / Risk and fit / Sources, range selectors (1W, 1M, 3M) and the
 All / AI analyzed / Not analyzed filter. On a phone the options spread over the full width.
 
+It is one component, `components/ui/SegmentedControl.tsx`: 36px tall on a computer and 44px on a
+phone (28px on a computer for the compact range control in a chart header), links for the
+Portfolio views (the current one in the accent) and `aria-pressed` buttons for filters and ranges
+(the chosen one in ink). The company page's Overview / Numbers / Risk and fit / Sources strip
+looks the same but is a real tab list with its own keyboard handling, so it is still written in
+`Workbench.tsx`.
+
 ### Company row and card
 Logo circle (48px list, 56 to 64px header), name (Lead, 650) and ticker, exchange and currency
 in muted label text, price and daily change on the right (signed, arrowed, coloured by movement),
