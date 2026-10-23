@@ -131,6 +131,16 @@ flowchart TB
 
 ## 4. Data model
 
+Known sector names and aliases are shared through `backend/app/sectors.json`. The backend's
+`app.sectors.Sector` literal type is checked against that catalog and the committed discovery
+universe; the frontend derives its `Sector` union from the JSON keys and provides one icon per
+key from a local `frontend/lib/sectors.json` copy; a frontend contract test requires the two JSON
+catalogs to match, avoiding a runtime dependency across deployment roots. Portfolio exposure
+grouping and frontend icons accept aliases (including the mock labels
+Software, Health Care and Consumer Staples). Unknown API/provider sector strings remain valid:
+backend exposure grouping keeps their labels, and the frontend uses a generic Layers icon.
+Discovery scoring uses the known sector type for its defensive-sector set without changing scores.
+
 SQLAlchemy models (`backend/app/models.py`). Every user-data table carries a
 `user_id` so **Row Level Security (RLS)** can enforce per-user isolation. A
 JWT check alone only guards the API layer; RLS is the actual database-level

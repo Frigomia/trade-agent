@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { Box } from "@mui/material";
-import { Globe, Layers } from "lucide-react";
+import { Globe } from "lucide-react";
 import { Meter } from "@/components/ui/Meter";
 import type { IdeaOut } from "@/lib/api/discovery-types";
 import { confidenceLabel, meterFill, riskLabel, sectorText } from "@/lib/discovery";
+import { SectorIcon } from "@/components/ui/SectorIcon";
 
 function Chip({ children }: { children: ReactNode }) {
   return (
@@ -47,7 +48,7 @@ export function IdeaChips({ idea }: { idea: IdeaOut }) {
       )}
       {sector && (
         <Chip>
-          <Layers size={13} aria-hidden />
+          <SectorIcon sector={idea.snapshot?.sector} size={13} />
           {sector}
         </Chip>
       )}
