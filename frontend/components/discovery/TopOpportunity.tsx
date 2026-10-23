@@ -32,7 +32,7 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
-        <Logo name={idea.name} size={56} />
+        <Logo ticker={idea.ticker} name={idea.name} size={56} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography component="h3" sx={{ fontSize: "1.25rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
             {idea.name}

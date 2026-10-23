@@ -160,7 +160,7 @@ The system is light-first and equally complete in dark, and phone-first: a quick
 - Light-first on Cloud, with a complete navy dark theme (Deep Navy, Periwinkle accent)
 - One blue accent; green and red only for price movement; amber for caution
 - Confidence, risk and status as shape plus word, never colour alone
-- Round monogram logos for every company (circles, never a brand mark)
+- Round company logos from Logo.dev in production, with monogram circles as the fallback
 - Soft panels: 22px radius, a hairline, a faint shadow in light and a deeper one in dark
 - Tight numerals, small quiet supporting text, one big figure per region
 - Phone-first with a bottom tab bar; a 204px sidebar on desktop
@@ -274,8 +274,9 @@ coloured shadows except the primary button's, no stacked cards with different he
 
 Round and friendly, in two sizes. Panels are 22px; buttons, tiles, the web box and inputs are 14px.
 Pills (search bar, status pills, segmented controls, filter chips, the circular go button) are
-fully round. Company logos are circles holding a two- or three-letter monogram on the Track
-colour; the brand mark is a 12px-radius square. Borders are 1px. Dashed and dotted borders carry
+fully round. Company logos are circles showing the Logo.dev image where available, otherwise a
+two- or three-letter monogram on the Track colour; the app brand mark is a 12px-radius square.
+Borders are 1px. Dashed and dotted borders carry
 meaning (see below); nothing else is dashed.
 
 ## Components
@@ -397,7 +398,7 @@ active states, `--up-bg` and `--down-bg` are only for a price rising or falling,
 "OK") no longer use green or red.
 
 **Built on Today:** the discovery section (latest-scan bar, Top opportunity, Other opportunities,
-the scan states), the round monogram `Logo`, the `Meter` (confidence and risk as bars plus a word)
+the scan states), the round company `Logo` (Logo.dev image with initials as fallback), the `Meter` (confidence and risk as bars plus a word)
 and the `Change` (signed, arrowed price move). Save to Discover adds the company to Discover (also
 from the workbench's decision rail and phone bar), then becomes a link to the list. The holdings
 recommendations sit under "Portfolio alerts" (a list with monogram logos on desktop, cards on a

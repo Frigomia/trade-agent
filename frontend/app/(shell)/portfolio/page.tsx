@@ -136,7 +136,7 @@ function HoldingRow({
       }}
     >
       <Box sx={{ minWidth: 0, display: "flex", alignItems: "center", gap: 1.5 }}>
-      <Logo name={holding.name} size={34} />
+      <Logo ticker={holding.ticker} name={holding.name} size={34} />
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{holding.ticker}</Typography>
         <Typography sx={{ fontSize: 12, color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>

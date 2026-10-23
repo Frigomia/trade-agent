@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Link, Typography } from "@mui/material";
 import { SquareCheckBig } from "lucide-react";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
@@ -100,6 +100,14 @@ export function AuthShell({ children }: { children: ReactNode }) {
         >
           {ADVISORY}
         </Typography>
+        {process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN && (
+          <Link
+            href="https://logo.dev"
+            sx={{ alignSelf: "center", fontSize: "0.75rem", color: "var(--muted)", display: "inline-flex", alignItems: "center", minHeight: 44 }}
+          >
+            Logos provided by Logo.dev
+          </Link>
+        )}
       </Box>
     </Box>
   );

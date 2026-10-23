@@ -55,7 +55,7 @@ export function PortfolioAlerts({ rows, missing = [] }: { rows: AlertRow[]; miss
               href={row.href}
               sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1.25, minHeight: 56, color: "inherit", textDecoration: "none" }}
             >
-              <Logo name={row.name ?? row.ticker} size={34} />
+              <Logo ticker={row.ticker} name={row.name ?? row.ticker} size={34} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 1 }}>
                   <Typography sx={{ fontWeight: 650, fontSize: "0.8125rem" }}>{row.ticker}</Typography>
