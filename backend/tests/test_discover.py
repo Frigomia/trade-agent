@@ -128,7 +128,7 @@ def test_a_company_with_no_stored_currency_gets_it_from_the_provider_so_pence_ar
 ):
     seed(db_session, "MRLW.L", name="Marlow Water")  # currency was not known when it was added
 
-    with patch("app.routers.discover.fetch_currency", AsyncMock(return_value="GBp")):
+    with patch("app.fx.fetch_currency", AsyncMock(return_value="GBp")):
         item = listing(client, {"MRLW.L": (1284.0, [1280.0, 1284.0])}).json()["items"][0]
 
     assert (item["currency"], item["price"]) == ("GBP", pytest.approx(12.84))
@@ -139,7 +139,7 @@ def test_a_company_whose_currency_cannot_be_found_shows_its_price_without_claimi
 ):
     seed(db_session, "MRLW.L")
 
-    with patch("app.routers.discover.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))):
+    with patch("app.fx.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))):
         item = listing(client, {"MRLW.L": (1284.0, [1280.0, 1284.0])}).json()["items"][0]
 
     assert item["currency"] is None and item["price"] == 1284.0
@@ -420,7 +420,7 @@ def test_the_database_refuses_an_unknown_source(db_session):
 
 
 def edit(client, ticker, body, currency=None):
-    with patch("app.routers.discover.fetch_currency", AsyncMock(return_value=currency)) as mock:
+    with patch("app.fx.fetch_currency", AsyncMock(return_value=currency)) as mock:
         return client.patch(f"/discover/{ticker}", json=body), mock
 
 
