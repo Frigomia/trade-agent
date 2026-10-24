@@ -16,6 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
+| [discover-company](discover-company/direction-approved.md) | Basic company overview and single-company Analyze (#193, #194) | Proposed, pending approval | 2026-10-24 | Interactive mock and staged implementation plan; not built |
 | [mockups](mockups/direction-approved.md) | The original app direction and screens | Direction A, "Emerald Glass" (teal), dark and light | 2026-09-28 | Built |
 | [claude-keys](claude-keys/direction-approved.md) | Connect Claude (guide, locked states, Account) | A, one step at a time | 2026-10-06 | Built |
 | [scheduled-analysis](scheduled-analysis/direction-approved.md) | Scheduled analysis switch in Preferences | A, a row in the Preferences panel | 2026-10-06 | Built |
