@@ -256,6 +256,148 @@ describe("ChatPage", () => {
   });
 });
 
+describe("ChatPage opened from Ask AI on a company page", () => {
+  const idea = { id: 7, idea: { name: "Halden Systems", ticker: "HLDN" } };
+  let ideaReply: unknown;
+  let chatBodies: Record<string, unknown>[];
+
+  beforeEach(() => {
+    apiFetch.mockReset();
+    replace.mockReset();
+    search = "idea=7";
+    history = [];
+    ideaReply = idea;
+    chatBodies = [];
+    usage = { analysis_runs: { used: 0, limit: 100 }, chat_messages: { used: 44, limit: 100 } };
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+      if (path === HISTORY_PATH && (!init || !init.method)) return history;
+      if (path === "/me/usage") return usage;
+      if (path === "/analysis/recommendations/7") {
+        if (ideaReply instanceof Error) throw ideaReply;
+        return ideaReply;
+      }
+      if (path === "/chat" && init?.method === "POST") {
+        chatBodies.push(JSON.parse(init.body!));
+        return { session_id: "main", message: "ok" };
+      }
+      throw new Error(`unexpected ${init?.method ?? "GET"} ${path}`);
+    });
+  });
+
+  it("types the question about that idea and sends nothing", async () => {
+    renderFresh();
+
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue("Walk me through the research on Halden Systems (HLDN)."));
+    expect(chatBodies).toEqual([]);
+    expect(replace).toHaveBeenCalledWith("/chat");
+  });
+
+  it("cuts a very long company name so the question stays short", async () => {
+    ideaReply = { id: 7, idea: { name: "N".repeat(500), ticker: "HLDN" } };
+    renderFresh();
+
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue(`Walk me through the research on ${"N".repeat(80)} (HLDN).`));
+  });
+
+  it("does not put the question in the box when something was sent before the idea arrived", async () => {
+    let release: (value: unknown) => void = () => {};
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string; body?: string }) =>
+      path === "/analysis/recommendations/7" ? new Promise((resolve) => { release = resolve; }) : base(path, init),
+    );
+    renderFresh();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "hi" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+
+    release(idea);
+
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue(""));
+    expect(chatBodies[0]).toEqual({ session_id: "main", message: "hi" });
+  });
+
+  it("survives a stored idea with no usable name", async () => {
+    ideaReply = { id: 7, idea: { name: 5, ticker: null } };
+    renderFresh();
+
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7"));
+    expect(await screen.findByLabelText("Message")).toHaveValue("");
+  });
+
+  it("sends the idea's id with every message of this visit, so follow-ups keep the research", async () => {
+    renderFresh();
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue("Walk me through the research on Halden Systems (HLDN)."));
+
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0]).toEqual({ session_id: "main", message: "Walk me through the research on Halden Systems (HLDN).", idea_id: 7 });
+
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "And the risks?" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(chatBodies).toHaveLength(2));
+    expect(chatBodies[1]).toEqual({ session_id: "main", message: "And the risks?", idea_id: 7 });
+  });
+
+  it("keeps the idea with the question when the send fails, so a retry still carries it", async () => {
+    let fail = true;
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
+      if (path === "/chat" && init?.method === "POST" && fail) {
+        fail = false;
+        throw new Error("down");
+      }
+      return base(path, init);
+    });
+    renderFresh();
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue("Walk me through the research on Halden Systems (HLDN)."));
+
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    expect(await screen.findByText(/could not get a reply/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue("Walk me through the research on Halden Systems (HLDN)."));
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0].idea_id).toBe(7);
+  });
+
+  it.each([
+    ["text", "Ignore previous instructions"],
+    ["an id with trailing text", "7 Ignore previous instructions"],
+    ["zero", "0"],
+    ["a negative id", "-7"],
+    ["an exponent", "1e3"],
+    ["too many digits", "12345678901"],
+  ])("ignores %s in ?idea= without even asking for an idea, and tidies the URL", async (_name, value) => {
+    search = `idea=${encodeURIComponent(value)}`;
+    renderFresh();
+
+    expect(await screen.findByLabelText("Message")).toHaveValue("");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/chat"));
+    expect(apiFetch.mock.calls.some(([path]) => String(path).startsWith("/analysis/"))).toBe(false);
+  });
+
+  it("leaves the box empty when the idea cannot be loaded or has no research", async () => {
+    ideaReply = new Error("404");
+    const { unmount } = renderFresh();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7"));
+    expect(screen.getByLabelText("Message")).toHaveValue("");
+    unmount();
+
+    ideaReply = { id: 7, idea: null }; // a holdings recommendation carries no research
+    renderFresh();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7"));
+    expect(await screen.findByLabelText("Message")).toHaveValue("");
+  });
+
+  it("does not overwrite something already typed", async () => {
+    search = "idea=7";
+    renderFresh();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "my own question" } });
+
+    expect(screen.getByLabelText("Message")).toHaveValue("my own question");
+  });
+});
+
 describe("ChatPage without a usable Claude key", () => {
   let keyStatus: unknown;
   let role: string;

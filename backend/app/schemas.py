@@ -200,6 +200,8 @@ class BacktestResultOut(BacktestListItemOut):
 class ChatIn(BaseModel):
     session_id: str = Field(max_length=100)
     message: str = Field(min_length=1, max_length=4000)
+    # The saved discovery idea the message asks about; its research goes into the context.
+    idea_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
 
 class ChatOut(BaseModel):
