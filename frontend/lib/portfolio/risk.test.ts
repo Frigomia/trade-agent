@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnalyticsPosition, PortfolioAnalytics } from "@/lib/api/analytics-types";
-import { correlationPairs, orderedPositions, riskFacts, spread } from "./risk";
+import { correlationPairs, fallWindowText, orderedPositions, riskFacts, spread } from "./risk";
 
 const pos = (ticker: string, weight: number, name = `${ticker} Corp`): AnalyticsPosition => ({
   ticker,
@@ -32,6 +32,7 @@ const analytics = (over: Partial<PortfolioAnalytics> = {}): PortfolioAnalytics =
   effective_n: 2.68,
   volatility_annualized: 0.174,
   max_drawdown_1y: -0.182,
+  risk_window: { start: "2025-10-23", end: "2026-10-22", intervals_used: 250, intervals_skipped: 0 },
   correlation: {
     AAA: { AAA: 1, BBB: 0.4, CCC: 0.2, DDD: null },
     BBB: { AAA: 0.4, BBB: 1, CCC: 0.6, DDD: 0.1 },
@@ -144,5 +145,22 @@ describe("spread", () => {
 
   it("has no largest sector when nothing is classified", () => {
     expect(spread(analytics({ by_sector: [] })).largestSector).toBeNull();
+  });
+});
+
+describe("fallWindowText", () => {
+  const window = { start: "2025-10-23", end: "2026-10-22", intervals_used: 238, intervals_skipped: 0 };
+
+  it("names the days and the number of price intervals the biggest fall covers", () => {
+    expect(fallWindowText(window)).toBe("From peak to low from 23 Oct 2025 to 22 Oct 2026 (238 price intervals), with today's holdings and weights.");
+  });
+
+  it("says how many intervals a holding's missing prices took out, and that the real fall may be larger", () => {
+    expect(fallWindowText({ ...window, intervals_skipped: 12 })).toMatch(/12 more were skipped because at least one holding has no usable price for those days, so the real fall may be larger\.$/);
+    expect(fallWindowText({ ...window, intervals_skipped: 1 })).toMatch(/1 more was skipped/);
+  });
+
+  it("falls back to a plain sentence without a window", () => {
+    expect(fallWindowText(null)).toBe("From peak to low over the shared price history, with today's holdings and weights.");
   });
 });

@@ -81,6 +81,19 @@ class PositionValue(Contract):
     stale: bool
 
 
+class ReturnWindow(Contract):
+    """The days the portfolio volatility and biggest fall cover: the common sample of price
+    intervals. `intervals_skipped` counts the intervals between those dates that the busiest holding
+    has and another does not (a market's holiday, a gap in a provider's history), left out and never
+    filled in, so a fall inside them is not seen. A holding with a shorter history only moves
+    `start`."""
+
+    start: date
+    end: date
+    intervals_used: int = Field(ge=0)
+    intervals_skipped: int = Field(ge=0)
+
+
 class PortfolioExposure(Contract):
     as_of: datetime
     total_value_eur: float | None  # None: no holdings
@@ -96,6 +109,8 @@ class PortfolioExposure(Contract):
     # The largest peak-to-low fall (a fraction at or below 0, e.g. -0.18) of today's holdings at
     # today's weights over the past year, on the volatility's common sample. None when that is.
     max_drawdown_1y: float | None
+    # Which days the volatility and biggest fall cover. None with fewer than 60 matching intervals.
+    risk_window: ReturnWindow | None
     # None: fewer than 60 overlapping days, so the pair cannot be estimated
     correlation: dict[str, dict[str, float | None]]
     skipped: dict[str, str]  # ticker -> why it could not be valued

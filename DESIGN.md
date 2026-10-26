@@ -447,7 +447,7 @@ table; a collapsed "Closed positions" line under it lists each with Log a trade 
 be logged (a sale is refused: there are no shares to sell). Below that, "Risk and analytics" (measured, not scored) reads
 `GET /portfolio/analytics`: volatility, largest position, top three together, effective holdings,
 average correlation with the most correlated pair, and the biggest fall of the past year (a plain
-negative percent, from peak to low over the shared price history, up to a year, with today's holdings and weights), each with what it means; what could not be
+negative percent, from peak to low over the shared price history, with the first and last day it covers, how many price intervals that is and, when a holding lacked prices for some days between them, how many were skipped, so the real fall may be larger; with today's holdings and weights), each with what it means; what could not be
 valued or measured is listed in the backend's own words; "Advanced analytics" opens a correlation
 table with every number printed and the spread across sectors, countries and currencies. There is no
 overall health score. Risk figures use values converted to euro, so they can differ a little

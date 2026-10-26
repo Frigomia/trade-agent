@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { PortfolioAnalytics } from "@/lib/api/analytics-types";
 import { formatShare } from "@/lib/format";
-import { orderedPositions, riskFacts, spread } from "@/lib/portfolio/risk";
+import { fallWindowText, orderedPositions, riskFacts, spread } from "@/lib/portfolio/risk";
 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
@@ -213,7 +213,7 @@ export function RiskPanel({
         <Metric
           label="Biggest fall, last year"
           value={facts.biggestFall === null ? null : formatShare(facts.biggestFall)}
-          detail={facts.biggestFall === null ? "Needs matching price history for every holding." : "From peak to low over the shared price history, up to a year, with today's holdings and weights."}
+          detail={facts.biggestFall === null ? (analytics.risk_window ? "Could not be worked out from this price history." : "Needs matching price history for every holding.") : fallWindowText(analytics.risk_window)}
         />
       </Box>
       <Gaps analytics={analytics} />

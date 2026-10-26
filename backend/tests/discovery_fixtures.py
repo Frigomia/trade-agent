@@ -18,6 +18,7 @@ from app.schemas_discovery import (
     PortfolioExposure,
     PositionValue,
     ResearchEvidence,
+    ReturnWindow,
     RiskProfile,
 )
 
@@ -62,6 +63,12 @@ def sample_exposure() -> PortfolioExposure:
         effective_n=1 / 0.52,
         volatility_annualized=0.24,
         max_drawdown_1y=-0.18,
+        risk_window=ReturnWindow(
+            start=date(2025, 10, 14),
+            end=date(2026, 10, 14),
+            intervals_used=250,
+            intervals_skipped=2,
+        ),
         correlation={"SAP.DE": {"AAPL": 0.42}, "AAPL": {"SAP.DE": 0.42}},
         skipped={},
         notes=[],
