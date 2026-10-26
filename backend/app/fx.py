@@ -70,6 +70,25 @@ MIN_RATE = Decimal("0.00000001")
 MAX_RATE = Decimal("100000000")
 
 
+def minor_unit(currency: str | None) -> tuple[str | None, Decimal]:
+    """The major currency and the factor from the quoted unit (GBp to GBP is 0.01)."""
+    if not currency:
+        return None, Decimal(1)
+    return SUBUNITS.get(currency, (currency, Decimal(1)))
+
+
+async def quoted_currency(ticker: str, stored: str | None, sem: asyncio.Semaphore) -> str | None:
+    """The currency a company is quoted in: saved with it, else the provider's, else None."""
+    if stored:
+        return stored
+    try:
+        async with sem:
+            return await fetch_currency(ticker)
+    except Exception as exc:
+        logger.warning("Currency lookup failed for %s: %s", ticker, type(exc).__name__)
+        return None
+
+
 @dataclass(frozen=True)
 class EurPrice:
     price_eur: Decimal

@@ -3,6 +3,8 @@ export interface WatchlistInsight {
   ticker: string;
   kind: "in_target_range";
   text: string; // a fact, never advice
+  // The prices are in the major unit of this currency (pounds, not pence), as Discover shows them.
+  currency: string;
   current_price: number;
   target_price_low: number;
   target_price_high: number;

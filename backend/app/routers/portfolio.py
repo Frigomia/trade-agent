@@ -2,6 +2,7 @@ import asyncio
 import logging
 import math
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from app import holdings as holding_service
 from app.agents.market_data import fetch_next_earnings, fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
+from app.fx import minor_unit, quoted_currency
 from app.http_headers import no_store
 from app.limits import cap_message
 from app.models import Holding, PortfolioSnapshot, Recommendation, Trade, WatchlistItem
@@ -442,23 +444,43 @@ async def get_watchlist_insights(
         for i in items
         if i.target_price_low is not None and i.target_price_high is not None
     }
+    stored_currency = {t: i.currency for i in items if (t := i.ticker) in ranges}
     db.close()  # release the pooled connection before awaiting quotes
-    prices = await _prices_for(set(ranges), asyncio.Semaphore(8))
-    insights = []
+    sem = asyncio.Semaphore(8)
+    # The currency lookups (cached, and only for a company saved without one) run beside the quotes.
+    prices, found = await asyncio.gather(
+        _prices_for(set(ranges), sem),
+        asyncio.gather(*(quoted_currency(t, stored_currency[t], sem) for t in ranges)),
+    )
+    quoted_in = dict(zip(ranges, found, strict=True))
+    # The range and the quote are both in the quote's own unit (pence for London), so they compare
+    # directly. They are shown in the major unit with its currency, as Discover shows them.
+    inside: dict[str, float] = {}
     missing = False
     for ticker, (low, high) in ranges.items():
         price, _, stale = prices[ticker]
         if price is None or stale:
             missing = True
         elif low <= price <= high:
-            insights.append(
-                WatchlistInsightOut(
-                    ticker=ticker,
-                    kind="in_target_range",
-                    text="Entered your target price range",
-                    current_price=price,
-                    target_price_low=low,
-                    target_price_high=high,
-                )
+            inside[ticker] = price
+    insights = []
+    for ticker, price in inside.items():
+        low, high = ranges[ticker]
+        major, unit = minor_unit(quoted_in[ticker])
+        if major is None:
+            # Without the currency a pence price would read as pounds, 100 times too high: say it
+            # could not be checked instead.
+            missing = True
+            continue
+        insights.append(
+            WatchlistInsightOut(
+                ticker=ticker,
+                kind="in_target_range",
+                text="Entered your target price range",
+                currency=major,
+                current_price=float(Decimal(str(price)) * unit),
+                target_price_low=float(Decimal(str(low)) * unit),
+                target_price_high=float(Decimal(str(high)) * unit),
             )
+        )
     return WatchlistInsightsOut(insights=insights, missing=["prices"] if missing else [])

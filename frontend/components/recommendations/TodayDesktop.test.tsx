@@ -20,7 +20,7 @@ describe("TodayDesktop", () => {
     expect(apiFetch).not.toHaveBeenCalledWith("/portfolio/snapshots");
   });
 
-  const WATCH = { insights: [{ ticker: "NVDA", kind: "in_target_range" as const, text: "Entered your target price range", current_price: 98.4, target_price_low: 90, target_price_high: 110 }], missing: [] };
+  const WATCH = { insights: [{ ticker: "NVDA", kind: "in_target_range" as const, text: "Entered your target price range", currency: "USD", current_price: 98.4, target_price_low: 90, target_price_high: 110 }], missing: [] };
   const recs = [{ id: 1, ticker: "AAPL", action: "TRIM", status: "PENDING" }] as RecommendationOut[];
   const wrap = (ui: React.ReactElement) => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>);
 
