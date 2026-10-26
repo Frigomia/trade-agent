@@ -47,6 +47,54 @@ describe("TrackRecordPage", () => {
     expect(screen.getByText(/not scored/i)).toBeInTheDocument();
   });
 
+  it("labels holdings calls and discovery ideas, counts each, and keeps a replaced idea", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations")
+        return [
+          rec(1, "BUY", 0.05),
+          { ...rec(2, "BUY", -0.02), source: "discovery" },
+          { ...rec(3, "BUY", 0.04), source: "discovery", status: "SUPERSEDED" },
+          { ...rec(4, "BUY", 0.09), source: "manual", status: "SUPERSEDED" },
+        ];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    const holdings = await screen.findByRole("region", { name: "Holdings calls" });
+    expect(holdings).toHaveTextContent("1 call, 1 scored");
+    expect(holdings).toHaveTextContent("1 of 1");
+    const discovery = screen.getByRole("region", { name: "Discovery ideas" });
+    expect(discovery).toHaveTextContent("2 calls, 2 scored");
+    expect(discovery).toHaveTextContent("1 of 2");
+    expect(screen.getByText(/2026-08-02 · Discovery idea · Approved/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-08-03 · Discovery idea · Replaced or withdrawn/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-08-01 · Holdings call · Approved/)).toBeInTheDocument();
+    expect(screen.queryByText("T4")).not.toBeInTheDocument(); // a replaced holdings call was never decided
+  });
+
+  it("says what the percentage measures", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05)];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    expect(await screen.findByText(/price change over the 20 trading days after the call: no benchmark, no dividends/i)).toBeInTheDocument();
+  });
+
+  it("names a kind with calls but none scored yet, without a 0 of 0", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05), { ...rec(2, "HOLD", 0.01), source: "discovery" }];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    const discovery = await screen.findByRole("region", { name: "Discovery ideas" });
+    expect(discovery).toHaveTextContent("1 call, 0 scored");
+    expect(discovery).toHaveTextContent("None scored yet");
+    expect(discovery).not.toHaveTextContent("0 of 0");
+  });
+
   it("shows an empty state instead of 0 of 0 when nothing is scored", async () => {
     apiFetch.mockImplementation(async (path: string) =>
       path === "/analysis/recommendations" ? [rec(1, "BUY", null, false), rec(2, "HOLD", 0.02)] : { evaluated: 0, remaining: 0 },

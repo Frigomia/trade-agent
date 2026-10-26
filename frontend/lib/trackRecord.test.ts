@@ -33,15 +33,15 @@ function rec(
 
 describe("buildTrackRecord", () => {
   it("matches BUY and ADD on a positive move, TRIM and SELL on a negative one", () => {
-    const { rows, matched, scored } = buildTrackRecord([
+    const { rows, bySource } = buildTrackRecord([
       rec("BUY", 0.05),
       rec("ADD", -0.02),
       rec("TRIM", -0.03),
       rec("SELL", 0.04),
     ]);
     expect(rows.map((r) => r.verdict)).toEqual(["matched", "missed", "matched", "missed"]);
-    expect(matched).toBe(2);
-    expect(scored).toBe(4);
+    expect(bySource.holdings.matched).toBe(2);
+    expect(bySource.holdings.scored).toBe(4);
   });
 
   it("never scores HOLD or WATCH", () => {
@@ -61,9 +61,9 @@ describe("buildTrackRecord", () => {
   });
 
   it("scores dismissed calls too", () => {
-    const { matched, scored } = buildTrackRecord([rec("BUY", 0.05, { status: "REJECTED" })]);
-    expect(matched).toBe(1);
-    expect(scored).toBe(1);
+    const { bySource } = buildTrackRecord([rec("BUY", 0.05, { status: "REJECTED" })]);
+    expect(bySource.holdings.matched).toBe(1);
+    expect(bySource.holdings.scored).toBe(1);
   });
 
   it("excludes superseded rows and rows not yet evaluated", () => {
@@ -75,13 +75,37 @@ describe("buildTrackRecord", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("counts a scheduled recommendation like a manual one", () => {
-    const { matched, scored } = buildTrackRecord([
+  it("counts a scheduled recommendation like a manual one, both as holdings calls", () => {
+    const { rows, bySource } = buildTrackRecord([
       rec("BUY", 0.05, { source: "scheduled" }),
       rec("BUY", 0.05, { source: "manual" }),
+      rec("BUY", 0.05, { source: undefined }),
     ]);
-    expect(matched).toBe(2);
-    expect(scored).toBe(2);
+    expect(rows.map((r) => r.kind)).toEqual(["holdings", "holdings", "holdings"]);
+    expect(bySource.holdings).toEqual({ count: 3, matched: 3, scored: 3 });
+    expect(bySource.discovery).toEqual({ count: 0, matched: 0, scored: 0 });
+  });
+
+  it("tells discovery ideas from holdings calls and counts each on its own", () => {
+    const { rows, bySource, scored } = buildTrackRecord([
+      rec("BUY", 0.05, { source: "discovery", created_at: "2026-08-03T00:00:00" }),
+      rec("BUY", -0.02, { source: "discovery", created_at: "2026-08-02T00:00:00" }),
+      rec("SELL", -0.04, { source: "manual", created_at: "2026-08-01T00:00:00" }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["discovery", "discovery", "holdings"]);
+    expect(bySource.discovery).toEqual({ count: 2, matched: 1, scored: 2 });
+    expect(bySource.holdings).toEqual({ count: 1, matched: 1, scored: 1 });
+    expect(scored).toBe(3);
+  });
+
+  it("keeps a discovery idea a later scan replaced, but not a replaced holdings call", () => {
+    const { rows } = buildTrackRecord([
+      rec("BUY", 0.05, { source: "discovery", status: "SUPERSEDED" }),
+      rec("BUY", 0.05, { source: "manual", status: "SUPERSEDED" }),
+      rec("BUY", 0.05, { source: "scheduled", status: "SUPERSEDED" }),
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("discovery");
   });
 
   it("keeps a resolved row with no valid outcome as unscored", () => {
@@ -98,6 +122,10 @@ describe("buildTrackRecord", () => {
       rec("BUY", 0.01, { created_at: "2026-08-15T00:00:00" }),
     ]);
     expect(rows[0].rec.created_at).toBe("2026-08-15T00:00:00");
-    expect(buildTrackRecord([])).toEqual({ rows: [], matched: 0, scored: 0 });
+    expect(buildTrackRecord([])).toEqual({
+      rows: [],
+      scored: 0,
+      bySource: { holdings: { count: 0, matched: 0, scored: 0 }, discovery: { count: 0, matched: 0, scored: 0 } },
+    });
   });
 });

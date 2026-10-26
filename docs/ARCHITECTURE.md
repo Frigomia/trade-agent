@@ -1181,6 +1181,11 @@ default — same dialect and models as production, started with
     Any other error (a throttle, a timeout) leaves it unstamped, counts one attempt and is not
     tried again for 20 hours, so one outage does not use up the attempts; after 5 attempts the row
     is stamped unscored.
+  - *On the page:* Track record (`frontend/lib/trackRecord.ts`) labels each row and counts each
+    source on its own: a holdings call (manual or scheduled) or a discovery idea. It says what the
+    percentage is (the stock's own price change over 20 trading days, no benchmark, no dividends).
+    A replaced discovery idea stays on the page; a replaced holdings call was never decided and
+    does not.
 - **Automatic analysis:** the third step, `app/scheduled.py::run_analysis`, opt-in per user through
   `investment_preferences.auto_analysis` (off by default). It does nothing on Saturday and Sunday
   (UTC). For each opted-in active user it runs inside that user's `scoped_session` and uses that

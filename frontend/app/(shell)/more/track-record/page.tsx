@@ -6,7 +6,7 @@ import { Alert, Box, LinearProgress, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct } from "@/lib/format";
-import { buildTrackRecord, type Verdict } from "@/lib/trackRecord";
+import { buildTrackRecord, type Kind, type Verdict } from "@/lib/trackRecord";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionChip } from "@/components/recommendations/RecommendationCard";
 import { Panel } from "@/components/ui/Panel";
@@ -22,7 +22,12 @@ const DECISION_WORD: Record<string, string> = {
   APPROVED: "Approved",
   REJECTED: "Dismissed",
   PENDING: "Pending",
+  SUPERSEDED: "Replaced or withdrawn",
 };
+
+const KIND_WORD: Record<Kind, string> = { holdings: "Holdings call", discovery: "Discovery idea" };
+const KIND_GROUP: Record<Kind, string> = { holdings: "Holdings calls", discovery: "Discovery ideas" };
+const KINDS: Kind[] = ["holdings", "discovery"];
 
 export default function TrackRecordPage() {
   const { data, error, mutate } = useSWR<RecommendationOut[]>("/analysis/recommendations", apiFetch);
@@ -50,20 +55,39 @@ export default function TrackRecordPage() {
 
       {summary && summary.scored > 0 && (
         <Panel sx={{ p: "18px 20px", mb: 1.75 }}>
-          <Typography sx={{ fontSize: 40, fontWeight: 650, letterSpacing: "-0.035em", lineHeight: 1.1 }}>
-            {summary.matched}
-            <Box component="span" sx={{ color: "var(--muted)", fontSize: 28, ml: 1 }}>
-              of {summary.scored}
-            </Box>
-          </Typography>
-          <Typography sx={{ fontSize: 15, mt: 0.5 }}>calls moved the way the action implied</Typography>
-          <LinearProgress
-            variant="determinate"
-            value={(summary.matched / summary.scored) * 100}
-            sx={{ mt: 1.5 }}
-          />
-          <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 1.25 }}>
-            HOLD and WATCH aren&apos;t scored. A small sample, not a forecast.
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(auto-fit, minmax(220px, 1fr))" }, gap: 2.5 }}>
+            {KINDS.filter((kind) => summary.bySource[kind].count > 0).map((kind) => {
+              const { count, matched, scored } = summary.bySource[kind];
+              return (
+                <Box component="section" key={kind} aria-label={KIND_GROUP[kind]}>
+                  <Typography sx={{ fontSize: 13, fontWeight: 650, color: "var(--text2)" }}>
+                    {KIND_GROUP[kind]}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+                    {count} {count === 1 ? "call" : "calls"}, {scored} scored
+                  </Typography>
+                  {scored === 0 ? (
+                    <Typography sx={{ fontSize: 15, mt: 0.75, color: "var(--muted)" }}>None scored yet</Typography>
+                  ) : (
+                    <>
+                      <Typography sx={{ fontSize: 40, fontWeight: 650, letterSpacing: "-0.035em", lineHeight: 1.1 }}>
+                        {matched}{" "}
+                        <Box component="span" sx={{ color: "var(--muted)", fontSize: 28 }}>
+                          of {scored}
+                        </Box>
+                      </Typography>
+                      <Typography sx={{ fontSize: 15, mt: 0.5 }}>calls moved the way the action implied</Typography>
+                      <LinearProgress variant="determinate" value={(matched / scored) * 100} sx={{ mt: 1.5 }} />
+                    </>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+          <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 1.75 }}>
+            Each percentage below is the stock&apos;s own price change over the 20 trading days after the call: no
+            benchmark, no dividends. HOLD and WATCH aren&apos;t scored, and a company that a later scan found again counts
+            again. A small sample, not a forecast.
           </Typography>
         </Panel>
       )}
@@ -71,7 +95,7 @@ export default function TrackRecordPage() {
       {summary && summary.rows.length > 0 && (
         <Panel sx={{ p: "4px 18px" }}>
         <Box component="ul" sx={{ listStyle: "none", p: 0, m: 0 }}>
-          {summary.rows.map(({ rec, verdict, movePct }) => (
+          {summary.rows.map(({ rec, kind, verdict, movePct }) => (
             <Box
               component="li"
               key={rec.id}
@@ -90,7 +114,7 @@ export default function TrackRecordPage() {
                   <ActionChip action={rec.action} />
                 </Box>
                 <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 0.25 }}>
-                  {rec.created_at.slice(0, 10)} · {DECISION_WORD[rec.status] ?? rec.status}
+                  {rec.created_at.slice(0, 10)} · {KIND_WORD[kind]} · {DECISION_WORD[rec.status] ?? rec.status}
                 </Typography>
               </Box>
               <Box sx={{ textAlign: "right" }}>
