@@ -90,6 +90,10 @@ Do not paraphrase, invent an attribution, or quote a different source under anot
 Claims concern only the subject company. Other companies belong in mentions/competitors.
 Classify kind as fact/opinion/forecast/forum, and stance as bull/bear/neutral. Forum sources
 are always kind=forum and source_tier=forum, never facts or confirmed developments.
+Give every claim a status: confirmed only for an authoritative factual statement, disputed when
+the supplied evidence contests that claim, otherwise unverified. Opinions, forecasts and forum
+posts cannot be confirmed facts. Preserve explicit full event dates in the verbatim excerpts
+when sources state them; publication dates are not event dates. Never infer a missing year.
 Materiality measures potential effect on the investment thesis, never repetition/popularity.
 Give claims about the same underlying event the same event_id, even across different outlets;
 keep distinct citations so later code can assess corroboration. Repetition is not independence.

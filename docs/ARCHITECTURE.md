@@ -720,7 +720,10 @@ retain English terms. Source snippets are bounded to 1,500 characters. Every ext
 treats fetched content and metadata as untrusted data. `Claim.text` must be a short verbatim
 excerpt found in its own cited source content after whitespace/case normalization; an unrelated
 fetched URL cannot support invented text. Distinct claims from one article are preserved;
-deduplication uses URL, event id and text. Dates come only from source metadata.
+deduplication uses URL, event id and text. Publication dates come only from source metadata.
+Every claim carries confirmed/disputed/unverified status. Missing statuses in older reports are
+unverified. Confirmation requires a fact from a verified official or reliable-reporting host;
+forum claims remain unverified, and host reclassification revalidates these constraints.
 `discovery/sources.py` derives authority from a conservative regulatory/reporting hostname
 policy; unknown hosts stay `other`, never model-assigned authority. Verified issuer hosts may
 be supplied only by trusted internal callers. Community hosts and explicit comment pages are
@@ -788,10 +791,22 @@ a discovery BUY recommendation: low confidence fails the medium/high opportunity
 If every candidate is quantitative-only, the scan stores `outcome="none"` with nearest misses.
 Screening and scoring share `PRICE_DATE_UNCERTAIN_PREFIX` for the price-date disclosure.
 
+Every synthesis catalyst is a structured `{text, occurs_on, event_id, evidence}` record; evidence
+is a nonempty list of validated claim URLs. The nullable ISO date is retained only if a cited
+claim about that same event explicitly states the full date, including its year. ISO and full
+English written dates are supported; partial, inferred, unrelated and publication-only dates are
+omitted with a data note. No extra research calls are added. Older saved catalyst strings are
+read as undated records without invented evidence; new model extraction must use the structured
+contract. The Workbench displays catalyst dates and safe evidence links, and bull/bear claim
+statuses as an icon plus a word using neutral colours. Today reads the same catalyst text.
+Roll out the frontend before the backend: the updated UI accepts both legacy strings and records,
+while older frontends expect strings. This changes saved JSON contracts, not database columns.
+
 Every synthesis catalyst must cite a claim URL from the validated evidence. `discovery/citations.py`
 checks all prose URLs and requires plain text with absolute HTTP(S) citations; Markdown links,
 reference links and HTML are rejected. Financial notation such as `>20%`, `P/E <15` and `[1]`
-is allowed; numeric markers never replace a catalyst's required source URL.
+is allowed; numeric markers never replace a catalyst's evidence array. Any URL in catalyst text
+must belong to that catalyst's own evidence, not merely another claim in the report.
 Invalid synthesis falls back to explicit quantitative
 screening prose with a disclosure. Forum discussion is labelled unverified, fit stays absent for
 an empty/inapplicable portfolio, and the conclusion carries the human-review/advisor disclaimer.

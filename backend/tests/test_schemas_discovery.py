@@ -38,6 +38,18 @@ def test_every_sample_survives_a_json_round_trip() -> None:
         assert again == model
 
 
+def test_legacy_saved_catalysts_and_claims_never_gain_a_date_or_confirmation():
+    data = sample_idea().model_dump(mode="json")
+    data["catalysts"] = ["Results in November."]
+    for claim in data["sources"]:
+        claim.pop("status", None)
+    idea = IdeaOut.model_validate(data)
+    assert idea.catalysts[0].text == "Results in November."
+    assert idea.catalysts[0].occurs_on is None
+    assert idea.catalysts[0].event_id is None and idea.catalysts[0].evidence == []
+    assert all(claim.status == "unverified" for claim in idea.sources)
+
+
 def test_a_misspelled_field_is_rejected_instead_of_silently_dropped() -> None:
     data = sample_candidate().model_dump()
     data["sektor"] = "Technology"

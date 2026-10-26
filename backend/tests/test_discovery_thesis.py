@@ -2,11 +2,93 @@ from datetime import date
 
 import pytest
 
-from app.discovery.thesis import exclusion_for, normalize_evidence, pending_development
-from app.schemas_discovery import NegativeDevelopment, ResearchEvidence
+from app.discovery.thesis import (
+    dated_catalysts,
+    exclusion_for,
+    normalize_evidence,
+    pending_development,
+)
+from app.schemas_discovery import Catalyst, NegativeDevelopment, ResearchEvidence
 from tests.discovery_fixtures import sample_candidate, sample_claim
 
 FACT = "The company lost its operating licence."
+
+
+@pytest.mark.parametrize(
+    "kind,tier,status,expected",
+    [
+        ("fact", "official", "confirmed", "confirmed"),
+        ("fact", "official", "disputed", "disputed"),
+        ("forecast", "official", "confirmed", "unverified"),
+        ("opinion", "official", "confirmed", "unverified"),
+        ("forum", "forum", "confirmed", "unverified"),
+        ("fact", "other", "confirmed", "unverified"),
+    ],
+)
+def test_claim_confirmation_is_gated_after_source_host_reclassification(
+    kind, tier, status, expected
+):
+    raw = evidence()
+    raw.claims[0] = raw.claims[0].model_copy(
+        update={
+            "kind": kind,
+            "source_tier": tier,
+            "status": status,
+            "url": "https://unknown.example/report" if tier == "other" else raw.claims[0].url,
+        }
+    )
+    normalized = normalize_evidence(raw)
+    assert normalized.claims[0].status == expected
+    assert raw.claims[0].status == status
+
+
+@pytest.mark.parametrize(
+    "excerpt,supported",
+    [
+        ("Earnings will be released on 2026-11-06.", True),
+        ("Earnings will be released on November 6, 2026.", True),
+        ("Earnings will be released on 6 November 2026.", True),
+        ("Earnings will be released on 6 Nov. 2026.", True),
+        ("Earnings will be released on 6 Nov.", False),
+        ("Earnings will be released in November 2026.", False),
+        ("The previous earnings were on 2025-11-06.", False),
+        ("Earnings date is unavailable.", False),
+        ("Unrelated reference: x2026-11-06x.", False),
+    ],
+)
+def test_catalyst_date_requires_a_full_date_in_its_cited_event_excerpt(excerpt, supported):
+    raw = evidence()
+    raw.claims[0] = raw.claims[0].model_copy(update={"text": excerpt})
+    catalyst = Catalyst(
+        text="Earnings release",
+        occurs_on=date(2026, 11, 6),
+        event_id=raw.claims[0].event_id,
+        evidence=[raw.claims[0].url],
+    )
+    out = dated_catalysts([catalyst], raw)[0]
+    assert out.occurs_on == (date(2026, 11, 6) if supported else None)
+    assert out.text == catalyst.text and out.evidence == catalyst.evidence
+    assert catalyst.occurs_on == date(2026, 11, 6)
+
+
+def test_date_from_another_event_in_the_same_article_or_publication_metadata_is_not_used():
+    raw = evidence()
+    raw.claims[0].published_at = date(2026, 11, 6)
+    catalyst = Catalyst(
+        text="Earnings release",
+        occurs_on=date(2026, 11, 6),
+        event_id=raw.claims[0].event_id,
+        evidence=[raw.claims[0].url],
+    )
+    assert dated_catalysts([catalyst], raw)[0].occurs_on is None
+    raw.claims.append(
+        raw.claims[0].model_copy(
+            update={"event_id": "different-event", "text": "Product launch on 2026-11-06."}
+        )
+    )
+    assert dated_catalysts([catalyst], raw)[0].occurs_on is None
+    raw.claims[0].text = "Earnings on 2026-11-06."
+    assert dated_catalysts([catalyst.model_copy(update={"evidence": []})], raw)[0].occurs_on is None
 
 
 def evidence(url: str = "https://www.reuters.com/business/licence") -> ResearchEvidence:

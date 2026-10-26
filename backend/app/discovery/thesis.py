@@ -4,6 +4,7 @@ The model judges thesis impact; it cannot promote a website into an authoritativ
 exclude a company without a quoted, high-materiality fact from the supplied evidence.
 """
 
+import re
 from collections.abc import Collection
 from typing import Any
 from urllib.parse import urlsplit
@@ -13,6 +14,7 @@ from app.discovery.citations import validate_citations
 from app.discovery.sources import source_tier
 from app.schemas_discovery import (
     CandidateMetrics,
+    Catalyst,
     Claim,
     Exclusion,
     NegativeDevelopment,
@@ -48,6 +50,8 @@ def normalize_evidence(
             cleaned = claim.model_copy(update={"url": url, "source_tier": tier})
             if tier == "other" and claim.source_tier in {"official", "reliable_reporting"}:
                 gaps.append(f"Source authority not verified for {host}; treated as other.")
+        # Revalidate after host classification: model_copy bypasses the confirmation gate.
+        cleaned = Claim.model_validate(cleaned.model_dump())
         claims.append(cleaned)
         by_url.setdefault(url, []).append(cleaned)
 
@@ -80,6 +84,37 @@ def normalize_evidence(
 
 def _trusted_fact(claim: Claim) -> bool:
     return claim.kind == "fact" and claim.source_tier in {"official", "reliable_reporting"}
+
+
+def dated_catalysts(catalysts: list[Catalyst], evidence: ResearchEvidence) -> list[Catalyst]:
+    """Keep event dates only when the cited, same-event excerpts explicitly state the full date."""
+    result = []
+    for catalyst in catalysts:
+        day = catalyst.occurs_on
+        if day is not None:
+            # shortcut: ISO and full English dates only; add locales when source coverage needs it.
+            forms = {day.isoformat()}
+            for month in (day.strftime("%B"), day.strftime("%b"), day.strftime("%b") + "."):
+                for number in (str(day.day), f"{day.day:02}"):
+                    forms.update(
+                        (
+                            f"{number} {month} {day.year}",
+                            f"{month} {number}, {day.year}",
+                            f"{month} {number} {day.year}",
+                        )
+                    )
+            pattern = r"(?<!\w)(?:" + "|".join(re.escape(form) for form in forms) + r")(?!\w)"
+            supported = any(
+                claim.url in catalyst.evidence
+                and catalyst.event_id is not None
+                and claim.event_id == catalyst.event_id
+                and re.search(pattern, " ".join(claim.text.split()), re.IGNORECASE)
+                for claim in evidence.claims
+            )
+            if not supported:
+                catalyst = catalyst.model_copy(update={"occurs_on": None})
+        result.append(catalyst)
+    return result
 
 
 def pending_development(evidence: ResearchEvidence) -> NegativeDevelopment | None:

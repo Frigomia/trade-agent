@@ -54,10 +54,14 @@ def evidence(*, negative=False, forum=False, status="confirmed", url=URL):
     return result
 
 
+def catalyst_data(text, url=URL, occurs_on=None, event_id="revenue"):
+    return {"text": text, "occurs_on": occurs_on, "event_id": event_id, "evidence": [url]}
+
+
 def prose(url=URL):
     return {
         "thesis": "Revenue growth supports further research.",
-        "catalysts": [f"Reported revenue growth ({url})."],
+        "catalysts": [catalyst_data(f"Reported revenue growth ({url}).", url)],
         "outlook": "The future remains uncertain.",
         "bear_case": "Margins and competitive pressures require further investigation.",
         "fit_summary": None,
@@ -231,7 +235,7 @@ def test_synthesis_preserves_numeric_identity_and_untrusted_data_boundary(provid
     assert result.risk == sample_candidate().risk
     assert result.peers == candidate.peers
     assert result.origin == sample_candidate().origin
-    assert result.catalysts == prose()["catalysts"]
+    assert result.model_dump(mode="json")["catalysts"] == prose()["catalysts"]
     assert "Not a licensed advisor" in result.conclusion
     extraction.assert_awaited_once()
     args = extraction.await_args.args
@@ -271,7 +275,7 @@ def test_invented_citation_in_any_prose_field_rejects_synthesis(providers, field
     _, _, extraction = providers
     data = prose()
     invented = "Claim: https://invented.example/not-fetched"
-    data[field] = [invented] if field == "catalysts" else invented
+    data[field] = [catalyst_data(invented)] if field == "catalysts" else invented
     extraction.return_value = data
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
@@ -283,22 +287,61 @@ def test_invented_citation_in_any_prose_field_rejects_synthesis(providers, field
 
 def test_catalyst_requires_a_claim_citation(providers):
     _, _, extraction = providers
-    extraction.return_value = {**prose(), "catalysts": ["A product might launch."]}
+    extraction.return_value = {
+        **prose(),
+        "catalysts": [{**catalyst_data("A product might launch."), "evidence": []}],
+    }
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
     assert result.catalysts == []
     assert any("Synthesis unavailable" in note for note in result.data_notes)
 
 
+@pytest.mark.parametrize("supported", [False, True])
+def test_graph_saves_only_catalyst_dates_supported_by_the_cited_event(providers, supported):
+    initial, _, extraction = providers
+    if supported:
+        initial.return_value.claims[0].text = "Results will be released on 6 November 2026."
+    initial.return_value.claims[0].status = "disputed"
+    extraction.return_value = {
+        **prose(),
+        "catalysts": [catalyst_data("Results release", occurs_on="2026-11-06")],
+    }
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.catalysts[0].occurs_on == (date(2026, 11, 6) if supported else None)
+    assert result.sources[0].status == "disputed"
+    assert result.thesis == prose()["thesis"]
+    assert any("Catalyst dates" in note for note in result.data_notes) is not supported
+    assert IdeaOut.model_validate_json(result.model_dump_json()) == result
+
+
+def test_structured_catalyst_cannot_attach_unknown_evidence(providers):
+    _, _, extraction = providers
+    extraction.return_value = {
+        **prose(),
+        "catalysts": [catalyst_data("Launch", url="https://invented.example/launch")],
+    }
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut) and result.catalysts == []
+
+
+def test_legacy_catalyst_text_is_not_accepted_from_new_model_extraction(providers):
+    _, _, extraction = providers
+    extraction.return_value = {**prose(), "catalysts": [f"Launch ({URL})"]}
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut) and result.catalysts == []
+
+
 def test_financial_comparisons_and_numeric_markers_preserve_valid_synthesis(providers):
     _, _, extraction = providers
     thesis = "EBITDA margin >20% and P/E <15 support further research [1]."
     catalyst = f"Coverage > 5x was reported [1]; source: {URL}."
-    extraction.return_value = {**prose(), "thesis": thesis, "catalysts": [catalyst]}
+    extraction.return_value = {**prose(), "thesis": thesis, "catalysts": [catalyst_data(catalyst)]}
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
     assert result.thesis == thesis
-    assert result.catalysts == [catalyst]
+    assert result.catalysts[0].text == catalyst
     assert not any("Synthesis unavailable" in note for note in result.data_notes)
 
 
@@ -351,7 +394,7 @@ def test_only_plain_text_absolute_fetched_citations_are_accepted(providers, untr
     _, _, extraction = providers
     extraction.return_value = {
         **prose(),
-        "catalysts": [f"Known source ({URL}). Read {untrusted_link}."],
+        "catalysts": [catalyst_data(f"Known source ({URL}). Read {untrusted_link}.")],
     }
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
