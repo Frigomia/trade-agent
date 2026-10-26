@@ -14,6 +14,9 @@ import {
   Users,
 } from "lucide-react";
 
+/** The one name of the backtest screen: nav, the More and Account lists and the page title. */
+export const BACKTEST_LABEL = "Signal backtest";
+
 export interface NavItem {
   label: string;
   href: string;
@@ -46,7 +49,7 @@ export const DESKTOP_SECTIONS: NavItem[] = [
   { label: "Plan", href: "/portfolio/plan", icon: CalendarCheck, sub: true },
   { label: "Chat", href: "/chat", icon: MessageSquare },
   { label: "Track record", href: "/more/track-record", icon: ListChecks },
-  { label: "Backtests", href: "/more/backtests", icon: History },
+  { label: BACKTEST_LABEL, href: "/more/backtests", icon: History },
   { label: "Preferences", href: "/more/preferences", icon: SlidersHorizontal },
   { label: "Account", href: "/more/account", icon: UserRound },
   { label: "Users", href: "/admin", icon: Users, adminOnly: true, exact: true, section: "Administration" },

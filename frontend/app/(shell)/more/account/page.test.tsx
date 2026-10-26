@@ -44,7 +44,7 @@ describe("AccountPage", () => {
     expect(await screen.findByText("me@example.com")).toBeInTheDocument();
     expect(await screen.findByText("2 / 10")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /track record/i })).toHaveAttribute("href", "/more/track-record");
-    expect(screen.getByRole("link", { name: /backtests/i })).toHaveAttribute("href", "/more/backtests");
+    expect(screen.getByRole("link", { name: "Signal backtest" })).toHaveAttribute("href", "/more/backtests");
     expect(screen.getByRole("link", { name: /preferences/i })).toHaveAttribute("href", "/more/preferences");
     fireEvent.click(screen.getByRole("button", { name: /change password/i }));
     expect(screen.getByText("change-password")).toBeInTheDocument();

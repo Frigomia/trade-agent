@@ -245,7 +245,7 @@ colour, at most 72 characters wide.
 Phone-first. On a phone the page is a single column with 16px side padding and a sticky bottom
 tab bar (Today, Discover, Portfolio, Chat, More), each a 20px icon over a label. From 900px a
 204px sidebar appears with the brand mark (the two-bulls SVG in a 34px square) and the full list:
-Today, Discover (with a small "new" badge), Portfolio, Chat, Track record, Backtests, Preferences,
+Today, Discover (with a small "new" badge), Portfolio, Chat, Track record, Signal backtest, Preferences,
 Account; the main area has 24px top and 34px side padding. Desktop mocks are drawn at 1280px and phone mocks at 390px.
 
 Spacing is a 4px base with 8, 10, 12, 16, 20, 22 and 24 in use: 16px between panels, 12px between

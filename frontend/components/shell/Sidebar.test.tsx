@@ -36,6 +36,12 @@ describe("Sidebar", () => {
     pathname = "/today";
   });
 
+  it("uses the one short name for the backtest screen, not the old Backtests", () => {
+    render(<Sidebar role="user" />);
+    expect(screen.getByRole("link", { name: "Signal backtest" })).toHaveAttribute("href", "/more/backtests");
+    expect(screen.queryByRole("link", { name: "Backtests" })).not.toBeInTheDocument();
+  });
+
   it("puts Plan under Portfolio, linking to the plan views", () => {
     render(<Sidebar role="user" />);
     const links = screen.getAllByRole("link").map((l) => l.textContent);
