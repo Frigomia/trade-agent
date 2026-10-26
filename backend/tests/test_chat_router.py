@@ -373,3 +373,31 @@ def test_a_generic_bad_request_does_not_flag_the_key(client, db_session, app_ses
 
     db_session.expire_all()
     assert db_session.query(UserApiKey).one().status == "ok"
+
+
+def test_chat_passes_the_asked_idea_to_the_agent(client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+    with patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")) as mock_run:
+        response = client.post("/chat", json={"session_id": "s1", "message": "q", "idea_id": 42})
+
+    assert response.status_code == 200
+    assert mock_run.call_args.kwargs["idea_id"] == 42
+
+
+def test_chat_without_an_idea_passes_none(client, monkeypatch):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+    with patch("app.routers.chat.run_chat", AsyncMock(return_value="ok")) as mock_run:
+        client.post("/chat", json={"session_id": "s1", "message": "q"})
+
+    assert mock_run.call_args.kwargs["idea_id"] is None
+
+
+@pytest.mark.parametrize("bad", [0, -1, 2**31, "abc", 1.5])
+def test_chat_rejects_a_bad_idea_id(client, monkeypatch, bad):
+    monkeypatch.setattr(settings, "anthropic_api_key", "test-key")
+
+    response = client.post("/chat", json={"session_id": "s1", "message": "q", "idea_id": bad})
+
+    assert response.status_code == 422
