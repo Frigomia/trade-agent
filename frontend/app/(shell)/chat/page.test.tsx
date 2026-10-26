@@ -280,6 +280,7 @@ describe("ChatPage opened from Ask AI on a company page", () => {
         chatBodies.push(JSON.parse(init.body!));
         return { session_id: "main", message: "ok" };
       }
+      if (path === HISTORY_PATH && init?.method === "DELETE") return undefined;
       throw new Error(`unexpected ${init?.method ?? "GET"} ${path}`);
     });
   });
@@ -313,7 +314,57 @@ describe("ChatPage opened from Ask AI on a company page", () => {
     release(idea);
 
     await waitFor(() => expect(screen.getByLabelText("Message")).toHaveValue(""));
-    expect(chatBodies[0]).toEqual({ session_id: "main", message: "hi" });
+    expect(chatBodies[0]).toEqual({ session_id: "main", message: "hi", idea_id: 7 });
+  });
+
+  it("sends the idea with what was typed before the lookup finished, and keeps that text", async () => {
+    let release: (value: unknown) => void = () => {};
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string; body?: string }) =>
+      path === "/analysis/recommendations/7" ? new Promise((resolve) => { release = resolve; }) : base(path, init),
+    );
+    renderFresh();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "What are the top risks?" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i })); // before the lookup has answered
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0]).toEqual({ session_id: "main", message: "What are the top risks?", idea_id: 7 });
+
+    release(idea);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.getByLabelText("Message")).toHaveValue(""); // the late answer does not fill the box
+  });
+
+  it("drops the idea after Clear chat", async () => {
+    history = [msg(1, "user", "Walk me through it"), msg(2, "assistant", "ok")];
+    renderFresh();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "and the risks?" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0].idea_id).toBe(7);
+
+    fireEvent.click(screen.getByRole("button", { name: /clear/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^delete$/i }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith(HISTORY_PATH, { method: "DELETE" }));
+    history = [];
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400)); // the dialog's exit transition hides the page
+    });
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "something else" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(chatBodies).toHaveLength(2));
+    expect(chatBodies[1]).toEqual({ session_id: "main", message: "something else" });
+  });
+
+  it("a starter question carries no idea", async () => {
+    renderFresh();
+
+    fireEvent.click(await screen.findByRole("button", { name: "How is my portfolio doing?" }));
+
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0]).toEqual({ session_id: "main", message: "How is my portfolio doing?" });
   });
 
   it("survives a stored idea with no usable name", async () => {
@@ -322,6 +373,10 @@ describe("ChatPage opened from Ask AI on a company page", () => {
 
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7"));
     expect(await screen.findByLabelText("Message")).toHaveValue("");
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "hello" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    await waitFor(() => expect(chatBodies).toHaveLength(1));
+    expect(chatBodies[0].idea_id).toBe(7); // the research still exists; only the typed question is skipped
   });
 
   it("sends the idea's id with every message of this visit, so follow-ups keep the research", async () => {

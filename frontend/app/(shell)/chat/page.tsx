@@ -42,22 +42,21 @@ function ChatScreen() {
     const ask = params.get("ask") ?? "";
     return ASK_SHAPE.test(ask) ? ask : "";
   });
-  const [ideaId] = useState<number | null>(() => {
+  // The company this visit is about. It goes with every message until a starter question or Clear chat
+  // moves on; the server only uses it when it is one of the person's own saved ideas.
+  const [ideaId, setIdeaId] = useState<number | null>(() => {
     const raw = params.get("idea") ?? "";
     return IDEA_ID.test(raw) ? Number(raw) : null;
   });
   const { data: askedIdea } = useSWR<RecommendationOut>(ideaId === null ? null : `/analysis/recommendations/${ideaId}`, apiFetch);
-  // The idea the box's question is about: it goes with the message so the answer can use its research.
-  const [asking, setAsking] = useState<number | null>(null);
   const [prefilled, setPrefilled] = useState(false);
-  // Anything the person types or sends first wins: a late answer must not put a question in the box.
+  // Anything the person types or sends first wins the box: a late answer must not put a question in it.
   const [touched, setTouched] = useState(false);
   if (askedIdea && !prefilled) {
     setPrefilled(true);
     const { name, ticker } = askedIdea.idea ?? {};
     if (!touched && draft === "" && typeof name === "string" && typeof ticker === "string") {
       setDraft(`Walk me through the research on ${[...name].slice(0, 80).join("")} (${ticker}).`);
-      setAsking(askedIdea.id);
     }
   }
   const [pending, setPending] = useState<string | null>(null);
@@ -91,7 +90,7 @@ function ChatScreen() {
       ? "Chat is turned off for your account. Ask the administrator if you need it."
       : `You've used all ${chatUsage?.limit ?? ""} chat messages this month. They reset on ${resetDate}. Need more sooner? Ask the administrator to raise your limit.`;
 
-  async function send(text: string) {
+  async function send(text: string, about: number | null = ideaId) {
     const message = text.trim();
     if (!message || pending !== null || atLimit) return;
     setTouched(true);
@@ -101,7 +100,7 @@ function ChatScreen() {
     try {
       await apiFetch("/chat", {
         method: "POST",
-        body: JSON.stringify({ session_id: CHAT_SESSION, message, ...(asking === null ? {} : { idea_id: asking }) }),
+        body: JSON.stringify({ session_id: CHAT_SESSION, message, ...(about === null ? {} : { idea_id: about }) }),
       });
     } catch (err) {
       setDraft(message);
@@ -124,6 +123,7 @@ function ChatScreen() {
     setConfirmClear(false);
     try {
       await apiFetch(HISTORY_PATH, { method: "DELETE" });
+      setIdeaId(null);
       await mutateMessages();
     } catch {
       setError("Could not clear the conversation.");
@@ -159,7 +159,10 @@ function ChatScreen() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
             <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
-              <Button key={starter} variant="outlined" size="small" onClick={() => void send(starter)}>
+              <Button key={starter} variant="outlined" size="small" onClick={() => {
+                  setIdeaId(null);
+                  void send(starter, null);
+                }}>
                 {starter}
               </Button>
             ))}
