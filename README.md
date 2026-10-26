@@ -16,7 +16,7 @@ production checklist is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - **Analysis and review:** analysis agents (fundamentals gate buy/sell, technicals time entries, a
   web-search second opinion kept separate from the numbers), recommendations with approve/dismiss
-  and 20-day outcomes, long-term memory, backtests with a stored equity curve, and a
+  and 20-trading-day outcomes, long-term memory, backtests with a stored equity curve, and a
   portfolio-aware chat.
 - **Portfolio:** holdings, trade log and daily snapshots. The companies you watch are on Discover.
 - **Monthly contribution planner:** enter an amount and get a plan of how much to add to each
@@ -131,7 +131,7 @@ More setup details (row-level security locally, invitations, running the tests) 
 
 ### Scheduled jobs
 
-The daily portfolio snapshot and the 20-day outcome evaluation also run without anyone opening a
+The daily portfolio snapshot and the 20-trading-day outcome evaluation also run without anyone opening a
 page, through a one-shot command that an external scheduler (cron, Task Scheduler, a Fly scheduled
 machine) triggers:
 

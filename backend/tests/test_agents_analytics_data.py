@@ -1,12 +1,13 @@
 import asyncio
 import inspect
 import json
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
 
-from app.agents.market_data import fetch_dated_closes, fetch_profile
+from app.agents.market_data import fetch_closes_between, fetch_dated_closes, fetch_profile
 
 
 def test_dated_history_preserves_dates_when_dropping_invalid_closes():
@@ -312,3 +313,33 @@ def test_yfinance_still_has_the_per_call_switch_the_strict_read_relies_on():
     from yfinance.scrapers.history import PriceHistory
 
     assert "raise_errors" in inspect.signature(PriceHistory.history).parameters
+
+
+def _between(ticker: MagicMock) -> dict[str, float]:
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+    ):
+        return asyncio.run(fetch_closes_between("A", date(2026, 10, 1), date(2026, 12, 1)))
+
+
+def test_closes_between_are_split_adjusted_only_and_keep_their_dates():
+    frame = pd.DataFrame(
+        {"Close": [100.0, float("nan"), 102.0]},
+        index=pd.to_datetime(["2026-10-01", "2026-10-02", "2026-10-05"]),
+    )
+    ticker = MagicMock()
+    ticker.history.return_value = frame
+
+    assert _between(ticker) == {"2026-10-01": 100.0, "2026-10-05": 102.0}
+    ticker.history.assert_called_once_with(
+        start=date(2026, 10, 1), end=date(2026, 12, 1), auto_adjust=False, raise_errors=True
+    )
+
+
+def test_closes_between_raises_a_provider_failure_instead_of_returning_nothing():
+    ticker = MagicMock()
+    ticker.history.side_effect = RuntimeError("yahoo down")
+
+    with pytest.raises(RuntimeError):
+        _between(ticker)
