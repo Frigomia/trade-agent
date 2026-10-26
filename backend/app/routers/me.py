@@ -11,6 +11,7 @@ from app.models import (
     AppUser,
     BacktestResult,
     ChatMessage,
+    CompanyAnalysis,
     Holding,
     InvestmentPreferences,
     PortfolioSnapshot,
@@ -24,6 +25,7 @@ from app.schemas import (
     AcceptIn,
     BacktestResultOut,
     ChatMessageOut,
+    CompanyAnalysisExportOut,
     DataDeleteIn,
     ExportOut,
     ExportProfileOut,
@@ -125,6 +127,10 @@ def export_data(
         contribution_plans=plans.load_all(db, user.id),
         scan_runs=[
             ScanRunOut.model_validate(scan) for scan in db.query(ScanRun).filter_by(user_id=user.id)
+        ],
+        company_analyses=[
+            CompanyAnalysisExportOut.model_validate(row)
+            for row in db.query(CompanyAnalysis).filter_by(user_id=user.id)
         ],
         # The settings only: the chat id is never exported.
         telegram=(

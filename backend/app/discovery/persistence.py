@@ -15,7 +15,7 @@ from app.schemas_discovery import Exclusion, IdeaOut, RejectedMention
 MAX_ENTRY_PRICE_AGE_DAYS = 10
 
 
-def _entry_price(idea: IdeaOut, today: datetime) -> tuple[float, datetime] | None:
+def entry_price(idea: IdeaOut, today: datetime) -> tuple[float, datetime] | None:
     """The price the idea was issued at and the day it is the close of, or None when the snapshot
     has no price, no date, a date in the future or one too old to be the issue price. The outcome
     job then leaves the idea unmeasured instead of guessing. The price is in the major currency
@@ -93,7 +93,7 @@ def save_scan(
                 ).update({"status": "SUPERSEDED"}, synchronize_session=False)
             now = datetime.now(UTC)
             for idea in qualifying:
-                entry = _entry_price(idea, now)
+                entry = entry_price(idea, now)
                 db.add(
                     Recommendation(
                         user_id=user_id,

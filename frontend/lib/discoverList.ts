@@ -18,8 +18,8 @@ export const SORTS: { key: DiscoverSort; label: string }[] = [
 ];
 
 export const nameOf = (item: DiscoverItem) => item.name ?? item.ticker;
-/** Researched by a scan and with a report to open: the one rule the filters, the counts and the card share. */
-export const isAnalyzed = (item: DiscoverItem) => item.status === "analyzed" && item.report_id !== null;
+/** A saved report or durable research outcome: the rule shared by filters, counts and cards. */
+export const isAnalyzed = (item: DiscoverItem) => item.status === "analyzed" && (item.report_id !== null || item.analysis?.researched === true);
 
 /** How many companies each filter would show, so the buttons can say before they are pressed. */
 export function counts(items: DiscoverItem[]): Record<DiscoverFilter, number> {

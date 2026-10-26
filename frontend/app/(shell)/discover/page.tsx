@@ -31,8 +31,8 @@ function Empty({ icon, title, body, action }: { icon: React.ReactNode; title: st
 
 /**
  * Discover: the companies the person is monitoring, whether or not they own them. Companies saved
- * from Today are in the list without any action. This screen only reads what scans already
- * produced; it never starts research and never places a trade.
+ * from Today are in the list without any action. Research starts only through an explicit
+ * Analyze action; opening the screen is free and nothing places a trade.
  */
 export default function DiscoverPage() {
   const list = useDiscoverList();

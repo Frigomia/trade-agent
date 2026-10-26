@@ -1,6 +1,6 @@
 """Discover: the person's watchlist as a browsable list, with what the app already knows about each
-company (its quote, whether a scan researched it, and the one-line reading). Reads only saved data
-and cached quotes; nothing here starts research, and nothing places a trade."""
+company (its quote, research status and one-line reading). Reads are free; only an explicit
+Analyze request starts single-company research. Nothing places a trade."""
 
 import asyncio
 import logging
@@ -10,21 +10,31 @@ from decimal import Decimal
 from typing import Literal, Self
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
+from app import claude_keys, usage
 from app.agents.market_data import fetch_profile, fetch_quote_and_history
+from app.agents.news import _get_client
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
+from app.discovery.company import CompanyDataUnavailable
+from app.discovery.company_jobs import CompanyUnavailable, company_state, start_company
+from app.discovery.jobs import DiscoveryAlreadyRunning
 from app.fx import minor_unit, quoted_currency
 from app.http_headers import no_store
 from app.limits import cap_message
 from app.models import Holding, Recommendation, WatchlistItem
+from app.price_history import HistoryUnavailable, load_price_history
 from app.rate_limit import rate_limiter
 from app.schemas import (
+    CompanyAnalysisOut,
+    HistoryRange,
     Note,
+    PriceHistoryOut,
     TargetPrice,
     Ticker,
     WatchlistItemIn,
@@ -67,12 +77,13 @@ class DiscoverItemOut(BaseModel):
     change_pct: float | None  # last close against the one before, in percent
     price_as_of: date | None
     stale: bool
-    # "analyzed": a scan researched it and saved an idea. Never started from here.
+    # A saved discovery report or a completed, researched company outcome.
     status: Literal["analyzed", "none"]
     insight: str | None  # the idea's one-line reading, only when analyzed
     report_id: int | None  # the idea's id, to open its report
     # The person holds shares of it. Its weight target then lives on the holding, not here.
     owned: bool
+    analysis: CompanyAnalysisOut | None = None
 
 
 class DiscoverOut(BaseModel):
@@ -159,6 +170,31 @@ def _item_out(
     )
 
 
+def _company_states(
+    db: Session, user_id: UUID, tickers: list[str]
+) -> dict[str, CompanyAnalysisOut]:
+    from app.models import CompanyAnalysis
+
+    newest = (
+        db.query(func.max(CompanyAnalysis.id))
+        .filter(CompanyAnalysis.user_id == user_id, CompanyAnalysis.ticker.in_(tickers))
+        .group_by(CompanyAnalysis.ticker)
+        .scalar_subquery()
+    )
+    return {
+        row.ticker: CompanyAnalysisOut.model_validate(row)
+        for row in db.query(CompanyAnalysis).filter(CompanyAnalysis.id.in_(newest))
+    }
+
+
+def _attach_state(item: DiscoverItemOut, state: CompanyAnalysisOut | None) -> None:
+    item.analysis = state
+    if state is not None and state.researched and item.report_id is None:
+        item.status = "analyzed"
+        item.insight = state.reason
+        item.report_id = state.report_id
+
+
 def _analysis(db: Session, user_id: UUID, tickers: list[str]) -> dict[str, tuple[int, str | None]]:
     """Each ticker's latest saved discovery idea: its id and one-line reading."""
     # The newest idea per ticker is the one with the highest id (ids only grow), so only those rows
@@ -196,6 +232,7 @@ async def list_discover(
     )
     analysis = _analysis(db, user.id, [i.ticker for i in items]) if items else {}
     owned = _owned(db, user.id)
+    company_states = _company_states(db, user.id, [i.ticker for i in items]) if items else {}
     rows = [(WatchlistItemOut.model_validate(i), analysis.get(i.ticker)) for i in items]
     db.close()  # everything is copied out: release the connection before waiting on quotes
     sem = asyncio.Semaphore(LOOKUP_CONCURRENCY)
@@ -209,7 +246,134 @@ async def list_discover(
         _item_out(item, found, currency, quote, item.ticker in owned)
         for (item, found), quote, currency in zip(rows, quotes, currencies, strict=True)
     ]
+    for item in out:
+        _attach_state(item, company_states.get(item.ticker))
     return DiscoverOut(items=out, missing=["prices"] if any(q is None for q in quotes) else [])
+
+
+class CompanyOverviewOut(BaseModel):
+    company: DiscoverItemOut
+    sector: str | None
+    industry: str | None
+    country: str | None
+    missing: list[Literal["prices", "profile"]]
+
+
+def _saved_company(db: Session, user_id: UUID, ticker: str) -> WatchlistItemOut:
+    row = db.query(WatchlistItem).filter_by(user_id=user_id, ticker=ticker).one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Not in your Discover list")
+    return WatchlistItemOut.model_validate(row)
+
+
+@router.get(
+    "/{ticker}/overview",
+    response_model=CompanyOverviewOut,
+    dependencies=[Depends(rate_limiter("company_overview", limit=LIST_LIMIT_PER_MINUTE))],
+)
+async def company_overview(
+    ticker: Ticker,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> CompanyOverviewOut:
+    item = _saved_company(db, user.id, ticker)
+    found = _analysis(db, user.id, [ticker]).get(ticker)
+    owned = ticker in _owned(db, user.id, ticker)
+    db.close()
+
+    async def profile() -> dict[str, str | None]:
+        try:
+            return await fetch_profile(ticker)
+        except Exception as exc:
+            logger.warning("Company profile unavailable (%s)", type(exc).__name__)
+            return {}
+
+    facts, quote = await asyncio.gather(profile(), _quote(ticker, asyncio.Semaphore(1)))
+    currency = item.currency or facts.get("currency")
+    company = _item_out(item, found, currency, quote, owned)
+    _attach_state(company, await company_state(user.id, ticker))
+    company.name = company.name or facts.get("name")
+    company.exchange = company.exchange or facts.get("exchange")
+    missing: list[Literal["prices", "profile"]] = []
+    if quote is None:
+        missing.append("prices")
+    if not facts:
+        missing.append("profile")
+    return CompanyOverviewOut(
+        company=company,
+        sector=facts.get("sector"),
+        industry=facts.get("industry"),
+        country=facts.get("country"),
+        missing=missing,
+    )
+
+
+@router.get(
+    "/{ticker}/history",
+    response_model=PriceHistoryOut,
+    dependencies=[Depends(rate_limiter("idea_history", limit=LIST_LIMIT_PER_MINUTE))],
+)
+async def company_history(
+    ticker: Ticker,
+    range_: HistoryRange = Query("1m", alias="range"),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> PriceHistoryOut:
+    item = _saved_company(db, user.id, ticker)
+    db.close()
+    # The shared reader verifies the live quote unit; it never guesses a pence/pound series.
+    major, _ = minor_unit(item.currency)
+    try:
+        return await load_price_history(ticker, range_, major)
+    except HistoryUnavailable:
+        raise HTTPException(status_code=502, detail="Price history is unavailable") from None
+
+
+@router.post(
+    "/{ticker}/analyze",
+    status_code=202,
+    response_model=CompanyAnalysisOut,
+    dependencies=[Depends(rate_limiter("discovery_run", limit=2))],
+)
+async def analyze_company(
+    ticker: Ticker,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+    defaults: usage.LimitDefaults = Depends(usage.get_limit_defaults),
+) -> CompanyAnalysisOut:
+    _saved_company(db, user.id, ticker)
+    if _analysis(db, user.id, [ticker]).get(ticker):
+        raise HTTPException(status_code=409, detail="A saved report is already available.")
+    client = await run_in_threadpool(claude_keys.resolve_client, db, user.id, user.role)
+    db.close()
+    uses_saved_key = client is not None
+    if client is None:
+        if user.role != "admin":
+            raise claude_keys.ClaudeKeyRequired()
+        client = _get_client()
+        if client is None:
+            raise claude_keys.ClaudeKeyRequired()
+    try:
+        return await start_company(
+            user.id,
+            ticker,
+            client,
+            usage.effective_limit(user, "analysis_run", defaults),
+            uses_saved_key,
+        )
+    except DiscoveryAlreadyRunning:
+        raise HTTPException(
+            status_code=409, detail="An analysis is already running. Wait for it to finish."
+        ) from None
+    except (CompanyDataUnavailable, TimeoutError):
+        raise HTTPException(
+            status_code=503, detail="Research data is unavailable. No monthly run was used."
+        ) from None
+    except (CompanyUnavailable, usage.RunClaimLost):
+        raise HTTPException(
+            status_code=409,
+            detail="Research or usage settlement is unavailable. Refresh before retrying.",
+        ) from None
 
 
 class DiscoverAddIn(WatchlistItemIn):
