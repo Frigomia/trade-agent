@@ -3,6 +3,7 @@ import { Box, Button, Typography } from "@mui/material";
 import { Check, CircleDashed, Eye, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { Change } from "@/components/ui/Change";
 import { Logo } from "@/components/ui/Logo";
+import { ResearchAction } from "./ResearchAction";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoverItem } from "@/lib/api/discover-types";
 import { addedText, isAnalyzed, metaText, nameOf, priceText, targetsText } from "@/lib/discoverList";
@@ -10,7 +11,7 @@ import { addedText, isAnalyzed, metaText, nameOf, priceText, targetsText } from 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
 /** Status as shape plus word, never colour alone: a check for researched, a dashed circle for not. */
-export function StatusPill({ analyzed }: { analyzed: boolean }) {
+export function StatusPill({ analyzed, running = false }: { analyzed: boolean; running?: boolean }) {
   const Icon = analyzed ? Check : CircleDashed;
   return (
     <Box
@@ -27,11 +28,11 @@ export function StatusPill({ analyzed }: { analyzed: boolean }) {
         whiteSpace: "nowrap",
         color: analyzed ? "var(--accent)" : "var(--text2)",
         bgcolor: analyzed ? "var(--accent-wash)" : "transparent",
-        border: analyzed ? "1px solid transparent" : "1px dashed var(--line2)",
+        border: running ? "1px dotted var(--line2)" : analyzed ? "1px solid transparent" : "1px dashed var(--line2)",
       }}
     >
       <Icon size={13} aria-hidden />
-      {analyzed ? "AI analyzed" : "Not analyzed"}
+      {running ? "Analyzing" : analyzed ? "AI analyzed" : "Not analyzed"}
     </Box>
   );
 }
@@ -89,8 +90,9 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
   const name = nameOf(item);
   const targets = targetsText(item);
   const analyzed = isAnalyzed(item);
-  // The first action takes the width on a phone: View for a researched company, Edit target for the rest.
-  const wideEdit = !analyzed;
+  // The first action opens a saved result or explicitly starts company research.
+  const hasReport = analyzed && item.report_id !== null;
+  const overview = `/discover/company/${encodeURIComponent(item.ticker)}`;
   const report = `/today/${item.report_id}`;
   return (
     <Panel
@@ -111,16 +113,16 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
       </Box>
       <Box sx={{ minWidth: 0, display: "grid", gap: 0.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          {analyzed ? (
+          {hasReport ? (
             <Box component={Link} href={report} aria-label={`Open the investment report for ${name}`} sx={{ fontWeight: 650, fontSize: "1rem", color: "var(--text)", textDecoration: "none", overflowWrap: "anywhere", "&:hover": { textDecoration: "underline" } }}>
               {name}
             </Box>
           ) : (
-            <Typography component="span" sx={{ fontWeight: 650, fontSize: "1rem", overflowWrap: "anywhere" }}>
+            <Box component={Link} href={`/discover/company/${encodeURIComponent(item.ticker)}`} aria-label={`Open the company overview for ${name}`} sx={{ fontWeight: 650, fontSize: "1rem", color: "var(--text)", textDecoration: "none", overflowWrap: "anywhere", "&:hover": { textDecoration: "underline" } }}>
               {name}
-            </Typography>
+            </Box>
           )}
-          <StatusPill analyzed={analyzed} />
+          <StatusPill analyzed={analyzed} running={item.analysis?.status === "running"} />
         </Box>
         <Typography sx={muted}>{[metaText(item), addedText(item, now)].filter(Boolean).join(" · ")}</Typography>
         {analyzed && item.insight && (
@@ -132,26 +134,26 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
         {targets && <Typography sx={{ ...muted, color: "var(--text2)" }}>{targets}</Typography>}
       </Box>
       <PriceBlock item={item} />
-      {/* The first action takes the width on a phone: View for a researched company, Edit target for the
-          rest (the person's own numbers). The square buttons beside it are 44px touch targets. */}
+      {/* Edit and Remove remain separate 44px actions beside research or the saved result. */}
       <Box sx={{ display: "flex", gap: 1, gridColumn: { xs: "1 / -1", md: "auto" }, justifyContent: { md: "flex-end" } }}>
-        {analyzed && (
-          <Button component={Link} href={report} variant="outlined" size="small" startIcon={<Eye size={15} aria-hidden />} aria-label={`View the report for ${name}`} sx={{ flex: { xs: 1, md: "none" }, minHeight: { xs: 44, md: 36 } }}>
+        {hasReport && (
+          <Button component={Link} href={report} variant="outlined" size="small" startIcon={<Eye size={15} aria-hidden />} aria-label={`View the report for ${name}`} sx={{ flex: { xs: 1, md: "none" }, minHeight: 44 }}>
             View
           </Button>
         )}
+        {!hasReport && (item.analysis?.status === "no_opportunity" || item.analysis?.status === "ineligible") && <Button component={Link} href={overview} variant="outlined" sx={{ flex: 1, minHeight: 44 }}>View result</Button>}
+        {!hasReport && item.analysis?.status !== "no_opportunity" && item.analysis?.status !== "ineligible" && <ResearchAction item={item} />}
         <Button
           variant="outlined"
           size="small"
           onClick={onEdit}
           aria-label={`Edit target for ${name}`}
           title="Edit target and price range"
-          sx={{ flex: { xs: wideEdit ? 1 : "none", md: "none" }, minHeight: { xs: 44, md: 36 }, minWidth: 44, px: wideEdit ? { xs: 2, md: 0 } : 0, gap: 1, color: "var(--text2)" }}
+          sx={{ minHeight: 44, minWidth: 44, px: 0, color: "var(--text2)" }}
         >
           <Pencil size={16} aria-hidden />
-          {wideEdit && <Box component="span" sx={{ display: { xs: "inline", md: "none" }, fontSize: "0.875rem", fontWeight: 600 }}>Edit target</Box>}
         </Button>
-        <Button variant="outlined" size="small" onClick={onRemove} aria-label={`Remove ${name} from Discover`} title="Remove from Discover" sx={{ minHeight: { xs: 44, md: 36 }, minWidth: 44, px: 0, color: "var(--text2)" }}>
+        <Button variant="outlined" size="small" onClick={onRemove} aria-label={`Remove ${name} from Discover`} title="Remove from Discover" sx={{ minHeight: 44, minWidth: 44, px: 0, color: "var(--text2)" }}>
           <Trash2 size={16} aria-hidden />
         </Button>
       </Box>

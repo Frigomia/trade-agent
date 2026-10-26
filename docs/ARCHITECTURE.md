@@ -676,7 +676,7 @@ Failed synthesis always yields low confidence. Manual, scheduled, already review
 users' recommendations are preserved.
 
 `discovery/jobs.py` stores private progress/results at `discovery:job:{job_id}` for one hour and
-claims `discovery_active:{user_id}` with `SET NX` for 20 minutes (15-minute provider timeout plus
+claims the shared `analysis_active:{user_id}` with `SET NX` for 20 minutes (15-minute provider timeout plus
 five minutes of slack). It renews only its own marker before persistence; losing the marker
 prevents a write, and polling a job with an expired marker reports interruption. Cleanup uses
 `_RELEASE_IF_MINE`, so an old job cannot delete a newer marker. Cancellation waits for an already
@@ -1681,3 +1681,64 @@ just believed done.
 
 **Legal/compliance**
 - [x] Self-service data export and deletion in place (sub-project 2c): `GET /me/export` and `DELETE /me/data` endpoints; privacy notice and household-exemption statement still needed before inviting other users
+
+
+### Single-company Discover research (#193, #194)
+
+Owner-approved layout and policies are recorded in
+[the design record](design/discover-company/direction-approved.md).
+`GET /discover/{ticker}/overview` returns `{company, sector, industry, country, missing}` for an
+owned WatchlistItem. `company` has the normal DiscoverItemOut fields and nullable `analysis`.
+`missing` names prices/profile failures; known identity survives provider outages. Country is
+provider domicile, not a verified listing country. Reads never start research or spend quota.
+`GET /discover/{ticker}/history?range=1m` returns PriceHistoryOut for the saved ticker, with the
+same five ranges and conservative major-unit conversion as idea history. Both history routes use
+`app/price_history.py`. Ownership is checked and the read session closed before provider awaits;
+responses are no-store and user rate-limited. Unknown/other-user/removed tickers return 404.
+
+`POST /discover/{ticker}/analyze` returns 202 CompanyAnalysisOut: job_id, created_at, finished_at,
+status (running/report/no_opportunity/ineligible/failed), researched, bounded reason, nullable
+report_id, charge_state (none/reserved/charged/refunded/pending) and can_analyze. It checks watchlist
+ownership and the existing Claude client policy before paid work. The free preflight is bounded to
+120 seconds, refreshes only the requested missing/stale snapshot, verifies raw instrument type,
+freshness, currency and user safeguards, then compares it with cached peers. It works outside the
+static universe without ranking or researching other symbols or starting global theme searches.
+`discovery/runner.py::evaluate_candidate` is shared with full scans. Company jobs request completed
+cited synthesis; quantitative-only fallback fails/refunds instead of becoming a paid AI report.
+No prompt or deterministic opportunity threshold is weakened.
+Explicit company candidates/reports have `origin="watchlist"`, including tickers outside the
+static universe. This provenance is set by the backend; research mentions cannot claim it.
+
+Manual holdings analysis, scheduled analysis, discovery scans and company research share one
+atomic per-user `analysis_active` claim. Only the owning job renews/releases it. Company jobs renew
+the claim before their 900-second paid section and verify ownership inside the atomic quota
+reservation. Deploy after existing discovery jobs finish because older deployments used a separate
+discovery marker. Company jobs are in-process and not automatically restarted after a crash.
+
+CompanyAnalysis (`company_analyses`) is a separate durable user-data table: integer id, user_id,
+ticker, unique job_id, created_at/finished_at, status, researched, bounded reason, fingerprint,
+nullable report_id and validated idea JSON, nullable original usage_key, and charge_state. The
+fingerprint covers relevant snapshot, peer and user admission inputs. Generated revision
+`ee25b99dc928` creates it with forced owner-only RLS and runtime table/sequence grants in the same
+transaction. USER_TABLES registration provides deletion coverage; GET /me/export includes the
+company attempt summaries. A completed non-opportunity persists without a Recommendation, while a
+qualifying opportunity saves a discovery report atomically with its attempt. It only supersedes
+pending discovery advice for that ticker; unrelated ideas and the latest ScanRun remain intact.
+
+Completed research costs one analysis_run, including a non-opportunity. Refusals and failures cost
+zero under the approved company policy. Per-job Redis reservation tokens atomically change the
+shared usage counter and make refunds idempotent against the original month, including rollover.
+The pending attempt is written before reservation, so uncertain start results can be reconciled.
+Missing claims cause only the same orphaned attempt to fail/refund on a later read; pending refunds
+block paid retry. Completion commits before claim release. A completed result or unchanged refusal
+cannot spend again. Provider charges already incurred are separate from the app's run allowance.
+Existing holdings/full-scan failure policies are unchanged.
+
+GET /discovery/run/{job_id} keeps its existing RUNNING/DONE/FAILED shape and adds `company` for a
+company attempt. Exact attempts are read durably after temporary job expiry, with owner and saved
+company checks; a removed company returns 404. Company jobs have no temporary scan hash fallback.
+The overview polls its durable state; leaving, refreshing or returning does not start another run.
+Discover lists researched non-opportunities honestly as analyzed, with a result link rather than
+a fake BUY report. The free page reuses Soft panels, company identity/sector icons and the accessible
+price chart; only an explicit Analyze click starts paid work. Missing keys link to /more/account,
+quota uses actual /me/usage values, and settlement uncertainty disables retry. No broker call exists.

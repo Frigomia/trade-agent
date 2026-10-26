@@ -93,6 +93,7 @@ class DiscoveryState(TypedDict):
     evaluation: NotRequired[Evaluation]
     exclusion: NotRequired[Exclusion | None]
     output: NotRequired[IdeaOut | Exclusion]
+    research_complete: NotRequired[bool]
 
 
 MAX_COMPETITORS = 8
@@ -434,7 +435,7 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
             peers=candidate.named_peers,
         ),
     )
-    return {"output": idea}
+    return {"output": idea, "research_complete": synthesis_available}
 
 
 def build_discovery_graph() -> Any:
@@ -465,6 +466,7 @@ async def run_discovery_graph(
     *,
     fit: CandidateFit | None = None,
     official_hosts: Collection[str] = (),
+    require_research: bool = False,
 ) -> IdeaOut | Exclusion:
     """Evaluate one eligible candidate. None explicitly means quant-only, never a server key."""
     if fit is not None and fit.ticker != candidate.ticker:
@@ -476,4 +478,10 @@ async def run_discovery_graph(
         "official_hosts": tuple(official_hosts),
     }
     result: DiscoveryState = await build_discovery_graph().ainvoke(initial)
+    if (
+        require_research
+        and isinstance(result["output"], IdeaOut)
+        and not result.get("research_complete")
+    ):
+        raise research.ResearchUnavailable("Cited research could not be completed")
     return result["output"]

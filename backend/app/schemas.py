@@ -529,6 +529,25 @@ class PriceHistoryOut(BaseModel):
     points: list[PricePointOut]  # may be empty; never filled in or invented
 
 
+class CompanyAnalysisOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    created_at: datetime
+    finished_at: datetime | None
+    status: Literal["running", "report", "no_opportunity", "ineligible", "failed"]
+    researched: bool
+    reason: str
+    report_id: int | None
+    charge_state: Literal["none", "reserved", "charged", "refunded", "pending"]
+    can_analyze: bool = False
+
+
+class CompanyAnalysisExportOut(CompanyAnalysisOut):
+    user_id: UUID
+    idea: IdeaOut | None
+
+
 class ExportOut(BaseModel):
     profile: ExportProfileOut
     holdings: list[HoldingOut]
@@ -542,6 +561,7 @@ class ExportOut(BaseModel):
     telegram: TelegramExportOut | None = None
     contribution_plans: list[PlanOut] = Field(default_factory=list)
     scan_runs: list[ScanRunOut] = Field(default_factory=list)
+    company_analyses: list[CompanyAnalysisExportOut] = Field(default_factory=list)
 
 
 class UsageDetail(BaseModel):

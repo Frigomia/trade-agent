@@ -469,15 +469,18 @@ track across the full width; Sort by on its own row with a wide select; and each
 who it is (monogram, name and status, one line of where it is listed and when it was added, the
 reading), the price with its change and the quote date on one line, and the actions, where View (or
 Edit target for a company no scan has researched) takes the width and Edit and Remove are square
-44px outlined buttons (outlined on a computer too, as in the mock). There is no Analyze button: Discover does not start research. The empty, loading, load-error,
-no-match and "Price unavailable" states are built. Analyze (single-company research) and the simple
-company overview are not built: Discover only shows research a scan already produced, and a company
-without a report has no page to open. "Save to Discover" on Today and in the workbench adds the
-company here as "saved from Today".
+44px outlined buttons. An eligible company without a saved outcome offers Analyze, explicitly
+priced at one monthly run. Running research shows Analyzing; a saved report offers View. A researched
+non-opportunity offers View result without inventing a BUY. Eligibility refusals cost zero and cannot
+repeat unchanged; failed runs are refunded before an explicit retry. Opening a name without a report
+shows `/discover/company/<ticker>`: a free provider overview, dated quote, keyboard-readable chart
+and facts, with research in a separate panel. On a phone research comes before chart and facts.
+Provider failures remain explicit and do not by themselves disable research. The allowance comes
+from the account, with a real Account link for a missing/rejected Claude key. See
+`docs/design/discover-company/direction-approved.md` for the owner's policy approval.
 
-**Not built yet:** single-company Analyze, the company
-overview for a company with no report, and the rem sizes in component `sx` props outside the new components (the theme
-and the new Today components are in rem). Existing screens keep their current layouts
+**Not built yet:** rem sizes in component `sx` props outside the new components.
+Existing screens keep their current layouts
 and sizes until each is restyled.
 
 Decided:
