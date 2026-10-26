@@ -6,7 +6,7 @@ import { setIsin } from "@/lib/orders";
 import type { PlanLine } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
 
-const label = { fontSize: 12, color: "var(--muted)", minWidth: 40 } as const;
+const label = { fontSize: "0.75rem", color: "var(--muted)", minWidth: 40 } as const;
 const rowSx = { display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", minHeight: 36 } as const;
 const linkButton = { minHeight: 44, textDecoration: "underline" } as const;
 
@@ -87,7 +87,7 @@ export function IsinRow({ line, onChanged }: { line: PlanLine; onChanged: () => 
           </>
         )}
         {action.error && (
-          <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)", flexBasis: "100%" }}>
+          <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--down)", flexBasis: "100%" }}>
             {action.error}
           </Typography>
         )}

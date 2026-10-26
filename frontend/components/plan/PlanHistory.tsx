@@ -21,7 +21,7 @@ import { useAction } from "@/lib/useAction";
 import { useWhenActive } from "@/lib/useWhenActive";
 import { OrdersSection } from "./OrdersSection";
 
-const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
+const muted = { fontSize: "0.78125rem", color: "var(--muted)" } as const;
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "180px minmax(0, 1fr) 140px 80px 120px" };
 const rowSx = {
   display: "grid",
@@ -88,7 +88,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Panel role="table" aria-label="Saved plans" sx={{ pt: 0.75, overflow: "hidden" }}>
-        <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, py: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
+        <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>
           <span role="columnheader">Month</span>
           <span role="columnheader">Saved</span>
           <Box component="span" role="columnheader" sx={right}>
@@ -135,7 +135,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
         <>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 1.5, flexWrap: "wrap" }}>
             <Box>
-              <Typography component="h2" sx={{ fontSize: 16, fontWeight: 650 }}>
+              <Typography component="h2" sx={{ fontSize: "1rem", fontWeight: 650 }}>
                 {month}, as saved
               </Typography>
               <Typography sx={muted}>Saved {planSavedAt(opened.created_at)}. Prices and rates of that day.</Typography>

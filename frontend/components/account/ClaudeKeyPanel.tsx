@@ -28,7 +28,7 @@ export function ClaudeKeyPanel() {
   return (
     <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }} aria-busy={isLoading}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-        <Typography component="h2" sx={{ fontSize: 16, fontWeight: 650 }}>
+        <Typography component="h2" sx={{ fontSize: "1rem", fontWeight: 650 }}>
           Claude
         </Typography>
         {status && <ClaudeStateChip kind={kind} />}
@@ -36,7 +36,7 @@ export function ClaudeKeyPanel() {
 
       {!status && error && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>Could not load your Claude status.</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>Could not load your Claude status.</Typography>
           <Button size="small" startIcon={<RefreshCw size={14} />} onClick={() => void refresh()}>
             Try again
           </Button>
@@ -46,7 +46,7 @@ export function ClaudeKeyPanel() {
 
       {status && kind === "none" && (
         <>
-          <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
+          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>
             Connect your own Claude account to use Chat and scans.
           </Typography>
           <Box>
@@ -60,7 +60,7 @@ export function ClaudeKeyPanel() {
       {status && kind !== "none" && (
         <>
           {kind === "warn" && (
-            <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>
               Anthropic did not accept your key. It may have been revoked, or the account may be out of credit. Chat and
               scans are paused.
             </Typography>
@@ -68,7 +68,7 @@ export function ClaudeKeyPanel() {
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Box
               component="span"
-              sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontFamily: "var(--font-mono, monospace)", fontSize: 13 }}
+              sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontFamily: "var(--font-mono, monospace)", fontSize: "0.8125rem" }}
             >
               <KeyRound size={16} color="var(--muted)" aria-hidden />
               {`sk-ant-…${status.last4 ?? ""}`}
@@ -87,7 +87,7 @@ export function ClaudeKeyPanel() {
             </Button>
           </Box>
           {kind === "ok" && (
-            <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>
               Your key is stored encrypted and is never shown again; only the last four characters are.
             </Typography>
           )}

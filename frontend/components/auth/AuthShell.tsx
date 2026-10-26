@@ -40,21 +40,21 @@ export function AuthShell({ children }: { children: ReactNode }) {
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <BrandMark />
-          <Typography sx={{ fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em" }}>
+          <Typography sx={{ fontSize: "1.0625rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
             trade-agent
           </Typography>
         </Box>
         <Box>
           <Typography
             component="p"
-            sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.15 }}
+            sx={{ fontSize: "1.875rem", fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.15 }}
           >
             It shows its work, remembers how past calls turned out, and never places a trade.
           </Typography>
           <Typography sx={{ color: "var(--text2)", mt: 2, maxWidth: "36ch" }}>
             An advisory-only reasoning partner. You stay the decision-maker.
           </Typography>
-          <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 4 }}>{ADVISORY}</Typography>
+          <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 4 }}>{ADVISORY}</Typography>
         </Box>
       </Box>
       <Box
@@ -84,7 +84,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <Typography
           sx={{
             display: { xs: "block", md: "none" },
-            fontSize: 11.5,
+            fontSize: "0.75rem",
             color: "var(--muted)",
             textAlign: "center",
             pb: 1,
@@ -121,12 +121,12 @@ export function AuthHeading({
       <Typography
         variant="h5"
         component="h1"
-        sx={{ fontSize: 28, letterSpacing: "-0.03em", lineHeight: 1.15 }}
+        sx={{ fontSize: "1.75rem", letterSpacing: "-0.03em", lineHeight: 1.15 }}
       >
         {title}
       </Typography>
       {subtitle && (
-        <Typography sx={{ color: "var(--muted)", mt: 0.5, fontSize: 14.5 }}>{subtitle}</Typography>
+        <Typography sx={{ color: "var(--muted)", mt: 0.5, fontSize: "0.90625rem" }}>{subtitle}</Typography>
       )}
     </Box>
   );

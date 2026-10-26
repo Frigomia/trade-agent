@@ -6,7 +6,7 @@ export function UsageMeter({ usage }: { usage: UsageDetail }) {
   const color = usageLevel(usage) === "ok" ? "var(--accent)" : "var(--warn)";
   return (
     <Box sx={{ display: "inline-flex", alignItems: "center", gap: 1 }} title="Chat messages used this month">
-      <Typography sx={{ fontSize: 12.5, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
         {usage.used} / {usage.limit}
       </Typography>
       {/* The bar is dropped on phones so the header fits on one row. */}

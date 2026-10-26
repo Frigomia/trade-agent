@@ -483,9 +483,12 @@ Provider failures remain explicit and do not by themselves disable research. The
 from the account, with a real Account link for a missing/rejected Claude key. See
 `docs/design/discover-company/direction-approved.md` for the owner's policy approval.
 
-**Not built yet:** rem sizes in component `sx` props outside the new components.
-Existing screens keep their current layouts
-and sizes until each is restyled.
+**Rem sizes:** every component font size is in `rem` now (#192), converted exactly from the old pixel value
+(13px is 0.8125rem, 12.5px is 0.78125rem), so layouts did not move. The exception is the 11px and 11.5px labels (tab bar, usage
+table headers, auth shell, the Automatic tag, avatar initials): they were raised to the 0.75rem floor, so they grow by 0.5 to 1px.
+Some sizes are not steps of the type ramp (0.78125rem, 0.84375rem, 0.90625rem and the larger one-offs).
+**Not built yet:** moving those onto the ramp. Existing screens keep their current layouts
+and sizes until each is restyled (#195). The price chart's SVG axis labels (10 units) are in the chart's own coordinates, not CSS pixels, and are a separate decision.
 
 Decided:
 

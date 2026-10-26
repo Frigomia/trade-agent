@@ -166,7 +166,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
         </Button>
       </Box>
       {failed === "*" && (
-        <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)" }}>
+        <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--down)" }}>
           {COPY_ALL_FAILED}
         </Typography>
       )}
@@ -174,7 +174,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
         <Box
           role="status"
           aria-live="polite"
-          sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: 14, color: "var(--text2)" } : hidden}
+          sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: "0.875rem", color: "var(--text2)" } : hidden}
         >
           {status && (
             <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>
@@ -187,7 +187,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
       {notice}
 
       <Panel sx={{ pt: { md: 0.75 }, overflow: "hidden" }}>
-        <Box aria-hidden sx={{ ...gridSx, display: { xs: "none", md: "grid" }, py: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
+        <Box aria-hidden sx={{ ...gridSx, display: { xs: "none", md: "grid" }, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>
           <span>Ticker</span>
           <span>Why</span>
           <span>Weight, before to after</span>
@@ -302,14 +302,14 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
         }}
       >
         <Box component="span" sx={{ gridColumn: 1, gridRow: 1, minWidth: 0 }}>
-          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: 14 }}>
+          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: "0.875rem" }}>
             {line.ticker}
           </Box>
           <Box component="span" sx={{ ...muted, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {line.name}
           </Box>
         </Box>
-        <Box component="span" sx={{ gridColumn: { xs: "1 / -1", md: 2 }, gridRow: { xs: 2, md: 1 }, fontSize: 13, color: "var(--text2)" }}>
+        <Box component="span" sx={{ gridColumn: { xs: "1 / -1", md: 2 }, gridRow: { xs: 2, md: 1 }, fontSize: "0.8125rem", color: "var(--text2)" }}>
           {line.reason_text}
         </Box>
         <Box component="span" sx={{ gridColumn: { xs: "1 / 3", md: 3 }, gridRow: { xs: 3, md: 1 }, display: "flex", flexDirection: "column", gap: 0.75 }}>
@@ -323,7 +323,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
           )}
         </Box>
         <Box component="span" sx={{ gridColumn: { xs: 2, md: 4 }, gridRow: 1, textAlign: "right" }}>
-          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: 15, whiteSpace: "nowrap" }}>
+          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: "0.9375rem", whiteSpace: "nowrap" }}>
             {formatAmount(line.amount_eur)} EUR
           </Box>
           <Box component="span" sx={{ ...muted, display: "block" }}>
@@ -363,7 +363,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
                 )}
               </Box>
               {copyFailed && (
-                <Typography role="alert" sx={{ fontSize: 13, color: "var(--down)" }}>
+                <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--down)" }}>
                   {COPY_FAILED}
                 </Typography>
               )}
@@ -371,7 +371,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
           )}
           <Box sx={{ gridColumn: { md: 1 }, gridRow: { md: placed ? "auto" : "1 / span 2" }, p: 1.75, borderRadius: "14px", border: "1px solid var(--line)", bgcolor: "var(--tab-bg)" }}>
             <Typography sx={{ ...muted, mb: 0.75 }}>Ticket, the text Copy copies</Typography>
-            <Typography sx={{ fontSize: 14.5, lineHeight: 1.6, overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>
+            <Typography sx={{ fontSize: "0.90625rem", lineHeight: 1.6, overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>
               {ticketText(line, plan.whole_shares)}
             </Typography>
           </Box>

@@ -80,7 +80,7 @@ export default function BacktestsPage() {
         }}
       >
         <Panel sx={{ gridArea: "form", p: "16px 18px" }}>
-          <Typography component="h2" sx={{ fontSize: 17, fontWeight: 650, mb: 0.5 }}>
+          <Typography component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650, mb: 0.5 }}>
             Run a backtest
           </Typography>
           <RunForm onRun={start} running={submitting || jobRunning} error={error} suggestions={suggestions} />
@@ -97,7 +97,7 @@ export default function BacktestsPage() {
         </Box>
 
         <Panel sx={{ gridArea: "runs", p: "14px 10px" }}>
-          <Typography component="h2" sx={{ fontSize: 15, fontWeight: 650, px: 1.5 }}>
+          <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, px: 1.5 }}>
             Recent runs
           </Typography>
           {listError && (

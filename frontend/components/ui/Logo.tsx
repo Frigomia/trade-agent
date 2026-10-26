@@ -1,5 +1,6 @@
 import { Avatar } from "@mui/material";
 import { monogram } from "@/lib/discovery";
+import { remFromPx } from "@/lib/rem";
 
 /** Company logo with initials when the CDN is unavailable or has no matching ticker. */
 export function Logo({ name, ticker, size = 40 }: { name: string; ticker?: string; size?: number }) {
@@ -25,7 +26,7 @@ export function Logo({ name, ticker, size = 40 }: { name: string; ticker?: strin
         bgcolor: "var(--track)",
         color: "var(--text2)",
         fontWeight: 650,
-        fontSize: `${(size * 0.34) / 16}rem`,
+        fontSize: remFromPx(size * 0.34),
         "& .MuiAvatar-img": { objectFit: "contain" },
       }}
     >

@@ -13,7 +13,7 @@ import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
 import { ActionChip, ChangePill } from "./RecommendationCard";
 import { WebOpinionBox } from "./WebOpinionBox";
 
-const BIG = { fontSize: 26, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 } as const;
+const BIG = { fontSize: "1.625rem", fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1.2 } as const;
 
 /**
  * The desktop detail page: one centred column. A hero panel holds the call, the price and the
@@ -33,7 +33,7 @@ export function RecommendationDetailDesktop({
     <Box sx={{ maxWidth: 760, mx: "auto", pb: 1 }}>
       <Panel sx={{ p: "24px 28px" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", rowGap: 0.75 }}>
-          <Typography sx={{ fontSize: 38, fontWeight: 650, letterSpacing: "-0.035em" }}>
+          <Typography sx={{ fontSize: "2.375rem", fontWeight: 650, letterSpacing: "-0.035em" }}>
             {recommendation.ticker}
           </Typography>
           <ActionChip action={recommendation.action} />
@@ -58,12 +58,12 @@ export function RecommendationDetailDesktop({
           }}
         >
           <Box>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Fundamentals</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Fundamentals</Typography>
             {fundamental_score !== null ? (
               <>
                 <Typography sx={BIG}>
                   {fundamental_score}
-                  <Box component="span" sx={{ fontSize: 13, fontWeight: 400, color: "var(--muted)", letterSpacing: 0 }}>
+                  <Box component="span" sx={{ fontSize: "0.8125rem", fontWeight: 400, color: "var(--muted)", letterSpacing: 0 }}>
                     {" "}/100
                   </Box>
                 </Typography>
@@ -74,7 +74,7 @@ export function RecommendationDetailDesktop({
             )}
           </Box>
           <Box>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Technical timing</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Technical timing</Typography>
             <Box sx={{ mt: 1 }}>
               {technical_signal ? (
                 <Pill tone={SIGNAL_TONE[technical_signal]}>{SIGNAL_LABEL[technical_signal]}</Pill>
@@ -84,7 +84,7 @@ export function RecommendationDetailDesktop({
             </Box>
           </Box>
           <Box>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Suggested position</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Suggested position</Typography>
             <Typography sx={BIG}>
               {formatShare(suggested_position_pct)}
             </Typography>

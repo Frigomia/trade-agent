@@ -9,21 +9,21 @@ export function TrackRecordEmpty() {
       <Box sx={{ mb: 3 }}>
         <Ring size={132} tone="idle">
           <Box>
-            <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1 }}>20</Typography>
-            <Typography sx={{ fontSize: 11, color: "var(--muted)", mt: 0.5 }}>trading days</Typography>
+            <Typography sx={{ fontSize: "1.875rem", fontWeight: 650, letterSpacing: "-0.03em", lineHeight: 1 }}>20</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 0.5 }}>trading days</Typography>
           </Box>
         </Ring>
       </Box>
-      <Typography component="h2" sx={{ fontSize: 22, fontWeight: 650, letterSpacing: "-0.02em" }}>
+      <Typography component="h2" sx={{ fontSize: "1.375rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
         No scored calls yet
       </Typography>
-      <Typography sx={{ fontSize: 13.5, color: "var(--muted)", mt: 0.75, mb: 2.5, maxWidth: 420 }}>
+      <Typography sx={{ fontSize: "0.84375rem", color: "var(--muted)", mt: 0.75, mb: 2.5, maxWidth: 420 }}>
         A call is scored 20 trading days after it is made. Then you see how many moved the way the action implied.
       </Typography>
       <Button component={Link} href="/today" variant="outlined">
         See today&apos;s recommendations
       </Button>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 2.5 }}>HOLD and WATCH aren&apos;t scored.</Typography>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 2.5 }}>HOLD and WATCH aren&apos;t scored.</Typography>
     </Box>
   );
 }

@@ -5,7 +5,7 @@ import { Panel } from "@/components/ui/Panel";
 import { formatAmount, formatShare } from "@/lib/format";
 import { formatRate, type LeftOut, type Plan, type PlanLine } from "@/lib/plans";
 
-export const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
+export const muted = { fontSize: "0.78125rem", color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
 const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "150px minmax(0, 1fr) 220px 130px 150px" };
 const BEFORE = "color-mix(in oklab, var(--accent-solid) 42%, var(--bg))";
@@ -74,10 +74,10 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
   return (
     <Box role="row" sx={rowSx}>
       <Box role="cell" sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 650, fontSize: 14 }}>{line.ticker}</Typography>
+        <Typography sx={{ fontWeight: 650, fontSize: "0.875rem" }}>{line.ticker}</Typography>
         <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{line.name}</Typography>
       </Box>
-      <Box role="cell" sx={{ ...wide, fontSize: 13, color: "var(--text2)" }}>
+      <Box role="cell" sx={{ ...wide, fontSize: "0.8125rem", color: "var(--text2)" }}>
         {line.reason_text}
       </Box>
       <Box role="cell" sx={{ ...wide, display: "flex", flexDirection: "column", gap: 0.75 }}>
@@ -93,7 +93,7 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
         )}
       </Box>
       <Box role="cell" sx={amountCell}>
-        <Typography sx={{ fontWeight: 650, fontSize: 15, whiteSpace: "nowrap" }}>
+        <Typography sx={{ fontWeight: 650, fontSize: "0.9375rem", whiteSpace: "nowrap" }}>
           Add {formatAmount(line.amount_eur)} EUR
         </Typography>
         <Typography sx={muted}>{shares(line, whole)}</Typography>
@@ -107,15 +107,15 @@ function LeftOutRow({ entry }: { entry: LeftOut }) {
   return (
     <Box role="row" sx={{ ...rowSx, color: "var(--muted)" }}>
       <Box role="cell" sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 650, fontSize: 14 }}>{entry.ticker}</Typography>
+        <Typography sx={{ fontWeight: 650, fontSize: "0.875rem" }}>{entry.ticker}</Typography>
         <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{entry.name}</Typography>
       </Box>
-      <Box role="cell" sx={{ ...wide, fontSize: 13 }}>
+      <Box role="cell" sx={{ ...wide, fontSize: "0.8125rem" }}>
         {entry.reason}
       </Box>
       <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
       <Box role="cell" sx={priceCell} />
-      <Box role="cell" sx={{ ...amountCell, fontSize: 15 }}>
+      <Box role="cell" sx={{ ...amountCell, fontSize: "0.9375rem" }}>
         0.00
       </Box>
     </Box>
@@ -129,13 +129,13 @@ export function LeftOutList({ entries, title }: { entries: LeftOut[]; title?: st
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
       {title && (
-        <Typography aria-hidden sx={{ fontSize: 13, fontWeight: 650, color: "var(--text2)" }}>
+        <Typography aria-hidden sx={{ fontSize: "0.8125rem", fontWeight: 650, color: "var(--text2)" }}>
           {title}
         </Typography>
       )}
       <Box component="ul" aria-label={label} sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
         {entries.map((e) => (
-          <Box component="li" key={e.ticker} sx={{ ...muted, fontSize: 13 }}>
+          <Box component="li" key={e.ticker} sx={{ ...muted, fontSize: "0.8125rem" }}>
             <Box component="span" sx={{ fontWeight: 650, color: "var(--text2)" }}>
               {e.ticker}
             </Box>{" "}
@@ -155,7 +155,7 @@ export function PlanNotes({ notes }: { notes: string[] }) {
   return (
     <Box component="ul" aria-label="Plan notes" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
       {notes.map((note) => (
-        <Box component="li" key={note} sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", fontSize: 13, color: "var(--text2)", lineHeight: 1.5 }}>
+        <Box component="li" key={note} sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", fontSize: "0.8125rem", color: "var(--text2)", lineHeight: 1.5 }}>
           <Box component="span" sx={{ color: "var(--warn)", mt: "2px", display: "flex" }}>
             <AlertTriangle size={15} aria-hidden />
           </Box>
@@ -170,7 +170,7 @@ function NothingToFund({ plan }: { plan: Plan }) {
   const wholeSharesTooSmall = plan.left_out.some((e) => e.kind === "too_small");
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
-      <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650 }}>
+      <Typography component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650 }}>
         Nothing to fund this month
       </Typography>
       <Typography sx={{ color: "var(--text2)" }}>
@@ -198,7 +198,7 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
       <Panel role="table" aria-label="Plan lines" sx={{ pt: 0.75, overflow: "hidden" }}>
-        <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, py: 1, fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
+        <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>
           <span role="columnheader">Ticker</span>
           <span role="columnheader">Why</span>
           <span role="columnheader">Weight, before to after</span>
@@ -229,7 +229,7 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
       </Panel>
       <PlanNotes notes={plan.notes} />
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.75, flexWrap: "wrap" }}>
-        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: "var(--muted)" }}>
+        <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center", fontSize: "0.75rem", color: "var(--muted)" }}>
           {[
             ["weight before", BEFORE],
             ["after this plan", "var(--accent-solid)"],

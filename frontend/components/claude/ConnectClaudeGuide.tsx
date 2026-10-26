@@ -70,7 +70,7 @@ function RailItem({ n, current, step, onJump }: { n: number; current: number; st
         placeItems: "center",
         flex: "none",
         fontWeight: 650,
-        fontSize: 13,
+        fontSize: "0.8125rem",
         border: "1px solid var(--line2)",
         color: "var(--muted)",
         ...(cur && { bgcolor: "var(--accent-solid)", color: "var(--on-accent)", borderColor: "transparent" }),
@@ -89,7 +89,7 @@ function RailItem({ n, current, step, onJump }: { n: number; current: number; st
     gap: 1.5,
     px: 2,
     py: 1.25,
-    fontSize: 13,
+    fontSize: "0.8125rem",
     color: cur ? "var(--text)" : done ? "var(--text2)" : "var(--muted)",
     fontWeight: cur ? 650 : 400,
   } as const;
@@ -214,7 +214,7 @@ function Connected({ last4, onToday }: { last4: string | null | undefined; onTod
           <Typography variant="h6" component="h2" sx={{ fontWeight: 650 }}>
             Claude is connected
           </Typography>
-          <Typography sx={{ fontSize: 13.5, color: "var(--text2)", mt: 0.5 }}>
+          <Typography sx={{ fontSize: "0.84375rem", color: "var(--text2)", mt: 0.5 }}>
             Chat and scans now use your own Claude account.
           </Typography>
         </Box>
@@ -311,7 +311,7 @@ export function ConnectClaudeGuide() {
               </Box>
               <Typography
                 aria-live="polite"
-                sx={{ fontSize: 11, fontWeight: 650, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--accent)" }}
+                sx={{ fontSize: "0.75rem", fontWeight: 650, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--accent)" }}
               >
                 Step {current} of {LAST_STEP}
               </Typography>
@@ -324,7 +324,7 @@ export function ConnectClaudeGuide() {
               >
                 {step.title}
               </Typography>
-              <Typography sx={{ fontSize: 13.5, color: "var(--text2)", maxWidth: 520, lineHeight: 1.6 }}>
+              <Typography sx={{ fontSize: "0.84375rem", color: "var(--text2)", maxWidth: 520, lineHeight: 1.6 }}>
                 {step.text}
               </Typography>
               {step.link && (
@@ -365,7 +365,7 @@ export function ConnectClaudeGuide() {
             alignItems: "flex-start",
             p: "12px 14px",
             borderRadius: "14px",
-            fontSize: 12.5,
+            fontSize: "0.78125rem",
             lineHeight: 1.55,
             color: "var(--text2)",
             boxShadow: "none",

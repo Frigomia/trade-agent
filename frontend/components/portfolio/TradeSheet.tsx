@@ -82,7 +82,7 @@ function TradeForm({
       <Typography variant="h6" sx={{ fontWeight: 650 }}>
         Log a trade
       </Typography>
-      <Typography sx={{ color: "var(--muted)", fontSize: 13, mt: 0.5 }}>
+      <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mt: 0.5 }}>
         Record a trade you already placed in your broker app.
       </Typography>
       <Alert severity="info" sx={{ mt: 1.5 }}>

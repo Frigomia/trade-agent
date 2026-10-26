@@ -60,23 +60,23 @@ export default function TrackRecordPage() {
               const { count, matched, scored } = summary.bySource[kind];
               return (
                 <Box component="section" key={kind} aria-label={KIND_GROUP[kind]}>
-                  <Typography sx={{ fontSize: 13, fontWeight: 650, color: "var(--text2)" }}>
+                  <Typography sx={{ fontSize: "0.8125rem", fontWeight: 650, color: "var(--text2)" }}>
                     {KIND_GROUP[kind]}
                   </Typography>
-                  <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+                  <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
                     {count} {count === 1 ? "call" : "calls"}, {scored} scored
                   </Typography>
                   {scored === 0 ? (
-                    <Typography sx={{ fontSize: 15, mt: 0.75, color: "var(--muted)" }}>None scored yet</Typography>
+                    <Typography sx={{ fontSize: "0.9375rem", mt: 0.75, color: "var(--muted)" }}>None scored yet</Typography>
                   ) : (
                     <>
-                      <Typography sx={{ fontSize: 40, fontWeight: 650, letterSpacing: "-0.035em", lineHeight: 1.1 }}>
+                      <Typography sx={{ fontSize: "2.5rem", fontWeight: 650, letterSpacing: "-0.035em", lineHeight: 1.1 }}>
                         {matched}{" "}
-                        <Box component="span" sx={{ color: "var(--muted)", fontSize: 28 }}>
+                        <Box component="span" sx={{ color: "var(--muted)", fontSize: "1.75rem" }}>
                           of {scored}
                         </Box>
                       </Typography>
-                      <Typography sx={{ fontSize: 15, mt: 0.5 }}>calls moved the way the action implied</Typography>
+                      <Typography sx={{ fontSize: "0.9375rem", mt: 0.5 }}>calls moved the way the action implied</Typography>
                       <LinearProgress variant="determinate" value={(matched / scored) * 100} sx={{ mt: 1.5 }} />
                     </>
                   )}
@@ -84,7 +84,7 @@ export default function TrackRecordPage() {
               );
             })}
           </Box>
-          <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 1.75 }}>
+          <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 1.75 }}>
             {summary.scored > 0 &&
               "Each percentage below is the stock's own price change over 20 trading days from the call's day, or, when a row says " +
                 "\"Measured from\", from that earlier close (a discovery idea uses the close its saved snapshot was taken at): no " +
@@ -113,14 +113,14 @@ export default function TrackRecordPage() {
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography sx={{ fontWeight: 650, fontSize: 16 }}>{rec.ticker}</Typography>
+                  <Typography sx={{ fontWeight: 650, fontSize: "1rem" }}>{rec.ticker}</Typography>
                   <ActionChip action={rec.action} />
                 </Box>
-                <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 0.25 }}>
+                <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 0.25 }}>
                   {rec.created_at.slice(0, 10)} · {KIND_WORD[kind]} · {DECISION_WORD[rec.status] ?? rec.status}
                 </Typography>
                 {movePct !== null && entryDay !== rec.created_at.slice(0, 10) && (
-                  <Typography sx={{ color: "var(--muted)", fontSize: 12 }}>
+                  <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem" }}>
                     Measured from the first close on or after {entryDay}
                   </Typography>
                 )}
@@ -135,7 +135,7 @@ export default function TrackRecordPage() {
                 >
                   {movePct === null ? "—" : formatPct(movePct)}
                 </Typography>
-                <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{VERDICT_WORD[verdict]}</Typography>
+                <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{VERDICT_WORD[verdict]}</Typography>
               </Box>
             </Box>
           ))}

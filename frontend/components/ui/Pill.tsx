@@ -21,7 +21,7 @@ export function Pill({ tone = "mute", children }: { tone?: PillTone; children: R
         display: "inline-flex",
         alignItems: "center",
         gap: 0.5,
-        fontSize: 12,
+        fontSize: "0.75rem",
         fontWeight: 600,
         px: 1,
         py: "2px",

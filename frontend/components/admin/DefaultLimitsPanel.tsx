@@ -16,10 +16,10 @@ export function DefaultLimitsPanel({ onSaved }: { onSaved: () => void }) {
 
   return (
     <Panel sx={{ p: "18px 20px" }}>
-      <Typography component="h2" sx={{ fontSize: 17, fontWeight: 650 }}>
+      <Typography component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650 }}>
         Default limits
       </Typography>
-      <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mb: 1 }}>
+      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mb: 1 }}>
         For everyone without a personal limit. Personal limits are set per person on the Users page.
       </Typography>
       {loadError && <Alert severity="error">Could not load the default limits.</Alert>}

@@ -28,7 +28,7 @@ const BLOCKED = "Telegram stopped receiving messages. Reconnect to get them agai
 const THRESHOLD_ERROR = "Enter a number from 1 to 50, one decimal at most.";
 const NEW_TAB = "noopener,noreferrer";
 
-const muted = { fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 } as const;
+const muted = { fontSize: "0.78125rem", color: "var(--muted)", lineHeight: 1.5 } as const;
 const linkSx = { color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" } as const;
 const cardSx = { p: "18px 20px", display: "flex", flexDirection: "column", gap: 1.75, minWidth: 0 } as const;
 
@@ -46,7 +46,7 @@ function Title({ focusable }: { focusable?: boolean }) {
       component="h2"
       tabIndex={focusable ? -1 : undefined}
       data-focus={focusable ? "" : undefined}
-      sx={{ fontSize: 16, fontWeight: 650, outline: "none" }}
+      sx={{ fontSize: "1rem", fontWeight: 650, outline: "none" }}
     >
       Telegram
     </Typography>
@@ -59,19 +59,19 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
     <Panel sx={cardSx}>
       <Typography
         component="h3"
-        sx={{ fontSize: 11, fontWeight: 650, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--muted)", minHeight: 26, display: "flex", alignItems: "center" }}
+        sx={{ fontSize: "0.75rem", fontWeight: 650, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--muted)", minHeight: 26, display: "flex", alignItems: "center" }}
       >
         What a message looks like
       </Typography>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, maxWidth: 420 }}>
-        <Typography sx={{ fontSize: 12, fontWeight: 500, color: "var(--muted)" }}>trade-agent bot</Typography>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--muted)" }}>trade-agent bot</Typography>
         <Box
           sx={{
             bgcolor: "var(--accent-wash)",
             border: "1px solid var(--line)",
             borderRadius: "6px 16px 16px 16px",
             p: "10px 12px",
-            fontSize: 13.5,
+            fontSize: "0.84375rem",
             lineHeight: 1.55,
             color: "var(--text)",
             display: "grid",
@@ -95,11 +95,11 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
               </div>
             )}
           </Box>
-          <Box component="span" sx={{ color: "var(--muted)", fontSize: 12 }}>
+          <Box component="span" sx={{ color: "var(--muted)", fontSize: "0.75rem" }}>
             Advisory only. Nothing is sent to a broker.
           </Box>
         </Box>
-        <Typography sx={{ fontSize: 11, color: "var(--muted)", alignSelf: "flex-end" }}>07:31</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", alignSelf: "flex-end" }}>07:31</Typography>
       </Box>
     </Panel>
   );
@@ -123,7 +123,7 @@ function SwitchRow({
   return (
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
       <Box>
-        <Typography id={`${id}-label`} sx={{ fontSize: 14, fontWeight: 650 }}>
+        <Typography id={`${id}-label`} sx={{ fontSize: "0.875rem", fontWeight: 650 }}>
           {label}
         </Typography>
         <Typography id={`${id}-hint`} sx={muted}>
@@ -224,7 +224,7 @@ export function TelegramPanel() {
         <Title />
         {error ? (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-            <Typography sx={{ fontSize: 13, color: "var(--muted)" }}>Could not load your Telegram status.</Typography>
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>Could not load your Telegram status.</Typography>
             <Button size="small" startIcon={<RefreshCw size={14} />} onClick={() => void refresh()}>
               Try again
             </Button>
@@ -263,13 +263,13 @@ export function TelegramPanel() {
 
         {state === "off" && (
           <>
-            <Typography sx={{ fontSize: 13, color: "var(--text2)" }}>{PITCH}</Typography>
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)" }}>{PITCH}</Typography>
             <Box>
               <Button variant="contained" size="small" disabled={link.submitting} onClick={startConnect} data-focus="">
                 Connect Telegram
               </Button>
             </Box>
-            <Typography sx={{ ...muted, fontSize: 12 }}>{NOTE}</Typography>
+            <Typography sx={{ ...muted, fontSize: "0.75rem" }}>{NOTE}</Typography>
           </>
         )}
 
@@ -281,7 +281,7 @@ export function TelegramPanel() {
                 <i />
                 <i />
               </Box>
-              <Typography sx={{ fontSize: 13, color: "var(--text2)" }}>Waiting for you to press Start in Telegram…</Typography>
+              <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)" }}>Waiting for you to press Start in Telegram…</Typography>
             </Box>
             <Typography sx={muted}>The link works for 10 minutes.</Typography>
             <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
@@ -344,7 +344,7 @@ export function TelegramPanel() {
               sx={{ width: 140 }}
             />
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
-              <Typography sx={{ ...muted, fontSize: 12, flex: 1, minWidth: 200 }}>{NOTE}</Typography>
+              <Typography sx={{ ...muted, fontSize: "0.75rem", flex: 1, minWidth: 200 }}>{NOTE}</Typography>
               <Button variant="outlined" size="small" onClick={() => setConfirming(true)}>
                 Disconnect
               </Button>
@@ -354,7 +354,7 @@ export function TelegramPanel() {
 
         {state === "blocked" && (
           <>
-            <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", color: "var(--warn)", fontSize: 12.5, lineHeight: 1.5 }}>
+            <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", color: "var(--warn)", fontSize: "0.78125rem", lineHeight: 1.5 }}>
               <AlertTriangle size={16} aria-hidden style={{ marginTop: 1, flex: "none" }} />
               <span>{BLOCKED}</span>
             </Box>

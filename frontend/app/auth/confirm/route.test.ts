@@ -30,6 +30,14 @@ describe("GET /auth/confirm", () => {
     vi.clearAllMocks();
   });
 
+  it("sizes the page's text in rem, not pixels", async () => {
+    const html = await (await GET(getRequest("token_hash=abc&type=invite&next=/accept-invitation"))).text();
+
+    expect(html).toContain("font-size:1.375rem");
+    expect(html).toContain("font:600 .9375rem system-ui");
+    expect(html).not.toMatch(/font(-size)?:[^;}]*\d+px/);
+  });
+
   it("renders a confirmation page and never verifies the token", async () => {
     const response = await GET(getRequest("token_hash=abc&type=invite&next=/accept-invitation"));
     const html = await response.text();

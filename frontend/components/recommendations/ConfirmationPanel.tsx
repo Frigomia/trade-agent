@@ -49,7 +49,7 @@ export function ConfirmationPanel({
       >
         <CheckCircle2 size={30} />
       </Box>
-      <Typography sx={{ fontSize: 22, fontWeight: 650, mt: 2 }}>Decision recorded</Typography>
+      <Typography sx={{ fontSize: "1.375rem", fontWeight: 650, mt: 2 }}>Decision recorded</Typography>
       <Typography sx={{ color: "var(--text2)", mt: 1 }}>
         You {approved ? "approved" : "dismissed"} {recommendation.ticker} &middot;{" "}
         {recommendation.action}.
@@ -67,7 +67,7 @@ export function ConfirmationPanel({
           }}
         >
           <AlertTriangle size={17} color="var(--warn)" style={{ flexShrink: 0 }} />
-          <Typography sx={{ fontSize: 13 }}>
+          <Typography sx={{ fontSize: "0.8125rem" }}>
             <b>No order was placed.</b> trade-agent never trades. If you decide to act, do it in your
             broker app.
           </Typography>

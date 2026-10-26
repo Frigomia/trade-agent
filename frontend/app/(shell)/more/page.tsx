@@ -37,7 +37,7 @@ export default function MorePage() {
           >
             <Box sx={{ flex: 1 }}>
               <Typography sx={{ fontWeight: 600 }}>{item.label}</Typography>
-              <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>{item.hint}</Typography>
+              <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>{item.hint}</Typography>
             </Box>
             <ChevronRight size={18} color="var(--muted)" />
           </Box>

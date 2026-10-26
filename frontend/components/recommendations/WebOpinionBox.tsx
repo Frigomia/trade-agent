@@ -23,7 +23,7 @@ export function WebOpinionBox({
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
         <Globe size={15} color="var(--muted)" />
-        <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
           {label}
         </Typography>
       </Box>

@@ -92,8 +92,8 @@ export default function AccountPage() {
         <Box sx={{ display: "grid", gap: 2, maxWidth: 680 }}>
           <Box sx={{ display: "grid", gap: 2 }}>
           <Panel sx={{ p: "16px 18px" }}>
-            <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>Signed in as</Typography>
-            <Typography sx={{ fontSize: 18, fontWeight: 650, mt: 0.25 }}>{me.email}</Typography>
+            <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>Signed in as</Typography>
+            <Typography sx={{ fontSize: "1.125rem", fontWeight: 650, mt: 0.25 }}>{me.email}</Typography>
           </Panel>
           {usage && (
             <Panel sx={{ p: "16px 18px" }}>

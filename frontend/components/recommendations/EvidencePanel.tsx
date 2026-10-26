@@ -59,8 +59,8 @@ export function EvidencePanel({ recommendation }: { recommendation: Recommendati
       {fundamental_score !== null && (
         <Box sx={{ mb: 1 }}>
           <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Fundamentals</Typography>
-            <Typography sx={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Fundamentals</Typography>
+            <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
               {fundamental_score}/100
             </Typography>
           </Box>
@@ -73,14 +73,14 @@ export function EvidencePanel({ recommendation }: { recommendation: Recommendati
       )}
       {technical_signal !== null && (
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 1.25 }}>
-          <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Technical timing</Typography>
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Technical timing</Typography>
           <Pill tone={SIGNAL_TONE[technical_signal]}>{SIGNAL_LABEL[technical_signal]}</Pill>
         </Box>
       )}
       {suggested_position_pct !== null && (
         <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1 }}>
-          <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Suggested size</Typography>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Suggested size</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }}>
             {formatShare(suggested_position_pct)} of portfolio
           </Typography>
         </Box>

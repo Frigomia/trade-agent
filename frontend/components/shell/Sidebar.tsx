@@ -32,7 +32,7 @@ export function Sidebar({ role }: { role: Role }) {
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, px: 1, pb: 2 }}>
         <BrandMark size={34} />
-        <Typography sx={{ fontSize: 16, fontWeight: 650, letterSpacing: "-0.01em" }}>
+        <Typography sx={{ fontSize: "1rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
           trade-agent
         </Typography>
       </Box>
@@ -49,7 +49,7 @@ export function Sidebar({ role }: { role: Role }) {
               gap: 10,
               padding: item.sub ? "7px 12px" : "10px 12px",
               borderRadius: 12,
-              fontSize: item.sub ? 12.5 : 14,
+              fontSize: item.sub ? "0.78125rem" : "0.875rem",
               fontWeight: on ? 600 : 400,
               textDecoration: "none",
               color: on ? "var(--accent)" : "var(--muted)",
@@ -64,7 +64,7 @@ export function Sidebar({ role }: { role: Role }) {
         return (
           <Fragment key={item.href}>
             {item.section && (
-              <Typography sx={{ fontSize: 12, color: "var(--muted)", px: 1.5, pt: 2, pb: 0.5 }}>
+              <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", px: 1.5, pt: 2, pb: 0.5 }}>
                 {item.section}
               </Typography>
             )}
@@ -79,8 +79,8 @@ export function Sidebar({ role }: { role: Role }) {
       })}
       <Box sx={{ flex: 1 }} />
       <Panel sx={{ p: "12px 14px" }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>Advisory only</Typography>
-        <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 0.25 }}>
+        <Typography sx={{ fontSize: "0.78125rem", fontWeight: 600 }}>Advisory only</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 0.25 }}>
           Nothing here places a trade.
         </Typography>
       </Panel>

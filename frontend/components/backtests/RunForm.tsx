@@ -70,7 +70,7 @@ export function RunForm({
       <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={running}>
         Run backtest
       </Button>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 1.5 }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 1.5 }}>
         Starts with 10,000 and replays the technical signal on past prices.
       </Typography>
     </Box>

@@ -134,7 +134,7 @@ export default function AcceptInvitationPage() {
           helperText={passwordsDiffer ? "Passwords don't match." : undefined}
         />
         <FormControlLabel
-          sx={{ alignItems: "flex-start", mt: 1.5, mx: 0, "& .MuiFormControlLabel-label": { fontSize: 12.5, color: "var(--text2)", lineHeight: 1.45, pt: 0.5 } }}
+          sx={{ alignItems: "flex-start", mt: 1.5, mx: 0, "& .MuiFormControlLabel-label": { fontSize: "0.78125rem", color: "var(--text2)", lineHeight: 1.45, pt: 0.5 } }}
           control={
             <Checkbox
               checked={acceptedTerms}

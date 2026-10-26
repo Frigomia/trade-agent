@@ -39,8 +39,8 @@ export function DecisionActions({
       {title ? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
           <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontWeight: 600, fontSize: 14.5 }}>{title}</Typography>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{NOTE}</Typography>
+            <Typography sx={{ fontWeight: 600, fontSize: "0.90625rem" }}>{title}</Typography>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{NOTE}</Typography>
           </Box>
           {dismiss}
           {approve}
@@ -51,7 +51,7 @@ export function DecisionActions({
             {approve}
             {dismiss}
           </Box>
-          <Typography sx={{ fontSize: 12, color: "var(--muted)", mt: 1, textAlign: "center" }}>{NOTE}</Typography>
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 1, textAlign: "center" }}>{NOTE}</Typography>
         </>
       )}
     </>

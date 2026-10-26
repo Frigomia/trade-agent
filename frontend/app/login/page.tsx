@@ -102,7 +102,7 @@ export default function LoginPage() {
           }}
         />
         <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1.5 }}>
-          <Link component={NextLink} href="/reset-password" sx={{ fontSize: 13 }}>
+          <Link component={NextLink} href="/reset-password" sx={{ fontSize: "0.8125rem" }}>
             Forgot password?
           </Link>
         </Box>
