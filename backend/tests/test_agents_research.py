@@ -222,6 +222,21 @@ def test_prompts_frame_injection_as_untrusted_data(providers):
     assert not any("place an order" in c.text for c in result.claims)
 
 
+def test_extracted_claim_statuses_use_the_fetched_source_authority(fixture, providers):
+    client, _ = providers
+    source = fixture["searches"]["news"]["results"][0]
+    source["url"] = "https://www.sec.gov/Archives/earnings"
+    original_url = fixture["extraction"]["claims"][0]["url"]
+    for claim in fixture["extraction"]["claims"]:
+        claim["status"] = "confirmed"
+        if claim.get("url", "").startswith(original_url):
+            claim["url"] = source["url"]
+    result = asyncio.run(candidate(client))
+    official = next(claim for claim in result.claims if claim.url == source["url"])
+    assert official.status == "confirmed"
+    assert all(claim.status == "unverified" for claim in result.claims if claim is not official)
+
+
 @pytest.mark.parametrize("error", ["http", "json", "shape"])
 def test_tavily_failure_returns_explicit_quant_only_gap(monkeypatch, providers, error, caplog):
     client, _ = providers

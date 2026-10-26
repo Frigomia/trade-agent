@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoveryRecommendation, IdeaOut, ScanRun } from "@/lib/api/discovery-types";
 import {
+  calendarDateText,
   dateTimeText,
   holdingsOnly,
   listingText,
@@ -196,5 +197,16 @@ describe("dateTimeText", () => {
     const text = dateTimeText("2026-10-20T06:12:00Z");
     expect(text).toMatch(/2026/);
     expect(text).not.toMatch(/today/i);
+  });
+});
+
+describe("calendarDateText", () => {
+  it("shows a readable calendar day with its year, without shifting to the previous day", () => {
+    const text = calendarDateText("2026-11-06");
+    expect(text).toContain("Nov");
+    expect(text).toContain("2026");
+    expect(text).toMatch(/\b6\b/);
+    expect(text).not.toMatch(/\b5\b/);
+    expect(text).not.toBe("2026-11-06");
   });
 });
