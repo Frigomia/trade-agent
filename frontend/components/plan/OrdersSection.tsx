@@ -16,7 +16,7 @@ export interface OrdersSectionProps {
   /** Reloads the plan; the parent replaces `plan` with the fresh one. */
   onChanged: () => Promise<unknown>;
   footer?: ReactNode;
-  /** The Orders tab's sticky plan heading and old-plan note; see OrdersPanel. */
+  /** The Orders tab's plan heading and old-plan note; see OrdersPanel. */
   heading?: ReactNode;
   notice?: ReactNode;
   /** After a line is recorded (the parent reloads its plan for the placed chip), with the line that opens next (null: none left in this plan). */

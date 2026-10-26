@@ -103,14 +103,15 @@ describe("OrdersPanel", () => {
     expect(screen.getByRole("button", { name: "Copy all lines" })).toBeDisabled();
   });
 
-  it("shows closed cards as the ledger row with no Copy or Placed buttons", () => {
+  it("shows closed cards as a short row with no Copy or Placed buttons", () => {
     renderPanel(plan(), { onPlace: vi.fn() });
     const c = card("EIMI.L");
     expect(c).toHaveAccessibleName("EIMI.L, 92.30 EUR, not placed, press to open");
     expect(c).toHaveAttribute("aria-expanded", "false");
     expect(c).toHaveTextContent("about 1.69 sh");
-    expect(c).toHaveTextContent("Below its target weight");
-    expect(c).toHaveTextContent("Weight 17.9% to 18.4%");
+    // Why and the weight open with the card: a closed row is only the company, the amount and a mark.
+    expect(c).not.toHaveTextContent("Below its target weight");
+    expect(c).not.toHaveTextContent("Weight 17.9% to 18.4%");
     expect(screen.queryByRole("button", { name: "Copy" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Placed" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Ticket, the text Copy copies/)).not.toBeInTheDocument();
@@ -414,12 +415,16 @@ describe("OrdersPanel", () => {
     expect(screen.queryByText("No price available.")).not.toBeInTheDocument();
   });
 
-  it("shows the target tick and the target in a card's weight line", () => {
+  it("shows the target tick and the target in an open card's weight line", () => {
     renderPanel(plan([line({ target_weight: 0.19 }), LINES[1]]));
-    expect(card("EIMI.L")).toHaveTextContent("Weight 17.9% to 18.4% · target 19.0%");
-    expect(within(card("EIMI.L")).getByTestId("target-tick")).toBeInTheDocument();
-    expect(within(card("IWDA.L")).queryByTestId("target-tick")).not.toBeInTheDocument();
-    expect(card("IWDA.L")).not.toHaveTextContent("· target");
+    openCard("EIMI.L");
+    const region = document.getElementById(card("EIMI.L").getAttribute("aria-controls")!)!;
+    expect(region).toHaveTextContent("Weight 17.9% to 18.4% · target 19.0%");
+    expect(within(region).getByTestId("target-tick")).toBeInTheDocument();
+    openCard("IWDA.L");
+    const other = document.getElementById(card("IWDA.L").getAttribute("aria-controls")!)!;
+    expect(within(other).queryByTestId("target-tick")).not.toBeInTheDocument();
+    expect(other).not.toHaveTextContent("· target");
   });
 
   it("uses no Buy or Sell wording", () => {
@@ -431,8 +436,8 @@ describe("OrdersPanel", () => {
       reason_text: "Below its target, and a pending call favours adding",
     });
     renderPanel(plan([...LINES, favoured]), { onPlace: vi.fn() });
-    expect(card("VWCE.DE")).toHaveTextContent("Below its target, and a pending call favours adding");
     [...LINES, favoured].forEach((l) => openCard(l.ticker));
+    expect(document.body.textContent).toContain("Below its target, and a pending call favours adding");
     expect(document.body.textContent).not.toMatch(/\b(Buy|Sell|Deposit|Withdraw)\b/i);
   });
 });

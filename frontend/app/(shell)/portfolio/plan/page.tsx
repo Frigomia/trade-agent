@@ -5,7 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { Alert, Box, Button, Skeleton, Typography } from "@mui/material";
-import { ShieldCheck } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import type { PortfolioSummary } from "@/lib/api/portfolio-types";
 import { formatAmount } from "@/lib/format";
@@ -32,7 +32,7 @@ const stepBadge = {
   display: "flex",
   gap: 1.5,
   alignItems: "flex-start",
-  fontSize: "0.875rem",
+  fontSize: "0.8125rem",
   "&::before": {
     counterIncrement: "step",
     content: "counter(step)",
@@ -59,7 +59,7 @@ function hasTargets(summary: PortfolioSummary): boolean {
 function NoTargets() {
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
-      <Typography component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650 }}>
+      <Typography component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650 }}>
         Set a target weight first
       </Typography>
       <Typography sx={{ color: "var(--text2)" }}>
@@ -132,7 +132,10 @@ function ThisMonth({ initialAmount, active }: { initialAmount: number | null; ac
 
   const footer =
     plan?.created_at ? (
-      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }} role="status">
+      <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", display: "flex", gap: 1, alignItems: "center" }} role="status">
+        <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)" }}>
+          <Check size={16} />
+        </Box>
         Saved {planSavedAt(plan.created_at)}. You find it under Saved plans.
       </Typography>
     ) : plan ? (
@@ -219,7 +222,7 @@ export default function PlanPage() {
       {view === "orders" && <OrdersView />}
 
       <Typography
-        sx={{ mt: 2, fontSize: "0.78125rem", color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}
+        sx={{ mt: 2, fontSize: "0.75rem", color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}
       >
         <Box component="span" sx={{ color: "var(--accent)", display: "flex" }}>
           <ShieldCheck size={15} aria-hidden />

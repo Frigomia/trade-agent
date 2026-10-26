@@ -200,11 +200,11 @@ async function openOrdersFetcher(path: string): Promise<OpenOrders> {
 
 /** The unplaced order lines across the saved plans: one shared read, no polling; a failure shows up in `error`. */
 export function useOpenOrders() {
-  const { data, error, isLoading, mutate } = useSWR<OpenOrders>(OPEN_ORDERS, openOrdersFetcher, {
+  const { data, error, isLoading, isValidating, mutate } = useSWR<OpenOrders>(OPEN_ORDERS, openOrdersFetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     refreshInterval: 0,
     shouldRetryOnError: false,
   });
-  return { openLines: data?.open_lines ?? 0, plans: data?.plans ?? [], error, isLoading, mutate };
+  return { openLines: data?.open_lines ?? 0, plans: data?.plans ?? [], error, isLoading, isValidating, mutate };
 }

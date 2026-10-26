@@ -23,7 +23,7 @@ import type { PlanLine } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
 
 const NETWORK = "Could not reach the server. Check the line: if it does not show as placed, try again.";
-const muted = { fontSize: "0.78125rem", color: "var(--muted)" } as const;
+const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
 export interface PlacedSheetProps {
   open: boolean;
@@ -147,7 +147,7 @@ function PlacedForm({ line, lineId, planId, summary, titleId, onClose, onPlaced,
       sx={{ width: { xs: "auto", md: 420 }, p: 3, pb: { xs: 4, md: 3 }, display: "flex", flexDirection: "column", gap: 2 }}
     >
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-        <Typography id={titleId} component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650 }}>
+        <Typography id={titleId} component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650 }}>
           Record placed order
         </Typography>
         <IconButton aria-label="Close" onClick={onClose} disabled={submitting} sx={{ mr: -1 }}>
@@ -191,7 +191,7 @@ function PlacedForm({ line, lineId, planId, summary, titleId, onClose, onPlaced,
       {sharesNum !== null && priceNum !== null && (
         // A check on the two numbers, so a slip of a thousand shows before it is recorded. No currency:
         // it is in the holding's, whatever that is.
-        <Typography data-testid="sanity" sx={{ fontSize: "0.875rem", fontVariantNumeric: "tabular-nums", mt: -0.5 }}>
+        <Typography data-testid="sanity" sx={{ fontSize: "0.8125rem", fontVariantNumeric: "tabular-nums", mt: -0.5 }}>
           Shares × price = {(sharesNum * priceNum).toFixed(2)}
         </Typography>
       )}

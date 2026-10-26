@@ -335,7 +335,9 @@ describe("Plan page", () => {
     await makePlan();
     expect(screen.queryByRole("list", { name: "Orders" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument();
-    expect(screen.queryByText(/placed/i)).not.toBeInTheDocument();
+    // (The Saved plans view stays mounted and may say "All placed"; the preview itself has no placed marks.)
+    expect(screen.queryByRole("button", { name: /placed/i })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Plan lines" })).queryByText(/placed/i)).not.toBeInTheDocument();
   });
 
   it("reloads the saved plan after an ISIN is saved, so the ticket carries it", async () => {
