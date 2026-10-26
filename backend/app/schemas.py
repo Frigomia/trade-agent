@@ -159,7 +159,8 @@ class RecommendationOut(BaseModel):
     fundamental_score: int | None
     technical_signal: str | None
     price_at_recommendation: float | None
-    # Stored by POST /memory/evaluate-outcomes ~20 days after the call. A fraction (0.05 = +5%)
+    # Stored by POST /memory/evaluate-outcomes once 20 trading days have closed after the call's
+    # entry day (price_as_of, else created_at). A fraction (0.05 = +5%)
     # despite the column name. evaluated_at set with a null return means "resolved, no valid
     # outcome" (no price history), which is different from "not due yet" (both null).
     outcome_forward_return_pct: float | None = None

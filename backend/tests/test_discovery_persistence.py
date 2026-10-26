@@ -1,6 +1,6 @@
 """Discovery scan writes run through the real restricted Postgres role."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -10,10 +10,10 @@ from app.db import open_user_session
 from app.discovery.persistence import save_scan
 from app.models import Recommendation, ScanRun
 from app.schemas import ScanRunOut
-from app.schemas_discovery import Exclusion, IdeaOut, Mention, RejectedMention
+from app.schemas_discovery import Exclusion, IdeaOut, IdeaSnapshot, Mention, RejectedMention
 from app.user_data import delete_user_data
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
-from tests.discovery_fixtures import sample_idea
+from tests.discovery_fixtures import sample_candidate, sample_idea
 
 COUNTS = {"universe_size": 600, "eligible": 100, "shortlisted": 10, "researched": 2}
 
@@ -333,3 +333,50 @@ def test_scan_count_requires_an_integer_within_researched_bounds(count, expected
     data = scan.model_dump()
     assert data["opportunities"] == expected
     assert data["set_aside"] == (None if expected is None else COUNTS["researched"] - expected)
+
+
+def _idea_priced(price_as_of, *, price=95.0) -> IdeaOut:
+    candidate = sample_candidate()
+    snapshot = IdeaSnapshot(
+        exchange=candidate.exchange,
+        country=candidate.country,
+        sector=candidate.sector,
+        industry=candidate.industry,
+        currency="CHF",
+        price=price,
+        price_as_of=price_as_of,
+        fundamentals=candidate.fundamentals,
+        coverage=candidate.coverage,
+    )
+    return _idea().model_copy(update={"snapshot": snapshot})
+
+
+def _saved_entry(db_session, app_session_local, idea):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        save_scan(USER_ID, [idea], **COUNTS)
+    return db_session.query(Recommendation).one()
+
+
+def test_an_idea_keeps_the_price_and_day_it_was_issued_at(db_session, app_session_local):
+    as_of = datetime.now(UTC) - timedelta(days=3)
+
+    saved = _saved_entry(db_session, app_session_local, _idea_priced(as_of))
+
+    assert float(saved.price_at_recommendation) == 95.0
+    assert saved.price_as_of == datetime(as_of.year, as_of.month, as_of.day)
+
+
+@pytest.mark.parametrize("days", [-2, 11, 400])
+def test_a_price_dated_in_the_future_or_too_old_is_not_kept(db_session, app_session_local, days):
+    saved = _saved_entry(
+        db_session, app_session_local, _idea_priced(datetime.now(UTC) - timedelta(days=days))
+    )
+
+    assert saved.price_at_recommendation is None and saved.price_as_of is None
+
+
+def test_an_idea_with_no_price_date_or_snapshot_is_left_unmeasured(db_session, app_session_local):
+    saved = _saved_entry(db_session, app_session_local, _idea_priced(None))
+
+    assert saved.price_at_recommendation is None and saved.price_as_of is None

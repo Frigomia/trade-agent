@@ -1,6 +1,7 @@
 """Save a discovery scan atomically after all provider work has finished."""
 
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -9,6 +10,23 @@ from app.config import settings
 from app.db import lock_and_check_active, scoped_session
 from app.models import Recommendation, ScanRun
 from app.schemas_discovery import Exclusion, IdeaOut, RejectedMention
+
+# An entry price older than this was not the price the idea was issued at.
+MAX_ENTRY_PRICE_AGE_DAYS = 10
+
+
+def _entry_price(idea: IdeaOut, today: datetime) -> tuple[float, datetime] | None:
+    """The price the idea was issued at and the day it is the close of, or None when the snapshot
+    has no price, no date, a date in the future or one too old to be the issue price. The outcome
+    job then leaves the idea unmeasured instead of guessing. The price is in the major currency
+    unit, as the idea shows it; the outcome is measured on the provider's own series, not on it."""
+    snapshot = idea.snapshot
+    if snapshot is None or snapshot.price is None or snapshot.price_as_of is None:
+        return None
+    day = snapshot.price_as_of.astimezone(UTC).date()
+    if not today.date() - timedelta(days=MAX_ENTRY_PRICE_AGE_DAYS) <= day <= today.date():
+        return None
+    return snapshot.price, datetime(day.year, day.month, day.day)
 
 
 def save_scan(
@@ -73,7 +91,9 @@ def save_scan(
                     Recommendation.status == "PENDING",
                     Recommendation.ticker.in_(evaluated),
                 ).update({"status": "SUPERSEDED"}, synchronize_session=False)
+            now = datetime.now(UTC)
             for idea in qualifying:
+                entry = _entry_price(idea, now)
                 db.add(
                     Recommendation(
                         user_id=user_id,
@@ -90,6 +110,8 @@ def save_scan(
                         source="discovery",
                         status="PENDING",
                         idea=idea.model_dump(mode="json"),
+                        price_at_recommendation=entry[0] if entry else None,
+                        price_as_of=entry[1] if entry else None,
                     )
                 )
             scan = ScanRun(

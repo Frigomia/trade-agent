@@ -144,10 +144,17 @@ class Recommendation(Base):
     idea: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    # The trading day price_at_recommendation is the close of (a discovery idea's snapshot date,
+    # which can be days older than the scan); the 20-trading-day horizon starts here. NULL: the
+    # creation date.
+    price_as_of: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     fundamental_score: Mapped[int | None] = mapped_column(nullable=True)
     technical_signal: Mapped[str | None] = mapped_column(String(20), nullable=True)
     outcome_forward_return_pct: Mapped[float | None] = mapped_column(Numeric(8, 4), nullable=True)
     outcome_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # A provider error leaves the outcome unscored and retried on a later day, up to a limit.
+    outcome_attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    outcome_attempted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), nullable=True)
 
 

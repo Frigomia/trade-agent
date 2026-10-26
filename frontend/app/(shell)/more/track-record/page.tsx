@@ -29,7 +29,7 @@ export default function TrackRecordPage() {
   const asked = useRef(false);
 
   // Nothing computes outcomes on a schedule, so opening this page asks the backend to evaluate
-  // whatever is due (20 days old, batch of 50). Best effort: a failure just leaves older data.
+  // whatever is due (28 days old, batch of 50). Best effort: a failure just leaves older data.
   useEffect(() => {
     if (asked.current) return;
     asked.current = true;

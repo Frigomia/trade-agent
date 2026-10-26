@@ -174,11 +174,45 @@ def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | N
 
 
 def _symbol_has_no_prices(exc: YFPricesMissingError) -> bool:
-    """True when Yahoo answered that the symbol has no data, not that it failed to answer."""
+    """True only when Yahoo said in so many words that the symbol has no data. An error with no
+    stated reason (an HTTP error body, malformed JSON, a missing chart) is an outage: yfinance
+    raises the same exception for those, and calling one "no prices" would be permanent."""
     reason = (exc.yahoo_reason or "").lower()
-    if reason:
-        return "no data found" in reason or "delisted" in reason
-    return "status_code" not in str(exc.debug_info)  # an HTTP error body is not "no prices"
+    return "no data found" in reason or "delisted" in reason
+
+
+def _history_closes(ticker: str, **kwargs: Any) -> dict[str, float]:
+    """`Ticker.history(**kwargs)` as closes by date: {} when Yahoo has no prices for the symbol, and
+    anything else it raises (a throttle, a server error, with `raise_errors`) is an outage."""
+    try:
+        frame = yf.Ticker(ticker).history(**kwargs)
+    except YFPricesMissingError as exc:  # only raised with raise_errors
+        if _symbol_has_no_prices(exc):
+            return {}
+        raise
+    return _closes_by_date(frame)
+
+
+def _closes_by_date(frame: Any) -> dict[str, float]:
+    """A history frame's positive finite closes by ISO date; {} for an unknown or delisted one."""
+    if "Close" not in frame:
+        return {}
+    return {
+        stamp.date().isoformat(): float(value)
+        for stamp, value in frame["Close"].items()
+        if math.isfinite(value) and value > 0
+    }
+
+
+async def fetch_closes_between(ticker: str, start: date, end: date) -> dict[str, float]:
+    """Daily closes by date from `start` up to `end`, adjusted for splits but not for dividends
+    (a price return). A provider failure is raised, never an empty result: {} means only that
+    Yahoo has no prices for the symbol, so the caller can tell an outage from a dead ticker. Not
+    cached."""
+
+    return await _retry_fetch(
+        lambda: _history_closes(ticker, start=start, end=end, auto_adjust=False, raise_errors=True)
+    )
 
 
 async def fetch_dated_closes(
@@ -202,26 +236,12 @@ async def fetch_dated_closes(
         if known or not strict:
             return known
 
-    def _fetch() -> dict[str, float]:
-        try:
-            frame = yf.Ticker(ticker).history(
-                period=period, **({"raise_errors": True} if strict else {})
-            )
-        except YFPricesMissingError as exc:  # only raised for a strict read
-            if _symbol_has_no_prices(exc):
-                return {}
-            raise  # Yahoo named another reason (throttled, server error): an outage
-        if "Close" not in frame:  # an unknown or delisted symbol: no history, not an outage
-            return {}
-        closes = frame["Close"]
-        return {
-            stamp.date().isoformat(): float(value)
-            for stamp, value in closes.items()
-            if math.isfinite(value) and value > 0
-        }
-
     try:
-        result = await _retry_fetch(_fetch)
+        result = await _retry_fetch(
+            lambda: _history_closes(
+                ticker, period=period, **({"raise_errors": True} if strict else {})
+            )
+        )
     except Exception as exc:
         logger.warning("Dated history unavailable (%s)", type(exc).__name__)
         if strict:

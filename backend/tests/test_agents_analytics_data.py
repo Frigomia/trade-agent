@@ -1,12 +1,13 @@
 import asyncio
 import inspect
 import json
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
 
-from app.agents.market_data import fetch_dated_closes, fetch_profile
+from app.agents.market_data import fetch_closes_between, fetch_dated_closes, fetch_profile
 
 
 def test_dated_history_preserves_dates_when_dropping_invalid_closes():
@@ -295,6 +296,9 @@ def test_yahoo_saying_there_are_no_prices_is_empty_history_even_for_a_strict_rea
         {"chart": {"result": None, "error": {"description": "Too Many Requests"}}},
         {"chart": {"result": None, "error": {"description": "Internal Server Error"}}},
         {"status_code": 502},
+        {},  # a malformed answer states no reason: it is not "no prices"
+        {"chart": {}},
+        {"chart": {"result": None, "error": None}},
     ],
 )
 def test_other_yahoo_errors_are_an_outage_for_a_strict_read(body):
@@ -312,3 +316,69 @@ def test_yfinance_still_has_the_per_call_switch_the_strict_read_relies_on():
     from yfinance.scrapers.history import PriceHistory
 
     assert "raise_errors" in inspect.signature(PriceHistory.history).parameters
+
+
+def _between(ticker: MagicMock) -> dict[str, float]:
+    with (
+        patch("app.agents.market_data.yf.Ticker", return_value=ticker),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+    ):
+        return asyncio.run(fetch_closes_between("A", date(2026, 10, 1), date(2026, 12, 1)))
+
+
+def test_closes_between_are_split_adjusted_only_and_keep_their_dates():
+    frame = pd.DataFrame(
+        {"Close": [100.0, float("nan"), 102.0]},
+        index=pd.to_datetime(["2026-10-01", "2026-10-02", "2026-10-05"]),
+    )
+    ticker = MagicMock()
+    ticker.history.return_value = frame
+
+    assert _between(ticker) == {"2026-10-01": 100.0, "2026-10-05": 102.0}
+    ticker.history.assert_called_once_with(
+        start=date(2026, 10, 1), end=date(2026, 12, 1), auto_adjust=False, raise_errors=True
+    )
+
+
+def test_closes_between_raises_a_provider_failure_instead_of_returning_nothing():
+    ticker = MagicMock()
+    ticker.history.side_effect = RuntimeError("yahoo down")
+
+    with pytest.raises(RuntimeError):
+        _between(ticker)
+
+
+def _real_between(transport: object) -> dict[str, float] | str:
+    """fetch_closes_between through yfinance's own history code, with only the HTTP getter faked.
+
+    A dated request needs the exchange's time zone first; yfinance caches it on disk, so a machine
+    that has seen the symbol before would skip the lookup a clean one makes. It is fixed here.
+    (`_get_ticker_tz` is a yfinance 1.7.0 internal: if an upgrade renames it, this patch fails
+    loudly with an AttributeError rather than quietly leaking the cache back in.)"""
+    with (
+        patch("yfinance.base.TickerBase._get_ticker_tz", return_value="America/New_York"),
+        patch("yfinance.data.YfData.get", side_effect=transport),
+        patch("yfinance.data.YfData.cache_get", side_effect=transport),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+    ):
+        try:
+            return asyncio.run(fetch_closes_between("AAPL", date(2026, 10, 1), date(2026, 12, 1)))
+        except Exception as exc:
+            return type(exc).__name__
+
+
+@pytest.mark.parametrize("body", [{}, {"chart": {}}, {"chart": {"result": None, "error": None}}])
+def test_a_malformed_yahoo_answer_is_an_outage_for_closes_between_not_no_prices(body):
+    response = MagicMock(text="{}")
+    response.json.return_value = body
+
+    assert _real_between([response] * 10) == "YFPricesMissingError"
+
+
+def test_yahoo_saying_there_are_no_prices_is_empty_for_closes_between():
+    response = MagicMock(text="{}")
+    response.json.return_value = {
+        "chart": {"result": None, "error": {"description": "No data found, symbol may be delisted"}}
+    }
+
+    assert _real_between([response] * 10) == {}
