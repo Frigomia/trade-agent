@@ -124,8 +124,6 @@ def _flush_rate_limit_keys() -> None:
             await redis.delete(key)
         async for key in redis.scan_iter("analysis_active:*"):
             await redis.delete(key)
-        async for key in redis.scan_iter("discovery_active:*"):
-            await redis.delete(key)
         async for key in redis.scan_iter("telegram:*"):
             await redis.delete(key)
         async for key in redis.scan_iter("discovery:*"):

@@ -147,10 +147,21 @@ redis.call('set', KEYS[2], 'reserved', 'EX', ARGV[2])
 return 1
 """
 _REFUND_COMPANY = """
+if redis.call('get', KEYS[2]) == 'charged' then return -1 end
 if redis.call('get', KEYS[2]) ~= 'reserved' then return 0 end
 local count = tonumber(redis.call('get', KEYS[1]) or '0')
 if count > 0 then redis.call('decr', KEYS[1]) end
 redis.call('set', KEYS[2], 'refunded', 'EX', ARGV[1])
+return 1
+"""
+_CHARGE_COMPANY = """
+local state = redis.call('get', KEYS[2])
+if state == 'charged' then return 0 end
+if state == 'refunded' then
+    redis.call('incr', KEYS[1])
+    redis.call('expire', KEYS[1], ARGV[1])
+end
+redis.call('set', KEYS[2], 'charged', 'EX', ARGV[1])
 return 1
 """
 
@@ -176,8 +187,17 @@ async def reserve_company_usage(job_id: str, key: str, limit: int, claim_key: st
         raise RunClaimLost
 
 
-async def refund_company_usage(job_id: str, key: str) -> None:
-    await get_redis().eval(_REFUND_COMPANY, 2, key, f"company_usage:{job_id}", _MONTH_TTL_SECONDS)
+async def charge_company_usage(job_id: str, key: str) -> None:
+    """Make completed work nonrefundable, restoring the unit if recovery refunded first."""
+    await get_redis().eval(_CHARGE_COMPANY, 2, key, f"company_usage:{job_id}", _MONTH_TTL_SECONDS)
+
+
+async def refund_company_usage(job_id: str, key: str) -> bool:
+    """Settle a refund, or return False when completed work already owns the unit."""
+    result = await get_redis().eval(
+        _REFUND_COMPANY, 2, key, f"company_usage:{job_id}", _MONTH_TTL_SECONDS
+    )
+    return bool(result != -1)
 
 
 def check_monthly_usage(kind: str) -> Callable[..., Awaitable[None]]:

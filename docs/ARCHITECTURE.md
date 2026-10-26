@@ -1756,12 +1756,19 @@ company attempt summaries. A completed non-opportunity persists without a Recomm
 qualifying opportunity saves a discovery report atomically with its attempt. It only supersedes
 pending discovery advice for that ticker; unrelated ideas and the latest ScanRun remain intact.
 
-Completed research costs one analysis_run, including a non-opportunity. Refusals and failures cost
-zero under the approved company policy. Per-job Redis reservation tokens atomically change the
+Completed research costs one analysis_run, including a non-opportunity. Removing a company or
+losing the claim after research returns records a charged failure; completed provider work cannot
+be made free by removing and re-adding the company. Refusals and provider, timeout or persistence
+failures cost zero. Per-job Redis reservation tokens atomically change the
 shared usage counter and make refunds idempotent against the original month, including rollover.
+Completed work finalizes that token as charged atomically, restoring the original month's unit
+if an overlapping orphan recovery refunded first; subsequent refunds cannot decrement it.
 The pending attempt is written before reservation, so uncertain start results can be reconciled.
 Missing claims cause only the same orphaned attempt to fail/refund on a later read; pending refunds
-block paid retry. Completion commits before claim release. A completed result or unchanged refusal
+block paid retry. Overview and job-status reads perform this reconciliation even for removed
+companies, before checking whether a result may be returned. The Discover list does not reconcile
+attempts itself and can show running until one of those reads settles the attempt.
+Completion commits before claim release. A completed result or unchanged refusal
 cannot spend again. Provider charges already incurred are separate from the app's run allowance.
 Existing holdings/full-scan failure policies are unchanged.
 

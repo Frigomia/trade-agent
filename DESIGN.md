@@ -472,7 +472,8 @@ Edit target for a company no scan has researched) takes the width and Edit and R
 44px outlined buttons. An eligible company without a saved outcome offers Analyze, explicitly
 priced at one monthly run. Running research shows Analyzing; a saved report offers View. A researched
 non-opportunity offers View result without inventing a BUY. Eligibility refusals cost zero and cannot
-repeat unchanged; failed runs are refunded before an explicit retry. Opening a name without a report
+repeat unchanged; provider failures are refunded before an explicit retry. Completed research stays
+charged if the company is removed or its run expires after research returns. Opening a name without a report
 shows `/discover/company/<ticker>`: a free provider overview, dated quote, keyboard-readable chart
 and facts, with research in a separate panel. On a phone research comes before chart and facts.
 Provider failures remain explicit and do not by themselves disable research. The allowance comes

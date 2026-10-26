@@ -45,7 +45,7 @@ export function ResearchAction({ item, details = false }: { item: DiscoverItem; 
     <Box sx={{ display: "grid", gap: 1, flex: 1, minWidth: 0 }}>
       {details && quota && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{quota.used} of {quota.limit} monthly runs used · {Math.max(0, quota.limit - quota.used)} remaining · renews {renewal}</Typography>}
       {lock ? <Button component={Link} href="/more/account" variant="outlined" sx={{ minHeight: 44 }}>{lock === "reconnect" ? "Reconnect Claude in Account" : "Connect Claude in Account"}</Button> : <Button onClick={() => void start()} disabled={submitting || running || pending || refused || exhausted} variant="contained" sx={{ minHeight: 44 }}>{submitting ? "Starting research…" : text}</Button>}
-      {details && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Completed research uses one run, including no opportunity. Refusals and failed runs cost zero. You can leave while research runs.</Typography>}
+      {details && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Completed research uses one run, including no opportunity or a company removed after research. Refusals and provider failures cost zero. You can leave while research runs.</Typography>}
       {error && <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--warn)" }}>{error}</Typography>}
     </Box>
   );

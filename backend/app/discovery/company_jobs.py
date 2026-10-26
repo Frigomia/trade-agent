@@ -18,6 +18,7 @@ from app.config import settings
 from app.db import lock_and_check_active, scoped_session
 from app.discovery import jobs
 from app.discovery.company import PreparedCompany, prepare_company
+from app.discovery.persistence import entry_price
 from app.discovery.runner import SCAN_TIMEOUT_SECONDS, _user_inputs, evaluate_candidate
 from app.models import CompanyAnalysis, Recommendation, WatchlistItem
 from app.portfolio_analytics import load_fit_context
@@ -33,10 +34,15 @@ class CompanyUnavailable(Exception):
     """Company removed, account disabled or usage settlement still pending."""
 
 
+def _is_saved(user_id: UUID, ticker: str) -> bool:
+    with scoped_session(user_id) as db:
+        return (
+            db.query(WatchlistItem.id).filter_by(user_id=user_id, ticker=ticker).first() is not None
+        )
+
+
 def _latest(user_id: UUID, ticker: str, job_id: str | None = None) -> CompanyAnalysis | None:
     with scoped_session(user_id) as db:
-        if not db.query(WatchlistItem.id).filter_by(user_id=user_id, ticker=ticker).first():
-            return None
         query = db.query(CompanyAnalysis).filter_by(user_id=user_id, ticker=ticker)
         if job_id is not None:
             query = query.filter_by(job_id=job_id)
@@ -77,7 +83,9 @@ def _insert(user_id: UUID, ticker: str, job_id: str, prepared: PreparedCompany) 
             raise
 
 
-def _failure(user_id: UUID, job_id: str, reason: str, settled: bool = False) -> bool:
+def _failure(
+    user_id: UUID, job_id: str, reason: str, settled: bool = False, charged: bool = False
+) -> bool:
     with scoped_session(user_id) as db:
         try:
             if not lock_and_check_active(db, user_id):
@@ -85,10 +93,13 @@ def _failure(user_id: UUID, job_id: str, reason: str, settled: bool = False) -> 
             row = db.query(CompanyAnalysis).filter_by(user_id=user_id, job_id=job_id).first()
             if row is None or row.status not in ("running", "failed"):
                 return row is None
+            if row.charge_state == "charged":
+                return False
             row.status = "failed"
             row.reason = reason
             row.finished_at = datetime.now(UTC).replace(tzinfo=None)
-            row.charge_state = "refunded" if settled else "pending"
+            row.charge_state = "charged" if charged else "refunded" if settled else "pending"
+            row.researched = charged
             db.commit()
             return True
         except Exception:
@@ -99,13 +110,14 @@ def _failure(user_id: UUID, job_id: str, reason: str, settled: bool = False) -> 
 async def _refund(user_id: UUID, row: CompanyAnalysis, reason: str) -> None:
     if not await asyncio.to_thread(_failure, user_id, row.job_id, reason):
         return  # a concurrent successful commit must never be refunded
+    refunded = True
     if row.usage_key is not None:
-        await usage.refund_company_usage(row.job_id, row.usage_key)
-    await asyncio.to_thread(_failure, user_id, row.job_id, reason, True)
+        refunded = await usage.refund_company_usage(row.job_id, row.usage_key)
+    await asyncio.to_thread(_failure, user_id, row.job_id, reason, True, charged=not refunded)
 
 
 async def company_state(
-    user_id: UUID, ticker: str, job_id: str | None = None
+    user_id: UUID, ticker: str, job_id: str | None = None, *, refresh_eligibility: bool = True
 ) -> CompanyAnalysisOut | None:
     row = await asyncio.to_thread(_latest, user_id, ticker, job_id)
     if row is None:
@@ -131,9 +143,11 @@ async def company_state(
             logger.warning("Company usage settlement unavailable (%s)", type(exc).__name__)
     if row is None:
         return None
+    if not await asyncio.to_thread(_is_saved, user_id, ticker):
+        return None
     out = CompanyAnalysisOut.model_validate(row)
     out.can_analyze = row.status == "failed" and row.charge_state == "refunded"
-    if row.status == "ineligible":
+    if row.status == "ineligible" and refresh_eligibility:
         try:
             prepared = await prepare_company(user_id, ticker)
             out.can_analyze = prepared.fingerprint != row.fingerprint
@@ -166,6 +180,7 @@ def _save_result(user_id: UUID, job_id: str, result: IdeaOut | Exclusion) -> Non
                 row.reason = result.explanation[:1000]
             row.status = "no_opportunity"
             if isinstance(result, IdeaOut) and is_opportunity(result):
+                entry = entry_price(result, datetime.now(UTC))
                 db.query(Recommendation).filter_by(
                     user_id=user_id, ticker=row.ticker, source="discovery", status="PENDING"
                 ).update({"status": "SUPERSEDED"})
@@ -178,8 +193,14 @@ def _save_result(user_id: UUID, job_id: str, result: IdeaOut | Exclusion) -> Non
                     status="PENDING",
                     reasoning=[result.conclusion],
                     ai_analysis=result.thesis,
-                    suggested_position_pct=settings.max_single_position_pct / 2,
+                    suggested_position_pct=(
+                        settings.max_single_position_pct
+                        if result.overall is not None and result.overall >= 80
+                        else settings.max_single_position_pct / 2
+                    ),
                     idea=result.model_dump(mode="json"),
+                    price_at_recommendation=entry[0] if entry else None,
+                    price_as_of=entry[1] if entry else None,
                 )
                 db.add(rec)
                 db.flush()
@@ -202,6 +223,7 @@ async def run_company(
     uses_saved_key: bool,
 ) -> None:
     completed = False
+    researched = False
     try:
         if prepared.candidate is None:
             raise ValueError("An eligible candidate is required")
@@ -216,6 +238,7 @@ async def run_company(
                 datetime.now(UTC).date(),
                 require_research=True,
             )
+            researched = True
         if not await get_redis().eval(
             _RENEW_IF_MINE, 1, jobs._active_key(user_id), row.job_id, jobs.ACTIVE_TTL_SECONDS
         ):
@@ -245,7 +268,12 @@ async def run_company(
             if isinstance(exc, ResearchKeyRejected):
                 reason = "Your Claude key needs attention."
             try:
-                await _refund(user_id, row, reason)
+                if researched and isinstance(exc, CompanyUnavailable):
+                    if row.usage_key is not None:
+                        await usage.charge_company_usage(row.job_id, row.usage_key)
+                    await asyncio.to_thread(_failure, user_id, row.job_id, reason, charged=True)
+                else:
+                    await _refund(user_id, row, reason)
             except Exception as settle_error:
                 logger.warning("Company usage settlement pending (%s)", type(settle_error).__name__)
             logger.warning("Company research unavailable (%s)", type(exc).__name__)
@@ -305,7 +333,8 @@ async def start_company(
         row = await asyncio.to_thread(_insert, user_id, ticker, job_id, prepared)
         out = CompanyAnalysisOut.model_validate(row)
         if prepared.candidate is not None:
-            assert row.usage_key is not None
+            if row.usage_key is None:
+                raise CompanyUnavailable
             if not await get_redis().eval(
                 _RENEW_IF_MINE, 1, jobs._active_key(user_id), job_id, jobs.ACTIVE_TTL_SECONDS
             ):
@@ -331,7 +360,7 @@ async def company_job_status(user_id: UUID, job_id: str, db: Session) -> dict[st
     db.close()
     if ticker is None:
         return None
-    state = await company_state(user_id, ticker, job_id)
+    state = await company_state(user_id, ticker, job_id, refresh_eligibility=False)
     if state is None or state.job_id != job_id:
         return None
     return {
