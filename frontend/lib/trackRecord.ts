@@ -8,6 +8,9 @@ export type Kind = "holdings" | "discovery";
 export interface TrackRow {
   rec: RecommendationOut;
   kind: Kind;
+  /** YYYY-MM-DD of the close the return is measured from: the saved snapshot's close for a discovery
+   *  idea (it can be days before the call), the day of the call otherwise. */
+  entryDay: string;
   verdict: Verdict;
   movePct: number | null; // percent: 5.25 means +5.25%
 }
@@ -48,7 +51,8 @@ export function buildTrackRecord(recs: RecommendationOut[]): TrackSummary {
     .map((rec): TrackRow => {
       const fraction = rec.outcome_forward_return_pct;
       const movePct = fraction == null ? null : fraction * 100;
-      return { rec, kind: kindOf(rec), verdict: verdictFor(rec.action, movePct), movePct };
+      const entryDay = (rec.idea?.snapshot?.price_as_of ?? rec.created_at).slice(0, 10);
+      return { rec, kind: kindOf(rec), entryDay, verdict: verdictFor(rec.action, movePct), movePct };
     })
     .sort((a, b) => b.rec.created_at.localeCompare(a.rec.created_at));
   const summarize = (kind: Kind): SourceSummary => {

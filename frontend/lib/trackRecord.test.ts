@@ -98,6 +98,23 @@ describe("buildTrackRecord", () => {
     expect(scored).toBe(3);
   });
 
+  it("measures a discovery idea from its snapshot's close and any other call from its own day", () => {
+    const snapshot = { price_as_of: "2026-07-30T00:00:00Z" } as NonNullable<RecommendationOut["idea"]>["snapshot"];
+    const idea = { snapshot } as RecommendationOut["idea"];
+    const { rows } = buildTrackRecord([
+      rec("BUY", 0.05, { source: "discovery", idea, created_at: "2026-08-03T10:00:00" }),
+      rec("BUY", 0.05, { source: "manual", created_at: "2026-08-02T10:00:00" }),
+      rec("BUY", 0.05, { source: "discovery", idea: null, created_at: "2026-08-01T10:00:00" }),
+    ]);
+    expect(rows.map((r) => r.entryDay)).toEqual(["2026-07-30", "2026-08-02", "2026-08-01"]);
+  });
+
+  it("falls back to the call's day when the saved snapshot has no price date", () => {
+    const idea = { snapshot: { price_as_of: null } } as RecommendationOut["idea"];
+    const { rows } = buildTrackRecord([rec("BUY", 0.05, { source: "discovery", idea, created_at: "2026-08-03T10:00:00" })]);
+    expect(rows[0].entryDay).toBe("2026-08-03");
+  });
+
   it("keeps a discovery idea a later scan replaced, but not a replaced holdings call", () => {
     const { rows } = buildTrackRecord([
       rec("BUY", 0.05, { source: "discovery", status: "SUPERSEDED" }),

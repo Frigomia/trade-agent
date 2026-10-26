@@ -51,9 +51,9 @@ export default function TrackRecordPage() {
 
       {error && <Alert severity="error">Could not load your track record.</Alert>}
 
-      {summary && summary.scored === 0 && <TrackRecordEmpty />}
+      {summary && summary.rows.length === 0 && <TrackRecordEmpty />}
 
-      {summary && summary.scored > 0 && (
+      {summary && summary.rows.length > 0 && (
         <Panel sx={{ p: "18px 20px", mb: 1.75 }}>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(auto-fit, minmax(220px, 1fr))" }, gap: 2.5 }}>
             {KINDS.filter((kind) => summary.bySource[kind].count > 0).map((kind) => {
@@ -85,9 +85,12 @@ export default function TrackRecordPage() {
             })}
           </Box>
           <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 1.75 }}>
-            Each percentage below is the stock&apos;s own price change over the 20 trading days after the call: no
-            benchmark, no dividends. HOLD and WATCH aren&apos;t scored, and a company that a later scan found again counts
-            again. A small sample, not a forecast.
+            {summary.scored > 0 &&
+              "Each percentage below is the stock's own price change over 20 trading days from the call's day, or, when a row says " +
+                "\"Measured from\", from that earlier close (a discovery idea uses the close its saved snapshot was taken at): no " +
+                "benchmark, no dividends. "}
+            HOLD and WATCH aren&apos;t scored, and a company that a later scan found again counts again. A small sample,
+            not a forecast.
           </Typography>
         </Panel>
       )}
@@ -95,7 +98,7 @@ export default function TrackRecordPage() {
       {summary && summary.rows.length > 0 && (
         <Panel sx={{ p: "4px 18px" }}>
         <Box component="ul" sx={{ listStyle: "none", p: 0, m: 0 }}>
-          {summary.rows.map(({ rec, kind, verdict, movePct }) => (
+          {summary.rows.map(({ rec, kind, entryDay, verdict, movePct }) => (
             <Box
               component="li"
               key={rec.id}
@@ -116,6 +119,11 @@ export default function TrackRecordPage() {
                 <Typography sx={{ color: "var(--muted)", fontSize: 12, mt: 0.25 }}>
                   {rec.created_at.slice(0, 10)} · {KIND_WORD[kind]} · {DECISION_WORD[rec.status] ?? rec.status}
                 </Typography>
+                {movePct !== null && entryDay !== rec.created_at.slice(0, 10) && (
+                  <Typography sx={{ color: "var(--muted)", fontSize: 12 }}>
+                    Measured from the first close on or after {entryDay}
+                  </Typography>
+                )}
               </Box>
               <Box sx={{ textAlign: "right" }}>
                 <Typography
