@@ -14,7 +14,7 @@ import { SaveToDiscover } from "./SaveToDiscover";
  */
 export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecommendation; earlier?: boolean }) {
   const idea = rec.idea!;
-  const why = idea.catalysts.find((c) => c.trim());
+  const why = idea.catalysts.map((c) => typeof c === "string" ? c : c.text).find((c) => c.trim());
   const headline = idea.headline?.trim() || idea.thesis;
   return (
     <Box

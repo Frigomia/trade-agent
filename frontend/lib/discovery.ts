@@ -90,6 +90,11 @@ export function dateTimeText(iso: string): string {
   return `${day}, ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
+/** A calendar day with its year, kept on that day in every viewer's time zone. */
+export function calendarDateText(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+
 /** The scan bar's count words, from the saved counts only; empty parts when a legacy scan lacks them. */
 export function scanCounts(scan: ScanRun): string[] {
   if (scan.opportunities === null) return [];

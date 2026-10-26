@@ -10,6 +10,7 @@ import { usePortfolioSuggestions } from "@/lib/portfolio/usePortfolioSuggestions
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
 import { Panel } from "@/components/ui/Panel";
+import { BACKTEST_LABEL } from "@/components/shell/navItems";
 import { Pill } from "@/components/ui/Pill";
 import { formatPct } from "@/lib/format";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -61,7 +62,10 @@ export default function BacktestsPage() {
 
   return (
     <Box>
-      <PageHeader title="Backtests" />
+      <PageHeader
+        title={BACKTEST_LABEL}
+        subtitle="Tests the technical signals only, on one ticker, with no fundamentals. It does not test discovery ideas."
+      />
 
       <Box
         sx={{

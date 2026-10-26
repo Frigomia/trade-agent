@@ -35,7 +35,7 @@ production checklist is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Operations:** scheduled daily snapshot, outcome and analysis jobs, and a database backup
   workflow (GitHub Actions).
 - **Frontend:** Today, recommendation detail, Portfolio (Holdings, This month, Saved plans,
-  Orders), Track record, Backtests, Chat, Preferences, Account, and the admin screens, with light
+  Orders), Track record, Signal backtest, Chat, Preferences, Account, and the admin screens, with light
   and dark themes and a phone-first shell with desktop layouts. The visual design is in
   [DESIGN.md](DESIGN.md).
 

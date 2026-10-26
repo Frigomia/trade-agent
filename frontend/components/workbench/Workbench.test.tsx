@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
-import { testHistory, testIdea, testRec } from "./testData";
+import { claim, testHistory, testIdea, testRec } from "./testData";
 
 const apiFetch = vi.fn();
 const { FakeApiError } = vi.hoisted(() => {
@@ -169,6 +169,35 @@ describe("Workbench tabs", () => {
     expect(bull).toHaveTextContent("Fact");
     expect(bull).toHaveTextContent("Official");
     expect(bull).toHaveTextContent("Q3 results on 6 Nov.");
+    expect(bull).toHaveTextContent("Unverified");
+    expect(bull.querySelector("time")).toBeNull();
+  });
+
+  it("shows all claim statuses and cited catalyst dates without dating undated events", async () => {
+    show(testRec({
+      sources: [claim({ status: "confirmed" }), claim({ text: "The growth claim is contested.", status: "disputed" }), claim({ text: "Demand might accelerate.", status: "unverified", kind: "forecast" })],
+      catalysts: [
+        { text: "Quarterly results", occurs_on: "2026-11-06", event_id: "earnings", evidence: ["https://issuer.example/calendar"] },
+        { text: "A possible product launch", occurs_on: null, event_id: null, evidence: ["https://reporter.example/launch"] },
+      ],
+    }));
+    const bull = (await screen.findByRole("heading", { name: "Bull case" })).closest("section")!;
+    for (const status of ["Confirmed", "Disputed", "Unverified"]) expect(bull).toHaveTextContent(status);
+    expect(bull.querySelectorAll("time")).toHaveLength(1);
+    expect(bull.querySelector("time")).toHaveAttribute("dateTime", "2026-11-06");
+    expect(bull.querySelector("time")).toHaveTextContent(/Nov/);
+    expect(bull.querySelector("time")).toHaveTextContent(/2026/);
+    expect(bull.querySelector("time")).not.toHaveTextContent("2026-11-06");
+    expect(within(bull).getByRole("link", { name: "issuer.example" })).toHaveAttribute("href", "https://issuer.example/calendar");
+    expect(within(bull).getByRole("link", { name: "reporter.example" })).toHaveAttribute("rel", "noopener noreferrer");
+  });
+
+  it("renders catalyst text as text and refuses unsafe evidence links", async () => {
+    show(testRec({ catalysts: [{ text: "<img src=x onerror=alert(1)>", occurs_on: null, event_id: null, evidence: ["javascript:alert(1)"] }] }));
+    const bull = (await screen.findByRole("heading", { name: "Bull case" })).closest("section")!;
+    expect(bull).toHaveTextContent("<img src=x onerror=alert(1)>");
+    expect(bull.querySelector("img")).toBeNull();
+    expect(bull.querySelector('a[href^="javascript:"]')).toBeNull();
   });
 
   it("expands the thesis on request, with the outlook", async () => {

@@ -5,10 +5,11 @@ import { Box, Typography } from "@mui/material";
 import { ChevronRight } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { BACKTEST_LABEL } from "@/components/shell/navItems";
 
 const ITEMS = [
   { label: "Track record", href: "/more/track-record", hint: "How past calls moved after 20 trading days" },
-  { label: "Backtests", href: "/more/backtests", hint: "Test the signals on past prices" },
+  { label: BACKTEST_LABEL, href: "/more/backtests", hint: "Technical signals only, one ticker, past prices" },
   { label: "Preferences", href: "/more/preferences", hint: "Risk, sectors to avoid, notes, appearance" },
   { label: "Account", href: "/more/account", hint: "Password, usage, export and delete" },
 ];
