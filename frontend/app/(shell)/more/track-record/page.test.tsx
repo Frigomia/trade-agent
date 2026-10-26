@@ -47,13 +47,95 @@ describe("TrackRecordPage", () => {
     expect(screen.getByText(/not scored/i)).toBeInTheDocument();
   });
 
-  it("shows an empty state instead of 0 of 0 when nothing is scored", async () => {
+  it("labels holdings calls and discovery ideas, counts each, and keeps a replaced idea", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations")
+        return [
+          rec(1, "BUY", 0.05),
+          { ...rec(2, "BUY", -0.02), source: "discovery" },
+          { ...rec(3, "BUY", 0.04), source: "discovery", status: "SUPERSEDED" },
+          { ...rec(4, "BUY", 0.09), source: "manual", status: "SUPERSEDED" },
+        ];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    const holdings = await screen.findByRole("region", { name: "Holdings calls" });
+    expect(holdings).toHaveTextContent("1 call, 1 scored");
+    expect(holdings).toHaveTextContent("1 of 1");
+    const discovery = screen.getByRole("region", { name: "Discovery ideas" });
+    expect(discovery).toHaveTextContent("2 calls, 2 scored");
+    expect(discovery).toHaveTextContent("1 of 2");
+    expect(screen.getByText(/2026-08-02 · Discovery idea · Approved/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-08-03 · Discovery idea · Replaced or withdrawn/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-08-01 · Holdings call · Approved/)).toBeInTheDocument();
+    expect(screen.queryByText("T4")).not.toBeInTheDocument(); // a replaced holdings call was never decided
+  });
+
+  it("says what the percentage measures", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05)];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    expect(await screen.findByText(/price change over 20 trading days from the call's day.*no benchmark, no dividends/i)).toBeInTheDocument();
+  });
+
+  it("names a kind with calls but none scored yet, without a 0 of 0", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05), { ...rec(2, "HOLD", 0.01), source: "discovery" }];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    const discovery = await screen.findByRole("region", { name: "Discovery ideas" });
+    expect(discovery).toHaveTextContent("1 call, 0 scored");
+    expect(discovery).toHaveTextContent("None scored yet");
+    expect(discovery).not.toHaveTextContent("0 of 0");
+  });
+
+  it("shows an empty state instead of 0 of 0 when no call has been evaluated yet", async () => {
     apiFetch.mockImplementation(async (path: string) =>
-      path === "/analysis/recommendations" ? [rec(1, "BUY", null, false), rec(2, "HOLD", 0.02)] : { evaluated: 0, remaining: 0 },
+      path === "/analysis/recommendations" ? [rec(1, "BUY", null, false)] : { evaluated: 0, remaining: 0 },
     );
     renderFresh();
     expect(await screen.findByText(/no scored calls yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/0 of 0/)).not.toBeInTheDocument();
+  });
+
+  it("still shows the source summary and the rows when every evaluated call is unscored", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations")
+        return [{ ...rec(1, "BUY", null), source: "discovery" }, rec(2, "HOLD", 0.02)]; // no history; a HOLD
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    const discovery = await screen.findByRole("region", { name: "Discovery ideas" });
+    expect(discovery).toHaveTextContent("1 call, 0 scored");
+    expect(discovery).toHaveTextContent("None scored yet");
+    expect(screen.getByRole("region", { name: "Holdings calls" })).toHaveTextContent("None scored yet");
+    expect(screen.queryByText(/each percentage below/i)).not.toBeInTheDocument(); // nothing measured to describe
+    expect(screen.getByText(/hold and watch aren.t scored/i)).toBeInTheDocument();
+    expect(screen.getByText("T1")).toBeInTheDocument();
+    expect(screen.queryByText(/^Measured from the first close/)).not.toBeInTheDocument(); // nothing was measured
+    expect(screen.queryByText(/no scored calls yet/i)).not.toBeInTheDocument();
+  });
+
+  it("says each return is measured from the snapshot's close, which can precede the call", async () => {
+    const idea = { snapshot: { price_as_of: "2026-07-31T00:00:00Z" } } as RecommendationOut["idea"];
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations")
+        return [{ ...rec(3, "BUY", 0.05), source: "discovery", idea }, rec(2, "BUY", 0.02)];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+
+    // the idea was issued on 2026-08-03 from Friday 2026-07-31's close; a holdings call from its own day
+    expect(await screen.findByText(/2026-08-03 · Discovery idea/)).toBeInTheDocument();
+    expect(screen.getByText("Measured from the first close on or after 2026-07-31")).toBeInTheDocument();
+    expect(screen.getAllByText(/^Measured from the first close/)).toHaveLength(1); // the holdings call says nothing extra
   });
 
   it("explains the 20-day rule and points to today's recommendations when nothing is scored", async () => {
