@@ -37,6 +37,12 @@ describe("WatchlistInsights", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent("GBP 7.00 · Range GBP 6.50 to 7.205");
   });
 
+  it("shows the price with the range's decimals, so a price on the edge of its range does not look outside it", () => {
+    render(<WatchlistInsights insights={[insight({ currency: "GBP", current_price: 7.2049999, target_price_low: 6.5, target_price_high: 7.205 })]} />);
+
+    expect(screen.getByRole("listitem")).toHaveTextContent("GBP 7.205 · Range GBP 6.50 to 7.205");
+  });
+
   it("says what could not be checked, so a missing insight is not read as outside the range", () => {
     render(<WatchlistInsights insights={[insight()]} missing={["prices"]} />);
 

@@ -73,9 +73,10 @@ function amountText(price: number, currency: string | null, most = 0): string {
 }
 
 /** "USD 184.20" or "JPY 3,845"; just the number when the currency is not known (no unit is claimed). */
-export function priceText(item: Pick<DiscoverItem, "price" | "currency">): string | null {
+/** `most` is how many decimals it may keep; a quote carries float noise, so only a price set beside a range asks for more. */
+export function priceText(item: Pick<DiscoverItem, "price" | "currency">, most = 0): string | null {
   if (item.price === null || !Number.isFinite(item.price)) return null;
-  const number = amountText(item.price, item.currency);
+  const number = amountText(item.price, item.currency, most);
   return item.currency ? `${item.currency} ${number}` : number;
 }
 
@@ -89,6 +90,12 @@ export function targetsText(item: Pick<DiscoverItem, "owned" | "target_weight" |
   const { target_price_low: low, target_price_high: high, currency } = item;
   if (low !== null && high !== null) parts.push(rangeText(low, high, currency));
   return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** The decimals a range's ends carry (up to the six stored): what a price compared with it needs to read alike. */
+export function rangeDecimals(low: number, high: number): number {
+  const decimals = (n: number) => (String(n).split(".")[1] ?? "").length;
+  return Math.min(6, Math.max(decimals(low), decimals(high)));
 }
 
 /** "Range USD 90.00 to 110.00": the unit once, then both ends with their own decimals. */
