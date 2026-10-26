@@ -35,8 +35,8 @@ def history(client, rec_id, closes=CLOSES, quote_currency="USD", **params):
     if not isinstance(quote_currency, Exception):
         currency.return_value = quote_currency
     with (
-        patch("app.routers.discovery.fetch_dated_closes", fetch),
-        patch("app.routers.discovery.fetch_currency", currency),
+        patch("app.price_history.fetch_dated_closes", fetch),
+        patch("app.price_history.fetch_currency", currency),
     ):
         return client.get(f"/discovery/ideas/{rec_id}/history", params=params), fetch
 

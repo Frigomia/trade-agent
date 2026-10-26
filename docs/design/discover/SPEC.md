@@ -48,8 +48,8 @@ Open `dc-a-list.html`, `dc-b-table.html` or `dc-c-cards.html` (add `?theme=dark`
 ## Decisions for you
 
 1. Resolved: option 1, List, was chosen (see `direction-approved.md`).
-2. Open: single-company Analyze is not in the built version; Discover only shows research a scan already produced. Decision and build: [#193](https://github.com/Frigomia/trade-agent/issues/193).
-3. Open: the overview of a company with no report is not designed. Design: [#194](https://github.com/Frigomia/trade-agent/issues/194).
+2. Resolved 2026-10-26 (#193): explicit single-company Analyze, with the owner-approved cost/refund and saved-outcome policies in [discover-company](../discover-company/direction-approved.md).
+3. Resolved 2026-10-26 (#194): the free provider overview and ticker-keyed history follow the approved [discover-company direction](../discover-company/direction-approved.md).
 4. Resolved 2026-10-22 (#169): Remove has no confirm step; it uses Undo for eight seconds, as in the mocks.
 5. Resolved 2026-10-22 (#168): the list holds at most 100 companies (`MAX_DISCOVER`, the watchlist cap), and the cards fit that.
 

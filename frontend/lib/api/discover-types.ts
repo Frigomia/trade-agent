@@ -16,14 +16,35 @@ export interface DiscoverItem {
   change_pct: number | null; // last close against the one before, in percent
   price_as_of: string | null; // YYYY-MM-DD
   stale: boolean;
-  status: "analyzed" | "none"; // analyzed: a scan saved an idea for it (never started from here)
+  status: "analyzed" | "none"; // analyzed: a saved report or a researched company outcome
   insight: string | null; // the idea's one-line reading, only when analyzed. Scan text: render as text.
   report_id: number | null; // the idea's id, to open its report at /today/{id}
   owned: boolean; // the person holds shares of it: its weight target lives on the holding, not here
+  analysis?: CompanyAnalysisState | null; // optional for responses from older deployments
+}
+
+export interface CompanyAnalysisState {
+  job_id: string;
+  created_at: string;
+  finished_at: string | null;
+  status: "running" | "report" | "no_opportunity" | "ineligible" | "failed";
+  researched: boolean;
+  reason: string;
+  report_id: number | null;
+  charge_state: "none" | "reserved" | "charged" | "refunded" | "pending";
+  can_analyze: boolean;
 }
 
 export interface DiscoverList {
   items: DiscoverItem[];
   // What could not be looked up, so a missing price is not read as "no change".
   missing: "prices"[];
+}
+
+export interface CompanyOverviewData {
+  company: DiscoverItem;
+  sector: string | null;
+  industry: string | null;
+  country: string | null;
+  missing: ("prices" | "profile")[];
 }

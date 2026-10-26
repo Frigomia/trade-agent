@@ -81,6 +81,37 @@ class WatchlistItem(Base):
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class CompanyAnalysis(Base):
+    """A durable single-company attempt, including refusals and researched non-opportunities."""
+
+    __tablename__ = "company_analyses"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('running', 'report', 'no_opportunity', 'ineligible', 'failed')",
+            name="ck_company_analysis_status",
+        ),
+        CheckConstraint(
+            "charge_state IN ('none', 'reserved', 'charged', 'refunded', 'pending')",
+            name="ck_company_analysis_charge",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    ticker: Mapped[str] = mapped_column(String(20), index=True)
+    job_id: Mapped[str] = mapped_column(String(36), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    status: Mapped[str] = mapped_column(String(20))
+    researched: Mapped[bool] = mapped_column(Boolean, default=False)
+    reason: Mapped[str] = mapped_column(String(1000))
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    report_id: Mapped[int | None] = mapped_column(nullable=True)
+    idea: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    usage_key: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    charge_state: Mapped[str] = mapped_column(String(12), default="none")
+
+
 class Trade(Base):
     __tablename__ = "trades"
 

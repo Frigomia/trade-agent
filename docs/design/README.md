@@ -16,7 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
-| [discover-company](discover-company/SPEC.md) | Basic company overview and single-company Analyze (#193, #194) | Proposed, pending approval | 2026-10-24 | Interactive mock and staged implementation plan; not built |
+| [discover-company](discover-company/direction-approved.md) | Basic company overview and single-company Analyze (#193, #194) | Approved layout and policies | 2026-10-26 | Implementation supplied by feature/discover-company-analysis |
 | [mockups](mockups/direction-approved.md) | The original app direction and screens | Direction A, "Emerald Glass" (teal), dark and light | 2026-09-28 | Built |
 | [claude-keys](claude-keys/direction-approved.md) | Connect Claude (guide, locked states, Account) | A, one step at a time | 2026-10-06 | Built |
 | [scheduled-analysis](scheduled-analysis/direction-approved.md) | Scheduled analysis switch in Preferences | A, a row in the Preferences panel | 2026-10-06 | Built |
@@ -29,7 +29,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 | [today-discovery](today-discovery/direction-approved.md) | Today with discovery sections | Soft (`v2-b-soft`) | 2026-10-20 | Built (#145, #147, #148, #157, #170); the Today search bar is not built ([#211](https://github.com/Frigomia/trade-agent/issues/211)) |
 | [company-overview](company-overview/direction-approved.md) | Company detail page | Workbench | 2026-10-20 | Built (#149, #150, #158 to #161); catalyst dates and bull-claim statuses are not built ([#198](https://github.com/Frigomia/trade-agent/issues/198)) |
 | [portfolio](portfolio/direction-approved.md) | Portfolio page | Explorer | 2026-10-20 | Built |
-| [discover](discover/direction-approved.md) | Discover (watchlist) | List | 2026-10-20 | Built (#168, #169, #176, #177); no Analyze ([#193](https://github.com/Frigomia/trade-agent/issues/193)) or overview for a company without a report ([#194](https://github.com/Frigomia/trade-agent/issues/194)) yet |
+| [discover](discover/direction-approved.md) | Discover (watchlist) | List | 2026-10-20 | Built (#168, #169, #176, #177); company overview and Analyze added by feature/discover-company-analysis (#193, #194) |
 
 Palette note: everything above the 2026-10-20 rows uses the teal "Emerald Glass" palette; the four newest folders use the Soft palette (blue accent), which changes `DESIGN.md` when it is built.
 

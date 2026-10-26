@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.agents.graph import AnalysisState, run_graph_for_ticker
 from app.db import lock_and_check_active, scoped_session
 from app.models import Holding, Recommendation, WatchlistItem
-from app.redis_client import _RELEASE_IF_MINE, get_redis
+from app.redis_client import _RELEASE_IF_MINE, _RENEW_IF_MINE, get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +150,7 @@ async def _process_ticker(
         await redis.expire(f"job:{job_id}:results", JOB_TTL_SECONDS)
         await redis.hincrby(f"job:{job_id}", "done", 1)
         # Keep the marker alive while the run goes on. EXPIRE on a missing key does nothing.
-        await redis.expire(_active_key(user_id), JOB_TTL_SECONDS)
+        await redis.eval(_RENEW_IF_MINE, 1, _active_key(user_id), job_id, JOB_TTL_SECONDS)
 
 
 async def run_job(

@@ -36,6 +36,7 @@ export function useDiscoverList() {
   const { data, error, isLoading, isValidating, mutate } = useSWR<DiscoverList>("/discover", apiFetch, {
     shouldRetryOnError: false,
     revalidateOnFocus: false,
+    refreshInterval: (current) => current?.items.some((item) => item.analysis?.status === "running") ? 2000 : 0,
   });
   const [removed, setRemoved] = useState<Removal[]>([]);
   // `undoable` notices (a removal) are shown only while there is still something to undo.

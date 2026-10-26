@@ -3,6 +3,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { DiscoverItem } from "@/lib/api/discover-types";
 import { DiscoverCard } from "./DiscoverCard";
 
+vi.mock("./ResearchAction", () => ({ ResearchAction: () => <button>Analyze · 1 monthly run</button> }));
+
 const NOW = Date.parse("2026-10-22T09:00:00Z");
 
 const item = (over: Partial<DiscoverItem> = {}): DiscoverItem => ({
@@ -60,7 +62,8 @@ describe("DiscoverCard", () => {
 
     const card = screen.getByRole("listitem");
     expect(card).toHaveTextContent("Not analyzed");
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the company overview for Halden Systems" })).toHaveAttribute("href", "/discover/company/HLDN");
+    expect(screen.queryByRole("link", { name: "View the report for Halden Systems" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Recurring software/)).not.toBeInTheDocument();
   });
 
@@ -161,9 +164,9 @@ describe("DiscoverCard phone layout", () => {
     expect(meta.compareDocumentPosition(reading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("gives a company no scan has researched a wide Edit target button, and one that is researched View with a square edit", () => {
+  it("offers explicit research for a company without a report, and View for a researched company", () => {
     const { unmount } = render(<ul><DiscoverCard item={item({ status: "none", insight: null, report_id: null })} now={NOW} onRemove={vi.fn()} onEdit={vi.fn()} /></ul>);
-    expect(screen.getByRole("button", { name: "Edit target for Halden Systems" })).toHaveTextContent("Edit target");
+    expect(screen.getByRole("button", { name: /Analyze/ })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /View the report/ })).not.toBeInTheDocument();
     unmount();
 
@@ -172,9 +175,9 @@ describe("DiscoverCard phone layout", () => {
     expect(screen.getByRole("button", { name: "Edit target for Halden Systems" })).not.toHaveTextContent("Edit target"); // a square icon
   });
 
-  it("never offers a button that starts research", () => {
+  it("names the run cost on the explicit research action", () => {
     show({ status: "none", insight: null, report_id: null });
 
-    expect(screen.queryByRole("button", { name: /analyze/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Analyze/ })).toHaveTextContent("1 monthly run");
   });
 });

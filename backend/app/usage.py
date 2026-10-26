@@ -135,6 +135,71 @@ async def get_usage(kind: str, user_id: str) -> int:
     return int(value) if value is not None else 0
 
 
+# The reservation token and the original month counter change in one atomic operation.
+_RESERVE_COMPANY = """
+if redis.call('get', KEYS[3]) ~= ARGV[3] then return -2 end
+if redis.call('exists', KEYS[2]) == 1 then return 0 end
+local count = tonumber(redis.call('get', KEYS[1]) or '0')
+if count >= tonumber(ARGV[1]) then return -1 end
+redis.call('incr', KEYS[1])
+redis.call('expire', KEYS[1], ARGV[2])
+redis.call('set', KEYS[2], 'reserved', 'EX', ARGV[2])
+return 1
+"""
+_REFUND_COMPANY = """
+if redis.call('get', KEYS[2]) == 'charged' then return -1 end
+if redis.call('get', KEYS[2]) ~= 'reserved' then return 0 end
+local count = tonumber(redis.call('get', KEYS[1]) or '0')
+if count > 0 then redis.call('decr', KEYS[1]) end
+redis.call('set', KEYS[2], 'refunded', 'EX', ARGV[1])
+return 1
+"""
+_CHARGE_COMPANY = """
+local state = redis.call('get', KEYS[2])
+if state == 'charged' then return 0 end
+if state == 'refunded' then
+    redis.call('incr', KEYS[1])
+    redis.call('expire', KEYS[1], ARGV[1])
+end
+redis.call('set', KEYS[2], 'charged', 'EX', ARGV[1])
+return 1
+"""
+
+
+class RunClaimLost(Exception):
+    """The job no longer owns the shared analysis claim; it must not spend quota."""
+
+
+async def reserve_company_usage(job_id: str, key: str, limit: int, claim_key: str) -> None:
+    result = await get_redis().eval(
+        _RESERVE_COMPANY,
+        3,
+        key,
+        f"company_usage:{job_id}",
+        claim_key,
+        limit,
+        _MONTH_TTL_SECONDS,
+        job_id,
+    )
+    if result == -1:
+        raise UsageLimitExceeded("analysis_run", limit)
+    if result == -2:
+        raise RunClaimLost
+
+
+async def charge_company_usage(job_id: str, key: str) -> None:
+    """Make completed work nonrefundable, restoring the unit if recovery refunded first."""
+    await get_redis().eval(_CHARGE_COMPANY, 2, key, f"company_usage:{job_id}", _MONTH_TTL_SECONDS)
+
+
+async def refund_company_usage(job_id: str, key: str) -> bool:
+    """Settle a refund, or return False when completed work already owns the unit."""
+    result = await get_redis().eval(
+        _REFUND_COMPANY, 2, key, f"company_usage:{job_id}", _MONTH_TTL_SECONDS
+    )
+    return bool(result != -1)
+
+
 def check_monthly_usage(kind: str) -> Callable[..., Awaitable[None]]:
     """FastAPI dependency factory: add as a route dependency to enforce kind's monthly cap."""
 
