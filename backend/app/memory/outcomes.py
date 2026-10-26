@@ -47,7 +47,7 @@ async def compute_outcome(ticker: str, entry: date) -> float:
     if not days:
         raise NotEnoughHistory(ticker)
     if (date.fromisoformat(days[0]) - entry).days > MAX_ENTRY_GAP_DAYS:
-        raise NoPriceHistory(ticker)  # no close near the entry day: the start would be a guess
+        raise NotEnoughHistory(ticker)  # no close near the entry day: wait, a guess is no start
     if len(days) <= HORIZON_TRADING_DAYS:
         raise NotEnoughHistory(ticker)
     return closes[days[HORIZON_TRADING_DAYS]] / closes[days[0]] - 1

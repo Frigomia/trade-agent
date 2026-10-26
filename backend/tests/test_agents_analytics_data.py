@@ -349,8 +349,14 @@ def test_closes_between_raises_a_provider_failure_instead_of_returning_nothing()
 
 
 def _real_between(transport: object) -> dict[str, float] | str:
-    """fetch_closes_between through yfinance's own history code, with only the HTTP getter faked."""
+    """fetch_closes_between through yfinance's own history code, with only the HTTP getter faked.
+
+    A dated request needs the exchange's time zone first; yfinance caches it on disk, so a machine
+    that has seen the symbol before would skip the lookup a clean one makes. It is fixed here.
+    (`_get_ticker_tz` is a yfinance 1.7.0 internal: if an upgrade renames it, this patch fails
+    loudly with an AttributeError rather than quietly leaking the cache back in.)"""
     with (
+        patch("yfinance.base.TickerBase._get_ticker_tz", return_value="America/New_York"),
         patch("yfinance.data.YfData.get", side_effect=transport),
         patch("yfinance.data.YfData.cache_get", side_effect=transport),
         patch("app.agents.market_data.asyncio.sleep", AsyncMock()),

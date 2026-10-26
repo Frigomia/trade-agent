@@ -227,10 +227,10 @@ def test_too_few_closes_waits_then_gives_up_for_a_stock_that_stopped_trading(db_
     assert dead.outcome_evaluated_at is not None and dead.outcome_forward_return_pct is None
 
 
-def test_closes_that_start_days_after_the_entry_day_are_not_a_valid_entry():
+def test_closes_that_start_days_after_the_entry_day_wait_instead_of_guessing_a_start():
     late = {day: price for day, price in _closes(25).items() if day >= "2026-01-15"}  # 10 days on
 
-    with pytest.raises(NoPriceHistory):
+    with pytest.raises(NotEnoughHistory):
         _compute(late)
 
 
