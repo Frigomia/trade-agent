@@ -174,11 +174,11 @@ def _profile_text(value: object, max_chars: int = PROFILE_TEXT_CHARS) -> str | N
 
 
 def _symbol_has_no_prices(exc: YFPricesMissingError) -> bool:
-    """True when Yahoo answered that the symbol has no data, not that it failed to answer."""
+    """True only when Yahoo said in so many words that the symbol has no data. An error with no
+    stated reason (an HTTP error body, malformed JSON, a missing chart) is an outage: yfinance
+    raises the same exception for those, and calling one "no prices" would be permanent."""
     reason = (exc.yahoo_reason or "").lower()
-    if reason:
-        return "no data found" in reason or "delisted" in reason
-    return "status_code" not in str(exc.debug_info)  # an HTTP error body is not "no prices"
+    return "no data found" in reason or "delisted" in reason
 
 
 def _history_closes(ticker: str, **kwargs: Any) -> dict[str, float]:

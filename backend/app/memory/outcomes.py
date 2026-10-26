@@ -18,6 +18,9 @@ READY_AFTER_DAYS = 28
 GIVE_UP_AFTER_DAYS = 75
 # The entry close is the first one on or after the entry day: a weekend or holiday is a few days.
 MAX_ENTRY_GAP_DAYS = 5
+# A daily bar this young may still be a session in progress (the provider returns the live bar,
+# and exchanges are up to a day apart from UTC), so it is not a close yet.
+SETTLE_DAYS = 2
 # A provider error is tried again on a later day, this many times, then the row is left unscored.
 MAX_ATTEMPTS = 5
 RETRY_AFTER = timedelta(hours=20)
@@ -39,7 +42,10 @@ async def compute_outcome(ticker: str, entry: date) -> float:
     closes = await fetch_closes_between(ticker, entry, entry + timedelta(days=GIVE_UP_AFTER_DAYS))
     if not closes:
         raise NoPriceHistory(ticker)
-    days = sorted(closes)
+    settled = datetime.now(UTC).date() - timedelta(days=SETTLE_DAYS)
+    days = sorted(day for day in closes if date.fromisoformat(day) <= settled)
+    if not days:
+        raise NotEnoughHistory(ticker)
     if (date.fromisoformat(days[0]) - entry).days > MAX_ENTRY_GAP_DAYS:
         raise NoPriceHistory(ticker)  # no close near the entry day: the start would be a guess
     if len(days) <= HORIZON_TRADING_DAYS:

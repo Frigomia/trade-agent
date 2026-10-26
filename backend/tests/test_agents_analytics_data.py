@@ -296,6 +296,9 @@ def test_yahoo_saying_there_are_no_prices_is_empty_history_even_for_a_strict_rea
         {"chart": {"result": None, "error": {"description": "Too Many Requests"}}},
         {"chart": {"result": None, "error": {"description": "Internal Server Error"}}},
         {"status_code": 502},
+        {},  # a malformed answer states no reason: it is not "no prices"
+        {"chart": {}},
+        {"chart": {"result": None, "error": None}},
     ],
 )
 def test_other_yahoo_errors_are_an_outage_for_a_strict_read(body):
@@ -343,3 +346,33 @@ def test_closes_between_raises_a_provider_failure_instead_of_returning_nothing()
 
     with pytest.raises(RuntimeError):
         _between(ticker)
+
+
+def _real_between(transport: object) -> dict[str, float] | str:
+    """fetch_closes_between through yfinance's own history code, with only the HTTP getter faked."""
+    with (
+        patch("yfinance.data.YfData.get", side_effect=transport),
+        patch("yfinance.data.YfData.cache_get", side_effect=transport),
+        patch("app.agents.market_data.asyncio.sleep", AsyncMock()),
+    ):
+        try:
+            return asyncio.run(fetch_closes_between("AAPL", date(2026, 10, 1), date(2026, 12, 1)))
+        except Exception as exc:
+            return type(exc).__name__
+
+
+@pytest.mark.parametrize("body", [{}, {"chart": {}}, {"chart": {"result": None, "error": None}}])
+def test_a_malformed_yahoo_answer_is_an_outage_for_closes_between_not_no_prices(body):
+    response = MagicMock(text="{}")
+    response.json.return_value = body
+
+    assert _real_between([response] * 10) == "YFPricesMissingError"
+
+
+def test_yahoo_saying_there_are_no_prices_is_empty_for_closes_between():
+    response = MagicMock(text="{}")
+    response.json.return_value = {
+        "chart": {"result": None, "error": {"description": "No data found, symbol may be delisted"}}
+    }
+
+    assert _real_between([response] * 10) == {}
