@@ -316,11 +316,41 @@ def test_graph_saves_only_catalyst_dates_supported_by_the_cited_event(providers,
     assert IdeaOut.model_validate_json(result.model_dump_json()) == result
 
 
-def test_structured_catalyst_cannot_attach_unknown_evidence(providers):
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://WWW.SEC.GOV/Archives/company-report",
+        URL + "/",
+        URL + "?utm_source=research#calendar",
+    ],
+)
+def test_catalyst_url_variants_keep_valid_synthesis_and_the_cited_date(providers, url):
+    initial, _, extraction = providers
+    initial.return_value.claims[0].text = "Results will be released on 6 November 2026."
+    extraction.return_value = {
+        **prose(),
+        "catalysts": [catalyst_data(f"Results release ({url})", url=url, occurs_on="2026-11-06")],
+    }
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.thesis == prose()["thesis"]
+    assert result.catalysts[0].occurs_on == date(2026, 11, 6)
+    assert not any("Synthesis unavailable" in note for note in result.data_notes)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://invented.example/launch",
+        "https://www.sec.gov.attacker.example/Archives/company-report",
+        "https://user:password@www.sec.gov/Archives/company-report",
+    ],
+)
+def test_structured_catalyst_cannot_attach_unknown_evidence(providers, url):
     _, _, extraction = providers
     extraction.return_value = {
         **prose(),
-        "catalysts": [catalyst_data("Launch", url="https://invented.example/launch")],
+        "catalysts": [catalyst_data("Launch", url=url)],
     }
     result = run(MagicMock())
     assert isinstance(result, IdeaOut) and result.catalysts == []

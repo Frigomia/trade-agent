@@ -185,6 +185,9 @@ describe("Workbench tabs", () => {
     for (const status of ["Confirmed", "Disputed", "Unverified"]) expect(bull).toHaveTextContent(status);
     expect(bull.querySelectorAll("time")).toHaveLength(1);
     expect(bull.querySelector("time")).toHaveAttribute("dateTime", "2026-11-06");
+    expect(bull.querySelector("time")).toHaveTextContent(/Nov/);
+    expect(bull.querySelector("time")).toHaveTextContent(/2026/);
+    expect(bull.querySelector("time")).not.toHaveTextContent("2026-11-06");
     expect(within(bull).getByRole("link", { name: "issuer.example" })).toHaveAttribute("href", "https://issuer.example/calendar");
     expect(within(bull).getByRole("link", { name: "reporter.example" })).toHaveAttribute("rel", "noopener noreferrer");
   });

@@ -799,14 +799,22 @@ omitted with a data note. No extra research calls are added. Older saved catalys
 read as undated records without invented evidence; new model extraction must use the structured
 contract. The Workbench displays catalyst dates and safe evidence links, and bull/bear claim
 statuses as an icon plus a word using neutral colours. Today reads the same catalyst text.
+Dates are matched for presence in the cited same-event excerpt, not semantic meaning: when one
+excerpt contains several dates, choosing which date belongs to the catalyst remains model-dependent.
+English month names are fixed independently of the process locale. Displayed event dates use the
+viewer's date formatting while preserving the calendar day and the ISO `<time datetime>` value.
 Roll out the frontend before the backend: the updated UI accepts both legacy strings and records,
 while older frontends expect strings. This changes saved JSON contracts, not database columns.
+Existing reports display claims without a stored status as Unverified because their status was
+never recorded. New analyses save a status for each claim.
 
 Every synthesis catalyst must cite a claim URL from the validated evidence. `discovery/citations.py`
 checks all prose URLs and requires plain text with absolute HTTP(S) citations; Markdown links,
 reference links and HTML are rejected. Financial notation such as `>20%`, `P/E <15` and `[1]`
 is allowed; numeric markers never replace a catalyst's evidence array. Any URL in catalyst text
 must belong to that catalyst's own evidence, not merely another claim in the report.
+Catalyst evidence and date matching use the shared URL normalization rules (including host case,
+trailing slashes and tracking parameters), while still rejecting URLs outside the fetched evidence.
 Invalid synthesis falls back to explicit quantitative
 screening prose with a disclosure. Forum discussion is labelled unverified, fit stays absent for
 an empty/inapplicable portfolio, and the conclusion carries the human-review/advisor disclaimer.

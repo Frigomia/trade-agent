@@ -91,6 +91,28 @@ def test_date_from_another_event_in_the_same_article_or_publication_metadata_is_
     assert dated_catalysts([catalyst.model_copy(update={"evidence": []})], raw)[0].occurs_on is None
 
 
+@pytest.mark.parametrize(
+    "claim_url,cited_url",
+    [
+        (
+            "https://www.reuters.com/calendar",
+            "https://WWW.REUTERS.COM/calendar/?utm_source=news#event",
+        ),
+        ("https://WWW.REUTERS.COM/calendar/", "https://www.reuters.com/calendar"),
+    ],
+)
+def test_catalyst_date_matching_normalizes_both_source_and_citation_urls(claim_url, cited_url):
+    raw = evidence(claim_url)
+    raw.claims[0].text = "Results on 2026-11-06."
+    catalyst = Catalyst(
+        text="Results",
+        occurs_on=date(2026, 11, 6),
+        event_id=raw.claims[0].event_id,
+        evidence=[cited_url],
+    )
+    assert dated_catalysts([catalyst], raw)[0].occurs_on == date(2026, 11, 6)
+
+
 def evidence(url: str = "https://www.reuters.com/business/licence") -> ResearchEvidence:
     claim = sample_claim().model_copy(update={"text": FACT, "url": url, "stance": "bear"})
     return ResearchEvidence(

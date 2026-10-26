@@ -323,7 +323,9 @@ def evaluate_node(state: DiscoveryState) -> dict[str, Any]:
 
 
 def _validate_synthesis(prose: _Synthesis, evidence: ResearchEvidence) -> None:
-    allowed = {claim.url for claim in evidence.claims}
+    allowed = {
+        url for claim in evidence.claims if (url := research._normalize_url(claim.url)) is not None
+    }
     for field in ("thesis", "outlook", "bear_case", "fit_summary", "community_note", "conclusion"):
         text = getattr(prose, field)
         if text is not None:
@@ -331,7 +333,8 @@ def _validate_synthesis(prose: _Synthesis, evidence: ResearchEvidence) -> None:
     for catalyst in prose.catalysts:
         if not catalyst.text.strip() or len(catalyst.text) > 4000:
             raise ValueError("Invalid catalyst text")
-        if not catalyst.evidence or not set(catalyst.evidence) <= allowed:
+        cited = {research._normalize_url(url) for url in catalyst.evidence}
+        if not cited or None in cited or not cited <= allowed:
             raise ValueError("Every catalyst must cite validated claim URLs")
         validate_citations(catalyst.text, catalyst.evidence)
 

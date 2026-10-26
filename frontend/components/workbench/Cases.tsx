@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, CircleHelp, ExternalLink, Sparkles } from "lu
 import { Panel } from "@/components/ui/Panel";
 import type { Claim, IdeaOut, NegativeDevelopment } from "@/lib/api/discovery-types";
 import { hostOf, safeHref } from "@/lib/safeHref";
+import { calendarDateText } from "@/lib/discovery";
 
 export const BODY = { fontSize: "0.8125rem", color: "var(--text2)", lineHeight: 1.55 } as const;
 export const H3 = { fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" } as const;
@@ -106,7 +107,7 @@ export function BullCase({ idea }: { idea: IdeaOut }) {
                 <Sparkles size={14} color="var(--accent)" aria-hidden style={{ flex: "none", marginTop: 3 }} />
                 <Box sx={{ display: "grid", gap: 0.5, minWidth: 0 }}>
                   <span>{c.text}</span>
-                  {c.occurs_on && <Box component="time" dateTime={c.occurs_on} sx={{ fontSize: "0.75rem", fontWeight: 650, color: "var(--text2)" }}>{c.occurs_on}</Box>}
+                  {c.occurs_on && <Box component="time" dateTime={c.occurs_on} sx={{ fontSize: "0.75rem", fontWeight: 650, color: "var(--text2)" }}>{calendarDateText(c.occurs_on)}</Box>}
                   {c.evidence.length > 0 && <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, fontSize: "0.75rem" }}>{c.evidence.map((url) => <SourceLink key={url} url={url} />)}</Box>}
                 </Box>
               </Box>

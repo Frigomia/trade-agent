@@ -21,6 +21,21 @@ from app.schemas_discovery import (
     ResearchEvidence,
 )
 
+ENGLISH_MONTHS = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
+
 
 def normalize_evidence(
     evidence: ResearchEvidence, official_hosts: Collection[str] = ()
@@ -94,7 +109,8 @@ def dated_catalysts(catalysts: list[Catalyst], evidence: ResearchEvidence) -> li
         if day is not None:
             # shortcut: ISO and full English dates only; add locales when source coverage needs it.
             forms = {day.isoformat()}
-            for month in (day.strftime("%B"), day.strftime("%b"), day.strftime("%b") + "."):
+            name = ENGLISH_MONTHS[day.month - 1]
+            for month in (name, name[:3], name[:3] + "."):
                 for number in (str(day.day), f"{day.day:02}"):
                     forms.update(
                         (
@@ -104,8 +120,9 @@ def dated_catalysts(catalysts: list[Catalyst], evidence: ResearchEvidence) -> li
                         )
                     )
             pattern = r"(?<!\w)(?:" + "|".join(re.escape(form) for form in forms) + r")(?!\w)"
+            cited = {url for raw in catalyst.evidence if (url := _normalize_url(raw)) is not None}
             supported = any(
-                claim.url in catalyst.evidence
+                _normalize_url(claim.url) in cited
                 and catalyst.event_id is not None
                 and claim.event_id == catalyst.event_id
                 and re.search(pattern, " ".join(claim.text.split()), re.IGNORECASE)
