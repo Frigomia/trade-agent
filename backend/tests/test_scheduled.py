@@ -48,7 +48,7 @@ def _holding(db, user_id, ticker="AAPL", shares=10):
     db.commit()
 
 
-def _due_rec(db, user_id, days_old=25):
+def _due_rec(db, user_id, days_old=40):
     db.add(
         Recommendation(
             user_id=user_id,

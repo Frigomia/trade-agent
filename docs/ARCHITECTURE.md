@@ -181,9 +181,15 @@ Recommendation
   suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"|"SUPERSEDED"),
   reviewed_at,
   price_at_recommendation (Numeric(18,6), nullable -- quote price captured
-      when the job created this row),
-  outcome_forward_return_pct (Numeric(8,4), nullable -- set once a
-      lookback-window price fetch evaluates the outcome),
+      when the job created this row; for a discovery idea the snapshot price, in the major
+      currency unit as the idea shows it, and NULL when the snapshot has no price or no usable
+      date. A row without it is never scored),
+  price_as_of (nullable DateTime -- the trading day that price is the close of; a discovery idea's
+      snapshot date, which can be days older than the scan. NULL: the creation date),
+  outcome_forward_return_pct (Numeric(8,4), nullable -- set once the outcome job has 20
+      trading days of closes after the entry day; a fraction, 0.05 is +5%),
+  outcome_attempts (int, default 0) and outcome_attempted_at (nullable -- provider errors so far
+      and the last try; see "Outcomes" below),
   source ("manual"|"scheduled"|"discovery", not null, default "manual" -- whether a person
       started holdings analysis, the weekday job did, or a discovery scan produced the idea;
       the Today screen tags "scheduled" calls as Automatic),
@@ -383,7 +389,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
 | GET | `/backtest/results/{id}` | — | A single result including `equity_curve`; 404 if missing or not the caller's |
 | POST | `/memory/embed` | — | Batch-embeds pending `Recommendation` rows (situation text via Voyage) so they're searchable by `/memory/similar`. Rate limited: 5/min per user |
-| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows: fetches a real historical price ~20 days after `created_at` and stores `outcome_forward_return_pct`. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
+| POST | `/memory/evaluate-outcomes` | — | Batch-evaluates due `Recommendation` rows (see "Outcomes" below): stores `outcome_forward_return_pct`, the price change over 20 trading days. Rate limited: 6/min per user (Track record calls it once when opened). Also run daily by the scheduled job |
 | POST | `/memory/similar` | `{query, top_k}` | pgvector similarity search over embedded past recommendations. Rate limited: 30/min per user |
 | GET | `/preferences` | — | Retrieve user investment preferences (returns defaults if none exist). Includes independent default-off `auto_analysis` and `auto_discovery` flags and their `_paused` fields (`null` when off, not paused or the usage counter cannot be read), `monthly_contribution` (`null` until set) and `drift_threshold_pct` (default 5) |
 | POST | `/preferences` | `PreferencesIn` | Create or update user investment preferences. Only the fields sent are updated; omitted fields keep their stored value (an explicit `null` for either automatic-run flag is ignored). `monthly_contribution` is 0.01 to 1,000,000 with two decimals at most (`422` otherwise); `drift_threshold_pct` is 1 to 50. An explicit `null` for `monthly_contribution` clears it; an explicit `null` for `drift_threshold_pct` is ignored (the column is not null). The response adds each enabled flag's `_paused` state (`no_key` or `limit`; discovery also reports `reserved` when only the final monthly unit remains), with `limit` and `resumes_on` where applicable |
@@ -460,7 +466,8 @@ is normalized to major units using `fx.SUBUNITS` (5000 GBp becomes 50 GBP); raw 
 are unchanged, and their monetary reporting currency is not inferred from the quote currency.
 Country is the listing country, not issuer domicile or revenue exposure. Missing timestamps
 remain null and existing price-date uncertainty disclosures remain in `data_notes`.
-The saved price is a scan-time quote, not a live price or a change to outcome-evaluation inputs.
+The saved price is the snapshot's close, not a live price. It is also the entry price of the idea's
+outcome (see "Outcomes" in the scheduled-jobs section), kept with its date.
 `headline` is a whitespace-normalized, word-bounded thesis excerpt of at most 180 characters;
 it is null when no word fits instead of returning a bare ellipsis. It adds no model call or
 new claims. Full thesis, bear case and sources remain available.
@@ -1157,7 +1164,26 @@ default — same dialect and models as production, started with
 - **Snapshots:** a user with no open holding, or with a snapshot already dated
   today (UTC), is skipped, so the page-open snapshot hook and the job coexist.
 - **Outcomes:** per user, up to 20 batches of 50 due recommendations per run;
-  anything left over is picked up by the next run.
+  anything left over is picked up by the next run. `app/memory/outcomes.py`:
+  - *What is measured:* the change in the provider's close from the entry day
+    (`price_as_of`, else the creation date) to the close 20 trading days later, both read from one
+    dated series (`fetch_closes_between`, split-adjusted, not dividend-adjusted: a price return).
+    A bar dated within the last 2 days is not counted (it may be a session still in progress, and
+    exchanges sit up to a day from UTC), so an outcome never rests on an intraday price. One series
+    means a currency subunit (London quotes pence, the idea shows pounds) or a split
+    between the two days cannot make the ends disagree. No benchmark, no dividends.
+  - *Which rows:* every recommendation with `price_at_recommendation`, whatever its status: a
+    discovery idea replaced by a later scan was still issued and is scored once. A discovery idea
+    gets its entry price in `save_scan` only when the snapshot has a price and a date that is not
+    in the future and not older than 10 days; ideas saved before this stay unmeasured, not guessed.
+  - *When:* once the entry day is 28 calendar days old (20 trading days need at least that). With
+    fewer than 21 closes it waits and looks again the next day; after 75 days of that the stock
+    has stopped trading and the row is stamped unscored.
+  - *Failures:* "the provider has no prices for the symbol" stamps the row (no outcome, permanent),
+    but only when Yahoo says so in words ("No data found", "delisted"); a malformed answer or an HTTP
+    error body states no reason and counts as an outage. Any other error (a throttle, a timeout) leaves it unstamped, counts one attempt and is not
+    tried again for 20 hours, so one outage does not use up the attempts; after 5 attempts the row
+    is stamped unscored.
 - **Automatic analysis:** the third step, `app/scheduled.py::run_analysis`, opt-in per user through
   `investment_preferences.auto_analysis` (off by default). It does nothing on Saturday and Sunday
   (UTC). For each opted-in active user it runs inside that user's `scoped_session` and uses that
@@ -1540,7 +1566,7 @@ produces):
    gives a baseline to compare against.
 3. **Long-term memory** — store past recommendations + outcomes as
    embeddings for similarity recall. Outcomes come from a real historical
-   price fetch ~20 days after each live recommendation, not from backtest
+   price fetch 20 trading days after each live recommendation, not from backtest
    results. `pgvector` on the existing Supabase Postgres — no separate
    vector DB service. Spec:
    `docs/superpowers/specs/2026-09-24-long-term-memory-design.md`.

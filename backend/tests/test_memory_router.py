@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
 from app.config import settings
+from app.memory.outcomes import NoPriceHistory
 from app.models import Recommendation
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
@@ -33,7 +34,7 @@ def test_embed_recommendations_embeds_pending_rows(client, db_session, monkeypat
 
 
 def test_evaluate_outcomes_evaluates_due_rows(client, db_session, monkeypatch):
-    old_date = datetime.now(UTC) - timedelta(days=21)
+    old_date = datetime.now(UTC) - timedelta(days=29)
     rec = Recommendation(
         user_id=USER_ID,
         ticker="AAPL",
@@ -85,7 +86,7 @@ def test_embed_recommendations_skips_failed_row_and_continues(client, db_session
 
 
 def test_evaluate_outcomes_skips_failed_row_and_continues(client, db_session, monkeypatch):
-    old_date = datetime.now(UTC) - timedelta(days=21)
+    old_date = datetime.now(UTC) - timedelta(days=29)
     rec1 = Recommendation(
         user_id=USER_ID,
         ticker="AAPL",
@@ -116,13 +117,13 @@ def test_evaluate_outcomes_skips_failed_row_and_continues(client, db_session, mo
     assert response.status_code == 200
     body = response.json()
     assert body["evaluated"] == 1
-    # rec1's failure is permanent (no price history) -> stamped resolved, not
-    # re-counted as still due, so remaining is 0 not 1.
+    # rec1's failure is a provider error: it is left unscored, but it was tried today, so it is
+    # not due again until tomorrow and remaining is 0, not 1.
     assert body["remaining"] == 0
 
 
 def test_evaluate_outcomes_marks_permanently_failed_row_resolved(client, db_session, monkeypatch):
-    old_date = datetime.now(UTC) - timedelta(days=21)
+    old_date = datetime.now(UTC) - timedelta(days=29)
     rec = Recommendation(
         user_id=USER_ID,
         ticker="DELISTED",
@@ -137,7 +138,7 @@ def test_evaluate_outcomes_marks_permanently_failed_row_resolved(client, db_sess
 
     with patch(
         "app.memory.outcomes.compute_outcome",
-        AsyncMock(side_effect=ValueError("No price history for DELISTED")),
+        AsyncMock(side_effect=NoPriceHistory("DELISTED")),
     ):
         first = client.post("/memory/evaluate-outcomes")
         second = client.post("/memory/evaluate-outcomes")
@@ -197,7 +198,7 @@ def _rec(user_id, ticker, **extra):
 
 def test_evaluate_outcomes_only_touches_the_token_users_rows(client, db_session):
     add_app_user(db_session, OTHER_USER_ID)
-    old_date = datetime.now(UTC) - timedelta(days=21)
+    old_date = datetime.now(UTC) - timedelta(days=29)
     mine = _rec(USER_ID, "AAPL", price_at_recommendation=150.0, created_at=old_date)
     theirs = _rec(OTHER_USER_ID, "MSFT", price_at_recommendation=250.0, created_at=old_date)
     db_session.add_all([mine, theirs])
