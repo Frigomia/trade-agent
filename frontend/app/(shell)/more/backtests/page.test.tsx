@@ -97,7 +97,7 @@ describe("BacktestsPage", () => {
     mockApi({ "/backtest/results": () => [] });
     renderFresh();
     expect(await screen.findByText("No backtests yet.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Technical-signal backtest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Signal backtest" })).toBeInTheDocument();
     expect(screen.getByText(/technical signals only, on one ticker, with no fundamentals/i)).toBeInTheDocument();
     expect(screen.getByText(/does not test discovery ideas/i)).toBeInTheDocument();
   });

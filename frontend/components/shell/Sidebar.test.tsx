@@ -36,9 +36,9 @@ describe("Sidebar", () => {
     pathname = "/today";
   });
 
-  it("names the backtest screen for what it tests", () => {
+  it("uses the one short name for the backtest screen, not the old Backtests", () => {
     render(<Sidebar role="user" />);
-    expect(screen.getByRole("link", { name: "Technical-signal backtest" })).toHaveAttribute("href", "/more/backtests");
+    expect(screen.getByRole("link", { name: "Signal backtest" })).toHaveAttribute("href", "/more/backtests");
     expect(screen.queryByRole("link", { name: "Backtests" })).not.toBeInTheDocument();
   });
 

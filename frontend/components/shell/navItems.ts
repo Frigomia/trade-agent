@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 /** The one name of the backtest screen: nav, the More and Account lists and the page title. */
-export const BACKTEST_LABEL = "Technical-signal backtest";
+export const BACKTEST_LABEL = "Signal backtest";
 
 export interface NavItem {
   label: string;
