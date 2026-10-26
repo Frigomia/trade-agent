@@ -5,17 +5,16 @@ DATA.ideas[0].sources = 2; // the two catalysts below
 DATA.ideas[0].flags = ['Top three customers are 38% of revenue', 'Shares fell 22% over the past year'];
 DATA.ideas[0].catalysts = ['Q3 results on 6 Nov follow two quarters of margin expansion.', 'Contract renewals for the largest customers start in Q1.'];
 
-const SEARCH = `<label class="search">${ic('search', 's')}<input placeholder="Search a company or ask a question" aria-label="Search a company or ask a question"></label>`;
 const head2 = (sub) => `<div class="head2"><div><h1>Today</h1><div class="sub">${sub}</div></div></div>`;
 const SUB = 'Your latest research ideas and what needs attention on your holdings.';
 
-function V2Desktop(inner, { search = true } = {}) {
+function V2Desktop(inner) {
   return `<div class="frame"><aside class="side"><div class="brand"><i>${ic('today')}</i>trade-agent</div>${navItems('today')}</aside>
-  <main class="main v2">${search ? `<div class="topbar">${SEARCH}<button class="theme" aria-label="Toggle theme">${ic('sun')}</button></div>` : ''}${head2(SUB)}${inner}</main></div>`;
+  <main class="main v2"><div class="topbar"><button class="theme" style="margin-left:auto" aria-label="Toggle theme">${ic('sun')}</button></div>${head2(SUB)}${inner}</main></div>`;
 }
-function V2Phone(inner, { search = true } = {}) {
+function V2Phone(inner) {
   const tabs = [['today', 'Today', 1], ['discover', 'Discover'], ['portfolio', 'Portfolio'], ['chat', 'Chat'], ['more', 'More']];
-  return `<div class="phone"><div class="scr v2">${search ? `<div class="topbar">${SEARCH}</div>` : ''}${head2(SUB)}${inner}</div>
+  return `<div class="phone"><div class="scr v2">${head2(SUB)}${inner}</div>
   <div class="tabbar">${tabs.map(([k, l, on]) => `<div class="${on ? 'on' : ''}">${ic(k)}${l}</div>`).join('')}</div></div>`;
 }
 
@@ -55,14 +54,14 @@ const stageBlock = (state) => {
 };
 
 /* each page passes foundBlock(hasFit) and its own tag text */
-function mountV2(foundBlock, { search = true, extra } = {}) {
+function mountV2(foundBlock, { extra } = {}) {
   const region = (state) => {
     const found = state === 'found' || state === 'empty';
     return `${scanbar(state)}${found ? foundBlock(state !== 'empty') : stageBlock(state)}${state === 'found' ? lists() : ''}${adv()}`;
   };
-  document.getElementById('desk').innerHTML = V2Desktop(region('found'), { search });
+  document.getElementById('desk').innerHTML = V2Desktop(region('found'));
   document.getElementById('phones').innerHTML = [['found', 'Ideas found'], ['none', 'No compelling opportunity'], ['running', 'Scan running'], ['failed', 'Scan failed'], ['failedKey', 'Claude key needs attention'], ['empty', 'Empty portfolio (alerts hidden, fit unavailable)']]
-    .concat(extra ? [[null, extra[0]]] : []).map(([s, l]) => `<div><div class="cap">${l}</div>${V2Phone(s ? region(s) : extra[1](), { search })}</div>`).join('');
+    .concat(extra ? [[null, extra[0]]] : []).map(([s, l]) => `<div><div class="cap">${l}</div>${V2Phone(s ? region(s) : extra[1]())}</div>`).join('');
   document.getElementById('states').innerHTML = [['none', 'No compelling opportunity'], ['running', 'Scan running'], ['failed', 'Scan failed'], ['failedKey', 'Claude key needs attention'], ['empty', 'Empty portfolio']]
     .map(([s, l]) => `<div class="region v2"><div class="cap">${l}</div>${region(s)}</div>`).join('');
 }
