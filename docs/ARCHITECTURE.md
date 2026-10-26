@@ -1708,7 +1708,7 @@ just believed done.
 - [x] Postgres connections go through Supabase's pooler endpoint rather
       than SQLAlchemy defaults — specified in the runbook (session-pooler URL),
       not yet verified against a live project
-- [x] Frontend refresh strategy for jobs — Today and Backtests poll
+- [x] Frontend refresh strategy for jobs — Today and the technical-signal backtest poll
       `GET /analysis/run/{job_id}` and `GET /backtest/run/{job_id}` every 2 s
       while the status is `RUNNING` (SWR `refreshInterval`)
 

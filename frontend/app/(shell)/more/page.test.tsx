@@ -7,7 +7,7 @@ describe("MorePage", () => {
     render(<MorePage />);
     const hrefs = {
       "Track record": "/more/track-record",
-      Backtests: "/more/backtests",
+      "Technical-signal backtest": "/more/backtests",
       Preferences: "/more/preferences",
       Account: "/more/account",
     };

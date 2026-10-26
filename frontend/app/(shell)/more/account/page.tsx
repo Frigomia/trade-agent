@@ -18,10 +18,11 @@ import type { Usage } from "@/lib/usage";
 import { useAction } from "@/lib/useAction";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { BACKTEST_LABEL } from "@/components/shell/navItems";
 
 const LINKS = [
   { href: "/more/track-record", label: "Track record", icon: ListChecks },
-  { href: "/more/backtests", label: "Backtests", icon: History },
+  { href: "/more/backtests", label: BACKTEST_LABEL, icon: History },
   { href: "/more/preferences", label: "Preferences", icon: SlidersHorizontal },
 ];
 
