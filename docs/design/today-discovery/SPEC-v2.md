@@ -10,7 +10,7 @@ Open `v2-a-lean.html`, `v2-b-soft.html` or `v2-c-evidence.html` (add `?theme=lig
 
 ## What all three keep from the reference
 
-Search bar, big "Today" title with a one-line subtitle, a compact "Latest AI scan" bar, a Top opportunity card, three Other opportunities cards with "View all", then Portfolio alerts and Watchlist insights side by side, and a one-column phone version.
+Big "Today" title with a one-line subtitle, a compact "Latest AI scan" bar, a Top opportunity card, three Other opportunities cards with "View all", then Portfolio alerts and Watchlist insights side by side, and a one-column phone version.
 
 ## What all three change, and why
 
@@ -45,14 +45,14 @@ New or sharper in this round:
 - **Set-aside count** is derivable (`researched - opportunities`); expose it on `ScanRun` to avoid recomputing.
 - **Alert pills** (Up next, Positive move, New insight) need a typed `kind` on each alert: earnings upcoming, move since purchase, new recommendation. Only "New insight" (a recommendation on a holding) has a source today.
 - **Watchlist insights** (Watch, Monitor actions) need a watchlist feature and the same alert source as holdings.
-- **Search bar** is new. The closest existing feature is Chat; decide whether it opens Chat, searches tickers, or is dropped.
+- **Search bar** was in the mock and is dropped (decision 3 below): Discover has the company search, and Chat is one tap away.
 - **Option 3 only:** the Top opportunity needs `catalysts` (already in `IdeaOut`, with a URL each) and `risk_flags` (already in `risk`); the three scores exist.
 
 ## Decisions for you
 
 1. Resolved 2026-10-20: option 2, Soft (`v2-b-soft`), see `direction-approved.md`.
 2. Resolved 2026-10-21 (#145): the blue accent was accepted and DESIGN.md now describes it (Cobalt, Periwinkle in dark).
-3. Open: the Today search bar is not built (`DESIGN.md`, "Built on Today"). Discover has its own search bar (#169). Decision and build: [#211](https://github.com/Frigomia/trade-agent/issues/211).
+3. Resolved 2026-10-26 ([#211](https://github.com/Frigomia/trade-agent/issues/211)): dropped. Discover already searches companies and adds them (#169), Chat is a tab away, and a free-text box that jumped into Chat would reopen the crafted-link hole Chat's `?ask=` guard closes. The mock and `DESIGN.md` no longer show a search bar on Today.
 4. Resolved 2026-10-22: Save and the Discover destination are in the plan and built (#168, #169, #170).
 5. Resolved 2026-10-21 (#145): the app says "confidence".
 

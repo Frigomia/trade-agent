@@ -78,5 +78,5 @@ All three keep the app's tokens (Geist, the teal palette, 18 px panels, 14 px co
 
 ## Next step
 
-Done. `direction-approved.md` records the choice (Soft, 2026-10-20) and Today is built; the open question, the Today search bar, is
-[#211](https://github.com/Frigomia/trade-agent/issues/211). The pull requests are listed in the README; the gap table above is the original analysis and is not re-checked row by row.
+Done. `direction-approved.md` records the choice (Soft, 2026-10-20) and Today is built; the one open question, the Today search bar, was resolved by dropping it
+([#211](https://github.com/Frigomia/trade-agent/issues/211)). The pull requests are listed in the README; the gap table above is the original analysis and is not re-checked row by row.

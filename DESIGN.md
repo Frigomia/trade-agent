@@ -290,7 +290,7 @@ meaning (see below); nothing else is dashed.
 - **Ghost:** transparent, 1px Hairline Strong outline, ink text, 500 weight, for Dismiss, Save
   to Discover, Ask AI, Remove.
 - **Icon button:** 36px circle (44px on a phone) with a hairline, for refresh and theme.
-- **Go button:** a circular Cobalt arrow on the Today search bar.
+- **Go button:** a circular Cobalt arrow ("Full analysis") on the Top opportunity card.
 - **Disabled** dims to 60%; it does not change shape. A running action keeps its label and shows
   the state in text.
 
@@ -412,7 +412,7 @@ the scan states), the round company `Logo` (Logo.dev image with initials as fall
 and the `Change` (signed, arrowed price move). Save to Discover adds the company to Discover (also
 from the workbench's decision rail and phone bar), then becomes a link to the list. The holdings
 recommendations sit under "Portfolio alerts" (a list with monogram logos on desktop, cards on a
-phone), and Watchlist insights sit beside them; the search bar is not built. The page title is 30px (26px on a
+phone), and Watchlist insights sit beside them. Today has no search bar (dropped 2026-10-26, #211): Discover searches companies. The page title is 30px (26px on a
 phone) on every screen.
 
 **Built on the company page** (`/today/[id]` for a discovery idea): the Workbench shell (identity, a

@@ -26,7 +26,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 | [orders-tab](orders-tab/direction-approved.md) | Orders tab | A, stacked plan sections | 2026-10 | Built |
 | [order-tickets](order-tickets/direction-approved.md) | Order tickets and placed orders | D, hybrid | 2026-10 | Built |
 | [empty-states](empty-states/direction-approved.md) | Empty Today and empty Portfolio | Quiet ring (Today), inline first holding (Portfolio); inferred from the code | before 2026-10-20 (recorded 2026-10-21) | Built; choice not recorded at the time |
-| [today-discovery](today-discovery/direction-approved.md) | Today with discovery sections | Soft (`v2-b-soft`) | 2026-10-20 | Built (#145, #147, #148, #157, #170); the Today search bar is not built ([#211](https://github.com/Frigomia/trade-agent/issues/211)) |
+| [today-discovery](today-discovery/direction-approved.md) | Today with discovery sections | Soft (`v2-b-soft`) | 2026-10-20 | Built (#145, #147, #148, #157, #170); the Today search bar was dropped ([#211](https://github.com/Frigomia/trade-agent/issues/211)) |
 | [company-overview](company-overview/direction-approved.md) | Company detail page | Workbench | 2026-10-20 | Built (#149, #150, #158 to #161); catalyst dates and bull-claim statuses are not built ([#198](https://github.com/Frigomia/trade-agent/issues/198)) |
 | [portfolio](portfolio/direction-approved.md) | Portfolio page | Explorer | 2026-10-20 | Built |
 | [discover](discover/direction-approved.md) | Discover (watchlist) | List | 2026-10-20 | Built (#168, #169, #176, #177); no Analyze ([#193](https://github.com/Frigomia/trade-agent/issues/193)) or overview for a company without a report ([#194](https://github.com/Frigomia/trade-agent/issues/194)) yet |
