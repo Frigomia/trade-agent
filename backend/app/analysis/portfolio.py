@@ -22,11 +22,10 @@ from app.schemas_discovery import (
     PositionValue,
     ReturnWindow,
 )
-from app.sectors import SECTOR_ALIASES
+from app.sectors import SECTOR_ALIASES, UNCLASSIFIED
 
 MIN_RETURNS = 60
 TRADING_DAYS = 252
-UNCLASSIFIED = "Unclassified"
 RETURN_NOTE = "Risk uses local-currency returns with current EUR weights; FX moves are excluded."
 DRAWDOWN_NOTE = (
     "Biggest fall uses today's holdings at today's weights, not the portfolio you actually held."

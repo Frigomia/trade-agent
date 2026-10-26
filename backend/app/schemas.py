@@ -314,6 +314,9 @@ class WatchlistInsightOut(BaseModel):
     ticker: str
     kind: Literal["in_target_range"]
     text: str
+    # The prices are in the major unit of `currency` (pounds, not pence), as Discover shows them. A
+    # company whose currency is not known is not listed (it is reported as missing).
+    currency: str
     current_price: float
     target_price_low: float
     target_price_high: float

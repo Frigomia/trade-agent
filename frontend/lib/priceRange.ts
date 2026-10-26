@@ -10,9 +10,6 @@ export function priceToText(price: number | null | undefined): string {
   return price == null ? "" : String(price);
 }
 
-/** A price as it is read on screen: its own decimals up to the six stored, never rounded to two. */
-export const priceText = (price: number) => price.toLocaleString("en-US", { maximumFractionDigits: 6 });
-
 export interface PriceRange {
   low: number;
   high: number;

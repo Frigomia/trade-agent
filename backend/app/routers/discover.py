@@ -15,10 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.agents.market_data import fetch_currency, fetch_profile, fetch_quote_and_history
+from app.agents.market_data import fetch_profile, fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.db import lock_user_for_insert
-from app.fx import SUBUNITS
+from app.fx import minor_unit, quoted_currency
 from app.http_headers import no_store
 from app.limits import cap_message
 from app.models import Holding, Recommendation, WatchlistItem
@@ -81,14 +81,6 @@ class DiscoverOut(BaseModel):
     missing: list[Literal["prices"]]
 
 
-def _minor_unit(currency: str | None) -> tuple[str | None, Decimal]:
-    """The major currency and the factor from the quoted unit (GBp to GBP is 0.01)."""
-    if not currency:
-        return None, Decimal(1)
-    major, unit = SUBUNITS.get(currency, (currency, Decimal(1)))
-    return major, unit
-
-
 Quote = tuple[float, float | None, date | None, bool]
 
 
@@ -117,14 +109,7 @@ async def _quote(ticker: str, sem: asyncio.Semaphore) -> Quote | None:
 
 async def _currency(item: WatchlistItemOut, sem: asyncio.Semaphore) -> str | None:
     """The currency the company is quoted in: stored, else the provider's (cached), else unknown."""
-    if item.currency:
-        return item.currency
-    try:
-        async with sem:
-            return await fetch_currency(item.ticker)
-    except Exception as exc:
-        logger.warning("Discover currency failed for %s: %s", item.ticker, type(exc).__name__)
-        return None
+    return await quoted_currency(item.ticker, item.currency, sem)
 
 
 def _owned(db: Session, user_id: UUID, ticker: str | None = None) -> set[str]:
@@ -143,7 +128,7 @@ def _item_out(
     owned: bool,
 ) -> DiscoverItemOut:
     """One company as the list shows it: prices and price targets in the major currency unit."""
-    major, unit = _minor_unit(currency)
+    major, unit = minor_unit(currency)
     low, high = item.target_price_low, item.target_price_high
     price = change = as_of = None
     stale = True
@@ -334,7 +319,7 @@ async def edit_discover_item(
         raise HTTPException(
             status_code=503, detail="Its currency could not be read right now. Try again."
         )
-    _, unit = _minor_unit(currency)
+    _, unit = minor_unit(currency)
 
     # Locked so a removal racing this edit waits for it, and a removed company is a 404, not a 500.
     row = (
@@ -348,7 +333,7 @@ async def edit_discover_item(
         raise HTTPException(status_code=404, detail="Not in your Discover list")
     if row.currency:  # stored since the first read: it wins over the provider's answer
         currency = row.currency
-        _, unit = _minor_unit(currency)
+        _, unit = minor_unit(currency)
     owned = ticker in _owned(db, user.id, ticker)
     sent = payload.model_fields_set
     if owned and payload.target_weight is not None:

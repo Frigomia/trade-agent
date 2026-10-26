@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Cpu, HeartPulse, Layers, ShoppingBasket } from "lucide-react";
 import { getSectorIcon, SECTOR_ICONS } from "./sectors";
 import sectorCatalog from "./sectors.json";
 
 describe("getSectorIcon", () => {
   it("matches the backend sector catalog and covers every sector with an icon", () => {
-    const backendCatalog: unknown = JSON.parse(readFileSync("../backend/app/sectors.json", "utf8"));
+    const backendCatalog: unknown = JSON.parse(readFileSync(resolve(import.meta.dirname, "../../backend/app/sectors.json"), "utf8"));
     expect(sectorCatalog).toEqual(backendCatalog);
     expect(Object.keys(SECTOR_ICONS).sort()).toEqual(Object.keys(sectorCatalog).sort());
   });
