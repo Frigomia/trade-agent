@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan · Soft restyle</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="../portfolio/pf.css">
+<link rel="stylesheet" href="plan.css">
+</head>
+<body>
+<div class="tag"><b>Plan · Soft restyle (proposal).</b> The three Plan views of the Portfolio page (This month, Saved plans, Orders) in the approved Soft direction: the same content, states and copy as today, with Soft panels, pills, type and logos. Fictional data, no requests. Toggle the theme with the sun; add <code>?theme=dark</code> to start dark.</div>
+<div class="tag"><b>This month.</b> The form, the ledger (funded lines, left-out tickers at 0.00, total and leftover), the notes and Save plan.</div>
+<div id="d-month"></div>
+<div class="tag"><b>Saved plans.</b> The months table; the open plan is read-only and can be deleted.</div>
+<div id="d-saved"></div>
+<div class="tag"><b>Orders.</b> One panel per saved plan with open lines: a progress count, Copy all lines, each line collapsed (with a Placed line quiet), the open line's ticket, Copy and Placed.</div>
+<div id="d-orders"></div>
+<div class="tag"><b>Phone, 390 wide.</b> This month, Saved plans, Orders, and the Placed sheet as a bottom sheet. The ledger keeps two lines per row and drops the price column; actions are 44px or more.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Whole shares, a stale amount, an invalid amount, saved, no targets, nothing to fund, loading; no saved plans, delete confirmation; Copied, next line opened, an old plan, none open, load error; the Placed sheet, also for a ticker that is not a holding yet.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="../portfolio/pf.js"></script>
+<script src="plan.js"></script>
+</body>
+</html>
