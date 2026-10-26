@@ -83,9 +83,10 @@ class PositionValue(Contract):
 
 class ReturnWindow(Contract):
     """The days the portfolio volatility and biggest fall cover: the common sample of price
-    intervals. `intervals_skipped` counts the intervals the busiest holding has beyond it, left out
-    because another holding's market did not trade (never filled in), so a fall inside them is not
-    seen."""
+    intervals. `intervals_skipped` counts the intervals between those dates that the busiest holding
+    has and another does not (a market's holiday, a gap in a provider's history), left out and never
+    filled in, so a fall inside them is not seen. A holding with a shorter history only moves
+    `start`."""
 
     start: date
     end: date

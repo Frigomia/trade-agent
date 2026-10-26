@@ -105,18 +105,22 @@ def risk_window(
     returns: Mapping[str, ReturnSeries], weights: Mapping[str, float]
 ) -> ReturnWindow | None:
     """What the portfolio volatility and biggest fall cover: the dates of the common sample, how
-    many intervals it has, and how many the busiest holding has beyond it (another market's
-    holidays)."""
+    many intervals it has, and how many more the busiest holding has between those dates (another
+    market's holidays, a gap in a provider's history). A holding whose history starts later only
+    moves the start date; it is not a gap."""
     symbols = [ticker for ticker, weight in weights.items() if weight > 0]
     keys = _shared_keys([returns.get(ticker, {}) for ticker in symbols])
     if keys is None:
         return None
-    busiest = max(len(returns.get(ticker, {})) for ticker in symbols)
+    start, end = keys[0][0], keys[-1][1]  # ISO dates, so they compare in date order
+    inside = [
+        sum(first >= start and last <= end for first, last in returns.get(t, {})) for t in symbols
+    ]
     return ReturnWindow(
-        start=date.fromisoformat(keys[0][0]),
-        end=date.fromisoformat(keys[-1][1]),
+        start=date.fromisoformat(start),
+        end=date.fromisoformat(end),
         intervals_used=len(keys),
-        intervals_skipped=busiest - len(keys),
+        intervals_skipped=max(inside) - len(keys),
     )
 
 
@@ -151,8 +155,9 @@ def portfolio_max_drawdown(
     """The largest fall from a peak to the lowest point after it, as a fraction at or below 0, of
     today's holdings at today's weights on the same common sample as the volatility. Each day's
     simple return is the weighted sum of the holdings' (weights fixed, as if rebalanced daily). An
-    interval that not every holding has (another market's holiday) is skipped, never filled in, so
-    a fall inside it is not seen. None when a glitched close gives an unusable return."""
+    interval that not every holding has (another market's holiday, a gap in a provider's history)
+    is skipped, never filled in, so a fall inside it is not seen. None when a glitched close gives
+    an unusable return."""
     rows = _weighted_rows(returns, weights)
     if rows is None:
         return None

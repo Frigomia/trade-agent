@@ -35,14 +35,15 @@ function dayText(iso: string): string {
 }
 
 /**
- * What the biggest fall covers, in words: the days, the number of price intervals, and, when another
- * market's closed days took some out, how many (a fall inside them is not seen, so it may be larger).
+ * What the biggest fall covers, in words: the days, the number of price intervals, and, when a
+ * holding lacked prices for some days between them, how many (a fall inside them is not seen, so it
+ * may be larger).
  */
 export function fallWindowText(window: RiskWindow | null | undefined): string {
   if (!window) return "From peak to low over the shared price history, with today's holdings and weights.";
   const covers = `From peak to low from ${dayText(window.start)} to ${dayText(window.end)} (${window.intervals_used} price intervals), with today's holdings and weights.`;
   if (window.intervals_skipped === 0) return covers;
-  return `${covers} ${window.intervals_skipped} more ${window.intervals_skipped === 1 ? "was" : "were"} skipped because not every holding's market traded, so the real fall may be larger.`;
+  return `${covers} ${window.intervals_skipped} more ${window.intervals_skipped === 1 ? "was" : "were"} skipped because at least one holding has no usable price for those days, so the real fall may be larger.`;
 }
 
 export interface RiskFacts {

@@ -21,7 +21,7 @@ export interface RiskWindow {
   start: string; // YYYY-MM-DD
   end: string;
   intervals_used: number;
-  /** Intervals the busiest holding has beyond the sample, left out because another market did not trade. */
+  /** Intervals between start and end that the busiest holding has and another does not, left out (not filled in). */
   intervals_skipped: number;
 }
 

@@ -155,8 +155,8 @@ describe("fallWindowText", () => {
     expect(fallWindowText(window)).toBe("From peak to low from 23 Oct 2025 to 22 Oct 2026 (238 price intervals), with today's holdings and weights.");
   });
 
-  it("says how many intervals a closed market took out, and that the real fall may be larger", () => {
-    expect(fallWindowText({ ...window, intervals_skipped: 12 })).toMatch(/12 more were skipped because not every holding's market traded, so the real fall may be larger\.$/);
+  it("says how many intervals a holding's missing prices took out, and that the real fall may be larger", () => {
+    expect(fallWindowText({ ...window, intervals_skipped: 12 })).toMatch(/12 more were skipped because at least one holding has no usable price for those days, so the real fall may be larger\.$/);
     expect(fallWindowText({ ...window, intervals_skipped: 1 })).toMatch(/1 more was skipped/);
   });
 
