@@ -13,6 +13,7 @@ USER_TABLES: tuple[str, ...] = (
     "trades",
     "recommendations",
     "scan_runs",
+    "company_analyses",
     "chat_messages",
     "backtest_results",
     "investment_preferences",

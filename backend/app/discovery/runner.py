@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -16,7 +16,13 @@ from app.agents.discovery_graph import run_discovery_graph
 from app.agents.market_data import fetch_dated_closes
 from app.agents.research import ResearchKeyRejected
 from app.analysis.discovery_score import rank_ideas
-from app.analysis.portfolio import PositionInput, clean_history, log_returns, marginal_effect
+from app.analysis.portfolio import (
+    Histories,
+    PositionInput,
+    clean_history,
+    log_returns,
+    marginal_effect,
+)
 from app.db import scoped_session
 from app.discovery.admit import admit_mentions
 from app.discovery.refresh import load_snapshot
@@ -26,7 +32,14 @@ from app.discovery.universe import load_universe
 from app.models import Holding, InvestmentPreferences
 from app.portfolio_analytics import load_fit_context
 from app.redis_client import get_redis
-from app.schemas_discovery import Exclusion, IdeaOut, Mention, RejectedMention
+from app.schemas_discovery import (
+    CandidateMetrics,
+    Exclusion,
+    IdeaOut,
+    Mention,
+    PortfolioExposure,
+    RejectedMention,
+)
 
 logger = logging.getLogger(__name__)
 MAX_CONCURRENT_CANDIDATES = 3
@@ -92,6 +105,34 @@ async def _rates() -> dict[str, Decimal]:
     }
 
 
+async def evaluate_candidate(
+    candidate: CandidateMetrics,
+    client: Anthropic,
+    exposure: PortfolioExposure,
+    histories: Histories,
+    today: date,
+    *,
+    require_research: bool = False,
+) -> IdeaOut | Exclusion:
+    history: dict[str, float] = {}
+    if len(exposure.positions) >= 2:
+        try:
+            history = await fetch_dated_closes(candidate.ticker)
+        except Exception as exc:
+            logger.warning("Discovery fit history unavailable (%s)", type(exc).__name__)
+    portfolio_returns = {ticker: log_returns(values) for ticker, values in histories.items()}
+    fit = marginal_effect(
+        exposure,
+        log_returns(clean_history(history, today)),
+        candidate.sector,
+        ticker=candidate.ticker,
+        portfolio_returns=portfolio_returns,
+    )
+    if require_research:
+        return await run_discovery_graph(candidate, client, fit=fit, require_research=True)
+    return await run_discovery_graph(candidate, client, fit=fit)
+
+
 async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) -> ScanEvaluation:
     """No scheduling, global paid theme searches or database writes; at most eight graph calls."""
     await progress("screening", 0, 0)
@@ -126,7 +167,6 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
     done = 0
     if candidates:
         exposure, histories = await load_fit_context(holdings)
-        portfolio_returns = {ticker: log_returns(history) for ticker, history in histories.items()}
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_CANDIDATES)
 
         async def evaluate(index: int) -> None:
@@ -134,22 +174,7 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
             candidate = candidates[index]
             async with semaphore:
                 try:
-                    history: dict[str, float] = {}
-                    if len(exposure.positions) >= 2:
-                        try:
-                            history = await fetch_dated_closes(candidate.ticker)
-                        except Exception as exc:
-                            logger.warning(
-                                "Discovery fit history unavailable (%s)", type(exc).__name__
-                            )
-                    fit = marginal_effect(
-                        exposure,
-                        log_returns(clean_history(history, today)),
-                        candidate.sector,
-                        ticker=candidate.ticker,
-                        portfolio_returns=portfolio_returns,
-                    )
-                    output = await run_discovery_graph(candidate, client, fit=fit)
+                    output = await evaluate_candidate(candidate, client, exposure, histories, today)
                     if isinstance(output, Exclusion):
                         excluded.append(output)
                     else:

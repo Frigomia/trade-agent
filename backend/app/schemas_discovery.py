@@ -26,7 +26,7 @@ from pydantic import (
 )
 
 AssetType = Literal["STOCK", "ETF"]
-Origin = Literal["universe", "tavily", "reddit", "industry_research"]
+Origin = Literal["universe", "watchlist", "tavily", "reddit", "industry_research"]
 MentionOrigin = Literal["tavily", "reddit", "industry_research"]
 SizeBucket = Literal["micro", "small", "mid", "large", "unknown"]
 RiskLevel = Literal["low", "medium", "high", "unknown"]

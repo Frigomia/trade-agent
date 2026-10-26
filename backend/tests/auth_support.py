@@ -16,6 +16,7 @@ from app.models import (
     AppUser,
     BacktestResult,
     ChatMessage,
+    CompanyAnalysis,
     ContributionPlan,
     ContributionPlanLine,
     Holding,
@@ -101,6 +102,16 @@ def add_app_user(
 
 
 ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
+    "company_analyses": lambda uid: CompanyAnalysis(
+        user_id=uid,
+        ticker="AAPL",
+        job_id=str(uuid.uuid4()),
+        status="ineligible",
+        researched=False,
+        reason="Insufficient data.",
+        fingerprint="a" * 64,
+        charge_state="none",
+    ),
     "holdings": lambda uid: Holding(
         user_id=uid,
         ticker="AAPL",

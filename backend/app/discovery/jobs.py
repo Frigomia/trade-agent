@@ -13,18 +13,12 @@ from app.agents.research import ResearchKeyRejected
 from app.claude_keys import mark_needs_attention
 from app.discovery.persistence import save_scan
 from app.discovery.runner import SCAN_TIMEOUT_SECONDS, SnapshotUnavailable, evaluate_scan
-from app.redis_client import _RELEASE_IF_MINE, get_redis
+from app.redis_client import _RELEASE_IF_MINE, _RENEW_IF_MINE, get_redis
 from app.schemas import ScanRunOut
 from app.usage import refund_usage
 
 logger = logging.getLogger(__name__)
 ACTIVE_TTL_SECONDS = SCAN_TIMEOUT_SECONDS + 300
-_RENEW_IF_MINE = """
-if redis.call('get', KEYS[1]) == ARGV[1] then
-    return redis.call('expire', KEYS[1], ARGV[2])
-end
-return 0
-"""
 
 
 class DiscoveryAlreadyRunning(Exception):
@@ -32,7 +26,8 @@ class DiscoveryAlreadyRunning(Exception):
 
 
 def _active_key(user_id: UUID) -> str:
-    return f"discovery_active:{user_id}"
+    # All manual and scheduled holdings/discovery/company jobs contend on the same claim.
+    return f"analysis_active:{user_id}"
 
 
 def _job_key(job_id: str) -> str:
