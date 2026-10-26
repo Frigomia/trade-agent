@@ -10,4 +10,4 @@ Chosen: option 3, Workbench. User's words: "ok i will pick option co-c-workbench
 
 What this means: a persistent decision rail beside the evidence (price, confidence, risk, last analysis, portfolio fit and the actions Approve, Save to Discover, Dismiss, Ask AI), and the evidence in four tabs (Overview, Numbers, Risk and fit, Sources). On a phone the tabs go across the top and the actions become a bar above the tab bar (pinned in the app). Light and dark follow the Soft Today direction.
 
-Open items this choice left (see `SPEC.md`, "Decisions for you", for where each landed): only catalyst dates and bull-claim statuses are still open (#198).
+Follow-up 2026-10-26 (#198): catalyst dates and bull-claim statuses follow this approved mock. Dates require an explicit full date in cited same-event research; no date is guessed for old or undated reports. Bull claims carry confirmed/disputed/unverified status with source evidence, and code prevents forum, opinion, forecast or untrusted-source claims from becoming confirmed. See `SPEC.md` for the completed decision record.

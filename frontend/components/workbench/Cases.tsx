@@ -4,6 +4,7 @@ import { CircleAlert, CircleCheck, CircleHelp, ExternalLink, Sparkles } from "lu
 import { Panel } from "@/components/ui/Panel";
 import type { Claim, IdeaOut, NegativeDevelopment } from "@/lib/api/discovery-types";
 import { hostOf, safeHref } from "@/lib/safeHref";
+import { calendarDateText } from "@/lib/discovery";
 
 export const BODY = { fontSize: "0.8125rem", color: "var(--text2)", lineHeight: 1.55 } as const;
 export const H3 = { fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" } as const;
@@ -24,6 +25,15 @@ const STATUS: Record<NegativeDevelopment["status"], { label: string; icon: typeo
   unverified: { label: "Unverified", icon: CircleHelp },
 };
 
+function ClaimStatus({ status }: { status: NegativeDevelopment["status"] }) {
+  const { label, icon: Icon } = STATUS[status];
+  return (
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, border: "1px solid var(--line2)", borderStyle: status === "confirmed" ? "solid" : status === "disputed" ? "dashed" : "dotted", borderRadius: 999, px: 1, color: "var(--text2)" }}>
+      <Icon size={13} aria-hidden />{label}
+    </Box>
+  );
+}
+
 /** A link that opens a web source safely, or the plain text when the address is not http(s). */
 export function SourceLink({ url, children }: { url: string; children?: ReactNode }) {
   const href = safeHref(url);
@@ -42,6 +52,7 @@ function ClaimRow({ claim }: { claim: Claim }) {
     <Box component="li" sx={{ display: "grid", gap: 0.5, py: 1.25, borderTop: "1px solid var(--line)", "&:first-of-type": { borderTop: 0, pt: 0 } }}>
       <Typography sx={{ ...BODY, color: "var(--text)" }}>{claim.text}</Typography>
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, fontSize: "0.75rem", color: "var(--muted)", alignItems: "center" }}>
+        <ClaimStatus status={claim.status ?? "unverified"} />
         <Box component="span" sx={{ border: "1px solid var(--line2)", borderRadius: 999, px: 1, fontWeight: 500, color: "var(--text2)" }}>
           {KIND_LABEL[claim.kind]}
         </Box>
@@ -73,7 +84,7 @@ const plural = (n: number) => `${n} item${n === 1 ? "" : "s"}`;
 /** What could go right: the supporting claims, then the catalysts the research found. */
 export function BullCase({ idea }: { idea: IdeaOut }) {
   const claims = idea.sources.filter((c) => c.stance === "bull");
-  const catalysts = idea.catalysts.filter((c) => c.trim());
+  const catalysts = idea.catalysts.map((c) => typeof c === "string" ? { text: c, occurs_on: null, evidence: [] } : c).filter((c) => c.text.trim());
   return (
     <Case title="Bull case" note="What could go right">
       {claims.length > 0 ? (
@@ -92,9 +103,13 @@ export function BullCase({ idea }: { idea: IdeaOut }) {
           </Typography>
           <Box component="ul" sx={{ m: 0, p: 0, listStyle: "none", display: "grid", gap: 0.75 }}>
             {catalysts.map((c, i) => (
-              <Box component="li" key={`${i}-${c}`} sx={{ display: "flex", gap: 1, ...BODY }}>
+              <Box component="li" key={`${i}-${c.text}`} sx={{ display: "flex", gap: 1, minWidth: 0, overflowWrap: "anywhere", ...BODY }}>
                 <Sparkles size={14} color="var(--accent)" aria-hidden style={{ flex: "none", marginTop: 3 }} />
-                <span>{c}</span>
+                <Box sx={{ display: "grid", gap: 0.5, minWidth: 0 }}>
+                  <span>{c.text}</span>
+                  {c.occurs_on && <Box component="time" dateTime={c.occurs_on} sx={{ fontSize: "0.75rem", fontWeight: 650, color: "var(--text2)" }}>{calendarDateText(c.occurs_on)}</Box>}
+                  {c.evidence.length > 0 && <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, fontSize: "0.75rem" }}>{c.evidence.map((url) => <SourceLink key={url} url={url} />)}</Box>}
+                </Box>
               </Box>
             ))}
           </Box>

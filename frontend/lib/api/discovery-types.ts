@@ -28,6 +28,14 @@ export interface Claim {
   source_tier: "official" | "reliable_reporting" | "other" | "forum";
   url: string;
   published_at: string | null;
+  status?: "confirmed" | "disputed" | "unverified"; // absent on older reports: unverified
+}
+
+export interface Catalyst {
+  text: string;
+  occurs_on: string | null;
+  event_id: string | null;
+  evidence: string[];
 }
 
 export interface NegativeDevelopment {
@@ -98,7 +106,7 @@ export interface IdeaOut {
   confidence: Level;
   risk: RiskProfile;
   thesis: string;
-  catalysts: string[];
+  catalysts: (Catalyst | string)[]; // legacy text remains readable without an invented date
   outlook: string;
   bear_case: string;
   negative_developments: NegativeDevelopment[];

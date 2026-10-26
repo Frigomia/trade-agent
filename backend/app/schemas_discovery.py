@@ -13,12 +13,13 @@ Conventions:
 """
 
 from datetime import date, datetime
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StringConstraints,
@@ -30,6 +31,7 @@ Origin = Literal["universe", "watchlist", "tavily", "reddit", "industry_research
 MentionOrigin = Literal["tavily", "reddit", "industry_research"]
 SizeBucket = Literal["micro", "small", "mid", "large", "unknown"]
 RiskLevel = Literal["low", "medium", "high", "unknown"]
+EvidenceStatus = Literal["confirmed", "disputed", "unverified"]
 
 # A share of the total value: never negative, never above the whole.
 Weight = Annotated[float, Field(ge=0, le=1)]
@@ -249,13 +251,32 @@ class Claim(Contract):
     event_id: str  # claims about the same underlying event share one id
     url: Url
     published_at: date | None
+    status: EvidenceStatus = "unverified"  # older reports never imply confirmation
 
     @model_validator(mode="after")
-    def _forum_is_always_forum(self) -> Self:
+    def _forum_and_confirmation_are_consistent(self) -> Self:
         # Forum content is a hypothesis, never evidence: kind and source tier must agree.
         if (self.kind == "forum") != (self.source_tier == "forum"):
             raise ValueError("a forum claim must have source_tier 'forum', and only forum claims")
+        if self.kind == "forum" or (
+            self.status == "confirmed"
+            and (self.kind != "fact" or self.source_tier not in {"official", "reliable_reporting"})
+        ):
+            self.status = "unverified"
         return self
+
+
+class Catalyst(Contract):
+    text: str
+    occurs_on: date | None
+    event_id: str | None  # binds the date to the cited claims about this event
+    evidence: list[Url] = Field(max_length=20)
+
+
+def _legacy_catalyst(value: Any) -> Any:
+    if isinstance(value, str):
+        return {"text": value, "occurs_on": None, "event_id": None, "evidence": []}
+    return value
 
 
 class NegativeDevelopment(Contract):
@@ -263,7 +284,7 @@ class NegativeDevelopment(Contract):
     occurred_on: date | None  # and when
     evidence: list[Url]  # claim urls
     thesis_impact: str  # how it affects the thesis
-    status: Literal["confirmed", "disputed", "unverified"]
+    status: EvidenceStatus
     invalidates_thesis: bool
 
 
@@ -337,7 +358,7 @@ class IdeaOut(Contract):
     risk: RiskProfile
     peers: list[PeerComparison]
     thesis: str  # LLM, from the numbers and the evidence
-    catalysts: list[str]  # each cites a claim url
+    catalysts: list[Annotated[Catalyst, BeforeValidator(_legacy_catalyst)]]
     outlook: str  # qualitative; never a score
     bear_case: str
     negative_developments: list[NegativeDevelopment]

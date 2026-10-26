@@ -40,8 +40,8 @@ How each came about: 1 follows the reference you gave, 2 is built like an articl
 | Confidence, risk level, scores, overall | `IdeaOut` | Exists |
 | Last analysis date | `ScanRun.created_at` or the recommendation date | Exists |
 | Thesis, outlook, bear case, fit narrative | `IdeaOut.thesis`, `outlook`, `bear_case`, `fit_summary` | Exists; thesis is up to 4000 characters, so a short version for the card needs a headline (gap 6) |
-| Bull claims and catalysts | `IdeaOut.catalysts` (each cites a URL) and `sources` claims with stance | Exists; the mock's status on a bull claim has no field, only negative developments carry confirmed, disputed or unverified |
-| Upcoming catalyst dates | Not a field | New |
+| Bull claims and catalysts | Structured `IdeaOut.catalysts` and `sources` claims with stance and status | Built (#198); claims show confirmed, disputed or unverified with their source; old claims remain unverified |
+| Upcoming catalyst dates | `Catalyst.occurs_on`, bound to the cited claim's event | Built (#198); show a date only when the cited excerpt explicitly states the full date; older and undated catalysts show text only |
 | Negative developments with status | `NegativeDevelopment` (summary, date, evidence, impact, status, invalidates thesis) | Exists |
 | Fundamentals | `CandidateMetrics.fundamentals` (raw dict) | Exists; interest cover and some ratios are missing, shown as "Not available" |
 | Peer comparison | `PeerComparison` (value, median, p25, p75, position, count) | Exists; named competitor rows (as in the reference) are not available |
@@ -61,9 +61,9 @@ How each came about: 1 follows the reference you gave, 2 is built like an articl
 ## Decisions for you
 
 1. Resolved: option 3, Workbench, was chosen (see `direction-approved.md`).
-2. Partly resolved 2026-10-22: the price history (#159) and the fit facts (#160, #161) were added to the backend and built. Upcoming catalyst dates are open: [#198](https://github.com/Frigomia/trade-agent/issues/198).
+2. Resolved 2026-10-26 (#198): retain the approved catalyst dates. Each catalyst saves its text, nullable date, event id and evidence URLs. Code checks the full date against the cited same-event excerpt; publication dates and missing years are never substituted. Older reports stay undated. Price history (#159) and fit facts (#160, #161) were built earlier.
 3. Resolved 2026-10-22 (#160): the named-peer table is built, from the peer rows the backend saves with each idea (Numbers tab).
-4. Open: bull claims carry no confirmed, disputed or unverified status: [#198](https://github.com/Frigomia/trade-agent/issues/198).
+4. Resolved 2026-10-26 (#198): retain the approved bull-claim statuses. Research classifies each claim, and code gates confirmation on factual evidence from a verified source. Forum, opinion and forecast claims cannot be confirmed; old reports show Unverified. The word and icon accompany the source and its kind, with no price colours.
 5. Resolved 2026-10-22: the Discover destination is in the plan, so Save to Discover stays (#170).
 
-The direction is approved (`direction-approved.md`) and built; decisions 2 (catalyst dates) and 4 are open in #198.
+The direction is approved (`direction-approved.md`) and built; #198 closes decisions 2 and 4 by implementing the approved mock rather than dropping either detail.
