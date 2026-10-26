@@ -32,7 +32,7 @@ const stepBadge = {
   display: "flex",
   gap: 1.5,
   alignItems: "flex-start",
-  fontSize: 14,
+  fontSize: "0.875rem",
   "&::before": {
     counterIncrement: "step",
     content: "counter(step)",
@@ -42,7 +42,7 @@ const stepBadge = {
     borderRadius: "50%",
     display: "grid",
     placeItems: "center",
-    fontSize: 12,
+    fontSize: "0.75rem",
     fontWeight: 650,
     bgcolor: "var(--accent-wash)",
     color: "var(--accent)",
@@ -59,7 +59,7 @@ function hasTargets(summary: PortfolioSummary): boolean {
 function NoTargets() {
   return (
     <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
-      <Typography component="h2" sx={{ fontSize: 18, fontWeight: 650 }}>
+      <Typography component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650 }}>
         Set a target weight first
       </Typography>
       <Typography sx={{ color: "var(--text2)" }}>
@@ -132,7 +132,7 @@ function ThisMonth({ initialAmount, active }: { initialAmount: number | null; ac
 
   const footer =
     plan?.created_at ? (
-      <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }} role="status">
+      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }} role="status">
         Saved {planSavedAt(plan.created_at)}. You find it under Saved plans.
       </Typography>
     ) : plan ? (
@@ -164,7 +164,7 @@ function ThisMonth({ initialAmount, active }: { initialAmount: number | null; ac
       {make.error && <Alert severity="error">{make.error}</Alert>}
       {saving.error && <Alert severity="error">{saving.error}</Alert>}
       {stale && (
-        <Typography role="status" sx={{ fontSize: 13, color: "var(--warn)" }}>
+        <Typography role="status" sx={{ fontSize: "0.8125rem", color: "var(--warn)" }}>
           This plan is for {formatAmount(plan.amount_eur)} EUR. Press Make plan to update.
         </Typography>
       )}
@@ -219,7 +219,7 @@ export default function PlanPage() {
       {view === "orders" && <OrdersView />}
 
       <Typography
-        sx={{ mt: 2, fontSize: 12.5, color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}
+        sx={{ mt: 2, fontSize: "0.78125rem", color: "var(--muted)", display: "flex", gap: 1, alignItems: "center" }}
       >
         <Box component="span" sx={{ color: "var(--accent)", display: "flex" }}>
           <ShieldCheck size={15} aria-hidden />

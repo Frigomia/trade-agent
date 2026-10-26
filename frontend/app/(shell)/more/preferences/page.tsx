@@ -254,10 +254,10 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <Panel sx={{ p: "20px 24px", display: "flex", flexDirection: "column", gap: 1.5 }}>
       <Box>
-        <Typography variant="subtitle2" component="h2" sx={{ fontSize: 16 }}>
+        <Typography variant="subtitle2" component="h2" sx={{ fontSize: "1rem" }}>
           {title}
         </Typography>
-        {hint && <Typography sx={{ fontSize: 12.5, color: "var(--muted)" }}>{hint}</Typography>}
+        {hint && <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>{hint}</Typography>}
       </Box>
       {children}
     </Panel>

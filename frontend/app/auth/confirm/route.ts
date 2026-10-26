@@ -26,9 +26,9 @@ function page(status: number, title: string, body: string): NextResponse {
 :root{--bg:#0c1426;--text:#e9eefb;--muted:#92a0bd;--accent:#7ea3ff;--on:#0a1530;--line:rgba(255,255,255,.07)}
 @media(prefers-color-scheme:light){:root{--bg:#f5f7fb;--text:#0f1a2e;--muted:#5d6b85;--accent:#2457d6;--on:#fff;--line:rgba(15,26,46,.08)}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif}
-main{max-width:380px;padding:24px}h1{font-size:22px;letter-spacing:-.02em;margin:0 0 8px}p{color:var(--muted);line-height:1.5}
+main{max-width:380px;padding:24px}h1{font-size:1.375rem;letter-spacing:-.02em;margin:0 0 8px}p{color:var(--muted);line-height:1.5}
 .warn{border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text)}
-button,a.btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:12px;border:0;border-radius:10px;background:var(--accent);color:var(--on);font:600 15px system-ui,sans-serif;text-decoration:none;cursor:pointer}
+button,a.btn{display:block;width:100%;box-sizing:border-box;text-align:center;padding:12px;border:0;border-radius:10px;background:var(--accent);color:var(--on);font:600 .9375rem system-ui,sans-serif;text-decoration:none;cursor:pointer}
 </style></head><body><main>${body}</main></body></html>`;
   return new NextResponse(html, {
     status,

@@ -90,7 +90,7 @@ export default function AdminPage() {
       <Panel sx={{ p: "4px 18px" }}>
       <Box
         aria-hidden
-        sx={{ display: { xs: "none", md: "flex" }, gap: 1.5, py: 1, fontSize: 12, fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}
+        sx={{ display: { xs: "none", md: "flex" }, gap: 1.5, py: 1, fontSize: "0.75rem", fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}
       >
         <Box sx={{ flex: 1 }}>Person</Box>
         <Box sx={{ width: ROLE_W }}>Role</Box>
@@ -163,7 +163,7 @@ export default function AdminPage() {
         );
       })}
       </Panel>
-      <Typography sx={{ fontSize: 12.5, color: "var(--muted)", mt: 1.5, px: 0.5 }}>
+      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mt: 1.5, px: 0.5 }}>
         You see only whether a key is connected, never the key and never its digits.
       </Typography>
       </Box>
@@ -177,7 +177,7 @@ export default function AdminPage() {
               onChanged={() => mutate()}
             />
           ) : (
-            <Typography sx={{ fontSize: 13.5, color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.84375rem", color: "var(--muted)" }}>
               Select a user to see their limits and access.
             </Typography>
           )}

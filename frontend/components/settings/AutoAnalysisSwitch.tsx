@@ -66,10 +66,10 @@ export function AutoAnalysisSwitch({ saved, onSaved, kind = "analysis" }: { save
     <Box>
       <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
         <Box>
-          <Typography id={`${field}-label`} variant="subtitle2" component="h2" sx={{ fontSize: 16 }}>
+          <Typography id={`${field}-label`} variant="subtitle2" component="h2" sx={{ fontSize: "1rem" }}>
             {label}
           </Typography>
-          <Typography id={`${field}-hint`} sx={{ fontSize: 12.5, color: "var(--muted)" }}>
+          <Typography id={`${field}-hint`} sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>
             {explain}
           </Typography>
         </Box>
@@ -84,7 +84,7 @@ export function AutoAnalysisSwitch({ saved, onSaved, kind = "analysis" }: { save
       {paused && (
         <Box
           role="status"
-          sx={{ mt: 1.25, display: "flex", gap: 1, alignItems: "flex-start", color: "var(--warn)", fontSize: 13.5, "& a": { color: "inherit", textDecoration: "underline" } }}
+          sx={{ mt: 1.25, display: "flex", gap: 1, alignItems: "flex-start", color: "var(--warn)", fontSize: "0.84375rem", "& a": { color: "inherit", textDecoration: "underline" } }}
         >
           <SvgIcon fontSize="small" aria-hidden sx={{ mt: "1px" }}>
             <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />

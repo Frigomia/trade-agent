@@ -81,7 +81,7 @@ function WeightCell({ weight, target, scale }: { weight: number | null; target: 
             )}
           </Box>
         ) : (
-          <Box component="span" sx={{ display: "block", fontSize: 12.5 }}>
+          <Box component="span" sx={{ display: "block", fontSize: "0.78125rem" }}>
             <SetTarget />
           </Box>
         )}
@@ -140,8 +140,8 @@ function HoldingRow({
       <Logo ticker={holding.ticker} name={holding.name} size={34} />
       <Box sx={{ minWidth: 0 }}>
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{holding.ticker}</Typography>
-        <Typography sx={{ fontSize: 12, color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>
-        <Typography sx={{ fontSize: 12, color: "var(--muted)", display: { md: "none" } }}>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", overflowWrap: "anywhere" }}>{holding.name}</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", display: { md: "none" } }}>
           {shortShares(holding.shares)} sh · {formatShare(holding.weight)}
           {target ? (
             ` / target ${targetText(target.target)}${target.fromWatchlist ? " (Discover)" : ""}`
@@ -153,21 +153,21 @@ function HoldingRow({
       </Box>
       <Typography sx={cell}>
         {holding.shares}
-        <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--muted)" }}>
+        <Box component="span" sx={{ display: "block", fontSize: "0.75rem", color: "var(--muted)" }}>
           avg {holding.cost_basis !== null && Number.isFinite(holding.cost_basis) ? formatAmount(holding.cost_basis) : DASH}
         </Box>
       </Typography>
       <Typography sx={cell}>
         {holding.current_price !== null ? formatAmount(holding.current_price) : DASH}
         {holding.current_price !== null && holding.stale === true && (
-          <Box component="span" sx={{ display: "block", fontSize: 12, color: "var(--warn)" }}>
+          <Box component="span" sx={{ display: "block", fontSize: "0.75rem", color: "var(--warn)" }}>
             {holding.as_of ? `Stale quote · ${holding.as_of}` : "Quote date unavailable"}
           </Box>
         )}
       </Typography>
       <Box sx={{ textAlign: "right", display: { xs: "block", md: "none" } }}>
         <Typography sx={{ fontWeight: 600 }}>{value}</Typography>
-        <Typography sx={{ fontSize: 12, color: plColor(holding.unrealized_pl) }}>{noCost ? <AddPurchasePrice /> : pl}</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: plColor(holding.unrealized_pl) }}>{noCost ? <AddPurchasePrice /> : pl}</Typography>
       </Box>
       <Typography sx={{ ...cell, fontWeight: 600 }}>{value}</Typography>
       <Typography sx={{ ...cell, color: plColor(holding.unrealized_pl) }}>{noCost ? <AddPurchasePrice /> : pl}</Typography>
@@ -291,7 +291,7 @@ export default function PortfolioPage() {
               gap: HOLDING_GAP,
               pr: `${MENU_COL}px`,
               py: 1,
-              fontSize: 12,
+              fontSize: "0.75rem",
               color: "var(--muted)",
               textAlign: "right",
               "& > :first-of-type": { textAlign: "left" },

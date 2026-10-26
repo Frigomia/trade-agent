@@ -58,9 +58,9 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
         <Typography variant="h6" sx={{ fontWeight: 650 }}>
           {user.email}
         </Typography>
-        <Typography sx={{ color: "var(--muted)", fontSize: 13, mt: 0.5 }}>{user.status}</Typography>
+        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mt: 0.5 }}>{user.status}</Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Claude</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }}>Claude</Typography>
           <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
         </Box>
 
@@ -115,7 +115,7 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
         <Divider sx={{ my: 2 }} />
 
         <Typography sx={{ fontWeight: 600, mb: 1 }}>Remove user</Typography>
-        <Typography sx={{ color: "var(--muted)", fontSize: 13, mb: 1 }}>
+        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mb: 1 }}>
           Type {user.email} to confirm. This permanently deletes their data.
         </Typography>
         <TextField

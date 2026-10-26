@@ -16,7 +16,7 @@ export function AutomaticTag({ source }: { source?: RecommendationOut["source"] 
         px: "9px",
         py: "3px",
         borderRadius: "999px",
-        fontSize: 11,
+        fontSize: "0.75rem",
         fontWeight: 500,
         border: "1px solid var(--line2)",
         color: "var(--text2)",

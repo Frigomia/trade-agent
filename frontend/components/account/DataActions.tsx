@@ -61,11 +61,11 @@ export function DataActions({ email }: { email: string }) {
       </Box>
       {confirming && (
         <Box sx={{ display: "grid", gap: 1.5 }}>
-          <Typography sx={{ fontSize: 14 }}>
+          <Typography sx={{ fontSize: "0.875rem" }}>
             This permanently deletes your holdings, watchlist, trades, recommendations, chats, backtests,
             preferences, snapshots and your Claude key.
           </Typography>
-          <Typography sx={{ color: "var(--muted)", fontSize: 13 }}>
+          <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem" }}>
             Your sign-in and access stay. Removing access is done by your administrator.
           </Typography>
           <TextField

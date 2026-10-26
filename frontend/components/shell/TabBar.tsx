@@ -62,7 +62,7 @@ export function TabBar({ role }: { role: Role }) {
             }}
           >
             <Icon size={20} strokeWidth={1.75} />
-            <span style={{ fontSize: 11, fontWeight: on ? 600 : 400 }}>{tab.label}</span>
+            <span style={{ fontSize: "0.75rem", fontWeight: on ? 600 : 400 }}>{tab.label}</span>
           </Link>
         );
       })}

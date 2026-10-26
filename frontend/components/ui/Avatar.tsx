@@ -13,7 +13,7 @@ export function Avatar({ email }: { email: string }) {
         borderRadius: "50%",
         display: "grid",
         placeItems: "center",
-        fontSize: 11,
+        fontSize: "0.75rem",
         fontWeight: 700,
         bgcolor: "var(--field)",
         border: "1px solid var(--line)",

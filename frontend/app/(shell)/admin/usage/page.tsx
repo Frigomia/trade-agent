@@ -23,7 +23,7 @@ function UsageCell({ usage }: { usage: UsageDetail }) {
   const { color } = LEVEL[usageLevel(usage)];
   return (
     <Box sx={{ minWidth: { md: 110 } }}>
-      <Typography sx={{ fontSize: 13 }}>
+      <Typography sx={{ fontSize: "0.8125rem" }}>
         {usage.used} / {usage.limit || "—"}
       </Typography>
       <LinearProgress
@@ -58,7 +58,7 @@ const TABLE_SX = {
     "& td[data-label]::before": {
       content: "attr(data-label)",
       display: "block",
-      fontSize: 11,
+      fontSize: "0.75rem",
       color: "var(--muted)",
       marginBottom: "2px",
     },

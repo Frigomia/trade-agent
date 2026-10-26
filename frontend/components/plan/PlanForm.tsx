@@ -47,7 +47,7 @@ export function PlanForm({
         }}
       />
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography id="plan-whole-label" component="span" sx={{ fontSize: 14 }}>
+        <Typography id="plan-whole-label" component="span" sx={{ fontSize: "0.875rem" }}>
           Whole shares only
         </Typography>
         <Switch
@@ -60,7 +60,7 @@ export function PlanForm({
       <Button type="submit" variant="contained" disabled={!valid || pending} sx={{ flex: { xs: "1 1 100%", sm: "none" } }}>
         Make plan
       </Button>
-      <Typography sx={{ flex: "1 1 200px", fontSize: 12.5, color: "var(--muted)", textAlign: { sm: "right" } }}>
+      <Typography sx={{ flex: "1 1 200px", fontSize: "0.78125rem", color: "var(--muted)", textAlign: { sm: "right" } }}>
         Saved monthly amount, change it in{" "}
         <MuiLink component={Link} href="/more/preferences">
           Preferences

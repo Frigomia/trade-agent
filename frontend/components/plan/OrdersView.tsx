@@ -8,14 +8,14 @@ import { formatAmount } from "@/lib/format";
 import { isOldPlan, planDay, planMonth, useOpenOrders, type Plan } from "@/lib/plans";
 import { OrdersSection } from "./OrdersSection";
 
-const muted = { fontSize: 12.5, color: "var(--muted)" } as const;
+const muted = { fontSize: "0.78125rem", color: "var(--muted)" } as const;
 // Kept mounted while empty, so a new message is announced.
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
 function PlanHeading({ plan, created, id }: { plan: Plan; created: string; id: string }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
-      <Typography id={id} component="h2" sx={{ fontSize: 17, fontWeight: 650 }}>
+      <Typography id={id} component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650 }}>
         {planMonth(created)}
         <Box component="span" sx={{ fontWeight: 500, color: "var(--text2)" }}>
           , {plan.lines.length} open
@@ -30,7 +30,7 @@ function PlanHeading({ plan, created, id }: { plan: Plan; created: string; id: s
 
 function OldNote({ iso }: { iso: string }) {
   return (
-    <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", px: 1.75, py: 1.25, borderRadius: "12px", bgcolor: "var(--warn-bg)", fontSize: 14, lineHeight: 1.5, maxWidth: 760 }}>
+    <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", px: 1.75, py: 1.25, borderRadius: "12px", bgcolor: "var(--warn-bg)", fontSize: "0.875rem", lineHeight: 1.5, maxWidth: 760 }}>
       <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--warn)", pt: "2px" }}>
         <Clock size={16} />
       </Box>
@@ -42,17 +42,17 @@ function OldNote({ iso }: { iso: string }) {
 function Empty() {
   return (
     <Box sx={{ maxWidth: 560, pt: 2.5, display: "flex", flexDirection: "column", gap: 1.25 }}>
-      <Typography component="h2" sx={{ fontSize: 19, fontWeight: 650 }}>
+      <Typography component="h2" sx={{ fontSize: "1.1875rem", fontWeight: 650 }}>
         No open orders.
       </Typography>
-      <Typography sx={{ fontSize: 14, lineHeight: 1.55, color: "var(--text2)" }}>
+      <Typography sx={{ fontSize: "0.875rem", lineHeight: 1.55, color: "var(--text2)" }}>
         Orders come from saving a plan. Make this month&apos;s plan and press Save plan; each of its lines then waits here until you
         mark it placed.
       </Typography>
       <MuiLink
         component={Link}
         href="/portfolio/plan"
-        sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minHeight: 44, fontSize: 14, fontWeight: 500, alignSelf: "flex-start" }}
+        sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minHeight: 44, fontSize: "0.875rem", fontWeight: 500, alignSelf: "flex-start" }}
       >
         Go to This month
         <ArrowRight size={16} aria-hidden />
@@ -109,7 +109,7 @@ export function OrdersView() {
         role="status"
         aria-live="polite"
         tabIndex={-1}
-        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: 14, color: "var(--text2)", outline: "none" } : visuallyHidden}
+        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: "0.875rem", color: "var(--text2)", outline: "none" } : visuallyHidden}
       >
         {status && (
           <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>

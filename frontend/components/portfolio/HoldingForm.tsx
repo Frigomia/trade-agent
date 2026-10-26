@@ -153,7 +153,7 @@ function HoldingFormBody({
       <TextField label="Shares" type="number" value={shares} onChange={(e) => setShares(e.target.value)}
         fullWidth margin="normal" slotProps={{ htmlInput: { step: "any", min: editing ? 0 : undefined } }}
         helperText="Fractional shares are supported." />
-      <Typography sx={{ fontSize: 13, color: "var(--muted)", mt: 1 }}>
+      <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", mt: 1 }}>
         Company details fill automatically. Without an average cost, this holding stays out of P/L.
       </Typography>
       <Button type="button" onClick={() => setShowMore(!showMore)} aria-expanded={showMore} sx={{ mt: 1 }}>
@@ -215,7 +215,7 @@ function HoldingFormBody({
       {editing &&
         (confirmingRemove ? (
           <Box sx={{ mt: 2 }}>
-            <Typography sx={{ fontSize: 13, mb: 1 }}>
+            <Typography sx={{ fontSize: "0.8125rem", mb: 1 }}>
               Remove {holding.ticker}? This can&apos;t be undone.
             </Typography>
             <Button

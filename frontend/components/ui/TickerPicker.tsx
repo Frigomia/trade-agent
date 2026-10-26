@@ -91,11 +91,11 @@ export function TickerPicker({ label, value, onChange, onPick, suggestions = [],
         <li {...props} key={`${option.group}:${option.symbol}`}>
           <Box sx={{ minWidth: 0 }}>
             <Typography sx={{ fontWeight: 600 }}>{option.symbol}</Typography>
-            <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
               {[option.name, option.exchange, option.type].filter(Boolean).join(" · ")}
             </Typography>
             {isin && option.group === SEARCH_GROUP && (
-              <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+              <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
                 Saves ISIN {isin} with it
               </Typography>
             )}

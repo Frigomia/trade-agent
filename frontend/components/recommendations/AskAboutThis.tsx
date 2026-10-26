@@ -8,7 +8,7 @@ export function AskAboutThis({ ticker, action }: { ticker: string; action: strin
     <Box
       component={Link}
       href={`/chat?ask=${encodeURIComponent(`Why ${action} on ${ticker}?`)}`}
-      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontSize: 13.5, textDecoration: "none", mt: 1.5 }}
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontSize: "0.84375rem", textDecoration: "none", mt: 1.5 }}
     >
       <MessageSquare size={15} />
       Ask about this

@@ -3,6 +3,15 @@ import { render, screen } from "@testing-library/react";
 import { Markdown } from "./Markdown";
 
 describe("Markdown", () => {
+  it("sizes the text in rem, 14.5px by default", () => {
+    // jsdom turns rem into pixels when asked for the computed style, so read the stylesheet itself.
+    const { rerender } = render(<Markdown>hello</Markdown>);
+    expect(document.head.innerHTML).toContain("font-size:0.90625rem");
+
+    rerender(<Markdown size={12.5}>hello</Markdown>);
+    expect(document.head.innerHTML).toContain("font-size:0.78125rem");
+  });
+
   it("renders headings, bold text and lists", () => {
     render(<Markdown>{"## What the news adds\n\n**Solid results.**\n\n- first\n- second"}</Markdown>);
     expect(screen.getByRole("heading", { name: "What the news adds" })).toBeInTheDocument();

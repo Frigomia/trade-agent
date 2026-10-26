@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { Box } from "@mui/material";
+import { remFromPx } from "@/lib/rem";
 
 function textOf(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
@@ -36,11 +37,12 @@ function destination(href: string | undefined, text: string): string | null {
  * as untrusted: raw HTML is dropped (react-markdown never renders it by default, `skipHtml` makes
  * that explicit), images are not loaded, and links open in a new tab without a referrer.
  */
+/** `size` is in pixels at the default browser size; it is applied in rem. */
 export function Markdown({ children, size = 14.5 }: { children: string; size?: number }) {
   return (
     <Box
       sx={{
-        fontSize: size,
+        fontSize: remFromPx(size),
         lineHeight: 1.6,
         color: "var(--text2)",
         maxWidth: "68ch",

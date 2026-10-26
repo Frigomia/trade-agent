@@ -157,7 +157,7 @@ function ChatScreen() {
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, justifyContent: "flex-end", pb: 1.5 }}>
         {empty && !lock && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
-            <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
+            <Typography sx={{ color: "var(--muted)", fontSize: "0.84375rem" }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
               <Button key={starter} variant="outlined" size="small" onClick={() => {
                   setIdeaId(null);
@@ -170,7 +170,7 @@ function ChatScreen() {
         )}
         {messages?.map((message) => <MessageBubble key={message.id} message={message} />)}
         {pending !== null && <MessageBubble message={{ role: "user", content: pending }} />}
-        <Typography sx={{ color: "var(--muted)", fontSize: 13, minHeight: pending !== null ? undefined : 0 }} role="status">
+        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", minHeight: pending !== null ? undefined : 0 }} role="status">
           {pending !== null ? "Thinking…" : ""}
         </Typography>
         <div ref={endRef} />
@@ -191,7 +191,7 @@ function ChatScreen() {
           <ClaudeRequired variant="chat" lock={lock} />
         ) : (
           <>
-            <Typography sx={{ textAlign: "center", fontSize: 12, color: "var(--muted)", mb: 0.75 }}>
+            <Typography sx={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", mb: 0.75 }}>
               Advisory only, not investment advice.
             </Typography>
             <Composer

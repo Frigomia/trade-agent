@@ -7,7 +7,7 @@ import type { EquityCurve } from "@/lib/backtest";
 import { CHART_HEIGHT, CHART_MARGIN, CHART_WIDTH, buildChart } from "@/lib/backtestChart";
 import { formatAmount } from "@/lib/format";
 
-const NOTE_SX = { fontSize: 12, color: "var(--muted)" };
+const NOTE_SX = { fontSize: "0.75rem", color: "var(--muted)" };
 
 export function BacktestChart({
   curve,
@@ -107,7 +107,7 @@ export function BacktestChart({
           </>
         )}
       </svg>
-      <Box sx={{ display: "flex", gap: 2, fontSize: 12, color: "var(--muted)", mt: 0.5, flexWrap: "wrap" }}>
+      <Box sx={{ display: "flex", gap: 2, fontSize: "0.75rem", color: "var(--muted)", mt: 0.5, flexWrap: "wrap" }}>
         {[
           ["Signal strategy", { height: 3, bgcolor: "var(--accent)", borderRadius: "2px" }],
           ["Buy and hold", { borderTop: "2px dashed var(--muted)" }],

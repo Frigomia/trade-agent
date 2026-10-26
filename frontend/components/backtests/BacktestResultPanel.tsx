@@ -9,8 +9,8 @@ import { BacktestChart } from "./BacktestChart";
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <Box>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>{label}</Typography>
-      <Typography sx={{ fontSize: 22, fontWeight: 650, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{label}</Typography>
+      <Typography sx={{ fontSize: "1.375rem", fontWeight: 650, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>
         {value}
       </Typography>
     </Box>
@@ -23,10 +23,10 @@ export function BacktestResultPanel({ result }: { result: BacktestResult }) {
     <Panel sx={{ p: "18px 20px", display: "grid", gap: 1 }}>
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
         <Box sx={{ flex: "1 1 220px" }}>
-          <Typography component="h2" sx={{ fontSize: 16, fontWeight: 650 }}>
+          <Typography component="h2" sx={{ fontSize: "1rem", fontWeight: 650 }}>
             {result.ticker}, {result.start_date} to {result.end_date}
           </Typography>
-          <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>Signal strategy vs buy and hold</Typography>
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Signal strategy vs buy and hold</Typography>
         </Box>
         <Pill tone={result.excess_return_pct < 0 ? "down" : "up"}>{excessLabel(result.excess_return_pct)}</Pill>
       </Box>
@@ -34,7 +34,7 @@ export function BacktestResultPanel({ result }: { result: BacktestResult }) {
         <Stat label="Strategy final value" value={formatAmount(result.final_value)} />
         <Stat label="Buy and hold" value={formatAmount(result.buy_and_hold_value)} />
       </Box>
-      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
         Both start from {formatAmount(STARTING_VALUE)}.
       </Typography>
       {result.equity_curve && (
@@ -67,11 +67,11 @@ export function BacktestResultPanel({ result }: { result: BacktestResult }) {
         </Table>
       )}
       {rows.some((r) => r.small) && (
-        <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
           Some signals were seen fewer than 5 times; treat those rows as anecdotes.
         </Typography>
       )}
-      <Typography sx={{ fontSize: 12, color: "var(--muted)" }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>
         Past performance is not a forecast. Simulated on past prices only; nothing is sent to a broker.
       </Typography>
     </Panel>

@@ -28,7 +28,7 @@ function BackRow() {
       <Box
         component={Link}
         href="/today"
-        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, textDecoration: "none", color: "var(--muted)", fontSize: 14 }}
+        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, textDecoration: "none", color: "var(--muted)", fontSize: "0.875rem" }}
       >
         <ChevronLeft size={18} />
         Today
@@ -110,7 +110,7 @@ function RecommendationDetail() {
   return (
     <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
-        <Typography sx={{ fontSize: 30, fontWeight: 650, letterSpacing: "-.03em" }}>
+        <Typography sx={{ fontSize: "1.875rem", fontWeight: 650, letterSpacing: "-.03em" }}>
           {recommendation.ticker}
         </Typography>
         <ActionChip action={recommendation.action} />
