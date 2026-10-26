@@ -16,8 +16,18 @@ def watch(client, ticker, low=None, high=None, **extra):
     return client.post("/portfolio/watchlist", json=body)
 
 
-def get_insights(client, prices, stale=()):
-    """GET /portfolio/insights with quotes faked: {ticker: price or an Exception}."""
+def store_currency(db_session, ticker, currency):
+    """Set the currency a company was saved with (Discover fills it in when a company is added)."""
+    item = db_session.query(WatchlistItem).filter_by(ticker=ticker).one()
+    item.currency = currency
+    db_session.commit()
+
+
+def get_insights(client, prices, stale=(), currency="USD"):
+    """GET /portfolio/insights with quotes faked: {ticker: price or an Exception}.
+
+    `currency` is what the provider says a company is quoted in (a company with none stored).
+    """
 
     async def quote(ticker):
         value = prices[ticker]
@@ -26,7 +36,10 @@ def get_insights(client, prices, stale=()):
         return {"price": value, "closes": [value], "stale": ticker in stale}
 
     mock = AsyncMock(side_effect=quote)
-    with patch("app.routers.portfolio.fetch_quote_and_history", mock):
+    with (
+        patch("app.routers.portfolio.fetch_quote_and_history", mock),
+        patch("app.fx.fetch_currency", AsyncMock(return_value=currency)),
+    ):
         return client.get("/portfolio/insights"), mock
 
 
@@ -141,6 +154,7 @@ def test_insights_list_an_item_whose_price_is_inside_its_range(client):
                 "ticker": "NVDA",
                 "kind": "in_target_range",
                 "text": "Entered your target price range",
+                "currency": "USD",
                 "current_price": 100.0,
                 "target_price_low": 90.0,
                 "target_price_high": 110.0,
@@ -148,6 +162,91 @@ def test_insights_list_an_item_whose_price_is_inside_its_range(client):
         ],
         "missing": [],
     }
+
+
+def test_insights_show_a_pence_quoted_company_in_pounds(client, db_session):
+    watch(client, "SHEL.L", 650, 720.5)
+    store_currency(db_session, "SHEL.L", "GBp")
+
+    response, _ = get_insights(client, {"SHEL.L": 700.0})
+
+    [insight] = response.json()["insights"]
+    assert insight["currency"] == "GBP"
+    assert (
+        insight["current_price"],
+        insight["target_price_low"],
+        insight["target_price_high"],
+    ) == (
+        7.0,
+        6.5,
+        7.205,
+    )
+
+
+def test_insights_use_the_stored_currency_without_asking_the_provider(client, db_session):
+    watch(client, "NVDA", 90, 110)
+    store_currency(db_session, "NVDA", "USD")
+
+    with patch("app.fx.fetch_currency", AsyncMock(side_effect=AssertionError)):
+
+        async def quote(_ticker):
+            return {"price": 100.0, "closes": [100.0], "stale": False}
+
+        with patch("app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=quote)):
+            response = client.get("/portfolio/insights")
+
+    assert response.json()["insights"][0]["currency"] == "USD"
+
+
+def test_insights_ask_the_provider_for_a_company_with_no_stored_currency(client):
+    watch(client, "ABC.L", 650, 720.5)
+
+    response, _ = get_insights(client, {"ABC.L": 700.0}, currency="GBp")
+
+    [insight] = response.json()["insights"]
+    assert (insight["currency"], insight["current_price"]) == ("GBP", 7.0)
+
+
+def test_insights_report_missing_rather_than_guess_when_the_currency_is_unknown(client):
+    watch(client, "ABC", 90, 110)
+
+    response, _ = get_insights(client, {"ABC": 100.0}, currency=None)
+
+    assert response.json() == {"insights": [], "missing": ["prices"]}
+
+
+def test_insights_report_missing_when_the_currency_lookup_fails(client):
+    watch(client, "ABC", 90, 110)
+
+    async def quote(_ticker):
+        return {"price": 100.0, "closes": [100.0], "stale": False}
+
+    with (
+        patch("app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=quote)),
+        patch("app.fx.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))),
+    ):
+        response = client.get("/portfolio/insights")
+
+    assert response.status_code == 200
+    assert response.json() == {"insights": [], "missing": ["prices"]}
+
+
+def test_insights_without_a_currency_do_not_hide_the_ones_with_one(client, db_session):
+    watch(client, "KNOWN", 90, 110)
+    watch(client, "UNKNOWN", 90, 110)
+    store_currency(db_session, "KNOWN", "USD")
+
+    async def quote(_ticker):
+        return {"price": 100.0, "closes": [100.0], "stale": False}
+
+    with (
+        patch("app.routers.portfolio.fetch_quote_and_history", AsyncMock(side_effect=quote)),
+        patch("app.fx.fetch_currency", AsyncMock(return_value=None)),
+    ):
+        body = client.get("/portfolio/insights").json()
+
+    assert [i["ticker"] for i in body["insights"]] == ["KNOWN"]
+    assert body["missing"] == ["prices"]
 
 
 def test_insights_include_both_ends_of_the_range(client):

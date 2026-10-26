@@ -4,7 +4,7 @@ import { ChevronRight, Eye } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
 import type { WatchlistInsight } from "@/lib/api/insight-types";
-import { priceText } from "@/lib/priceRange";
+import { priceText, rangeDecimals, rangeText } from "@/lib/discoverList";
 import { insightsMissingNote } from "@/lib/useInsights";
 
 /**
@@ -37,7 +37,7 @@ export function WatchlistInsights({ insights, missing = [] }: { insights: Watchl
                 <Typography sx={{ fontWeight: 650, fontSize: "0.8125rem" }}>{insight.ticker}</Typography>
                 <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)" }}>{insight.text}</Typography>
                 <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
-                  {priceText(insight.current_price)} · range {priceText(insight.target_price_low)} to {priceText(insight.target_price_high)}
+                  {priceText({ price: insight.current_price, currency: insight.currency }, rangeDecimals(insight.target_price_low, insight.target_price_high))} · {rangeText(insight.target_price_low, insight.target_price_high, insight.currency)}
                 </Typography>
               </Box>
               <Box

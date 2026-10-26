@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoverItem } from "@/lib/api/discover-types";
-import { addedText, counts, isAnalyzed, metaText, nameOf, priceText, targetsText, visibleItems } from "./discoverList";
+import { addedText, counts, isAnalyzed, metaText, nameOf, priceText, rangeDecimals, targetsText, visibleItems } from "./discoverList";
 
 const item = (ticker: string, over: Partial<DiscoverItem> = {}): DiscoverItem => ({
   ticker,
@@ -107,6 +107,18 @@ describe("text helpers", () => {
     expect(priceText({ price: 1284, currency: null })).toBe("1,284.00");
     expect(priceText({ price: null, currency: "USD" })).toBeNull();
     expect(priceText({ price: Number.NaN, currency: "USD" })).toBeNull();
+  });
+
+  it("rounds a quote's float noise to two decimals unless more are asked for", () => {
+    expect(priceText({ price: 184.1999969482422, currency: "USD" })).toBe("USD 184.20");
+    expect(priceText({ price: 7.205, currency: "GBP" }, 3)).toBe("GBP 7.205");
+    expect(priceText({ price: 7.2049999999, currency: "GBP" }, 3)).toBe("GBP 7.205");
+  });
+
+  it("reads the decimals a range's ends carry, at most the six stored", () => {
+    expect(rangeDecimals(90, 110)).toBe(0);
+    expect(rangeDecimals(6.5, 7.205)).toBe(3);
+    expect(rangeDecimals(0.1234567, 0.2)).toBe(6);
   });
 });
 
