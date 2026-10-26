@@ -18,6 +18,13 @@ const { FakeApiError } = vi.hoisted(() => {
 vi.mock("@/lib/api/client", () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args), ApiError: FakeApiError }));
 beforeEach(() => apiFetch.mockReset());
 
+it("shows the why-now text from a structured catalyst on the top opportunity", async () => {
+  renderFeed({
+    latest_scan: SCAN, recommendations: [rec(1, "Halden Systems", { catalysts: [{ text: "Quarterly results", occurs_on: "2026-11-06", event_id: "earnings", evidence: ["https://issuer.example/calendar"] }] })],
+  });
+  expect(await screen.findByText("Quarterly results")).toBeInTheDocument();
+});
+
 const claim = (url: string): Claim => ({ text: "A cited claim.", kind: "fact", stance: "bull", materiality: "high", source_tier: "official", url, published_at: null });
 import { DiscoveryFeed } from "./DiscoveryFeed";
 

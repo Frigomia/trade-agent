@@ -417,7 +417,10 @@ phone) on every screen.
 
 **Built on the company page** (`/today/[id]` for a discovery idea): the Workbench shell (identity, a
 decision rail beside the evidence, tabs, a phone action bar above the tab bar) with four tabs.
-Overview: thesis, price chart, bull and bear cases at equal weight. Numbers: fundamentals tiles,
+Overview: thesis, price chart, bull and bear cases at equal weight. Claims show Confirmed,
+Disputed or Unverified as a neutral icon plus word; older claims remain Unverified. Catalysts
+show cited event dates only when research explicitly supplies a full date, otherwise text only.
+Numbers: fundamentals tiles,
 valuation and quality against peers as bands (value, median tick, middle half of peers, position in
 words, neutral wording), and a named-peer table with this company first. Risk and fit: risk
 characteristics "measured, not scored" and the portfolio fit with its written reading. Sources:
