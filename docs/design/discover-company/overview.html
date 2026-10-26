@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Discover company · proposed design</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--panel:#fff;--text:#0f1a2e;--muted:#5d6b85;--accent:#2457d6;--track:#edf0f5;--line:#dce2ec}
+[data-theme=dark]{color-scheme:dark;--bg:#0c1426;--panel:#131d36;--text:#e9eefb;--muted:#92a0bd;--accent:#7ea3ff;--track:#1c2942;--line:#34425c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:1rem/1.5 system-ui,sans-serif}a{color:var(--accent)}button,select{font:inherit;min-height:44px;border-radius:14px;border:1px solid var(--line);padding:8px 14px;background:var(--panel);color:var(--text)}button{cursor:pointer}button:disabled{opacity:.6;cursor:default}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.tools{display:flex;gap:12px;flex-wrap:wrap;padding:16px;border-bottom:1px solid var(--line);font-size:.8125rem}.tools label{display:flex;gap:8px;align-items:center}main{max-width:1120px;margin:auto;padding:32px}header{display:flex;gap:16px;align-items:center;margin:24px 0}.logo{width:56px;height:56px;border-radius:50%;background:var(--track);display:grid;place-items:center;flex:none}h1{font-size:1.875rem;line-height:1.15;margin:0;overflow-wrap:anywhere}h2{font-size:1.125rem;margin:0 0 12px}.muted{color:var(--muted);font-size:.8125rem}.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}.panel{background:var(--panel);padding:24px;border:1px solid var(--line);border-radius:22px;box-shadow:0 4px 16px #00000008}.research{grid-column:2;grid-row:1 / 3}.primary{background:var(--accent);color:var(--bg);border:0;width:100%;font-weight:650}.price{font-size:1.875rem;font-weight:650}.pill{display:inline-block;padding:4px 10px;border:1px dashed var(--muted);border-radius:999px;font-size:.75rem}svg{width:100%;height:auto;margin:16px 0;color:var(--accent)}dl{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0;font-size:.875rem}dt{color:var(--muted)}dd{margin:0;overflow-wrap:anywhere}footer{margin-top:24px}.notice{padding:12px;background:var(--track);border-radius:14px;font-size:.875rem}#report,#account{display:none}.action-link{display:inline-flex;min-height:44px;align-items:center}
+@media(max-width:700px){main{padding:16px}.grid{grid-template-columns:1fr;gap:16px}.research{grid-column:1;grid-row:1}h1{font-size:1.625rem}.panel{padding:18px}}
+</style>
+<div class="tools"><strong>Design proposal · policies pending approval · fictional data · no requests or quota used</strong><label>Theme <select id="theme"><option value="light">Light</option><option value="dark">Dark</option></select></label><label>State <select id="state"><option value="ready">Ready</option><option value="running">Analyzing</option><option value="report">Report saved</option><option value="excluded">No report</option><option value="no-opportunity">Researched: no opportunity</option><option value="key">Connect Claude</option><option value="quota">Quota exhausted</option><option value="failed">Failed</option><option value="missing">Provider unavailable</option></select></label></div>
+<main><a href="../discover/dc-a-list.html">← Discover mock</a><header><div class="logo" aria-hidden="true">HS</div><div><h1>Halden Systems</h1><div class="muted">HLDN · NASDAQ · USD</div><div class="muted">Technology · Infrastructure software · United States</div></div></header>
+<div class="grid"><aside class="panel research" aria-label="Company research"><span class="pill" id="status">Not analyzed</span><h2 style="margin-top:16px">Research this company</h2><p id="message" role="status">Get an AI research report with cited sources and risks. Opening this page uses no monthly run.</p><p class="muted" id="allowance">23 of 100 monthly runs used · 77 remaining</p><button class="primary" id="analyze">Analyze · 1 monthly run</button><a class="action-link" id="account" href="../claude-keys/a-one-step-at-a-time.html">Connect Claude in Account mock &rarr;</a><a class="action-link" id="report" href="../company-overview/co-c-workbench.html">View report mock →</a><p class="muted">A completed analysis is research, not a trade instruction. Nothing is sent to a broker.</p></aside>
+<section class="panel"><h2>Share price</h2><div class="price" id="price">USD 184.20</div><div class="muted" id="asof">As of 23 Oct 2026, market close · illustrative data</div><svg viewBox="0 0 600 160" role="img" aria-label="Fictional price rose from USD 176 to USD 184.20 during one month"><path d="M5 130 L70 110 L120 123 L190 82 L250 99 L310 64 L370 77 L430 42 L500 51 L590 20" fill="none" stroke="currentColor" stroke-width="3"/></svg><p id="history-description" class="muted">One month · illustrative start USD 176.00 · latest USD 184.20. The production chart will reuse the keyboard-readable price chart and range controls.</p></section>
+<section class="panel"><h2>Company facts</h2><dl><dt>Sector</dt><dd>Technology</dd><dt>Industry</dt><dd>Infrastructure software</dd><dt>Listing</dt><dd>NASDAQ · United States</dd><dt>Quote currency</dt><dd>USD</dd></dl><p class="muted">Provider data, separate from AI research. No confidence or recommendation score exists yet.</p></section></div><footer class="muted">Prices can be delayed. Research is not investment advice. This prototype does not place trades.</footer></main>
+<script>
+const state=document.getElementById('state'),button=document.getElementById('analyze');
+const messages={
+  ready:'Get an AI research report with cited sources and risks. Opening this page uses no monthly run.',
+  running:'Analyzing Halden Systems \u00b7 Researching sources. You can leave this page; the job keeps running.',
+  report:'Research saved. Open the full report to read its conclusion and risks.',
+  excluded:'No report: this company has insufficient price history for eligibility. No research ran and no monthly run was used. Analyze becomes available when the required data changes.',
+  'no-opportunity':'Research completed 23 Oct 2026: no compelling opportunity met the score and confidence thresholds. The saved conclusion remains available here. Proposed charge: 1 monthly run.',
+  key:'Connect or reconnect Claude in Account to analyze this company. The overview still works.',
+  quota:'All 100 monthly runs have been used. Example renewal: 1 Nov 2026. Production uses your actual account allowance and renewal information.',
+  failed:'Research timed out before the result could be saved. Proposed policy: the failed run was refunded; the allowance below includes that refund. A retry reserves 1 monthly run.',
+  missing:'The quote and price history could not be loaded. Known identity and company facts remain available. Analyze can still check research data independently; an eligibility refusal costs no run.'
+};
+function render(){
+  const s=state.value;
+  const saved=['report','no-opportunity'].includes(s);
+  document.getElementById('allowance').textContent=s==='quota'?'100 of 100 monthly runs used \u00b7 0 remaining':'23 of 100 monthly runs used \u00b7 77 remaining';
+  document.getElementById('allowance').style.display=saved?'none':'block';
+  document.getElementById('history-description').style.display=s==='missing'?'none':'block';
+  document.getElementById('message').textContent=messages[s];
+  document.getElementById('status').textContent=s==='running'?'Analyzing':saved?'AI analyzed':s==='excluded'?'Not eligible':'Not analyzed';
+  button.disabled=['running','excluded','key','quota'].includes(s);
+  button.style.display=saved?'none':'block';
+  button.textContent=s==='failed'?'Try again \u00b7 1 monthly run':s==='running'?'Analysis in progress':s==='excluded'?'Waiting for eligible data':'Analyze \u00b7 1 monthly run';
+  document.getElementById('report').style.display=s==='report'?'inline-flex':'none';
+  document.getElementById('account').style.display=s==='key'?'inline-flex':'none';
+  document.getElementById('price').textContent=s==='missing'?'Price unavailable':'USD 184.20';
+  document.querySelector('svg').style.display=s==='missing'?'none':'block';
+  document.getElementById('asof').textContent=s==='missing'?'Quote and history unavailable - no value guessed':'As of 23 Oct 2026, market close \u00b7 illustrative data';
+}
+state.addEventListener('change',render);document.getElementById('theme').addEventListener('change',e=>document.documentElement.dataset.theme=e.target.value);button.addEventListener('click',()=>{state.value='running';render()});render();
+</script>
+</html>
