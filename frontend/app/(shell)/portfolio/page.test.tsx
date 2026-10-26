@@ -250,6 +250,7 @@ describe("PortfolioPage", () => {
       effective_n: 2,
       volatility_annualized: 0.2,
       max_drawdown_1y: -0.15,
+      risk_window: { start: "2025-10-23", end: "2026-10-22", intervals_used: 250, intervals_skipped: 0 },
       correlation: { AAPL: { AAPL: 1, MSFT: 0.5 }, MSFT: { AAPL: 0.5, MSFT: 1 } },
       skipped: {},
       notes: [],

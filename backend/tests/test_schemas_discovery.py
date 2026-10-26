@@ -123,6 +123,7 @@ def test_an_empty_portfolio_is_representable() -> None:
         effective_n=None,
         volatility_annualized=None,
         max_drawdown_1y=None,
+        risk_window=None,
         correlation={},
         skipped={},
         notes=[],

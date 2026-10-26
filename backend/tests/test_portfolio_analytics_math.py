@@ -16,8 +16,10 @@ from app.analysis.portfolio import (
     marginal_effect,
     pairwise_correlation,
     portfolio_max_drawdown,
+    risk_window,
 )
 from app.fx import EurPrice
+from app.schemas_discovery import ReturnWindow
 
 AS_OF = datetime(2026, 10, 15, 12, tzinfo=UTC)
 
@@ -424,7 +426,34 @@ def test_max_drawdown_skips_an_interval_another_market_does_not_have_and_the_not
     assert drawdown({"A": a, "B": b}, {"A": 0.5, "B": 0.5}) == pytest.approx(0)
     exposure = analysis({"A": a, "B": b})
     assert exposure.max_drawdown_1y == pytest.approx(0)
-    assert DRAWDOWN_NOTE in exposure.notes and "may be larger" in DRAWDOWN_NOTE
+    assert DRAWDOWN_NOTE in exposure.notes
+    window = exposure.risk_window
+    assert window is not None and window.intervals_skipped >= 1
+
+
+def test_the_risk_window_names_the_days_covered_and_counts_nothing_skipped_without_gaps():
+    history = moves_curve([0.005] * 59 + [-0.10, -0.10, 0.05])
+    days = sorted(history)
+    window = risk_window({"A": log_returns(history)}, {"A": 1.0})
+    assert window == ReturnWindow(
+        start=date.fromisoformat(days[0]),
+        end=date.fromisoformat(days[-1]),
+        intervals_used=len(days) - 1,
+        intervals_skipped=0,
+    )
+
+
+def test_the_risk_window_counts_the_intervals_another_market_took_out():
+    a = moves_curve([0.0] * 40 + [-0.20] + [0.0] * 40)
+    days = sorted(a)
+    b = {day: 100.0 for day in days if day != days[40]}  # B's market was closed that day
+    window = risk_window({"A": log_returns(a), "B": log_returns(b)}, {"A": 0.5, "B": 0.5})
+    assert window is not None
+    assert window.intervals_skipped == len(log_returns(a)) - window.intervals_used >= 2
+
+
+def test_there_is_no_risk_window_below_sixty_matching_intervals():
+    assert risk_window({"A": log_returns(moves_curve([0.01] * 59))}, {"A": 1.0}) is None
 
 
 def test_max_drawdown_is_unavailable_rather_than_an_error_for_an_absurd_close():

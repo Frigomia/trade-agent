@@ -16,6 +16,15 @@ export interface AnalyticsExposure {
   weight: number;
 }
 
+/** The common sample of price intervals behind the volatility and the biggest fall. */
+export interface RiskWindow {
+  start: string; // YYYY-MM-DD
+  end: string;
+  intervals_used: number;
+  /** Intervals the busiest holding has beyond the sample, left out because another market did not trade. */
+  intervals_skipped: number;
+}
+
 export interface PortfolioAnalytics {
   as_of: string;
   total_value_eur: number | null; // null: no holding could be valued
@@ -31,6 +40,8 @@ export interface PortfolioAnalytics {
   // The largest peak-to-low fall over the past year (a fraction at or below 0, e.g. -0.18) of today's
   // holdings at today's weights, not the portfolio actually held; null with the volatility
   max_drawdown_1y: number | null;
+  // The days the volatility and biggest fall cover; null with fewer than 60 matching intervals.
+  risk_window: RiskWindow | null;
   // null: fewer than 60 overlapping days, so the pair cannot be estimated
   correlation: Record<string, Record<string, number | null>>;
   skipped: Record<string, string>; // ticker -> why it could not be valued

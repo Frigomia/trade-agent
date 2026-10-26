@@ -893,7 +893,11 @@ unavailable; usable positions are never silently reweighted for risk. No forward
 of the portfolio over the past year, from the same common sample as the volatility. Each day's
 simple return is the weighted sum of the holdings' returns at today's weights (as if rebalanced
 daily), compounded into a value series. An interval that not every holding has (another
-market's holiday) is skipped, as for the volatility, so the real fall may be larger. It is the
+market's holiday) is skipped, as for the volatility, so the real fall may be larger. The response
+says how much: `risk_window` is `{start, end, intervals_used, intervals_skipped}`, the first and
+last day of the common sample, how many intervals it has, and how many more the busiest holding has
+(the skipped ones), `null` with fewer than 60 matching intervals. Portfolio words it under the
+figure (dates, interval count, and the skipped ones). It is the
 history of **today's holdings at today's weights**, not the portfolio the person actually held
 (trades made during the year are not known), and a note on the response says so. It is `null`,
 with the volatility, when fewer than 60 matching intervals exist, and it needs no extra provider
