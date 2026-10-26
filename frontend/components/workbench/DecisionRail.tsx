@@ -14,9 +14,8 @@ import { useSaveToDiscover } from "@/lib/useSaveToDiscover";
 
 const NOTE = "Approving records your decision. Nothing is sent to a broker.";
 
-/** Where "Ask AI" goes: Chat with the question already typed in. */
-export const askHref = (name: string, ticker: string) =>
-  `/chat?ask=${encodeURIComponent(`Walk me through the research on ${name} (${ticker}).`)}`;
+/** Where "Ask AI" goes: Chat, which types the question about this saved idea and sends nothing. */
+export const askHref = (ideaId: number) => `/chat?idea=${ideaId}`;
 
 function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & object }) {
   const fit = fitScore(idea);
@@ -120,7 +119,7 @@ export function DecisionRail({
         <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} startIcon={<X size={16} aria-hidden />}>
           Dismiss
         </Button>
-        <Button component={Link} href={askHref(idea.name, idea.ticker)} variant="outlined" startIcon={<MessageSquare size={16} aria-hidden />}>
+        <Button component={Link} href={askHref(rec.id)} variant="outlined" startIcon={<MessageSquare size={16} aria-hidden />}>
           Ask AI
         </Button>
       </Box>
@@ -156,7 +155,7 @@ export function PhoneActions({ rec, onDecided }: { rec: DiscoveryRecommendation;
         <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} aria-label="Dismiss" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
           <X size={16} aria-hidden />
         </Button>
-        <Button component={Link} href={askHref(idea.name, idea.ticker)} variant="outlined" aria-label="Ask AI" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
+        <Button component={Link} href={askHref(rec.id)} variant="outlined" aria-label="Ask AI" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
           <MessageSquare size={16} aria-hidden />
         </Button>
       </Box>

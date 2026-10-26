@@ -74,7 +74,13 @@ async def chat(
     history = await run_in_threadpool(_prepare_chat, db, user.id, payload)
     try:
         reply = await run_chat(
-            db, user.id, payload.session_id, payload.message, history=history, client=client
+            db,
+            user.id,
+            payload.session_id,
+            payload.message,
+            history=history,
+            client=client,
+            idea_id=payload.idea_id,
         )
     except anthropic.APIStatusError as exc:
         if client is not None and claude_keys.is_key_problem(exc):

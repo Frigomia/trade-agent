@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton, Typography } from "@mui/material";
 import { Trash2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { CHAT_SESSION, STARTERS, type ChatMessage } from "@/lib/chat";
 import { nextResetDate, type Usage } from "@/lib/usage";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -16,6 +17,9 @@ import { ClaudeRequired } from "@/components/claude/ClaudeRequired";
 import { isClaudeKeyRequired, useClaudeLock } from "@/lib/claudeKey";
 
 const ASK_SHAPE = /^Why (BUY|ADD|HOLD|TRIM|SELL|WATCH) on [A-Za-z0-9.^=-]{1,20}\?$/;
+// "Ask AI" on a company page sends only the saved idea's id; the question is built here from that
+// idea (one the person owns), so a crafted link cannot put text of its own in the box.
+const IDEA_ID = /^[1-9]\d{0,8}$/;
 const HISTORY_PATH = `/chat/messages?session_id=${CHAT_SESSION}`;
 
 export default function ChatPage() {
@@ -38,6 +42,23 @@ function ChatScreen() {
     const ask = params.get("ask") ?? "";
     return ASK_SHAPE.test(ask) ? ask : "";
   });
+  // The company this visit is about. It goes with every message until a starter question or Clear chat
+  // moves on; the server only uses it when it is one of the person's own saved ideas.
+  const [ideaId, setIdeaId] = useState<number | null>(() => {
+    const raw = params.get("idea") ?? "";
+    return IDEA_ID.test(raw) ? Number(raw) : null;
+  });
+  const { data: askedIdea } = useSWR<RecommendationOut>(ideaId === null ? null : `/analysis/recommendations/${ideaId}`, apiFetch);
+  const [prefilled, setPrefilled] = useState(false);
+  // Anything the person types or sends first wins the box: a late answer must not put a question in it.
+  const [touched, setTouched] = useState(false);
+  if (askedIdea && !prefilled) {
+    setPrefilled(true);
+    const { name, ticker } = askedIdea.idea ?? {};
+    if (!touched && draft === "" && typeof name === "string" && typeof ticker === "string") {
+      setDraft(`Walk me through the research on ${[...name].slice(0, 80).join("")} (${ticker}).`);
+    }
+  }
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
@@ -54,7 +75,7 @@ function ChatScreen() {
   }, [pending]);
 
   useEffect(() => {
-    if (params.get("ask") !== null) router.replace("/chat");
+    if (params.get("ask") !== null || params.get("idea") !== null) router.replace("/chat");
   }, [params, router]);
 
   useEffect(() => {
@@ -69,16 +90,17 @@ function ChatScreen() {
       ? "Chat is turned off for your account. Ask the administrator if you need it."
       : `You've used all ${chatUsage?.limit ?? ""} chat messages this month. They reset on ${resetDate}. Need more sooner? Ask the administrator to raise your limit.`;
 
-  async function send(text: string) {
+  async function send(text: string, about: number | null = ideaId) {
     const message = text.trim();
     if (!message || pending !== null || atLimit) return;
+    setTouched(true);
     setError(null);
     setPending(message);
     setDraft("");
     try {
       await apiFetch("/chat", {
         method: "POST",
-        body: JSON.stringify({ session_id: CHAT_SESSION, message }),
+        body: JSON.stringify({ session_id: CHAT_SESSION, message, ...(about === null ? {} : { idea_id: about }) }),
       });
     } catch (err) {
       setDraft(message);
@@ -101,6 +123,7 @@ function ChatScreen() {
     setConfirmClear(false);
     try {
       await apiFetch(HISTORY_PATH, { method: "DELETE" });
+      setIdeaId(null);
       await mutateMessages();
     } catch {
       setError("Could not clear the conversation.");
@@ -136,7 +159,10 @@ function ChatScreen() {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
             <Typography sx={{ color: "var(--muted)", fontSize: 13.5 }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
-              <Button key={starter} variant="outlined" size="small" onClick={() => void send(starter)}>
+              <Button key={starter} variant="outlined" size="small" onClick={() => {
+                  setIdeaId(null);
+                  void send(starter, null);
+                }}>
                 {starter}
               </Button>
             ))}
@@ -170,7 +196,10 @@ function ChatScreen() {
             </Typography>
             <Composer
               value={draft}
-              onChange={setDraft}
+              onChange={(value) => {
+                setTouched(true);
+                setDraft(value);
+              }}
               inputRef={inputRef}
               onSend={() => void send(draft)}
               disabled={atLimit || pending !== null}

@@ -121,11 +121,11 @@ describe("Workbench identity and rail", () => {
     expect(await screen.findByText("A newer analysis replaced this.")).toBeInTheDocument();
   });
 
-  it("links Ask AI to Chat with the question typed in", async () => {
-    show();
+  it("links Ask AI to Chat with this saved idea, not with text of its own", async () => {
+    show(testRec({}, 7));
 
     const link = await screen.findByRole("link", { name: "Ask AI" });
-    expect(decodeURIComponent(link.getAttribute("href")!)).toBe("/chat?ask=Walk me through the research on Halden Systems (HLDN).");
+    expect(link).toHaveAttribute("href", "/chat?idea=7");
   });
 });
 
