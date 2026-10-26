@@ -40,6 +40,29 @@ def test_a_price_quoted_in_pence_gives_the_same_return_as_in_pounds():
     assert pence == pytest.approx(pounds) == pytest.approx(0.20)
 
 
+def _recent_closes(count: int, last_days_ago: int) -> dict[str, float]:
+    last = datetime.now(UTC).date() - timedelta(days=last_days_ago)
+    return {(last - timedelta(days=count - 1 - i)).isoformat(): 100.0 + i for i in range(count)}
+
+
+def test_a_bar_that_may_still_be_a_session_in_progress_is_not_a_close():
+    # 21 closes whose last one is today's live bar: the 20-trading-day close is not final yet
+    live = _recent_closes(21, last_days_ago=0)
+    with (
+        patch("app.memory.outcomes.fetch_closes_between", AsyncMock(return_value=live)),
+        pytest.raises(NotEnoughHistory),
+    ):
+        asyncio.run(compute_outcome("AAPL", date.fromisoformat(min(live))))
+
+
+def test_once_the_bar_has_settled_it_is_the_close():
+    settled = _recent_closes(21, last_days_ago=3)
+    with patch("app.memory.outcomes.fetch_closes_between", AsyncMock(return_value=settled)):
+        result = asyncio.run(compute_outcome("AAPL", date.fromisoformat(min(settled))))
+
+    assert result == pytest.approx(0.20)
+
+
 def test_a_split_between_entry_and_outcome_does_not_show_as_a_fall():
     # The provider's closes are split-adjusted, so both ends are in the same terms: 2-for-1 here.
     halved = {day: price / 2 for day, price in _closes(25).items()}

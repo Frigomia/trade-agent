@@ -1168,7 +1168,9 @@ default — same dialect and models as production, started with
   - *What is measured:* the change in the provider's close from the entry day
     (`price_as_of`, else the creation date) to the close 20 trading days later, both read from one
     dated series (`fetch_closes_between`, split-adjusted, not dividend-adjusted: a price return).
-    One series means a currency subunit (London quotes pence, the idea shows pounds) or a split
+    A bar dated within the last 2 days is not counted (it may be a session still in progress, and
+    exchanges sit up to a day from UTC), so an outcome never rests on an intraday price. One series
+    means a currency subunit (London quotes pence, the idea shows pounds) or a split
     between the two days cannot make the ends disagree. No benchmark, no dividends.
   - *Which rows:* every recommendation with `price_at_recommendation`, whatever its status: a
     discovery idea replaced by a later scan was still issued and is scored once. A discovery idea
@@ -1177,8 +1179,9 @@ default — same dialect and models as production, started with
   - *When:* once the entry day is 28 calendar days old (20 trading days need at least that). With
     fewer than 21 closes it waits and looks again the next day; after 75 days of that the stock
     has stopped trading and the row is stamped unscored.
-  - *Failures:* "the provider has no prices for the symbol" stamps the row (no outcome, permanent).
-    Any other error (a throttle, a timeout) leaves it unstamped, counts one attempt and is not
+  - *Failures:* "the provider has no prices for the symbol" stamps the row (no outcome, permanent),
+    but only when Yahoo says so in words ("No data found", "delisted"); a malformed answer or an HTTP
+    error body states no reason and counts as an outage. Any other error (a throttle, a timeout) leaves it unstamped, counts one attempt and is not
     tried again for 20 hours, so one outage does not use up the attempts; after 5 attempts the row
     is stamped unscored.
 - **Automatic analysis:** the third step, `app/scheduled.py::run_analysis`, opt-in per user through
