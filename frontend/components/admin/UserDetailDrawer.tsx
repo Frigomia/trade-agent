@@ -12,14 +12,15 @@ interface UserDetailProps {
   user: AdminUserOut;
   onClose: () => void;
   onChanged: () => void;
+  onBusyChange?: (busy: boolean) => void;
 }
 
 /** A user's limits, access and removal controls. Shown in a drawer on phones and inline on desktop. */
-export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps) {
+export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: UserDetailProps) {
   const [analysisLimit, setAnalysisLimit] = useState("");
   const [chatLimit, setChatLimit] = useState("");
   const [confirmEmail, setConfirmEmail] = useState("");
-  const { run, submitting, error } = useAction();
+  const { run, submitting, error } = useAction(onBusyChange);
 
   const patchLimits = (body: Record<string, number | null>) =>
     run(async () => {
@@ -78,7 +79,7 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
             margin="normal"
             type="number"
           />
-          <Button size="small" onClick={() => patchLimits({ analysis_limit: null })}>
+          <Button size="small" disabled={submitting} onClick={() => patchLimits({ analysis_limit: null })}>
             Use default
           </Button>
           <TextField
@@ -91,7 +92,7 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
             margin="normal"
             type="number"
           />
-          <Button size="small" onClick={() => patchLimits({ chat_limit: null })}>
+          <Button size="small" disabled={submitting} onClick={() => patchLimits({ chat_limit: null })}>
             Use default
           </Button>
           <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={submitting}>
@@ -102,12 +103,12 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
         <Divider sx={{ my: 2 }} />
 
         {user.status === "active" && (
-          <Button variant="outlined" fullWidth onClick={() => handleStatusAction("disable")}>
+          <Button variant="outlined" fullWidth disabled={submitting} onClick={() => handleStatusAction("disable")}>
             Disable
           </Button>
         )}
         {user.status === "disabled" && (
-          <Button variant="outlined" fullWidth onClick={() => handleStatusAction("enable")}>
+          <Button variant="outlined" fullWidth disabled={submitting} onClick={() => handleStatusAction("enable")}>
             Enable
           </Button>
         )}
@@ -129,7 +130,7 @@ export function UserDetailContent({ user, onClose, onChanged }: UserDetailProps)
           color="error"
           variant="contained"
           fullWidth
-          disabled={confirmEmail !== user.email}
+          disabled={submitting || confirmEmail !== user.email}
           onClick={handleRemove}
         >
           Remove
@@ -149,6 +150,7 @@ interface UserDetailDrawerProps extends Omit<UserDetailProps, "user"> {
 }
 
 export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerProps) {
+  const [busy, setBusy] = useState(false);
   if (!user) return null;
   // A bottom sheet, not a side drawer: a 400px drawer is wider than a phone, so the backdrop was
   // unreachable and nothing closed it. Here the page stays visible above the sheet (tap it to
@@ -157,9 +159,9 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
     <Drawer
       anchor="bottom"
       open
-      onClose={onClose}
+      onClose={busy ? undefined : onClose}
       slotProps={{
-        paper: { sx: { maxHeight: "92dvh", borderTopLeftRadius: 20, borderTopRightRadius: 20 } },
+        paper: { "aria-busy": busy, sx: { maxHeight: "92dvh", borderTopLeftRadius: 20, borderTopRightRadius: 20 } },
       }}
     >
       <Box
@@ -189,12 +191,12 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
             transform: "translateX(-50%)",
           }}
         />
-        <IconButton aria-label="Close" onClick={onClose} size="small">
+        <IconButton aria-label="Close" onClick={onClose} disabled={busy} size="small">
           <X size={20} />
         </IconButton>
       </Box>
       <Box sx={{ px: 3, pb: 3 }}>
-        <UserDetailContent user={user} onClose={onClose} onChanged={onChanged} />
+        <UserDetailContent user={user} onClose={onClose} onChanged={onChanged} onBusyChange={setBusy} />
       </Box>
     </Drawer>
   );

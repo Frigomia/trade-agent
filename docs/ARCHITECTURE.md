@@ -440,6 +440,12 @@ Telegram routes: the four `/me/telegram` routes need the normal login. When the 
 
 `POST /analysis/run` and `POST /chat` return `429` with a calm, specific message when the caller's monthly cap is reached ("Monthly limit reached (N analysis runs this month). Resets next month, or ask your admin to raise it."), distinct from the generic `429` the per-minute burst limiter returns.
 
+The frontend API clients bound the whole request (session lookup, fetch and response body) to
+30 seconds, or five minutes for `/chat` model replies, and preserve a caller's earlier cancellation.
+A timeout releases busy forms with an error asking the person to check whether changes were saved
+before retrying: aborting the browser request cannot undo a server write. Saving dialogs and drawers
+refuse backdrop, Escape and Cancel/Close dismissal while their action is in flight.
+
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,
 a blocking implementation could run for minutes behind one HTTP request —

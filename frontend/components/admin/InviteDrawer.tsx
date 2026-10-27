@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { Drawer, Box, Typography, TextField, Button, Alert } from "@mui/material";
-import { apiFetch, ApiError } from "@/lib/api/client";
+import { apiFetch } from "@/lib/api/client";
+import { useAction } from "@/lib/useAction";
 
 interface InviteDrawerProps {
   open: boolean;
@@ -12,14 +13,11 @@ interface InviteDrawerProps {
 
 export function InviteDrawer({ open, onClose, onInvited }: InviteDrawerProps) {
   const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { run, submitting, error } = useAction();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    setError(null);
-    setSubmitting(true);
-    try {
+    await run(async () => {
       await apiFetch("/admin/users/invite", {
         method: "POST",
         body: JSON.stringify({ email }),
@@ -27,15 +25,11 @@ export function InviteDrawer({ open, onClose, onInvited }: InviteDrawerProps) {
       setEmail("");
       onInvited();
       onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : "Something went wrong.");
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose}>
+    <Drawer anchor="right" open={open} onClose={submitting ? undefined : onClose} slotProps={{ paper: { "aria-busy": submitting } }}>
       <Box component="form" onSubmit={handleSubmit} sx={{ width: 360, p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 650, mb: 2 }}>
           Invite user

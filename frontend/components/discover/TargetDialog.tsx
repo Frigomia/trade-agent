@@ -24,6 +24,7 @@ interface Props {
 // the dialog fades out, so it does not blank first; and a company found to be gone keeps the dialog open
 // with its message, even though the refreshed list no longer has it, until the person closes it.
 export function TargetDialog({ item, onClose, onSaved, onStale }: Props) {
+  const [busy, setBusy] = useState(false);
   const [kept, setKept] = useState(item);
   if (item !== null && item !== kept) setKept(item);
   const [gone, setGone] = useState(false);
@@ -41,9 +42,9 @@ export function TargetDialog({ item, onClose, onSaved, onStale }: Props) {
     onClose();
   };
   return (
-    <Dialog open={active} onClose={close} fullWidth maxWidth="xs">
+    <Dialog open={active} onClose={busy ? undefined : close} fullWidth maxWidth="xs" slotProps={{ paper: { "aria-busy": busy } }}>
       {kept && (
-        <Body key={`${kept.ticker}:${session}`} item={kept} active={active} onClose={close} onSaved={onSaved} onStale={onStale} onGone={() => setGone(true)} />
+        <Body key={`${kept.ticker}:${session}`} item={kept} active={active} onClose={close} onSaved={onSaved} onStale={onStale} onGone={() => setGone(true)} onBusyChange={setBusy} />
       )}
     </Dialog>
   );
@@ -54,7 +55,7 @@ export function TargetDialog({ item, onClose, onSaved, onStale }: Props) {
  * not pence): the backend converts. For a company that is owned the weight target lives on the holding,
  * so only the range is offered. Only what was edited is sent.
  */
-function Body({ item, active, onClose, onSaved, onStale, onGone }: { item: DiscoverItem; active: boolean; onClose: () => void; onSaved: (updated: DiscoverItem) => void; onStale: () => void; onGone: () => void }) {
+function Body({ item, active, onClose, onSaved, onStale, onGone, onBusyChange }: { item: DiscoverItem; active: boolean; onClose: () => void; onSaved: (updated: DiscoverItem) => void; onStale: () => void; onGone: () => void; onBusyChange: (busy: boolean) => void }) {
   const owned = item.owned;
   // The unit of a range is the card's currency: without it no range can be set. One already saved
   // can still be changed or cleared (the backend refuses a new value it cannot convert).
@@ -76,7 +77,7 @@ function Body({ item, active, onClose, onSaved, onStale, onGone }: { item: Disco
   const [text, setText] = useState(opened.weight);
   const [lowText, setLowText] = useState(opened.low);
   const [highText, setHighText] = useState(opened.high);
-  const { run, submitting, error, setError } = useAction();
+  const { run, submitting, error, setError } = useAction(onBusyChange);
   const { mutate } = useSWRConfig();
   const [tried, setTried] = useState(false);
   const weightEdited = !owned && text !== opened.weight;
@@ -195,7 +196,7 @@ function Body({ item, active, onClose, onSaved, onStale, onGone }: { item: Disco
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose} disabled={submitting}>Cancel</Button>
         <Button variant="contained" disabled={submitting || gone} onClick={() => void save()} sx={{ minHeight: 44 }}>
           {owned ? "Save range" : "Save target"}
         </Button>

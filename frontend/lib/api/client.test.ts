@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+import { useAction } from "@/lib/useAction";
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn(),
@@ -6,6 +8,8 @@ vi.mock("@/lib/supabase/client", () => ({
 
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch, apiFetchServer, ApiError } from "./client";
+
+afterEach(() => vi.useRealTimers());
 
 function mockSession(accessToken: string | null) {
   vi.mocked(createClient).mockReturnValue({
@@ -166,6 +170,86 @@ describe("apiFetch", () => {
 
     const result = await apiFetch<{ status: string }>("/health");
     expect(result).toEqual({ status: "ok" });
+  });
+
+  it("releases a busy action with a useful error when fetch never settles", async () => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+    const onBusy = vi.fn();
+    const { result } = renderHook(() => useAction(onBusy));
+    let action: Promise<void>;
+    act(() => { action = result.current.run(() => apiFetch("/discover/ASML", { method: "PATCH" })); });
+    expect(result.current.submitting).toBe(true);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await action;
+    });
+
+    expect(result.current.submitting).toBe(false);
+    expect(result.current.error).toBe("The request timed out. Check whether your changes were saved before trying again.");
+    expect(onBusy.mock.calls).toEqual([[true], [false]]);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("bounds session lookup and never sends a write after a late session answer", async () => {
+    vi.useFakeTimers();
+    mockSession(null);
+    const session = createClient().auth.getSession;
+    let release!: () => void;
+    vi.mocked(createClient).mockReturnValue({ auth: {
+      getSession: async () => { await new Promise<void>((resolve) => { release = resolve; }); return session(); },
+    } } as ReturnType<typeof createClient>);
+    const request = expect(apiFetch("/discover/ASML", { method: "PATCH" })).rejects.toMatchObject({ code: "request_timeout" });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await request;
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([apiFetch, (path: string) => apiFetchServer(path, "token")])("bounds a stalled response body for browser and server reads", async (request) => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response(new ReadableStream({ start() {} })));
+    const result = expect(request("/me")).rejects.toMatchObject({ code: "request_timeout" });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await result;
+  });
+
+  it("keeps caller cancellation and its reason", async () => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+    const controller = new AbortController();
+    const reason = new Error("Cancelled by caller");
+    const result = expect(apiFetch("/me", { signal: controller.signal })).rejects.toBe(reason);
+    controller.abort(reason);
+    await result;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("allows a model reply beyond 30 seconds but still bounds Chat at five minutes", async () => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+    const settled = vi.fn();
+    const request = apiFetch("/chat").catch(settled);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(settled).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(270_000);
+    await request;
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ code: "request_timeout" }));
+  });
+
+  it("clears the deadline after success", async () => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockResolvedValue(new Response("{}"));
+    await apiFetch("/me");
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

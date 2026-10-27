@@ -55,6 +55,30 @@ describe("UserDetailDrawer", () => {
     vi.clearAllMocks();
   });
 
+  it.each(["limits", "disable", "remove"])("cannot close during %s, and unlocks on failure", async (action) => {
+    let fail!: (reason: Error) => void;
+    apiFetch.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    const onClose = vi.fn();
+    render(<UserDetailDrawer user={USER} onClose={onClose} onChanged={vi.fn()} />);
+    if (action === "limits") fireEvent.click(screen.getAllByRole("button", { name: /use default/i })[0]);
+    else {
+      if (action === "remove") fireEvent.change(screen.getByLabelText(/confirm email/i), { target: { value: USER.email } });
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${action}$`, "i") }));
+    }
+    const paper = document.querySelector(".MuiDrawer-paper")!;
+    expect(paper).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    fireEvent.keyDown(paper, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    fail(new FakeApiError(0, "The request timed out."));
+    expect(await screen.findByText("The request timed out.")).toBeInTheDocument();
+    expect(paper).toHaveAttribute("aria-busy", "false");
+    fireEvent.keyDown(paper, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("renders nothing when user is null", () => {
     const { container } = render(<UserDetailDrawer user={null} onClose={vi.fn()} onChanged={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
