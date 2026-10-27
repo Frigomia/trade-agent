@@ -212,16 +212,9 @@ describe("placeLine", () => {
     const [path, init] = apiFetch.mock.calls[0];
     expect(path).toBe("/plans/4/lines/7/placed");
     expect(init.method).toBe("POST");
+    expect(init.signal).toBeUndefined(); // apiFetch owns the deadline and its write warning
     expect(JSON.parse(init.body)).toEqual({ date: "2026-10-08", shares: 1.69, price: 54.64 });
     expect(init.body).not.toContain("asset_type");
-  });
-  it("gives the request a timeout signal, so a hung request ends", async () => {
-    const timeout = vi.spyOn(AbortSignal, "timeout");
-    apiFetch.mockResolvedValue(line());
-    await placeLine(4, 7, { date: "2026-10-08", shares: 1, price: 2 });
-    expect(timeout).toHaveBeenCalledWith(30_000);
-    expect(apiFetch.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
-    timeout.mockRestore();
   });
   it("includes asset_type when given", async () => {
     apiFetch.mockResolvedValue(line());

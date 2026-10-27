@@ -303,12 +303,13 @@ describe("Record placed order", () => {
     expect(onChanged).not.toHaveBeenCalled(); // no plan reload, no auto-advance
   });
 
-  it("ends a request that times out with the network message, and the sheet can be closed", async () => {
-    place = () => Promise.reject(new DOMException("The operation timed out.", "TimeoutError"));
+  it("shows the shared timeout warning unchanged, and the sheet can be closed", async () => {
+    const message = "The request timed out. Check whether your changes were saved before trying again.";
+    place = () => Promise.reject(new FakeApiError(0, message));
     const { sheet } = await openSheet("EIMI.L");
     typePrice(sheet, "54.6");
     fireEvent.click(record(sheet));
-    expect(await within(sheet).findByText(/Could not reach the server/)).toBeInTheDocument();
+    expect(await within(sheet).findByText(message)).toBeInTheDocument();
     expect(sheet).toHaveAttribute("aria-busy", "false");
     expect(within(sheet).getByRole("button", { name: "Cancel" })).toBeEnabled();
     fireEvent.keyDown(sheet, { key: "Escape" });

@@ -396,6 +396,7 @@ export function TelegramPanel() {
 
       <Dialog
         open={confirming}
+        slotProps={{ paper: { "aria-busy": leave.submitting } }}
         onClose={() => {
           if (!leave.submitting) {
             setConfirming(false);

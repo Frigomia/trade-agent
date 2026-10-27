@@ -73,13 +73,42 @@ function requireBaseUrl(): string {
   return baseUrl;
 }
 
+// Race the whole operation: session lookup and response bodies can hang too. Aborting a write
+// does not undo it on the server, so the message must not encourage a blind retry.
+async function withDeadline<T>(path: string, init: RequestInit, request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+  const isRead = ["GET", "HEAD"].includes((init.method ?? "GET").toUpperCase());
+  const timer = setTimeout(() => controller.abort(new ApiError(
+    0,
+    isRead ? "The request timed out. Try again." : "The request timed out. Check whether your changes were saved before trying again.",
+    "request_timeout",
+  )), path === "/chat" ? 300_000 : 30_000);
+  let onAbort: () => void = () => {};
+  try {
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) onAbort();
+    });
+    return await Promise.race([aborted, request(signal)]);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 /** Browser-only: reads the auth token from the current Supabase browser session. */
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const baseUrl = requireBaseUrl();
-  const authHeader = await getAuthHeader();
-  const headers = buildHeaders(init, authHeader.Authorization);
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
-  return handleApiResponse<T>(response);
+  return withDeadline(path, init, async (signal) => {
+    signal.throwIfAborted();
+    const authHeader = await getAuthHeader();
+    signal.throwIfAborted(); // a late session answer must not send a timed-out write
+    const headers = buildHeaders(init, authHeader.Authorization);
+    const response = await fetch(`${baseUrl}${path}`, { ...init, headers, signal });
+    return handleApiResponse<T>(response);
+  });
 }
 
 /**
@@ -94,7 +123,10 @@ export async function apiFetchServer<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const baseUrl = requireBaseUrl();
-  const headers = buildHeaders(init, `Bearer ${accessToken}`);
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers });
-  return handleApiResponse<T>(response);
+  return withDeadline(path, init, async (signal) => {
+    signal.throwIfAborted();
+    const headers = buildHeaders(init, `Bearer ${accessToken}`);
+    const response = await fetch(`${baseUrl}${path}`, { ...init, headers, signal });
+    return handleApiResponse<T>(response);
+  });
 }

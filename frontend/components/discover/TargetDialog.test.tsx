@@ -124,6 +124,35 @@ describe("TargetDialog", () => {
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
+  it("blocks Cancel, backdrop and Escape while saving, then closes on success", async () => {
+    let finish!: (value: unknown) => void;
+    apiFetch.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { onClose, onSaved } = setup();
+    fireEvent.change(field(), { target: { value: "3" } });
+    save();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(dialog.parentElement!); // MUI Dialog's backdrop-click target
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    finish(ITEM);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(ITEM));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows dismissal after a save fails", async () => {
+    apiFetch.mockRejectedValueOnce(new FakeApiError(0, "The request timed out."));
+    const { onClose } = setup();
+    fireEvent.change(field(), { target: { value: "3" } });
+    save();
+    expect(await screen.findByText("The request timed out.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false");
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("does not check or send a range that was not touched, even one the form cannot read back", async () => {
     const { onSaved } = setup({ ...ITEM, target_price_low: 0.0000001, target_price_high: 5 });
     fireEvent.change(field(), { target: { value: "3" } });
@@ -244,13 +273,12 @@ describe("TargetDialog", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
-  it("does not reopen when a save is refused as gone after the dialog was left", async () => {
+  it("does not reopen when a save is refused as gone after the parent removed the dialog", async () => {
     let refuse: (reason: Error) => void = () => {};
     apiFetch.mockReturnValueOnce(new Promise((_, reject) => (refuse = reject)));
     const { onStale, show } = setup();
     fireEvent.change(field(), { target: { value: "3" } });
     save();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" })); // left before the answer
     show(null);
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
