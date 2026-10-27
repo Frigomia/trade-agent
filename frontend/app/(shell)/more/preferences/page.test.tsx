@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 
 const apiFetch = vi.fn();
@@ -87,6 +87,20 @@ describe("PreferencesPage", () => {
     fireEvent.change(notes, { target: { value: "x".repeat(2500) } });
     expect((notes as HTMLTextAreaElement).value).toHaveLength(2000);
     expect(screen.getByText("2000 / 2000")).toBeInTheDocument();
+  });
+
+  it("risk tolerance and appearance are named groups of buttons; clicking the chosen risk clears it", async () => {
+    renderFresh();
+    await screen.findByDisplayValue("long term");
+    const risk = screen.getByRole("group", { name: "Risk tolerance" });
+    expect(within(risk).getAllByRole("button").map((b) => b.textContent)).toEqual(["conservative", "moderate", "aggressive"]);
+    expect(within(screen.getByRole("group", { name: "Appearance" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["System", "Light", "Dark"]);
+    fireEvent.click(within(risk).getByRole("button", { name: "moderate" }));
+    expect(within(risk).getByRole("button", { name: "moderate" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(screen.getByRole("button", { name: /save preferences/i }));
+    await waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/preferences", expect.objectContaining({ body: expect.stringContaining('"risk_tolerance":null') })),
+    );
   });
 
   it("saves the full object even when only notes changed", async () => {

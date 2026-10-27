@@ -2,7 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import useSWR from "swr";
-import { Alert, Box, Button, Chip, InputAdornment, SvgIcon, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { AlertTriangle, Check, Plus } from "lucide-react";
+import { Alert, Box, Button, Chip, InputAdornment, SvgIcon, TextField, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import { AppearanceSetting } from "@/components/settings/AppearanceSetting";
 import { AutoAnalysisSwitch } from "@/components/settings/AutoAnalysisSwitch";
@@ -22,8 +23,12 @@ import { useAction } from "@/lib/useAction";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
 const RISKS: RiskTolerance[] = ["conservative", "moderate", "aggressive"];
+
+// A full-width control with equal segments, the words capitalised (the stored values are lower case).
+const WIDE = { width: "100%", "& > *": { flex: 1 }, "& button": { textTransform: "capitalize" } } as const;
 
 const amountText = (p: Preferences) => (p.monthly_contribution === null ? "" : String(p.monthly_contribution));
 
@@ -99,20 +104,16 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
         subtitle="Preferences shape the explanations and the web second opinion. They never change the score or the call."
       />
 
-      <Box sx={{ maxWidth: 680, display: "grid", gap: 1.75 }}>
+      <Box sx={{ maxWidth: 760, display: "grid", gap: 2 }}>
         <Section title="Risk tolerance" hint="How bold explanations may be about position size.">
-          <ToggleButtonGroup
-            exclusive
-            value={risk}
-            onChange={(_, v: RiskTolerance | null) => setRisk(v)}
-            aria-label="Risk tolerance"
-          >
-            {RISKS.map((r) => (
-              <ToggleButton key={r} value={r} sx={{ textTransform: "capitalize" }}>
-                {r}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
+          <SegmentedControl
+            label="Risk tolerance"
+            // No risk chosen yet (null) leaves every segment off.
+            value={risk ?? ("" as RiskTolerance)}
+            onChange={(k) => setRisk(k === risk ? null : k)}
+            segments={RISKS.map((r) => ({ key: r, label: r }))}
+            sx={WIDE}
+          />
         </Section>
 
         <Section title="Sectors to avoid">
@@ -121,6 +122,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
               <Chip
                 key={s}
                 label={s}
+                sx={{ height: { xs: 44, md: 36 }, bgcolor: "var(--track)", color: "var(--text)", fontSize: "0.8125rem", fontWeight: 500, "& .MuiChip-deleteIcon": { color: "var(--muted)" } }}
                 onDelete={() => setSectors((l) => l.filter((x) => x !== s))}
                 deleteIcon={
                   <SvgIcon aria-label={`Remove ${s}`} titleAccess={`Remove ${s}`} role="button">
@@ -130,16 +132,19 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
               />
             ))}
           </Box>
-          <Box sx={{ display: "flex", gap: 1 }}>
+          <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start" }}>
             <TextField
               label="Add a sector"
-              size="small"
+              sx={{ flex: 1, minWidth: 0 }}
               value={sectorInput}
               onChange={(e) => setSectorInput(e.target.value)}
               slotProps={{ htmlInput: { maxLength: SECTOR_MAX_LENGTH } }}
               helperText={sectors.length >= MAX_SECTORS ? `At most ${MAX_SECTORS} sectors.` : undefined}
             />
             <Button
+              variant="outlined"
+              startIcon={<Plus size={16} aria-hidden />}
+              sx={{ mt: "26px" }}
               disabled={sectors.length >= MAX_SECTORS}
               onClick={() => {
                 setSectors((l) => addSector(l, sectorInput));
@@ -158,7 +163,10 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
             value={notes}
             onChange={(e) => setNotes(e.target.value.slice(0, NOTES_MAX))}
             helperText={`${notes.length} / ${NOTES_MAX}`}
-            slotProps={{ htmlInput: { maxLength: NOTES_MAX, "aria-label": "Notes" } }}
+            slotProps={{
+              htmlInput: { maxLength: NOTES_MAX, "aria-label": "Notes" },
+              formHelperText: { sx: { textAlign: "right", fontVariantNumeric: "tabular-nums" } },
+            }}
           />
         </Section>
 
@@ -170,7 +178,6 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
             <TextField
               id="pref-contribution"
               label="Monthly contribution"
-              size="small"
               value={amount}
               error={amountError}
               onChange={(e) => {
@@ -184,12 +191,11 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
                 htmlInput: { inputMode: "decimal" },
                 input: { endAdornment: <InputAdornment position="end">EUR</InputAdornment> },
               }}
-              sx={{ width: 260 }}
+              sx={{ width: { xs: "100%", sm: 260 } }}
             />
             <TextField
               id="pref-drift"
               label="Drift threshold"
-              size="small"
               value={drift}
               error={driftError}
               onChange={(e) => {
@@ -203,7 +209,7 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
                 htmlInput: { inputMode: "decimal" },
                 input: { endAdornment: <InputAdornment position="end">pp</InputAdornment> },
               }}
-              sx={{ width: 260 }}
+              sx={{ width: { xs: "100%", sm: 260 } }}
             />
           </Box>
         </Section>
@@ -226,22 +232,32 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
             bottom: { xs: 76, md: 24 },
             p: "12px 16px",
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             gap: 1.5,
             bgcolor: "var(--tab-bg)",
           }}
         >
-          <Box sx={{ flex: 1 }}>
+          {/* On a phone the status takes its own line above two equal buttons, and no line when there is no status. */}
+          <Box sx={{ flex: { xs: "1 1 100%", sm: 1 }, display: dirty || saved ? "block" : { xs: "none", sm: "block" } }}>
             {dirty ? (
-              <Pill tone="warn">Unsaved changes</Pill>
+              <Pill tone="warn">
+                <AlertTriangle size={13} aria-hidden />
+                Unsaved changes
+              </Pill>
             ) : (
-              saved && <Typography color="text.secondary">Saved</Typography>
+              saved && (
+                <Typography sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
+                  <Check size={16} color="var(--accent)" aria-hidden />
+                  Saved
+                </Typography>
+              )
             )}
           </Box>
-          <Button variant="outlined" disabled={!dirty || submitting} onClick={discard}>
+          <Button variant="outlined" disabled={!dirty || submitting} onClick={discard} sx={{ flex: { xs: 1, sm: "none" } }}>
             Discard
           </Button>
-          <Button variant="contained" disabled={submitting} onClick={save} sx={{ whiteSpace: "nowrap" }}>
+          <Button variant="contained" disabled={submitting} onClick={save} sx={{ whiteSpace: "nowrap", flex: { xs: 1, sm: "none" } }}>
             Save preferences
           </Button>
         </Panel>
@@ -254,10 +270,10 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   return (
     <Panel sx={{ p: "20px 24px", display: "flex", flexDirection: "column", gap: 1.5 }}>
       <Box>
-        <Typography variant="subtitle2" component="h2" sx={{ fontSize: "1rem" }}>
+        <Typography variant="subtitle2" component="h2" sx={{ fontSize: "0.9375rem" }}>
           {title}
         </Typography>
-        {hint && <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>{hint}</Typography>}
+        {hint && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.5, mt: 0.25 }}>{hint}</Typography>}
       </Box>
       {children}
     </Panel>
