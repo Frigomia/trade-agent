@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogContentText, IconButton, Typography } from "@mui/material";
-import { Trash2 } from "lucide-react";
+import { ArrowRight, Trash2 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { CHAT_SESSION, STARTERS, type ChatMessage } from "@/lib/chat";
@@ -142,11 +142,11 @@ function ChatScreen() {
           <>
             {chatUsage && <UsageMeter usage={chatUsage} />}
             <IconButton
-              size="small"
               aria-label="Clear chat"
               title="Clear chat"
               disabled={!messages?.length || pending !== null}
               onClick={() => setConfirmClear(true)}
+              sx={{ width: 44, height: 44, border: "1px solid var(--line)", bgcolor: "var(--panel)", boxShadow: "var(--shadow)", "&.Mui-disabled": { boxShadow: "none", opacity: 0.45 } }}
             >
               <Trash2 size={17} />
             </IconButton>
@@ -156,13 +156,19 @@ function ChatScreen() {
 
       <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1.25, justifyContent: "flex-end", pb: 1.5 }}>
         {empty && !lock && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, alignItems: "flex-start", mb: 1 }}>
-            <Typography sx={{ color: "var(--muted)", fontSize: "0.84375rem" }}>Ask about your portfolio, for example:</Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxWidth: 520, mb: 1 }}>
+            <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem" }}>Ask about your portfolio, for example:</Typography>
             {STARTERS.map((starter) => (
-              <Button key={starter} variant="outlined" size="small" onClick={() => {
+              <Button
+                key={starter}
+                variant="outlined"
+                endIcon={<ArrowRight size={16} aria-hidden />}
+                sx={{ justifyContent: "space-between", minHeight: 48, px: 2, borderRadius: "14px", fontSize: "0.8125rem", fontWeight: 500, textAlign: "left", boxShadow: "var(--shadow)", "& .MuiButton-endIcon": { color: "var(--muted)" } }}
+                onClick={() => {
                   setIdeaId(null);
                   void send(starter, null);
-                }}>
+                }}
+              >
                 {starter}
               </Button>
             ))}
@@ -170,7 +176,14 @@ function ChatScreen() {
         )}
         {messages?.map((message) => <MessageBubble key={message.id} message={message} />)}
         {pending !== null && <MessageBubble message={{ role: "user", content: pending }} />}
-        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", minHeight: pending !== null ? undefined : 0 }} role="status">
+        <Typography sx={{ display: "flex", alignItems: "center", gap: 1.25, color: "var(--muted)", fontSize: "0.75rem", minHeight: pending !== null ? undefined : 0 }} role="status">
+          {pending !== null && (
+            <Box component="span" aria-hidden sx={{ display: "inline-flex", gap: "5px", "& i": { width: 6, height: 6, borderRadius: "50%", bgcolor: "var(--accent)" }, "& i:nth-of-type(2)": { opacity: 0.6 }, "& i:nth-of-type(3)": { opacity: 0.3 } }}>
+              <i />
+              <i />
+              <i />
+            </Box>
+          )}
           {pending !== null ? "Thinking…" : ""}
         </Typography>
         <div ref={endRef} />
@@ -215,7 +228,7 @@ function ChatScreen() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmClear(false)}>Cancel</Button>
-          <Button color="error" onClick={() => void clear()}>
+          <Button color="error" variant="outlined" onClick={() => void clear()}>
             Delete
           </Button>
         </DialogActions>

@@ -2,7 +2,7 @@ import { Box, IconButton, TextField } from "@mui/material";
 import { ArrowUp } from "lucide-react";
 import { MAX_MESSAGE } from "@/lib/chat";
 
-/** The message box: Enter sends, Shift+Enter adds a line. */
+/** The message box: one rounded field with the round Send inside it. Enter sends, Shift+Enter adds a line. */
 export function Composer({
   value,
   onChange,
@@ -25,9 +25,24 @@ export function Composer({
         event.preventDefault();
         onSend();
       }}
-      sx={{ display: "flex", gap: 1, alignItems: "flex-end" }}
+      // The whole rounded field is the target: a click on its padding goes to the text.
+      onClick={(event) => {
+        if (event.target === event.currentTarget) event.currentTarget.querySelector("textarea")?.focus();
+      }}
+      sx={{
+        display: "flex",
+        gap: 1,
+        alignItems: "flex-end",
+        p: "6px 6px 6px 18px",
+        borderRadius: "26px",
+        border: "1px solid var(--line2)",
+        bgcolor: disabled ? "var(--track)" : "var(--panel)",
+        boxShadow: disabled ? "none" : "var(--shadow)",
+        "&:focus-within": { outline: "2px solid var(--accent)", outlineOffset: 2 },
+      }}
     >
       <TextField
+        variant="standard"
         fullWidth
         multiline
         maxRows={5}
@@ -41,14 +56,15 @@ export function Composer({
             onSend();
           }
         }}
-        slotProps={{ htmlInput: { "aria-label": "Message" } }}
+        slotProps={{ htmlInput: { "aria-label": "Message" }, input: { disableUnderline: true } }}
+        sx={{ "& .MuiInputBase-root": { p: 0, fontSize: "0.9375rem" }, "& .MuiInputBase-input": { py: "11px" } }}
         inputRef={inputRef}
       />
       <IconButton
         type="submit"
         aria-label="Send"
         disabled={disabled || value.trim() === ""}
-        sx={{ width: 46, height: 46, bgcolor: "var(--accent-solid)", color: "var(--on-accent)", "&:hover": { bgcolor: "var(--accent-solid)" }, "&.Mui-disabled": { opacity: 0.45, bgcolor: "var(--accent-solid)", color: "var(--on-accent)" } }}
+        sx={{ width: 44, height: 44, flex: "none", bgcolor: "var(--accent-solid)", color: "var(--on-accent)", boxShadow: "var(--btn-shadow)", "&:hover": { bgcolor: "var(--accent-solid)" }, "&.Mui-disabled": { boxShadow: "none", opacity: 0.45, bgcolor: "var(--accent-solid)", color: "var(--on-accent)" } }}
       >
         <ArrowUp size={20} />
       </IconButton>

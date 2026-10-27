@@ -505,4 +505,6 @@ Open items:
   restyled. The Plan views (This month, Saved plans, Orders, the Placed sheet) are restyled and use `Panel`.
   The Account screen is restyled too (two columns on a desktop, the usage bar, the Claude and Telegram panels, the
   shared state chip with an icon and the word), and so is Preferences (pill segmented controls for risk and
-  appearance, tags for the sectors, the sticky save bar with its status line).
+  appearance, tags for the sectors, the sticky save bar with its status line) and Chat (a squared tail corner on each
+  message, the starters as rows, the message box as one rounded field with Send inside it, "Near limit" and "At limit"
+  beside the allowance).
