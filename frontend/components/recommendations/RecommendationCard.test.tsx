@@ -126,6 +126,7 @@ describe("RecommendationCard", () => {
     render(<RecommendationCard recommendation={rec()} onDecided={onDecided} />);
 
     fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skip reason and dismiss/i }));
 
     await waitFor(() =>
       expect(apiFetch).toHaveBeenCalledWith(

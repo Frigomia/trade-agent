@@ -14,10 +14,13 @@ export function useDecision(id: number, onDecided: (updated: RecommendationOut) 
   const { run, submitting, error, setError } = useAction();
   const { mutate } = useSWRConfig();
 
-  const decide = (action: "approve" | "reject") =>
+  const decide = (action: "approve" | "reject", reason?: string) =>
     run(async () => {
       try {
-        const updated = await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, { method: "POST" });
+        const updated = await apiFetch<RecommendationOut>(`/analysis/recommendations/${id}/${action}`, {
+          method: "POST",
+          ...(action === "reject" && reason !== undefined ? { body: JSON.stringify({ reason }) } : {}),
+        });
         void mutate("/portfolio/alerts"); // a decided call is no longer an alert
         onDecided(updated);
       } catch (err) {

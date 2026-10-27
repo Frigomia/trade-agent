@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
+import { DismissSheet } from "./DismissSheet";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
@@ -18,15 +20,15 @@ export function ConfirmationPanel({
   onBackToToday: () => void;
 }) {
   const { run, submitting, error } = useAction();
+  const [dismissing, setDismissing] = useState(false);
 
   // The backend allows reversing a decision (the opposite action on an APPROVED or REJECTED
   // recommendation flips it), but not touching a superseded one (409).
   const changeDecision = () =>
     run(async () => {
-      const oppositeAction = recommendation.status === "APPROVED" ? "reject" : "approve";
       onChanged(
         await apiFetch<RecommendationOut>(
-          `/analysis/recommendations/${recommendation.id}/${oppositeAction}`,
+          `/analysis/recommendations/${recommendation.id}/approve`,
           { method: "POST" },
         ),
       );
@@ -55,6 +57,10 @@ export function ConfirmationPanel({
         You {approved ? "approved" : "dismissed"} {recommendation.ticker} &middot;{" "}
         {recommendation.action}.
       </Typography>
+      {!approved && recommendation.dismissal_reason && (
+        <Typography sx={{ mt: 1, overflowWrap: "anywhere" }}>Your note: {recommendation.dismissal_reason}</Typography>
+      )}
+      {dismissing && <DismissSheet id={recommendation.id} onClose={() => setDismissing(false)} onDecided={onChanged} />}
       {approved && (
         <Box
           sx={{
@@ -89,7 +95,7 @@ export function ConfirmationPanel({
         fullWidth
         sx={{ mt: 1 }}
         disabled={submitting}
-        onClick={changeDecision}
+        onClick={approved ? () => setDismissing(true) : changeDecision}
       >
         Change my decision
       </Button>

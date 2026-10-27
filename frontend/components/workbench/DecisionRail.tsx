@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { DismissSheet } from "@/components/recommendations/DismissSheet";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { Bookmark, Check, Clock, MessageSquare, X } from "lucide-react";
 import { PriceBlock } from "@/components/discovery/PriceBlock";
@@ -101,6 +103,7 @@ export function DecisionRail({
   const idea = rec.idea!;
   const { decide, submitting, error } = useDecision(rec.id, onDecided);
   const save = useSaveToDiscover(idea.ticker, idea.asset_type);
+  const [dismissing, setDismissing] = useState(false);
   return (
     <Panel component="aside" aria-label="Decision" sx={{ p: "20px", display: "grid", gap: 2, position: { md: "sticky" }, top: 16 }}>
       <DecisionSummary rec={rec} />
@@ -109,6 +112,7 @@ export function DecisionRail({
       <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />
       {error && <Alert severity="error">{error}</Alert>}
       <SaveNotes save={save} />
+      {dismissing && <DismissSheet id={rec.id} onClose={() => setDismissing(false)} onDecided={onDecided} />}
       <Box sx={{ display: "grid", gap: 1 }}>
         <Button variant="contained" disabled={submitting} onClick={() => decide("approve")} startIcon={<Check size={16} aria-hidden />}>
           Approve
@@ -116,7 +120,7 @@ export function DecisionRail({
         <Button variant="outlined" aria-disabled={save.saving || save.saved || undefined} onClick={save.saved ? undefined : () => void save.save()} startIcon={save.saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}>
           {save.saved ? "Saved" : "Save to Discover"}
         </Button>
-        <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} startIcon={<X size={16} aria-hidden />}>
+        <Button variant="outlined" disabled={submitting} onClick={() => setDismissing(true)} startIcon={<X size={16} aria-hidden />} sx={{ minHeight: 44 }}>
           Dismiss
         </Button>
         <Button component={Link} href={askHref(rec.id)} variant="outlined" startIcon={<MessageSquare size={16} aria-hidden />}>
@@ -141,10 +145,12 @@ export function PhoneActions({ rec, onDecided }: { rec: DiscoveryRecommendation;
   const idea = rec.idea!;
   const { decide, submitting, error } = useDecision(rec.id, onDecided);
   const save = useSaveToDiscover(idea.ticker, idea.asset_type);
+  const [dismissing, setDismissing] = useState(false);
   return (
     <Box sx={{ position: "sticky", bottom: "var(--tabbar-h, 66px)", zIndex: 2, mx: -2, px: 2, py: 1.25, display: "grid", gap: 1, borderTop: "1px solid var(--line)", bgcolor: "var(--panel)" }}>
       {error && <Alert severity="error">{error}</Alert>}
       <SaveNotes save={save} />
+      {dismissing && <DismissSheet id={rec.id} onClose={() => setDismissing(false)} onDecided={onDecided} />}
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 44px 44px 44px", gap: 1 }}>
         <Button variant="contained" disabled={submitting} onClick={() => decide("approve")} startIcon={<Check size={16} aria-hidden />} sx={{ minHeight: 44 }}>
           Approve
@@ -152,7 +158,7 @@ export function PhoneActions({ rec, onDecided }: { rec: DiscoveryRecommendation;
         <Button variant="outlined" aria-disabled={save.saving || save.saved || undefined} onClick={save.saved ? undefined : () => void save.save()} aria-label={save.saved ? "Saved to Discover" : "Save to Discover"} sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
           {save.saved ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
         </Button>
-        <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} aria-label="Dismiss" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
+        <Button variant="outlined" disabled={submitting} onClick={() => setDismissing(true)} aria-label="Dismiss" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
           <X size={16} aria-hidden />
         </Button>
         <Button component={Link} href={askHref(rec.id)} variant="outlined" aria-label="Ask AI" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>

@@ -80,6 +80,7 @@ describe("Workbench identity and rail", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     await waitFor(() => expect(onDecided).toHaveBeenCalledWith(decided));
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(screen.getByRole("button", { name: /skip reason and dismiss/i }));
     await waitFor(() => expect(onDecided).toHaveBeenCalledTimes(2));
   });
 
@@ -340,6 +341,20 @@ describe("Workbench price chart", () => {
 describe("Workbench on a phone", () => {
   beforeEach(() => {
     desktop = false;
+  });
+
+  it("opens a reason step before dismissing from the phone bar", async () => {
+    const updated = { ...testRec(), status: "REJECTED", dismissal_reason: "Too much tech" };
+    apiFetch.mockImplementation(async (path: string) => path.endsWith("/reject") ? updated : testHistory());
+    const { onDecided } = show();
+    fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
+    expect(onDecided).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: /reason/i }), { target: { value: "Too much tech" } });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss recommendation" }));
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith(updated));
+    expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/1/reject", {
+      method: "POST", body: JSON.stringify({ reason: "Too much tech" }),
+    });
   });
 
   it("puts the summary above the tabs and the actions in a bar, with icon buttons named for screen readers", async () => {

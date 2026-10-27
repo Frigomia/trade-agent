@@ -31,6 +31,15 @@ function rec(id: number, action: RecommendationOut["action"], ret: number | null
 describe("TrackRecordPage", () => {
   beforeEach(() => apiFetch.mockReset());
 
+  it("shows the private note beside a dismissed decision", async () => {
+    apiFetch.mockImplementation(async (path: string) => path === "/analysis/recommendations"
+      ? [{ ...rec(1, "BUY", 0.05), status: "REJECTED", dismissal_reason: "Too much tech" }]
+      : { evaluated: 0, remaining: 0 });
+    renderFresh();
+    expect(await screen.findByText("Your note: Too much tech")).toBeInTheDocument();
+    expect(screen.getByText(/Dismissed/)).toBeInTheDocument();
+  });
+
   it("shows the summary, a small-sample label and each scored row with a word and sign", async () => {
     apiFetch.mockImplementation(async (path: string) => {
       if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05), rec(2, "SELL", 0.03), rec(3, "HOLD", 0.01)];

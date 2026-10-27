@@ -143,6 +143,7 @@ class Recommendation(Base):
     source: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
     idea: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    dismissal_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     price_at_recommendation: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     # The trading day price_at_recommendation is the close of (a discovery idea's snapshot date,
     # which can be days older than the scan); the 20-trading-day horizon starts here. NULL: the

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Box, Typography, Button, Alert } from "@mui/material";
+import { DismissSheet } from "./DismissSheet";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { useDecision } from "@/lib/useDecision";
 
@@ -17,9 +19,10 @@ export function DecisionActions({
   title?: string;
 }) {
   const { decide, submitting, error } = useDecision(id, onDecided);
+  const [dismissing, setDismissing] = useState(false);
 
   const dismiss = (
-    <Button variant="outlined" disabled={submitting} onClick={() => decide("reject")} sx={{ flex: title ? "none" : 1 }}>
+    <Button variant="outlined" disabled={submitting} onClick={() => setDismissing(true)} sx={{ minHeight: 44, flex: title ? "none" : 1 }}>
       Dismiss
     </Button>
   );
@@ -31,6 +34,7 @@ export function DecisionActions({
 
   return (
     <>
+      {dismissing && <DismissSheet id={id} onClose={() => setDismissing(false)} onDecided={onDecided} />}
       {error && (
         <Alert severity="error" sx={{ mb: title ? 1.5 : 0, mt: title ? 0 : 1.5 }}>
           {error}

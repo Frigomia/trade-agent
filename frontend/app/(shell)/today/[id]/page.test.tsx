@@ -173,7 +173,9 @@ describe("RecommendationDetailPage", () => {
     await waitFor(() => expect(screen.getByText("NVDA")).toBeInTheDocument());
     const dismissButton = screen.getByRole("button", { name: /dismiss/i });
     fireEvent.click(dismissButton);
-    fireEvent.click(dismissButton);
+    const skip = screen.getByRole("button", { name: /skip reason and dismiss/i });
+    fireEvent.click(skip);
+    fireEvent.click(skip);
 
     resolve(rec({ status: "REJECTED" }));
     await waitFor(() =>

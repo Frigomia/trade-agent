@@ -179,7 +179,7 @@ Recommendation
       frontend evidence display),
   technical_signal (nullable str -- technical node's signal, persisted likewise),
   suggested_position_pct, status ("PENDING"|"APPROVED"|"REJECTED"|"SUPERSEDED"),
-  reviewed_at,
+  reviewed_at, dismissal_reason (nullable varchar(500), a private plain-text note; no control characters),
   price_at_recommendation (Numeric(18,6), nullable -- quote price captured
       when the job created this row; for a discovery idea the snapshot price, in the major
       currency unit as the idea shows it, and NULL when the snapshot has no price or no usable
@@ -383,7 +383,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/analysis/recommendations?status=` | — | Filter by status. Responses (list and by-id) carry computed, never-persisted fields: `current_price` and `price_change_pct`, populated server-side for `PENDING` rows only (`null` on any quote-fetch failure, never a 500), and `name`, the company name from the discovery idea or else from the user's holding (`null` for a ticker that is only watched; the approve and reject responses do not fill it). Responses also carry the stored 20-day outcome, `outcome_forward_return_pct` (a fraction) and `outcome_evaluated_at`, both `null` until `/memory/evaluate-outcomes` has run for that row |
 | GET | `/analysis/recommendations/{id}` | — | Single recommendation; 404 if missing or not owned by the caller. Same computed price fields as the list |
 | POST | `/analysis/recommendations/{id}/approve` | — | Marks reviewed; does **not** place a trade. Allowed from `PENDING` or `REJECTED` (a decision can be reversed); from `APPROVED` (same decision again) or `SUPERSEDED` it returns `409` ("This recommendation was already decided or replaced.") and is left unchanged; `404` if missing or not the caller's |
-| POST | `/analysis/recommendations/{id}/reject` | — | Same rules, mirrored: allowed from `PENDING` or `APPROVED`; `409` from `REJECTED` or `SUPERSEDED` |
+| POST | `/analysis/recommendations/{id}/reject` | Optional `{reason?: string \| null}` | Same rules, mirrored: allowed from `PENDING` or `APPROVED`; `409` from `REJECTED` or `SUPERSEDED`. The reason accepts at most 500 characters with no C0/C1 control characters (invalid input is 422). Omitted body/reason still works; blank notes store NULL. Saved atomically as `dismissal_reason`, returned on owner-only recommendation reads and data export. Approving clears it. Only a personal note, never fed to chat memory, embeddings, prompts, or analysis. Today cards, the workbench rail and phone actions open a side drawer (bottom sheet on phones) with an optional reason and Skip. Confirmation and Track record show the note as plain text |
 | POST | `/backtest/run` | `{ticker, start_date, end_date}` | **Starts** a backtest as a background job and returns `{job_id}` immediately, same async pattern as `/analysis/run`. Rate limited: 5/min per user; one running backtest per user at a time (`409` while one is `RUNNING`) |
 | GET | `/backtest/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus `backtest_result_id` once done |
 | GET | `/backtest/results?ticker=` | — | The caller's persisted `BacktestResult` rows, newest first, at most 20, without the curve; filter by ticker |
