@@ -16,6 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
+| [chat](chat/SPEC.md) | Soft restyle of Chat ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screen) | Proposed, pending approval | 2026-10-27 | Not built |
 | [account](account/SPEC.md) | Soft restyle of Account and Preferences ([#195](https://github.com/Frigomia/trade-agent/issues/195), second screen) | Approved as proposed | 2026-10-27 | Built (#195 second screen: Account, then Preferences) |
 | [plan](plan/SPEC.md) | Soft restyle of the Plan views: This month, Saved plans, Orders ([#195](https://github.com/Frigomia/trade-agent/issues/195), first screen) | Approved as proposed | 2026-10-26 | Built (#195 first screen) |
 | [discover-company](discover-company/direction-approved.md) | Basic company overview and single-company Analyze (#193, #194) | Approved layout and policies | 2026-10-26 | Implementation supplied by feature/discover-company-analysis |

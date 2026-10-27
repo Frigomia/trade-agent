@@ -1,0 +1,74 @@
+/* Chat in the Soft direction. Loads after ../today-discovery/lib.css, ../company-overview/soft.css, co.css, ../portfolio/pf.css, ../plan/plan.css and ../account/acct.css.
+   Layout and the few new pieces only: panels, buttons, alerts, the dialog and the shell are the shared ones. */
+.ch{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:780px}
+.ch h1{font-size:30px;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.ch .col{width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;flex:1;min-width:0}
+.ch .sp{flex:1}
+.ch a:not(.btn){color:var(--accent)}
+.ch .btn{min-height:44px}
+.ch .btn.sm{min-height:36px;padding:0 14px;font-size:var(--fs-label)}
+.phone .ch .btn.sm{min-height:44px}
+.phone .ch{min-height:700px}
+.phone .ch h1{font-size:26px}
+
+/* header: title, the allowance, the clear button */
+.chead{display:flex;align-items:center;gap:14px}
+.chead h1{flex:1}
+.um{display:inline-flex;align-items:center;gap:10px;color:var(--muted);font-size:var(--fs-label);font-variant-numeric:tabular-nums}
+.um .bar{display:block;width:56px;height:6px;border-radius:999px;background:var(--track);overflow:hidden}
+.um .bar i{display:block;height:100%;border-radius:999px;background:var(--accent-solid)}
+.um.warn .bar i{background:var(--warn)}
+.um.warn b{color:var(--warn);font-weight:650}
+.phone .um .bar{display:none}
+.ib{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--text2);box-shadow:var(--shadow)}
+.ib[disabled]{opacity:.45;box-shadow:none}
+
+/* messages */
+.msgs{display:flex;flex-direction:column;gap:12px;justify-content:flex-end;flex:1}
+.ub{align-self:flex-end;max-width:85%;padding:10px 14px;border-radius:18px 18px 6px 18px;background:var(--up-bg);color:var(--text);font-size:var(--fs-body);line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
+.ab{align-self:flex-start;max-width:92%;padding:14px 16px;border-radius:6px 22px 22px 22px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);font-size:var(--fs-body);line-height:1.55;overflow-wrap:anywhere}
+.ab p{margin:0 0 8px}.ab p:last-child{margin:0}
+.ab ul{margin:0 0 8px;padding-left:20px;display:grid;gap:4px}.ab ul:last-child{margin:0}
+.ab b{font-weight:650}
+.web{margin-top:12px;padding:10px 12px;border:1px dashed var(--line2);border-radius:12px;font-size:var(--fs-label);line-height:1.5}
+.web .wl{display:flex;align-items:center;gap:6px;color:var(--muted);margin-bottom:4px}
+.web .wl svg.i{width:15px;height:15px}
+.think{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:var(--fs-label)}
+.think .d{display:inline-flex;gap:5px}.think .d i{width:6px;height:6px;border-radius:50%;background:var(--accent)}.think .d i:nth-child(2){opacity:.6}.think .d i:nth-child(3){opacity:.3}
+
+/* starters */
+.hello{color:var(--muted);font-size:var(--fs-body)}
+.starters{display:grid;gap:8px;max-width:520px}
+.starter{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 16px;border-radius:14px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);color:var(--text);font-size:var(--fs-body);font-weight:500;text-align:left;width:100%}
+.starter span{flex:1}
+.starter svg.i{color:var(--muted);width:16px;height:16px}
+
+/* the composer: one rounded field with the round Send inside */
+.dock{position:sticky;bottom:0;display:grid;gap:8px;padding-top:6px;background:var(--bg)}
+.adv3{text-align:center;color:var(--muted);font-size:var(--fs-label)}
+.cmp{display:flex;align-items:flex-end;gap:8px;padding:6px 6px 6px 18px;border-radius:26px;border:1px solid var(--line2);background:var(--panel);box-shadow:var(--shadow)}
+.cmp:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.cmp textarea{flex:1;min-width:0;min-height:44px;max-height:132px;border:0;background:none;resize:none;padding:11px 0;font:inherit;font-size:var(--fs-body);line-height:1.45;color:var(--text);outline:0}
+.cmp textarea::placeholder{color:var(--muted)}
+.cmp .send{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:50%;border:0;background:var(--accent-solid);color:var(--on-accent);box-shadow:var(--btn-shadow)}
+.cmp .send[disabled]{opacity:.45;box-shadow:none}
+.cmp.off{background:var(--track);box-shadow:none}
+.cmp.off textarea{color:var(--muted)}
+
+/* locked and limit states */
+.req{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:14px 16px;border-radius:var(--rp);background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow)}
+.req>svg.i{color:var(--accent);width:20px;height:20px}
+.req .t{flex:1 1 220px;min-width:0}
+.req b{display:block;font-size:var(--fs-body);font-weight:650}
+.req small{display:block;margin-top:2px;color:var(--muted);font-size:var(--fs-label);line-height:1.5}
+.req.warn{background:var(--warn-bg,color-mix(in oklab,var(--warn) 11%,var(--panel)));border-color:color-mix(in oklab,var(--warn) 45%,var(--line))}
+.req.warn>svg.i{color:var(--warn)}
+.ch .warnbox,.ch .errbox{margin:0}
+
+/* states grid */
+.region .ch{min-height:0}
+.region .ch .col{max-width:100%}
+.region .ovl{min-height:300px}
+.region .msgs{justify-content:flex-start}
+.region .ch .col,.region .msgs{flex:none}
+.phone .dock{background:transparent}
