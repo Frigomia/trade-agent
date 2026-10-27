@@ -5,6 +5,7 @@ import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { useAction } from "@/lib/useAction";
 import { LogTradeCta } from "@/components/portfolio/LogTradeCta";
+import { Panel } from "@/components/ui/Panel";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 
 export function ConfirmationPanel({
@@ -34,7 +35,7 @@ export function ConfirmationPanel({
   const approved = recommendation.status === "APPROVED";
 
   return (
-    <Box sx={{ textAlign: "center", p: 3 }}>
+    <Panel sx={{ textAlign: "center", p: { xs: "24px 16px", md: "32px 28px" }, maxWidth: 760, mx: "auto" }}>
       <Box
         sx={{
           width: 64,
@@ -49,8 +50,8 @@ export function ConfirmationPanel({
       >
         <CheckCircle2 size={30} />
       </Box>
-      <Typography sx={{ fontSize: "1.375rem", fontWeight: 650, mt: 2 }}>Decision recorded</Typography>
-      <Typography sx={{ color: "var(--text2)", mt: 1 }}>
+      <Typography component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650, letterSpacing: "-0.02em", mt: 2 }}>Decision recorded</Typography>
+      <Typography sx={{ color: "var(--text2)", fontSize: "0.8125rem", mt: 1 }}>
         You {approved ? "approved" : "dismissed"} {recommendation.ticker} &middot;{" "}
         {recommendation.action}.
       </Typography>
@@ -63,7 +64,8 @@ export function ConfirmationPanel({
             mt: 2.5,
             p: 1.5,
             bgcolor: "var(--warn-bg)",
-            borderRadius: 1.5,
+            border: "1px solid color-mix(in srgb, var(--warn) 30%, var(--line))",
+            borderRadius: "14px",
           }}
         >
           <AlertTriangle size={17} color="var(--warn)" style={{ flexShrink: 0 }} />
@@ -91,6 +93,6 @@ export function ConfirmationPanel({
       >
         Change my decision
       </Button>
-    </Box>
+    </Panel>
   );
 }

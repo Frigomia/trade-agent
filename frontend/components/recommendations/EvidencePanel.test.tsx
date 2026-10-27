@@ -32,6 +32,7 @@ describe("EvidencePanel", () => {
     expect(screen.getByText(/78/)).toBeInTheDocument();
     expect(screen.getByText("Oversold")).toBeInTheDocument();
     expect(screen.getByText(/7\.5%/)).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Fundamentals" })).toHaveAttribute("aria-valuenow", "78");
   });
 
   it("omits the fundamentals row when there is no score", () => {

@@ -39,7 +39,7 @@ export function DecisionActions({
       {title ? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.75 }}>
           <Box sx={{ flex: 1 }}>
-            <Typography sx={{ fontWeight: 600, fontSize: "0.90625rem" }}>{title}</Typography>
+            <Typography sx={{ fontWeight: 650, fontSize: "0.9375rem" }}>{title}</Typography>
             <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{NOTE}</Typography>
           </Box>
           {dismiss}
