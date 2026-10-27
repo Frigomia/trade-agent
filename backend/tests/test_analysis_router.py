@@ -2,6 +2,8 @@ import threading
 from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.claude_keys import encrypt_key
 from app.models import AppUser, Holding, Recommendation, UserApiKey
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
@@ -212,6 +214,45 @@ def test_a_decision_can_be_reversed(client, db_session):
         db_session.refresh(rec)
         assert rec.status == expected
         assert rec.reviewed_at is not None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"reason": None}, {"reason": "   "}, {"reason": "Too much tech"}, {"reason": "x" * 500}],
+)
+def test_dismissal_note_is_saved_and_returned_only_to_owner(client, db_session, body):
+    add_app_user(db_session, OTHER_USER_ID)
+    rec = _rec(USER_ID)
+    db_session.add(rec)
+    db_session.commit()
+    reason = (body.get("reason") or "").strip() or None
+    path = f"/analysis/recommendations/{rec.id}"
+    response = client.post(f"{path}/reject", json=body)
+    assert response.status_code == 200
+    assert response.json()["dismissal_reason"] == reason
+    db_session.refresh(rec)
+    assert rec.dismissal_reason == reason
+    assert client.get(path).json()["dismissal_reason"] == reason
+    assert client.get("/analysis/recommendations").json()[0]["dismissal_reason"] == reason
+    assert client.get(path, headers=auth_headers(OTHER_USER_ID)).status_code == 404
+    assert client.post(f"{path}/reject", json={"reason": "replace"}).status_code == 409
+    db_session.refresh(rec)
+    assert rec.dismissal_reason == reason
+    assert client.post(f"{path}/approve").json()["dismissal_reason"] is None
+    db_session.refresh(rec)
+    assert rec.dismissal_reason is None
+
+
+@pytest.mark.parametrize("reason", ["x" * 501, "NUL\x00", "line\n", "tab\t", "\x7f", "\x85"])
+def test_dismiss_rejects_long_or_control_character_notes(client, db_session, reason):
+    rec = _rec(USER_ID)
+    db_session.add(rec)
+    db_session.commit()
+    response = client.post(f"/analysis/recommendations/{rec.id}/reject", json={"reason": reason})
+    assert response.status_code == 422
+    db_session.refresh(rec)
+    assert rec.status == "PENDING"
+    assert rec.dismissal_reason is None
 
 
 def test_same_decision_or_superseded_returns_409_and_leaves_it(client, db_session):

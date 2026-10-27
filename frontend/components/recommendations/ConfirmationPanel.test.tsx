@@ -47,6 +47,10 @@ function rec(overrides: Partial<RecommendationOut> = {}): RecommendationOut {
 }
 
 describe("ConfirmationPanel", () => {
+  it("shows the dismissed reason as plain text", () => {
+    render(<ConfirmationPanel recommendation={rec({ status: "REJECTED", dismissal_reason: "<b>Too much tech</b>" })} onChanged={vi.fn()} onBackToToday={vi.fn()} />);
+    expect(screen.getByText("Your note: <b>Too much tech</b>")).toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -101,6 +105,7 @@ describe("ConfirmationPanel", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /change my decision/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skip reason and dismiss/i }));
 
     await waitFor(() =>
       expect(apiFetch).toHaveBeenCalledWith(
@@ -138,6 +143,7 @@ describe("ConfirmationPanel", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /change my decision/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skip reason and dismiss/i }));
 
     await waitFor(() => expect(screen.getByText("Something broke")).toBeInTheDocument());
   });

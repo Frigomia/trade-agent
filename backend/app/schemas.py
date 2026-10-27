@@ -137,6 +137,10 @@ class TradeOut(TradeIn):
     user_id: UUID
 
 
+class DismissIn(BaseModel):
+    reason: str | None = Field(default=None, max_length=500, pattern=r"^[^\x00-\x1f\x7f-\x9f]*$")
+
+
 class RecommendationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -156,6 +160,7 @@ class RecommendationOut(BaseModel):
     source: str = "manual"
     idea: IdeaOut | None = None
     reviewed_at: datetime | None
+    dismissal_reason: str | None = None
     fundamental_score: int | None
     technical_signal: str | None
     price_at_recommendation: float | None

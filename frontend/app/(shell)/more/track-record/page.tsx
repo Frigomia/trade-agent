@@ -119,6 +119,11 @@ export default function TrackRecordPage() {
                 <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 0.25 }}>
                   {rec.created_at.slice(0, 10)} · {KIND_WORD[kind]} · {DECISION_WORD[rec.status] ?? rec.status}
                 </Typography>
+                {rec.status === "REJECTED" && rec.dismissal_reason && (
+                  <Typography sx={{ color: "var(--text2)", fontSize: "0.8125rem", overflowWrap: "anywhere" }}>
+                    Your note: {rec.dismissal_reason}
+                  </Typography>
+                )}
                 {movePct !== null && entryDay !== rec.created_at.slice(0, 10) && (
                   <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem" }}>
                     Measured from the first close on or after {entryDay}
