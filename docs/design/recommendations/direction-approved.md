@@ -7,5 +7,5 @@ Chosen by the owner: the proposal as shown. The owner merged the proposal (#243)
 What this means for the build:
 
 - The recommendation page: the shared Soft `Bar` (amber under 60, `role="progressbar"`) replaces the MUI progress bar, "Pending" carries a clock, Ask about this is a 44px link, the evidence rows on a phone are 56px, the phone decision buttons sit in one panel, and Decision recorded is one panel (maxWidth 760) with the amber "No order was placed" box. Same copy as today.
-- Track record is built in the next pull request, with the verdict icons.
+- Track record was built in the next pull request: the same `Bar` for each group (named "<group> matched"), an icon (check, cross, dash) before each verdict word, the Soft padding and the page at most 860px wide. The empty state keeps the shared ring.
 - Still open for #195: the Signal backtest, Admin, and the sign-in screens, each with its own mock and approval.
