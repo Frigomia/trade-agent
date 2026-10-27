@@ -43,6 +43,8 @@ describe("AccountPage", () => {
     renderFresh();
     expect(await screen.findByText("me@example.com")).toBeInTheDocument();
     expect(await screen.findByText("2 / 10")).toBeInTheDocument();
+    expect(screen.getByText("Signed in as")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Account links" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /track record/i })).toHaveAttribute("href", "/more/track-record");
     expect(screen.getByRole("link", { name: "Signal backtest" })).toHaveAttribute("href", "/more/backtests");
     expect(screen.getByRole("link", { name: /preferences/i })).toHaveAttribute("href", "/more/preferences");

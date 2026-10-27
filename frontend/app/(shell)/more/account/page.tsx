@@ -16,6 +16,7 @@ import { apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import type { Usage } from "@/lib/usage";
 import { useAction } from "@/lib/useAction";
+import { Avatar } from "@/components/ui/Avatar";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { BACKTEST_LABEL } from "@/components/shell/navItems";
@@ -52,7 +53,8 @@ function SettingsRow({
         display: "flex",
         alignItems: "center",
         gap: 1.5,
-        py: 1.5,
+        minHeight: 52,
+        py: 1,
         cursor: "pointer",
         color: "var(--text)",
         borderBottom: "1px solid var(--line)",
@@ -89,21 +91,24 @@ export default function AccountPage() {
       <PageHeader title="Account" />
       {meError && <Alert severity="error">Could not load your account.</Alert>}
       {!meError && me?.email && (
-        <Box sx={{ display: "grid", gap: 2, maxWidth: 680 }}>
+        <Box sx={{ display: "grid", gap: 2, maxWidth: 680, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start", "@media (min-width: 1280px)": { maxWidth: 1040, gridTemplateColumns: "minmax(0, 1fr) 340px" } }}>
           <Box sx={{ display: "grid", gap: 2 }}>
-          <Panel sx={{ p: "16px 18px" }}>
-            <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>Signed in as</Typography>
-            <Typography sx={{ fontSize: "1.125rem", fontWeight: 650, mt: 0.25 }}>{me.email}</Typography>
+          <Panel sx={{ p: "18px 20px", display: "flex", alignItems: "center", gap: 1.75 }}>
+            <Avatar email={me.email} size={48} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Signed in as</Typography>
+              <Typography sx={{ fontSize: "0.9375rem", fontWeight: 650, overflowWrap: "anywhere" }}>{me.email}</Typography>
+            </Box>
           </Panel>
           {usage && (
-            <Panel sx={{ p: "16px 18px" }}>
+            <Panel sx={{ p: "18px 20px" }}>
               <UsageSummary usage={usage} />
             </Panel>
           )}
           {usageError && <Alert severity="error">Could not load your usage.</Alert>}
           <ClaudeKeyPanel />
           <TelegramPanel />
-          <Panel component="nav" sx={{ p: "4px 18px" }}>
+          <Panel component="nav" aria-label="Account links" sx={{ p: "2px 20px" }}>
             {LINKS.map((l) => (
               <SettingsRow key={l.href} icon={l.icon} label={l.label} component={Link} href={l.href} />
             ))}
@@ -111,11 +116,11 @@ export default function AccountPage() {
           </Box>
           <Box sx={{ display: "grid", gap: 2 }}>
           {isDesktop ? (
-            <Panel sx={{ p: "16px 18px" }}>
+            <Panel sx={{ p: "18px 20px" }}>
               <ChangePasswordForm />
             </Panel>
           ) : (
-            <Panel sx={{ p: "4px 18px" }}>
+            <Panel sx={{ p: "2px 20px" }}>
               <SettingsRow
                 icon={Lock}
                 label="Change password"

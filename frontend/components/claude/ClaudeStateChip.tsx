@@ -1,10 +1,13 @@
+import { AlertTriangle, Check } from "lucide-react";
 import { Chip } from "@mui/material";
 
+const TINT_BORDER = "color-mix(in srgb, currentColor 22%, transparent)";
+// A tinted pill with an icon and the word (never colour alone); "Not connected" is a quiet outline.
 const CHIP = {
-  ok: { label: "Connected", color: "var(--accent)", bg: "var(--accent-wash)" },
-  warn: { label: "Needs attention", color: "var(--warn)", bg: "var(--warn-bg)" },
-  none: { label: "Not connected", color: "var(--muted)", bg: "transparent" },
-  server: { label: "Server key", color: "var(--accent)", bg: "var(--accent-wash)" },
+  ok: { label: "Connected", color: "var(--accent)", bg: "var(--accent-wash)", border: TINT_BORDER, icon: <Check size={13} aria-hidden /> },
+  warn: { label: "Needs attention", color: "var(--warn)", bg: "var(--warn-bg)", border: TINT_BORDER, icon: <AlertTriangle size={13} aria-hidden /> },
+  none: { label: "Not connected", color: "var(--muted)", bg: "transparent", border: "var(--line2)", icon: undefined },
+  server: { label: "Server key", color: "var(--accent)", bg: "var(--accent-wash)", border: TINT_BORDER, icon: <Check size={13} aria-hidden /> },
 } as const;
 
 export type ClaudeChipKind = keyof typeof CHIP;
@@ -16,8 +19,9 @@ export function ClaudeStateChip({ kind }: { kind: ClaudeChipKind }) {
     <Chip
       size="small"
       label={chip.label}
+      icon={chip.icon}
       variant="outlined"
-      sx={{ color: chip.color, borderColor: chip.color, bgcolor: chip.bg, fontWeight: 600 }}
+      sx={{ color: chip.color, borderColor: chip.border, bgcolor: chip.bg, fontWeight: 600, "& .MuiChip-icon": { color: "inherit", ml: 1, mr: -0.5 } }}
     />
   );
 }
