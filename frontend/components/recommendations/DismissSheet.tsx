@@ -23,12 +23,12 @@ export function DismissSheet({ id, onClose, onDecided }: {
       slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-labelledby": titleId, "aria-busy": submitting } }}>
       <Box component="form" onSubmit={(event) => { event.preventDefault(); void decide("reject", reason); }}
         sx={{ p: 3, width: { xs: "100%", md: 400 }, maxWidth: "100vw", display: "grid", gap: 2 }}>
-        <Typography id={titleId} component="h2" sx={{ fontSize: "1.375rem", fontWeight: 650 }}>Dismiss this idea?</Typography>
+        <Typography id={titleId} component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650 }}>Dismiss this recommendation?</Typography>
         <Typography sx={{ color: "var(--text2)" }}>Your reason is only a private note. It does not feed chat memory or analysis.</Typography>
-        <TextField label="Reason (optional)" value={reason} onChange={(event) => setReason(event.target.value)}
+        <TextField label="Reason (optional)" value={reason} onChange={(event) => setReason(event.target.value.replace(/\p{Cc}/gu, " "))}
           disabled={submitting} autoFocus fullWidth slotProps={{ htmlInput: { maxLength: 500 } }} helperText={`${reason.length}/500`} />
         {error && <Alert severity="error">{error}</Alert>}
-        <Button type="submit" variant="contained" disabled={submitting} sx={{ minHeight: 44 }}>Dismiss idea</Button>
+        <Button type="submit" variant="contained" disabled={submitting} sx={{ minHeight: 44 }}>Dismiss recommendation</Button>
         <Button disabled={submitting} onClick={() => decide("reject")} sx={{ minHeight: 44 }}>Skip reason and dismiss</Button>
         <Button disabled={submitting} onClick={onClose} sx={{ minHeight: 44 }}>Cancel</Button>
       </Box>

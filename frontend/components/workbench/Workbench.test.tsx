@@ -350,7 +350,7 @@ describe("Workbench on a phone", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Dismiss" }));
     expect(onDecided).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("textbox", { name: /reason/i }), { target: { value: "Too much tech" } });
-    fireEvent.click(screen.getByRole("button", { name: "Dismiss idea" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss recommendation" }));
     await waitFor(() => expect(onDecided).toHaveBeenCalledWith(updated));
     expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/1/reject", {
       method: "POST", body: JSON.stringify({ reason: "Too much tech" }),
