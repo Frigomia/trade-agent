@@ -1,0 +1,122 @@
+/* The recommendation page and Track record in the Soft direction. Loads after ../today-discovery/lib.css, ../company-overview/soft.css, co.css, ../portfolio/pf.css, ../plan/plan.css and ../account/acct.css.
+   Layout and the few new pieces only: panels, pills, buttons, alerts, bars and the shell are the shared ones. */
+.rc{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:780px}
+.rc .col{width:100%;max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;min-width:0}
+.rc .wide{max-width:860px}
+.rc h1{font-size:30px;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.rc p{margin:0}
+.rc a:not(.btn){color:var(--accent)}
+.rc .btn{min-height:44px}
+.rc small,.rc .muted{color:var(--muted);font-size:var(--fs-label)}
+.phone .rc{min-height:700px}
+.phone .rc h1{font-size:26px}
+
+/* back row */
+.back{display:flex;align-items:center;gap:10px}
+.back a{display:inline-flex;align-items:center;gap:4px;min-height:44px;color:var(--muted);font-size:var(--fs-body)}
+.back .sp{flex:1}
+.rc .back svg{transform:none}
+.rc .back a{color:var(--muted)}
+[hidden]{display:none!important}
+.theme2{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);color:var(--text2)}
+
+/* chips: the action is an icon and a word, never a colour */
+.act{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 12px;border-radius:999px;border:1px solid var(--line2);background:var(--track);color:var(--text);font-size:var(--fs-label);font-weight:650;letter-spacing:.04em}
+.act svg.i{width:13px;height:13px}
+.auto{display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--line2);color:var(--text2);font-size:var(--fs-label);font-weight:500}
+.auto svg.i{width:12px;height:12px}
+.pend{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 12px;border-radius:999px;background:color-mix(in oklab,var(--warn) 13%,var(--panel));color:var(--warn);font-size:var(--fs-label);font-weight:650}
+.pend svg.i{width:13px;height:13px}
+.tone-accent{background:var(--up-bg);color:var(--accent)}
+.tone-warn{background:color-mix(in oklab,var(--warn) 13%,var(--panel));color:var(--warn)}
+.tone-mute{background:var(--track);color:var(--muted)}
+.sig{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 12px;border-radius:999px;font-size:var(--fs-label);font-weight:650;white-space:nowrap}
+.sig svg.i{width:13px;height:13px}
+
+/* the hero: ticker, call, price, three pieces of evidence */
+.hero{padding:24px 28px}
+.hero .top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:8px}
+.hero .tk{font-size:38px;font-weight:650;letter-spacing:-.035em;line-height:1.1}
+.hero .top .sp{flex:1}
+.hero .px{display:flex;align-items:center;gap:12px;margin-top:6px;font-size:24px;font-weight:650;font-variant-numeric:tabular-nums}
+.ev{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:24px;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.ev .l{color:var(--muted);font-size:var(--fs-label)}
+.ev .v{font-size:26px;font-weight:650;letter-spacing:-.03em;line-height:1.2;margin-top:4px}
+.ev .v small{font-size:var(--fs-body);font-weight:400;letter-spacing:0}
+.ev .bar{margin-top:10px}
+.ev .pw{margin-top:10px;display:flex}
+.ask{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;min-height:44px;padding:0 4px;color:var(--accent);font-size:var(--fs-body);font-weight:500}
+.ask svg.i{width:16px;height:16px}
+
+/* the web second opinion: dashed always means web-derived */
+.web2{padding:20px 26px;border:1px dashed var(--line2);border-radius:16px;font-size:var(--fs-body);line-height:1.6}
+.web2 .wl{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:var(--fs-label);margin-bottom:10px}
+.web2 .wl svg.i{width:15px;height:15px}
+.web2 p{margin:0 0 10px}.web2 p:last-child{margin:0}
+.web2 b{font-weight:650}
+
+/* the decision bar */
+.dbar{position:sticky;bottom:16px;display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:var(--rp);background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow),0 -10px 30px -18px rgba(15,26,46,.3)}
+.dbar .t{flex:1;min-width:0}
+.dbar b{display:block;font-size:var(--fs-lead);font-weight:650}
+.dbar small{display:block;margin-top:2px}
+.phone .dbar{flex-wrap:wrap;position:static;bottom:auto;padding:12px;gap:10px;box-shadow:var(--shadow)}
+.phone .dbar .btn{flex:1}
+
+/* phone evidence: one panel, a row per piece */
+.erows{padding:2px 16px;display:grid}
+.erow{display:flex;align-items:center;gap:12px;min-height:56px;border-top:1px solid var(--line);font-size:var(--fs-body)}
+.erow:first-child{border-top:0}
+.erow b{flex:1;font-weight:650}
+.erow .n{font-weight:650;font-variant-numeric:tabular-nums}
+
+/* decision recorded */
+.done{padding:32px 28px;text-align:center;display:grid;gap:10px;justify-items:center}
+.done .ic{display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:var(--up-bg);color:var(--accent)}
+.done .ic.mute{background:var(--track);color:var(--text2)}
+.done .ic svg.i{width:30px;height:30px}
+.done h2{margin:6px 0 0;font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em}
+.done .sub{color:var(--text2);font-size:var(--fs-body)}
+.done .warnbox{text-align:left;width:100%;margin-top:6px}
+.done .btn{width:100%}
+.done .link{background:none;border:0;color:var(--accent);min-height:44px;font-size:var(--fs-body);font-weight:500}
+.done .ok2{display:flex;gap:8px;align-items:center;width:100%;justify-content:center;color:var(--text2)}
+.done .ok2 svg.i{color:var(--accent)}
+.phone .done{padding:24px 16px}
+
+/* Track record */
+.sum{padding:20px 24px;display:grid;gap:16px}
+.sums{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px}
+.sums h2{margin:0;font-size:var(--fs-body);font-weight:650;color:var(--text2)}
+.sums .big{font-size:40px;font-weight:650;letter-spacing:-.035em;line-height:1.1;margin-top:6px}
+.sums .big span{color:var(--muted);font-size:28px}
+.sums .what{font-size:var(--fs-body);margin-top:4px}
+.sums .bar{margin-top:12px}
+.note2{color:var(--muted);font-size:var(--fs-label);line-height:1.55}
+.rows{padding:2px 20px;display:grid}
+.trow{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.trow:first-child{border-top:0}
+.trow .m{flex:1;min-width:0}
+.trow .h{display:flex;align-items:center;gap:10px}
+.trow .h b{font-size:var(--fs-lead);font-weight:650}
+.trow small{display:block;margin-top:3px;line-height:1.45}
+.trow .r{text-align:right;flex:none}
+.trow .r b{display:block;font-weight:650;font-variant-numeric:tabular-nums}
+.trow .r b.up{color:var(--up)}.trow .r b.down{color:var(--down)}.trow .r b.nm{color:var(--muted)}
+.trow .vd{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-label);color:var(--text2);margin-top:2px}
+.trow .vd svg.i{width:13px;height:13px}
+.phone .trow{align-items:flex-start}
+.empty{display:grid;justify-items:center;text-align:center;gap:8px;padding:36px 16px}
+.ringe{display:grid;place-items:center;width:132px;height:132px;border-radius:50%;border:8px solid var(--track);margin-bottom:12px}
+.ringe b{display:block;font-size:30px;font-weight:650;letter-spacing:-.03em;line-height:1}
+.ringe small{display:block;margin-top:4px}
+.empty h2{margin:0;font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em}
+.empty p{color:var(--muted);font-size:var(--fs-body);max-width:420px;margin-bottom:10px}
+
+/* states grid */
+.region .rc{min-height:0}
+.region .rc .col{max-width:100%}
+.phone .sums{grid-template-columns:1fr}
+.infobox{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--rc);background:var(--up-bg);font-size:var(--fs-body);line-height:1.5}
+.infobox svg.i{color:var(--accent);margin-top:2px}
+.rc .col.wide{margin:0}
