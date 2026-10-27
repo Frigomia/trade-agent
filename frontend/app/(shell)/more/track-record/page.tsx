@@ -2,13 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import useSWR from "swr";
-import { Alert, Box, LinearProgress, Typography } from "@mui/material";
+import { Check, Minus, X, type LucideIcon } from "lucide-react";
+import { Alert, Box, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatPct } from "@/lib/format";
 import { buildTrackRecord, type Kind, type Verdict } from "@/lib/trackRecord";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionChip } from "@/components/recommendations/RecommendationCard";
+import { Bar } from "@/components/ui/Bar";
 import { Panel } from "@/components/ui/Panel";
 import { TrackRecordEmpty } from "@/components/recommendations/TrackRecordEmpty";
 
@@ -17,6 +19,19 @@ const VERDICT_WORD: Record<Verdict, string> = {
   missed: "Missed",
   unscored: "Not scored",
 };
+
+// The verdict is an icon and a word, never a colour: the move beside it is green or red because it is a price move.
+const VERDICT_ICON: Record<Verdict, LucideIcon> = { matched: Check, missed: X, unscored: Minus };
+
+function VerdictMark({ verdict }: { verdict: Verdict }) {
+  const Icon = VERDICT_ICON[verdict];
+  return (
+    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.625, fontSize: "0.75rem", color: "var(--text2)" }}>
+      <Icon size={13} aria-hidden />
+      {VERDICT_WORD[verdict]}
+    </Box>
+  );
+}
 
 const DECISION_WORD: Record<string, string> = {
   APPROVED: "Approved",
@@ -46,7 +61,7 @@ export default function TrackRecordPage() {
   const summary = data ? buildTrackRecord(data) : null;
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: 860 }}>
       <PageHeader title="Track record" subtitle="How past calls looked 20 trading days later" />
 
       {error && <Alert severity="error">Could not load your track record.</Alert>}
@@ -54,7 +69,7 @@ export default function TrackRecordPage() {
       {summary && summary.rows.length === 0 && <TrackRecordEmpty />}
 
       {summary && summary.rows.length > 0 && (
-        <Panel sx={{ p: "18px 20px", mb: 1.75 }}>
+        <Panel sx={{ p: "20px 24px", mb: 2 }}>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(auto-fit, minmax(220px, 1fr))" }, gap: 2.5 }}>
             {KINDS.filter((kind) => summary.bySource[kind].count > 0).map((kind) => {
               const { count, matched, scored } = summary.bySource[kind];
@@ -77,7 +92,7 @@ export default function TrackRecordPage() {
                         </Box>
                       </Typography>
                       <Typography sx={{ fontSize: "0.9375rem", mt: 0.5 }}>calls moved the way the action implied</Typography>
-                      <LinearProgress variant="determinate" value={(matched / scored) * 100} sx={{ mt: 1.5 }} />
+                      <Bar value={(matched / scored) * 100} label={`${KIND_GROUP[kind]} matched`} valueText={`${matched} of ${scored}`} sx={{ mt: 1.5 }} />
                     </>
                   )}
                 </Box>
@@ -96,7 +111,7 @@ export default function TrackRecordPage() {
       )}
 
       {summary && summary.rows.length > 0 && (
-        <Panel sx={{ p: "4px 18px" }}>
+        <Panel sx={{ p: "2px 20px" }}>
         <Box component="ul" sx={{ listStyle: "none", p: 0, m: 0 }}>
           {summary.rows.map(({ rec, kind, entryDay, verdict, movePct }) => (
             <Box
@@ -106,14 +121,14 @@ export default function TrackRecordPage() {
                 display: "flex",
                 gap: 1.25,
                 alignItems: "center",
-                py: 1.5,
+                py: 1.75,
                 borderBottom: "1px solid var(--line)",
                 "&:last-of-type": { borderBottom: 0 },
               }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography sx={{ fontWeight: 650, fontSize: "1rem" }}>{rec.ticker}</Typography>
+                  <Typography sx={{ fontWeight: 650, fontSize: "0.9375rem" }}>{rec.ticker}</Typography>
                   <ActionChip action={rec.action} />
                 </Box>
                 <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 0.25 }}>
@@ -140,7 +155,7 @@ export default function TrackRecordPage() {
                 >
                   {movePct === null ? "—" : formatPct(movePct)}
                 </Typography>
-                <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{VERDICT_WORD[verdict]}</Typography>
+                <VerdictMark verdict={verdict} />
               </Box>
             </Box>
           ))}

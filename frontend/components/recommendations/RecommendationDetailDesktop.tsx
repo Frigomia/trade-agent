@@ -1,15 +1,17 @@
 "use client";
 
-import { Box, LinearProgress, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { Amount } from "@/components/portfolio/Amount";
+import { Bar } from "@/components/ui/Bar";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { formatShare } from "@/lib/format";
 import { AskAboutThis } from "./AskAboutThis";
 import { AutomaticTag } from "./AutomaticTag";
 import { DecisionActions } from "./DecisionActions";
-import { SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
+import { FUNDAMENTALS_CAUTION, SIGNAL_LABEL, SIGNAL_TONE } from "./EvidencePanel";
+import { PendingPill } from "./PendingPill";
 import { ActionChip, ChangePill } from "./RecommendationCard";
 import { WebOpinionBox } from "./WebOpinionBox";
 
@@ -39,7 +41,7 @@ export function RecommendationDetailDesktop({
           <ActionChip action={recommendation.action} />
           <AutomaticTag source={recommendation.source} />
           <Box sx={{ flex: 1 }} />
-          <Pill tone="warn">Pending</Pill>
+          <PendingPill />
         </Box>
         {recommendation.current_price !== null && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.5 }}>
@@ -67,7 +69,7 @@ export function RecommendationDetailDesktop({
                     {" "}/100
                   </Box>
                 </Typography>
-                <LinearProgress variant="determinate" value={fundamental_score} sx={{ mt: 1 }} />
+                <Bar value={fundamental_score} label="Fundamentals" caution={fundamental_score < FUNDAMENTALS_CAUTION} sx={{ mt: 1.25 }} />
               </>
             ) : (
               <Typography sx={BIG}>—</Typography>
@@ -75,7 +77,7 @@ export function RecommendationDetailDesktop({
           </Box>
           <Box>
             <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Technical timing</Typography>
-            <Box sx={{ mt: 1 }}>
+            <Box sx={{ mt: 1.25, display: "flex" }}>
               {technical_signal ? (
                 <Pill tone={SIGNAL_TONE[technical_signal]}>{SIGNAL_LABEL[technical_signal]}</Pill>
               ) : (

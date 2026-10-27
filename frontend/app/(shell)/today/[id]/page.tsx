@@ -8,9 +8,10 @@ import { ChevronLeft } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { AutomaticTag } from "@/components/recommendations/AutomaticTag";
+import { PendingPill } from "@/components/recommendations/PendingPill";
 import { ActionChip, ChangePill } from "@/components/recommendations/RecommendationCard";
 import { Amount } from "@/components/portfolio/Amount";
-import { Pill } from "@/components/ui/Pill";
+import { Panel } from "@/components/ui/Panel";
 import { AskAboutThis } from "@/components/recommendations/AskAboutThis";
 import { DecisionActions } from "@/components/recommendations/DecisionActions";
 import { EvidenceDetail } from "@/components/recommendations/EvidencePanel";
@@ -28,7 +29,7 @@ function BackRow() {
       <Box
         component={Link}
         href="/today"
-        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, textDecoration: "none", color: "var(--muted)", fontSize: "0.875rem" }}
+        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minHeight: 44, textDecoration: "none", color: "var(--muted)", fontSize: "0.8125rem" }}
       >
         <ChevronLeft size={18} />
         Today
@@ -116,7 +117,7 @@ function RecommendationDetail() {
         <ActionChip action={recommendation.action} />
         <AutomaticTag source={recommendation.source} />
         <Box sx={{ flex: 1 }} />
-        <Pill tone="warn">Pending</Pill>
+        <PendingPill />
       </Box>
       {recommendation.current_price !== null && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
@@ -129,7 +130,9 @@ function RecommendationDetail() {
       {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
       {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
       <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
-        <DecisionActions id={recommendation.id} onDecided={setDecided} />
+        <Panel sx={{ p: "12px 12px 8px" }}>
+          <DecisionActions id={recommendation.id} onDecided={setDecided} />
+        </Panel>
       </Box>
     </Box>
   );

@@ -1,4 +1,5 @@
-import { Box, Typography, LinearProgress } from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { Bar } from "@/components/ui/Bar";
 import type { RecommendationOut, TechnicalSignal } from "@/lib/api/recommendation-types";
 import { Panel } from "@/components/ui/Panel";
 import { formatShare } from "@/lib/format";
@@ -20,7 +21,10 @@ export const SIGNAL_TONE: Record<TechnicalSignal, PillTone> = {
   WEAK_DOWNTREND: "warn",
 };
 
-const ROW = { display: "flex", alignItems: "center", py: 1.75, borderBottom: "1px solid var(--line)", "&:last-of-type": { borderBottom: 0 } };
+/** A fundamentals score under this reads as a caution (an amber bar and pill); the number is always shown. */
+export const FUNDAMENTALS_CAUTION = 60;
+
+const ROW = { display: "flex", alignItems: "center", gap: 1.5, minHeight: 56, py: 1, borderBottom: "1px solid var(--line)", "&:last-of-type": { borderBottom: 0 } };
 
 // The detail page's version: one panel, a row per kind of evidence, the number as a pill.
 export function EvidenceDetail({ recommendation }: { recommendation: RecommendationOut }) {
@@ -30,7 +34,7 @@ export function EvidenceDetail({ recommendation }: { recommendation: Recommendat
       {fundamental_score !== null && (
         <Box>
           <Typography sx={{ fontWeight: 600, flex: 1 }}>Fundamentals</Typography>
-          <Pill tone={fundamental_score < 60 ? "warn" : "accent"}>{fundamental_score}/100</Pill>
+          <Pill tone={fundamental_score < FUNDAMENTALS_CAUTION ? "warn" : "accent"}>{fundamental_score}/100</Pill>
         </Box>
       )}
       {technical_signal !== null && (
@@ -64,11 +68,7 @@ export function EvidencePanel({ recommendation }: { recommendation: Recommendati
               {fundamental_score}/100
             </Typography>
           </Box>
-          <LinearProgress
-            variant="determinate"
-            value={fundamental_score}
-            sx={{ mt: 0.75 }}
-          />
+          <Bar value={fundamental_score} label="Fundamentals" caution={fundamental_score < FUNDAMENTALS_CAUTION} sx={{ mt: 0.75 }} />
         </Box>
       )}
       {technical_signal !== null && (

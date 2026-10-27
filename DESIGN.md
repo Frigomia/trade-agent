@@ -507,4 +507,6 @@ Open items:
   shared state chip with an icon and the word), and so is Preferences (pill segmented controls for risk and
   appearance, tags for the sectors, the sticky save bar with its status line) and Chat (a squared tail corner on each
   message, the starters as rows, the message box as one rounded field with Send inside it, "Near limit" and "At limit"
-  beside the allowance).
+  beside the allowance), and the recommendation page for a call on a holding (the Soft score bar, amber under 60,
+  a clock on "Pending", the decision recorded as one panel) and Track record (the same bar for each group, an icon
+  before each verdict word).
