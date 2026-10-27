@@ -28,7 +28,7 @@ const BLOCKED = "Telegram stopped receiving messages. Reconnect to get them agai
 const THRESHOLD_ERROR = "Enter a number from 1 to 50, one decimal at most.";
 const NEW_TAB = "noopener,noreferrer";
 
-const muted = { fontSize: "0.78125rem", color: "var(--muted)", lineHeight: 1.5 } as const;
+const muted = { fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.5 } as const;
 const linkSx = { color: "var(--accent)", textDecoration: "underline", textUnderlineOffset: "2px", overflowWrap: "anywhere" } as const;
 const cardSx = { p: "18px 20px", display: "flex", flexDirection: "column", gap: 1.75, minWidth: 0 } as const;
 
@@ -46,7 +46,7 @@ function Title({ focusable }: { focusable?: boolean }) {
       component="h2"
       tabIndex={focusable ? -1 : undefined}
       data-focus={focusable ? "" : undefined}
-      sx={{ fontSize: "1rem", fontWeight: 650, outline: "none" }}
+      sx={{ fontSize: "0.9375rem", fontWeight: 650, outline: "none" }}
     >
       Telegram
     </Typography>
@@ -71,7 +71,7 @@ function PreviewCard({ reminder }: { reminder: boolean }) {
             border: "1px solid var(--line)",
             borderRadius: "6px 16px 16px 16px",
             p: "10px 12px",
-            fontSize: "0.84375rem",
+            fontSize: "0.8125rem",
             lineHeight: 1.55,
             color: "var(--text)",
             display: "grid",
@@ -112,6 +112,7 @@ function SwitchRow({
   checked,
   disabled,
   onChange,
+  divider,
 }: {
   id: string;
   label: string;
@@ -119,11 +120,21 @@ function SwitchRow({
   checked: boolean;
   disabled: boolean;
   onChange: (next: boolean) => void;
+  /** A hairline above the row; every row but the first. */
+  divider?: boolean;
 }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 2,
+        ...(divider && { borderTop: "1px solid var(--line)", pt: 1.75 }),
+      }}
+    >
       <Box>
-        <Typography id={`${id}-label`} sx={{ fontSize: "0.875rem", fontWeight: 650 }}>
+        <Typography id={`${id}-label`} sx={{ fontSize: "0.8125rem", fontWeight: 650 }}>
           {label}
         </Typography>
         <Typography id={`${id}-hint`} sx={muted}>
@@ -253,9 +264,9 @@ export function TelegramPanel() {
   return (
     <Box
       ref={panelRef}
-      sx={{ display: "grid", gap: 2.25, alignItems: "stretch", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 300px" } }}
+      sx={{ display: "grid", gap: 2.25, alignItems: "stretch", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 280px" } }}
     >
-      <Panel sx={{ ...cardSx, order: { xs: 1, md: 0 } }}>
+      <Panel sx={cardSx}>
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.25 }}>
           <Title focusable={state === "connected" || state === "blocked"} />
           <ClaudeStateChip kind={blocked ? "warn" : linked ? "ok" : "none"} />
@@ -309,6 +320,7 @@ export function TelegramPanel() {
             />
             <SwitchRow
               id="tg-moves"
+              divider
               label="Price moves"
               hint="Tickers that moved at least the threshold since the previous close."
               checked={movesOn}
@@ -317,12 +329,14 @@ export function TelegramPanel() {
             />
             <SwitchRow
               id="tg-plan"
+              divider
               label="Monthly plan reminder"
               hint="Sent on the first weekday of the month, only if at least one holding or watchlist item has a target weight."
               checked={planOn}
               disabled={save.submitting}
               onChange={(next) => toggle("plan_reminder_enabled", next)}
             />
+            <Box sx={{ borderTop: "1px solid var(--line)", pt: 1.75 }}>
             <TextField
               id="tg-threshold"
               label="Move threshold"
@@ -343,6 +357,7 @@ export function TelegramPanel() {
               }}
               sx={{ width: 140 }}
             />
+            </Box>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
               <Typography sx={{ ...muted, fontSize: "0.75rem", flex: 1, minWidth: 200 }}>{NOTE}</Typography>
               <Button variant="outlined" size="small" onClick={() => setConfirming(true)}>
@@ -354,7 +369,7 @@ export function TelegramPanel() {
 
         {state === "blocked" && (
           <>
-            <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", color: "var(--warn)", fontSize: "0.78125rem", lineHeight: 1.5 }}>
+            <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", color: "var(--warn)", fontSize: "0.8125rem", lineHeight: 1.5 }}>
               <AlertTriangle size={16} aria-hidden style={{ marginTop: 1, flex: "none" }} />
               <span>{BLOCKED}</span>
             </Box>
@@ -375,7 +390,7 @@ export function TelegramPanel() {
         {save.error && !thresholdInvalid && <Alert severity="error">{save.error}</Alert>}
       </Panel>
 
-      <Box sx={{ order: { xs: 0, md: 1 }, display: "grid" }}>
+      <Box sx={{ display: "grid" }}>
         <PreviewCard reminder={planOn} />
       </Box>
 

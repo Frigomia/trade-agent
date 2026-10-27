@@ -26,9 +26,9 @@ export function ClaudeKeyPanel() {
   const kind = !status?.connected ? "none" : status.needs_attention ? "warn" : "ok";
 
   return (
-    <Panel sx={{ p: "16px 18px", display: "grid", gap: 1.5 }} aria-busy={isLoading}>
+    <Panel sx={{ p: "18px 20px", display: "grid", gap: 1.5 }} aria-busy={isLoading}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-        <Typography component="h2" sx={{ fontSize: "1rem", fontWeight: 650 }}>
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
           Claude
         </Typography>
         {status && <ClaudeStateChip kind={kind} />}
@@ -68,7 +68,7 @@ export function ClaudeKeyPanel() {
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Box
               component="span"
-              sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontFamily: "var(--font-mono, monospace)", fontSize: "0.8125rem" }}
+              sx={{ display: "inline-flex", alignItems: "center", gap: 1, minHeight: 36, px: 1.5, borderRadius: "14px", bgcolor: "var(--track)", fontFamily: "var(--font-mono, monospace)", fontSize: "0.8125rem" }}
             >
               <KeyRound size={16} color="var(--muted)" aria-hidden />
               {`sk-ant-…${status.last4 ?? ""}`}
@@ -87,7 +87,7 @@ export function ClaudeKeyPanel() {
             </Button>
           </Box>
           {kind === "ok" && (
-            <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.5 }}>
               Your key is stored encrypted and is never shown again; only the last four characters are.
             </Typography>
           )}

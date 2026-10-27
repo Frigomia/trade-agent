@@ -61,7 +61,7 @@ export function DataActions({ email }: { email: string }) {
       </Box>
       {confirming && (
         <Box sx={{ display: "grid", gap: 1.5 }}>
-          <Typography sx={{ fontSize: "0.875rem" }}>
+          <Typography sx={{ fontSize: "0.8125rem", lineHeight: 1.55 }}>
             This permanently deletes your holdings, watchlist, trades, recommendations, chats, backtests,
             preferences, snapshots and your Claude key.
           </Typography>
