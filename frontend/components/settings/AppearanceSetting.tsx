@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { applyThemeChoice, readThemeChoice, type ThemeChoice } from "@/lib/theme/applyTheme";
 
 const CHOICES: { value: ThemeChoice; label: string }[] = [
@@ -20,21 +20,15 @@ export function AppearanceSetting() {
   }, []);
 
   return (
-    <ToggleButtonGroup
-      exclusive
+    <SegmentedControl
+      label="Appearance"
       value={choice}
-      aria-label="Appearance"
-      onChange={(_, next: ThemeChoice | null) => {
-        if (!next) return;
+      onChange={(next) => {
         applyThemeChoice(next);
         setChoice(next);
       }}
-    >
-      {CHOICES.map(({ value, label }) => (
-        <ToggleButton key={value} value={value} aria-pressed={choice === value}>
-          {label}
-        </ToggleButton>
-      ))}
-    </ToggleButtonGroup>
+      segments={CHOICES.map(({ value, label }) => ({ key: value, label }))}
+      sx={{ width: "100%", "& > *": { flex: 1 } }}
+    />
   );
 }
