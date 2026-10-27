@@ -4,14 +4,14 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Alert, Box, List, ListItemButton, ListItemText, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
-import type { BacktestListItem, BacktestResult, JobStatus, RunInput } from "@/lib/backtest";
+import { isLevel, type BacktestListItem, type BacktestResult, type JobStatus, type RunInput } from "@/lib/backtest";
 import { useAction } from "@/lib/useAction";
 import { usePortfolioSuggestions } from "@/lib/portfolio/usePortfolioSuggestions";
 import { RunForm } from "@/components/backtests/RunForm";
 import { BacktestResultPanel } from "@/components/backtests/BacktestResultPanel";
 import { Panel } from "@/components/ui/Panel";
 import { BACKTEST_LABEL } from "@/components/shell/navItems";
-import { Pill } from "@/components/ui/Pill";
+import { EdgePill } from "@/components/backtests/EdgePill";
 import { formatPct } from "@/lib/format";
 import { PageHeader } from "@/components/shell/PageHeader";
 
@@ -79,8 +79,8 @@ export default function BacktestsPage() {
           },
         }}
       >
-        <Panel sx={{ gridArea: "form", p: "16px 18px" }}>
-          <Typography component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650, mb: 0.5 }}>
+        <Panel sx={{ gridArea: "form", p: "18px 20px" }}>
+          <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, mb: 0.5 }}>
             Run a backtest
           </Typography>
           <RunForm onRun={start} running={submitting || jobRunning} error={error} suggestions={suggestions} />
@@ -96,7 +96,7 @@ export default function BacktestsPage() {
           {result && <BacktestResultPanel result={result} />}
         </Box>
 
-        <Panel sx={{ gridArea: "runs", p: "14px 10px" }}>
+        <Panel sx={{ gridArea: "runs", p: "18px 12px 12px" }}>
           <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, px: 1.5 }}>
             Recent runs
           </Typography>
@@ -111,15 +111,19 @@ export default function BacktestsPage() {
           {list && list.length > 0 && (
             <List>
               {list.map((item) => (
-                <ListItemButton key={item.id} selected={item.id === resultId} onClick={() => setSelectedId(item.id)}>
+                <ListItemButton
+                  key={item.id}
+                  selected={item.id === resultId}
+                  aria-pressed={item.id === resultId}
+                  onClick={() => setSelectedId(item.id)}
+                  sx={{ minHeight: 56, borderRadius: "14px", "&.Mui-selected, &.Mui-selected:hover": { bgcolor: "var(--accent-wash)" } }}
+                >
                   <ListItemText
                     primary={item.ticker}
                     secondary={`${item.start_date} to ${item.end_date}`}
                     slotProps={{ primary: { sx: { fontWeight: 650 } } }}
                   />
-                  <Pill tone={item.excess_return_pct < 0 ? "down" : "up"}>
-                    {formatPct(item.excess_return_pct * 100)}
-                  </Pill>
+                  <EdgePill fraction={item.excess_return_pct}>{isLevel(item.excess_return_pct) ? "0.0%" : formatPct(item.excess_return_pct * 100)}</EdgePill>
                 </ListItemButton>
               ))}
             </List>

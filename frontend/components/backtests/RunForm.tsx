@@ -63,7 +63,12 @@ export function RunForm({
         </Alert>
       )}
       {running && (
-        <Typography variant="body2" role="status" sx={{ mt: 1 }}>
+        <Typography role="status" sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 1.5, fontSize: "0.8125rem", color: "var(--text2)" }}>
+          <Box component="span" aria-hidden sx={{ display: "inline-flex", gap: "5px", "& i": { width: 6, height: 6, borderRadius: "50%", bgcolor: "var(--accent)" }, "& i:nth-of-type(2)": { opacity: 0.6 }, "& i:nth-of-type(3)": { opacity: 0.3 } }}>
+            <i />
+            <i />
+            <i />
+          </Box>
           Running the backtest. This can take a little while.
         </Typography>
       )}
