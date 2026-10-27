@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Account and Preferences · Soft restyle</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="../portfolio/pf.css">
+<link rel="stylesheet" href="../plan/plan.css">
+<link rel="stylesheet" href="acct.css">
+</head>
+<body>
+<div class="tag"><b>Account and Preferences · Soft restyle (proposal).</b> The two settings screens in the approved Soft direction: the same content, states and copy as the app today. Fictional data, no requests. Add ?theme=dark to start dark.</div>
+<div class="tag"><b>Account.</b> Who is signed in, the monthly usage, the Claude key, Telegram (connected, with the sample message), the links, Change password, the data actions and Sign out.</div>
+<div id="d-account"></div>
+<div class="tag"><b>Preferences.</b> Risk tolerance, sectors to avoid, notes, the contribution plan, appearance, the two automatic-analysis switches and the save bar (shown with unsaved changes).</div>
+<div id="d-prefs"></div>
+<div class="tag"><b>Phone, 390 wide.</b> One column. Change password folds into a row that opens the form; the save bar sits above the tab bar; every control is 44px or more.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width.</b> Claude: not connected, needs attention, loading, could not load, remove. Usage near and at the limit. Telegram: not connected, waiting, blocked, threshold not valid, not available, could not load, disconnect. Password errors and done. Delete my data. Preferences: nothing changed, saved, invalid amounts, sector list full, paused switches, could not save, could not load.</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="../portfolio/pf.js"></script>
+<script src="acct.js"></script>
+</body>
+</html>
