@@ -47,6 +47,23 @@ describe("TrackRecordPage", () => {
     expect(screen.getByText(/not scored/i)).toBeInTheDocument();
   });
 
+  it("gives each group a named bar and each verdict an icon beside its word", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/analysis/recommendations") return [rec(1, "BUY", 0.05), rec(2, "SELL", 0.03), rec(3, "HOLD", 0.01)];
+      return { evaluated: 0, remaining: 0 };
+    });
+    renderFresh();
+    const bars = await screen.findAllByRole("progressbar");
+    expect(bars).toHaveLength(1);
+    expect(bars[0]).toHaveAccessibleName("Holdings calls matched");
+    expect(bars[0]).toHaveAttribute("aria-valuenow", "50");
+    expect(bars[0]).toHaveAttribute("aria-valuetext", "1 of 2");
+    // the verdict word is never alone: an aria-hidden icon sits in the same element
+    expect(screen.getByText("Matched").querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("Missed").querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("Not scored").querySelector("svg")).not.toBeNull();
+  });
+
   it("labels holdings calls and discovery ideas, counts each, and keeps a replaced idea", async () => {
     apiFetch.mockImplementation(async (path: string) => {
       if (path === "/analysis/recommendations")

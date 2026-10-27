@@ -11,6 +11,11 @@ describe("Bar", () => {
     expect(bar).toHaveAttribute("aria-valuemax", "100");
   });
 
+  it("reads valueText instead of the bare number when given", () => {
+    render(<Bar value={50} label="Matched" valueText="3 of 6" />);
+    expect(screen.getByRole("progressbar", { name: "Matched" })).toHaveAttribute("aria-valuetext", "3 of 6");
+  });
+
   it("shows an empty bar for a value that is not a number", () => {
     render(<Bar value={Number.NaN} label="Score" />);
     expect(screen.getByRole("progressbar", { name: "Score" })).toHaveAttribute("aria-valuenow", "0");
