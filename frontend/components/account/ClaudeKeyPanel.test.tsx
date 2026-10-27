@@ -22,6 +22,8 @@ import { ClaudeKeyPanel } from "./ClaudeKeyPanel";
 
 type Status = { connected: boolean; last4: string | null; needs_attention: boolean };
 let status: Status;
+let role: string;
+let roleFails: boolean;
 
 function renderPanel() {
   return render(
@@ -35,7 +37,13 @@ describe("ClaudeKeyPanel", () => {
   beforeEach(() => {
     apiFetch.mockReset();
     status = { connected: false, last4: null, needs_attention: false };
-    apiFetch.mockImplementation(async (_p: string, init?: { method?: string }) => {
+    role = "user";
+    roleFails = false;
+    apiFetch.mockImplementation(async (p: string, init?: { method?: string }) => {
+      if (p === "/me") {
+        if (roleFails) throw new FakeApiError(500, "boom");
+        return { role };
+      }
       if (init?.method === "DELETE") {
         status = { connected: false, last4: null, needs_attention: false };
         return undefined;
@@ -50,6 +58,57 @@ describe("ClaudeKeyPanel", () => {
     expect(screen.getByText("Not connected")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Connect Claude" })).toHaveAttribute("href", "/more/connect-claude");
     expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("an admin without a key: Server key chip, no Connect Claude, an optional own-key link", async () => {
+    role = "admin";
+    renderPanel();
+    expect(await screen.findByText("Server key")).toBeInTheDocument();
+    expect(screen.getByText(/use the server's Claude key/)).toBeInTheDocument();
+    expect(screen.queryByText("Not connected")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect Claude" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Connect your own key" })).toHaveAttribute("href", "/more/connect-claude");
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("an admin with their own key sees it like anyone else", async () => {
+    role = "admin";
+    status = { connected: true, last4: "a1B2", needs_attention: false };
+    renderPanel();
+    expect(await screen.findByText("Connected")).toBeInTheDocument();
+    expect(screen.queryByText("Server key")).not.toBeInTheDocument();
+    expect(screen.getByText("sk-ant-…a1B2")).toBeInTheDocument();
+  });
+
+  it("does not flash Connect Claude while the role loads", async () => {
+    let release!: (v: { role: string }) => void;
+    apiFetch.mockImplementation((p: string) =>
+      p === "/me" ? new Promise((r) => (release = r)) : Promise.resolve(status),
+    );
+    renderPanel();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/me"));
+    expect(screen.queryByRole("link", { name: "Connect Claude" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Not connected")).not.toBeInTheDocument();
+    release({ role: "admin" });
+    expect(await screen.findByText("Server key")).toBeInTheDocument();
+  });
+
+  it("does not guess when the role cannot be read: an error and Try again, then the right state", async () => {
+    role = "admin";
+    roleFails = true;
+    renderPanel();
+    expect(await screen.findByText("Could not load your Claude status.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Connect Claude" })).not.toBeInTheDocument();
+    roleFails = false;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Server key")).toBeInTheDocument();
+  });
+
+  it("a connected user's role is never read", async () => {
+    status = { connected: true, last4: "a1B2", needs_attention: false };
+    renderPanel();
+    await screen.findByText("Connected");
+    expect(apiFetch).not.toHaveBeenCalledWith("/me");
   });
 
   it("connected: chip, masked key with only the last four, Replace opens step 5", async () => {

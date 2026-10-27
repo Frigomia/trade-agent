@@ -247,6 +247,14 @@ describe("TelegramPanel", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Move threshold" })).toBeDisabled());
   });
 
+  it("puts the message preview after the settings panel (on a phone it follows, never leads)", () => {
+    hook.status = connected;
+    render(<TelegramPanel />);
+    const title = screen.getByRole("heading", { name: "Telegram" });
+    const preview = screen.getByRole("heading", { name: "What a message looks like" });
+    expect(title.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("connected: chip, two labelled switches with hints, threshold with suffix, note, Disconnect", () => {
     hook.status = connected;
     render(<TelegramPanel />);
