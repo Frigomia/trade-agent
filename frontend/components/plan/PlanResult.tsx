@@ -124,9 +124,11 @@ function LeftOutRow({ entry }: { entry: LeftOut }) {
       <Box role="cell" sx={{ minWidth: 0 }}>
         <Company ticker={entry.ticker} name={entry.name} />
       </Box>
-      <Box role="cell" sx={{ ...wide, gridColumn: { xs: "1 / -1", md: "2 / 5" }, fontSize: "0.8125rem" }}>
+      <Box role="cell" sx={{ ...wide, fontSize: "0.8125rem" }}>
         {entry.reason}
       </Box>
+      <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
+      <Box role="cell" sx={priceCell} />
       <Box role="cell" sx={{ ...amountCell, fontSize: "0.9375rem" }}>
         0.00
       </Box>
@@ -241,9 +243,11 @@ export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode })
             <Box role="cell" sx={{ fontSize: "0.8125rem" }}>
               Total
             </Box>
-            <Box role="cell" sx={{ ...wide, ...muted, gridColumn: { xs: "1 / -1", md: "2 / 5" }, gridRow: { xs: 2, md: "auto" }, fontWeight: 400 }}>
+            <Box role="cell" sx={{ ...wide, ...muted, gridRow: { xs: 2, md: "auto" }, fontWeight: 400 }}>
               Leftover {formatAmount(plan.leftover_eur)} EUR
             </Box>
+            <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
+            <Box role="cell" sx={priceCell} />
             <Box role="cell" sx={{ ...amountCell, whiteSpace: "nowrap", fontSize: "0.9375rem" }}>
               {formatAmount(total)} EUR
             </Box>

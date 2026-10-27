@@ -72,6 +72,15 @@ describe("PlanResult", () => {
     expect(screen.queryByText("target")).not.toBeInTheDocument();
   });
 
+  it("keeps five cells in every row, so the amount is the fifth column in the funded, left-out and total rows", () => {
+    render(<PlanResult plan={plan({ left_out: [AAPL] })} />);
+    const rows = within(screen.getByRole("table", { name: "Plan lines" })).getAllByRole("row");
+    // hidden: the empty columns are display:none on a phone (and jsdom reads that base rule).
+    for (const row of rows.slice(1)) expect(within(row).getAllByRole("cell", { hidden: true })).toHaveLength(5);
+    expect(within(rows[2]).getAllByRole("cell", { hidden: true })[4]).toHaveTextContent("0.00");
+    expect(within(rows[3]).getAllByRole("cell", { hidden: true })[4]).toHaveTextContent("EUR");
+  });
+
   it("lists the left-out tickers after the funded lines, at 0.00 and outside the total", () => {
     render(<PlanResult plan={plan({ left_out: [AAPL, NVDA], notes: ["1 holding has no target weight and is left out of the plan (VUSA)."] })} />);
     const rows = within(screen.getByRole("table", { name: "Plan lines" })).getAllByRole("row");

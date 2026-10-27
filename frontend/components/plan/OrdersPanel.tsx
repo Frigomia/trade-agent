@@ -129,7 +129,7 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
       <Panel sx={{ overflow: "hidden" }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: { xs: "stretch", sm: "center" }, gap: 1.5, flexWrap: "wrap", px: { xs: 2, md: 2.5 }, py: 1.75 }}>
           {heading ?? (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
               {allPlaced ? (
                 <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--accent)" }}>
                   <CircleCheck size={18} aria-hidden />

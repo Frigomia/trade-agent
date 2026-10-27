@@ -29,9 +29,9 @@ function PlanHeading({ plan, created, id, total }: { plan: Plan; created: string
         Saved {planDay(created)} · {formatAmount(plan.amount_eur)} EUR plan
       </Typography>
       {total !== null && (
-        <Box role="img" aria-label={`${placed} of ${total} placed`} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75 }}>
+        <Box role="img" aria-label={`${placed} of ${total} placed`} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, minWidth: 0 }}>
           <PlacedProgress placed={Array.from({ length: total }, (_, i) => i < placed)} />
-          <Box component="span" aria-hidden sx={muted}>
+          <Box component="span" aria-hidden sx={{ ...muted, flex: "none", whiteSpace: "nowrap" }}>
             {placed} of {total} placed
           </Box>
         </Box>

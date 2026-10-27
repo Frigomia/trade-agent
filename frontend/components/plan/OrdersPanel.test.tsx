@@ -87,6 +87,26 @@ describe("OrdersPanel", () => {
     expect(screen.getByText("Orders")).toBeInTheDocument();
   });
 
+  it("lets the progress strip shrink so a long plan stays inside the panel, with the count beside it", () => {
+    const many = Array.from({ length: 13 }, (_, i) => ({ ...LINES[0], id: 100 + i, ticker: `T${i}`, placed_at: i === 0 ? "2026-10-08T10:00:00" : null }));
+    renderPanel(plan(many));
+    const strip = screen.getByTestId("progress");
+    const dashes = strip.querySelectorAll("i");
+    expect(dashes).toHaveLength(13);
+    expect(screen.getByText("1 of 13 placed")).toBeInTheDocument();
+    // jsdom does no layout: this only checks that the segments may shrink and the strip is capped
+    // (the fit itself was measured in Chrome at 390px and 320px).
+    expect(getComputedStyle(dashes[0]).flexShrink).toBe("1");
+    expect(getComputedStyle(strip).maxWidth).toBe("100%");
+  });
+
+  it("drops the strip for a plan too long to draw, and keeps the count", () => {
+    const many = Array.from({ length: 41 }, (_, i) => ({ ...LINES[0], id: 100 + i, ticker: `T${i}`, placed_at: null }));
+    renderPanel(plan(many));
+    expect(screen.queryByTestId("progress")).not.toBeInTheDocument();
+    expect(screen.getByText("0 of 41 placed")).toBeInTheDocument();
+  });
+
   it("copies only the unplaced tickets with Copy all lines", async () => {
     const p = plan([LINES[0], { ...LINES[1], placed_at: "2026-10-08T10:00:00" }, LINES[2]]);
     renderPanel(p);
