@@ -509,4 +509,5 @@ Open items:
   message, the starters as rows, the message box as one rounded field with Send inside it, "Near limit" and "At limit"
   beside the allowance), and the recommendation page for a call on a holding (the Soft score bar, amber under 60,
   a clock on "Pending", the decision recorded as one panel) and Track record (the same bar for each group, an icon
-  before each verdict word).
+  before each verdict word) and the Signal backtest (an arrow beside the result pills, Soft run rows, a quiet
+  hit-rate table).

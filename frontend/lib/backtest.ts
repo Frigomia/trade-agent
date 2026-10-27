@@ -61,9 +61,14 @@ export function validateRun({ ticker, start, end }: RunInput): string | null {
   return null;
 }
 
+/** An excess return under 0.05 percentage points is level with buy-and-hold (and one that is not a number is treated the same, never as a gain). */
+export function isLevel(fraction: number): boolean {
+  return !Number.isFinite(fraction) || Math.abs(fraction * 100) < 0.05;
+}
+
 export function excessLabel(fraction: number): string {
   const pct = fraction * 100;
-  if (Math.abs(pct) < 0.05) return "Level with buy-and-hold";
+  if (isLevel(fraction)) return "Level with buy-and-hold";
   return `${pct > 0 ? "Ahead of" : "Behind"} buy-and-hold by ${formatPct(pct)}`;
 }
 

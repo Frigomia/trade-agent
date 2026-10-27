@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { defaultRange, excessLabel, signalRows, validateRun } from "./backtest";
+import { defaultRange, excessLabel, isLevel, signalRows, validateRun } from "./backtest";
 
 const OK = { ticker: "AAPL", start: "2023-01-01", end: "2024-01-01" };
 
@@ -33,6 +33,21 @@ describe("validateRun", () => {
 describe("defaultRange", () => {
   it("ends today (UTC) and starts three years earlier", () => {
     expect(defaultRange(new Date("2026-09-30T23:30:00Z"))).toEqual({ start: "2023-09-30", end: "2026-09-30" });
+  });
+});
+
+describe("isLevel", () => {
+  it("is level under 0.05 percentage points, either way, and for a value that is not a number", () => {
+    expect(isLevel(0)).toBe(true);
+    expect(isLevel(0.0004)).toBe(true);
+    expect(isLevel(-0.0004)).toBe(true);
+    expect(isLevel(Number.NaN)).toBe(true);
+  });
+
+  it("is not level from 0.05 percentage points", () => {
+    expect(isLevel(0.0005)).toBe(false);
+    expect(isLevel(-0.0005)).toBe(false);
+    expect(excessLabel(Number.NaN)).toBe("Level with buy-and-hold");
   });
 });
 
