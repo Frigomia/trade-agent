@@ -1,0 +1,110 @@
+/* Admin (Users, Usage and limits) in the Soft direction. Loads after ../today-discovery/lib.css, ../company-overview/soft.css, co.css, ../portfolio/pf.css, ../plan/plan.css and ../account/acct.css.
+   Layout and the few new pieces only: panels, pills, buttons, alerts, bars and the shell are the shared ones. */
+.ad{display:flex;flex-direction:column;gap:16px;min-width:0;min-height:800px}
+.ad h1{font-size:30px;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.ad h2{margin:0;font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}
+.ad p{margin:0}
+.ad small,.ad .muted{color:var(--muted);font-size:var(--fs-label)}
+.ad .btn{min-height:44px}
+.ad .btn.sm{min-height:36px;padding:0 14px;font-size:var(--fs-label)}
+.phone .ad{min-height:700px}.phone .ad h1{font-size:26px}
+.phone .ad .btn.sm{min-height:44px}
+.side .sect{padding:14px 12px 4px;font-size:var(--fs-label);color:var(--muted);letter-spacing:.04em}
+
+.ad .head2{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.ad .head2 h1{flex:1}
+.info{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--rc);background:var(--up-bg);font-size:var(--fs-body);line-height:1.5}
+.info svg.i{color:var(--accent);margin-top:2px}
+
+/* filter: a pill control with counts */
+.flt{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--track);max-width:100%;overflow:hidden}
+.flt button{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:none;color:var(--text2);font-size:var(--fs-body);font-weight:500;white-space:nowrap}
+.flt button.on{background:var(--panel);color:var(--text);font-weight:650;box-shadow:var(--shadow)}
+.flt i{font-style:normal;min-width:20px;padding:0 6px;border-radius:999px;background:var(--track);font-size:var(--fs-label);font-variant-numeric:tabular-nums;text-align:center}
+.flt button.on i{background:var(--up-bg);color:var(--accent)}
+.phone .flt{width:100%}.phone .flt button{flex:1;padding:0 6px;min-height:44px;justify-content:center;gap:4px}
+
+/* the users list and its detail */
+.ugrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start;max-width:1080px}
+.phone .ugrid{grid-template-columns:minmax(0,1fr)}
+.ad .panel{padding:4px 20px;min-width:0}
+.arow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--line)}
+.uhead+.arow{border-top:0}
+.arow.on{background:var(--up-bg);border-radius:14px;padding-left:10px;padding-right:10px;margin:0 -10px;border-top-color:transparent}
+.uhead{display:flex;gap:12px;padding:10px 0;color:var(--muted);font-size:var(--fs-label);font-weight:500;border-bottom:1px solid var(--line)}
+.uhead span:first-child,.arow .who{flex:1 1 150px;min-width:0}
+.arow .who{display:flex;align-items:center;gap:12px;font-weight:650;font-size:var(--fs-body)}
+.arow .who span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-role{width:56px}.c-stat{width:88px}.c-cl{width:124px}.c-act{width:140px;display:flex;gap:4px;justify-content:flex-end;align-items:center}
+.phone .arow .c-role,.phone .uhead{display:none}.phone .arow .c-act{width:auto;margin-left:auto}.phone .arow .who{flex:1 1 100%}
+.uavatar{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--track);border:1px solid var(--line);font-size:var(--fs-label);font-weight:650;flex:none}
+.st{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 10px;border-radius:999px;font-size:var(--fs-label);font-weight:600;text-transform:capitalize;white-space:nowrap}
+.st svg.i{width:12px;height:12px}
+.st.active{background:var(--up-bg);color:var(--accent)}
+.st.invited{background:var(--track);color:var(--text2)}
+.st.disabled{background:color-mix(in oklab,var(--warn) 13%,var(--panel));color:var(--warn)}
+.rl{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--line2);color:var(--text2);font-size:var(--fs-label);text-transform:capitalize}
+.adots{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;border:0;background:none;color:var(--muted)}
+.phone .adots{width:44px;height:44px}
+.fnote{padding:0 4px;color:var(--muted);font-size:var(--fs-label);line-height:1.5}
+
+/* the detail panel */
+.ad .panel.det{padding:20px 22px;display:grid;gap:14px;position:sticky;top:16px}
+.det h2{font-size:var(--fs-lead);overflow-wrap:anywhere}
+.det .meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.det hr{border:0;border-top:1px solid var(--line);margin:2px 0;width:100%}
+.det h3{margin:0;font-size:var(--fs-body);font-weight:650}
+.ad .fld{display:grid;gap:6px;min-width:0}
+.ad .fld>small{color:var(--text2);font-weight:500}
+.ad .inp{display:flex;align-items:center;gap:8px;min-height:44px;width:100%;border:1px solid var(--line2);border-radius:var(--rc);background:var(--panel);padding:0 14px}
+.ad .inp:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.ad .inp input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:var(--fs-body);color:var(--text);outline:0}
+.ad .inp.err{border-color:var(--down)}
+.ad .ferr{color:var(--down);font-size:var(--fs-label)}
+.det .btn.danger[disabled]{opacity:.45;cursor:default}
+.empty2{color:var(--muted);font-size:var(--fs-body)}
+
+/* sheets and drawers for the states */
+.drawer{width:360px;max-width:100%;display:grid;gap:14px;padding:22px 24px;background:var(--panel);border:1px solid var(--line2);border-radius:22px;box-shadow:0 24px 60px rgba(8,16,40,.28)}
+.sheet{width:100%;display:grid;gap:14px;padding:16px 20px 24px;background:var(--panel);border:1px solid var(--line2);border-radius:22px 22px 0 0}
+.sheet .grab{width:44px;height:4px;border-radius:999px;background:var(--line2);justify-self:center}
+
+/* Usage and limits */
+.lgrid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start;max-width:1180px}
+.phone .lgrid{grid-template-columns:minmax(0,1fr)}
+.ad .panel.lim{padding:18px 20px;display:grid;gap:12px}
+.lim .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.lim .saved{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:var(--fs-body)}
+.lim .saved svg.i{color:var(--accent)}
+.utab{width:100%;border-collapse:collapse;font-size:var(--fs-body)}
+.utab th{color:var(--muted);font-size:var(--fs-label);font-weight:500;text-align:left;padding:12px 8px 8px}
+.utab td{padding:12px 8px;border-top:1px solid var(--line);vertical-align:middle}
+.utab tr.tot td{font-weight:650}
+.um{min-width:120px}.um b{display:block;font-weight:400;font-variant-numeric:tabular-nums;font-size:var(--fs-label)}
+.um .bar{margin-top:6px;height:6px}
+.um .bar.warn i{background:var(--warn)}
+.lv{display:inline-flex;align-items:center;gap:6px;min-height:26px;padding:0 10px;border-radius:999px;font-size:var(--fs-label);font-weight:650;white-space:nowrap}
+.lv.ok{background:var(--up-bg);color:var(--accent)}
+.lv.warn{background:color-mix(in oklab,var(--warn) 13%,var(--panel));color:var(--warn)}
+.ucard{padding:14px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr auto;gap:10px 16px;align-items:end}
+.ucard:first-child{border-top:0}
+.ucard .who{grid-column:1/-1;display:flex;align-items:center;gap:10px;font-weight:650;min-width:0}
+.ucard .who span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ucard .l{color:var(--muted);font-size:var(--fs-label)}
+
+/* states grid */
+.region .ad{min-height:0}
+.region .ugrid,.region .lgrid{grid-template-columns:minmax(0,1fr)}
+.region .ad .panel.det{position:static}
+.region .ovl{min-height:420px}
+.region .scr2{place-items:start end;padding-top:24px}
+[hidden]{display:none!important}
+
+.uhead .c-act{visibility:hidden}
+.ad .fld .inp{width:100%;max-width:100%;min-width:0}
+.ad .fld .inp input{width:100%;min-width:0}
+.phone .um{min-width:0}.ucard{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+.c-cl{width:140px}.c-act{width:132px}.c-act .btn.sm{padding:0 10px}.ad .chip{white-space:nowrap}
+.phone .c-act .btn.sm{padding:0 14px}
+.ugrid{grid-template-columns:minmax(0,1fr) 300px}.phone .ugrid{grid-template-columns:minmax(0,1fr)}.region .ugrid{grid-template-columns:minmax(0,1fr)}
+.c-stat{width:84px}

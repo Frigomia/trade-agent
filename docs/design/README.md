@@ -16,6 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
+| [admin](admin/SPEC.md) | Soft restyle of Admin: Users, Usage and limits ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screens) | Proposed, pending approval | 2026-10-27 | Not built |
 | [backtest](backtest/SPEC.md) | Soft restyle of the Signal backtest ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screen) | Approved as proposed | 2026-10-27 | Built (#195: Signal backtest) |
 | [recommendations](recommendations/SPEC.md) | Soft restyle of the recommendation page and Track record ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screens) | Approved as proposed (recommendation page first) | 2026-10-27 | Built (#195: the recommendation page, then Track record) |
 | [chat](chat/SPEC.md) | Soft restyle of Chat ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screen) | Approved as proposed | 2026-10-27 | Built (#195 next screen) |
