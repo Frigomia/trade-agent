@@ -43,9 +43,9 @@ export function ClaudeRequired({ variant, lock }: { variant: "chat" | "today"; l
         alignItems: "center",
         flexWrap: "wrap",
         gap: 1.5,
-        p: "12px 14px",
+        p: "14px 16px",
         mb: variant === "today" ? 1.5 : 0,
-        ...(warn && { borderColor: "var(--warn)", bgcolor: "var(--warn-bg)" }),
+        ...(warn && { borderColor: "color-mix(in oklab, var(--warn) 45%, var(--line))", bgcolor: "var(--warn-bg)" }),
       }}
     >
       <Box
@@ -55,8 +55,8 @@ export function ClaudeRequired({ variant, lock }: { variant: "chat" | "today"; l
         <Icon size={20} />
       </Box>
       <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
-        <Typography sx={{ fontSize: "0.875rem", fontWeight: 650 }}>{title}</Typography>
-        <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mt: 0.25 }}>{text}</Typography>
+        <Typography sx={{ fontSize: "0.8125rem", fontWeight: 650 }}>{title}</Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 0.25, lineHeight: 1.5 }}>{text}</Typography>
       </Box>
       <Button component={Link} href={warn ? "/more/connect-claude?step=5" : "/more/connect-claude"} variant={warn ? "outlined" : "contained"} size="small">
         {cta}
