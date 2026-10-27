@@ -91,15 +91,13 @@ export interface PlaceBody {
 }
 
 /**
- * Records that the order was placed (logs the buy). Throws the ApiError, or fetch's own error when
- * the server cannot be reached or does not answer within 30 seconds.
+ * Records that the order was placed (logs the buy). Uses apiFetch's deadline and timeout message;
+ * a timeout does not mean the server failed to record the order.
  */
 export function placeLine(planId: number, lineId: number, body: PlaceBody): Promise<PlanLine> {
   return apiFetch<PlanLine>(`/plans/${planId}/lines/${lineId}/placed`, {
     method: "POST",
     body: JSON.stringify(body),
-    // A hung request ends as an error, so the sheet shows its network message and can be closed.
-    signal: AbortSignal.timeout(30_000),
   });
 }
 

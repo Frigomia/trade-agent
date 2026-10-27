@@ -443,8 +443,9 @@ Telegram routes: the four `/me/telegram` routes need the normal login. When the 
 The frontend API clients bound the whole request (session lookup, fetch and response body) to
 30 seconds, or five minutes for `/chat` model replies, and preserve a caller's earlier cancellation.
 A timeout releases busy forms with an error asking the person to check whether changes were saved
-before retrying: aborting the browser request cannot undo a server write. Saving dialogs and drawers
-refuse backdrop, Escape and Cancel/Close dismissal while their action is in flight.
+before retrying: aborting the browser request cannot undo a server write. GET/HEAD timeouts instead
+ask the person to try again. Placed-order recording uses this shared deadline and write warning.
+Saving dialogs and drawers refuse backdrop, Escape and Cancel/Close dismissal while their action is in flight.
 
 **Why `/analysis/run` is async, not synchronous:** for N tickers, each doing
 a sequential quote + fundamentals + technical + web-search-backed AI call,

@@ -8,6 +8,7 @@ vi.mock("@/lib/supabase/client", () => ({
 
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch, apiFetchServer, ApiError } from "./client";
+import { placeLine } from "@/lib/orders";
 
 afterEach(() => vi.useRealTimers());
 
@@ -172,14 +173,14 @@ describe("apiFetch", () => {
     expect(result).toEqual({ status: "ok" });
   });
 
-  it("releases a busy action with a useful error when fetch never settles", async () => {
+  it("releases a busy placed-order action with the shared timeout message when fetch never settles", async () => {
     vi.useFakeTimers();
     mockSession(null);
     vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
     const onBusy = vi.fn();
     const { result } = renderHook(() => useAction(onBusy));
     let action: Promise<void>;
-    act(() => { action = result.current.run(() => apiFetch("/discover/ASML", { method: "PATCH" })); });
+    act(() => { action = result.current.run(() => placeLine(4, 7, { date: "2026-10-08", shares: 1, price: 2 })); });
     expect(result.current.submitting).toBe(true);
 
     await act(async () => {
@@ -214,7 +215,16 @@ describe("apiFetch", () => {
     vi.useFakeTimers();
     mockSession(null);
     vi.mocked(fetch).mockResolvedValue(new Response(new ReadableStream({ start() {} })));
-    const result = expect(request("/me")).rejects.toMatchObject({ code: "request_timeout" });
+    const result = expect(request("/me")).rejects.toMatchObject({ code: "request_timeout", detail: "The request timed out. Try again." });
+    await vi.advanceTimersByTimeAsync(30_000);
+    await result;
+  });
+
+  it.each(["GET", "get", "HEAD"])("uses read wording for an explicit %s request", async (method) => {
+    vi.useFakeTimers();
+    mockSession(null);
+    vi.mocked(fetch).mockReturnValue(new Promise(() => {}));
+    const result = expect(apiFetch("/me", { method })).rejects.toMatchObject({ detail: "The request timed out. Try again." });
     await vi.advanceTimersByTimeAsync(30_000);
     await result;
   });

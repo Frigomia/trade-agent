@@ -78,9 +78,10 @@ function requireBaseUrl(): string {
 async function withDeadline<T>(path: string, init: RequestInit, request: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+  const isRead = ["GET", "HEAD"].includes((init.method ?? "GET").toUpperCase());
   const timer = setTimeout(() => controller.abort(new ApiError(
     0,
-    "The request timed out. Check whether your changes were saved before trying again.",
+    isRead ? "The request timed out. Try again." : "The request timed out. Check whether your changes were saved before trying again.",
     "request_timeout",
   )), path === "/chat" ? 300_000 : 30_000);
   let onAbort: () => void = () => {};
