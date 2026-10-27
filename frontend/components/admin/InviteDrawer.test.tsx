@@ -30,6 +30,25 @@ describe("InviteDrawer", () => {
     vi.clearAllMocks();
   });
 
+  it("blocks backdrop and Escape during an invite, then unlocks on failure", async () => {
+    let fail!: (reason: Error) => void;
+    apiFetch.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    const onClose = vi.fn();
+    render(<InviteDrawer open onClose={onClose} onInvited={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: /send invite/i }));
+    const paper = document.querySelector(".MuiDrawer-paper")!;
+    expect(paper).toHaveAttribute("aria-busy", "true");
+    fireEvent.click(document.querySelector(".MuiBackdrop-root")!);
+    fireEvent.keyDown(paper, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    fail(new FakeApiError(0, "The request timed out."));
+    expect(await screen.findByText("The request timed out.")).toBeInTheDocument();
+    expect(paper).toHaveAttribute("aria-busy", "false");
+    fireEvent.keyDown(paper, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("invites the entered email and calls onInvited + onClose on success", async () => {
     apiFetch.mockResolvedValue({ id: "u1" });
     const onInvited = vi.fn();

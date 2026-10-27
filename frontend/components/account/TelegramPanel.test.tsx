@@ -423,6 +423,27 @@ describe("TelegramPanel", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
+  it("blocks dismissal during disconnect and unlocks when it fails", async () => {
+    hook.status = connected;
+    let fail!: (reason: Error) => void;
+    hook.disconnect.mockReturnValueOnce(new Promise((_, reject) => { fail = reject; }));
+    render(<TelegramPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Disconnect Telegram" }));
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(within(dialog).getByRole("button", { name: "Keep connected" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep connected" }));
+    fireEvent.click(dialog.parentElement!);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(dialog).toBeInTheDocument();
+    fail(new FakeApiError(0, "The request timed out."));
+    expect(await screen.findByText("The request timed out.")).toBeInTheDocument();
+    expect(dialog).toHaveAttribute("aria-busy", "false");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
   it("blocked: Needs attention, the warning, Reconnect and Disconnect", async () => {
     hook.status = { ...connected, status: "blocked" };
     render(<TelegramPanel />);
