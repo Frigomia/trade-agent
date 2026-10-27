@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { Box, Typography } from "@mui/material";
 import { AlertTriangle } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
 import { formatAmount, formatShare } from "@/lib/format";
 import { formatRate, type LeftOut, type Plan, type PlanLine } from "@/lib/plans";
 
-export const muted = { fontSize: "0.78125rem", color: "var(--muted)", lineHeight: 1.5 } as const;
+export const muted = { fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.5 } as const;
 // Ticker | why | weight | price | amount. A phone keeps two lines per row and drops the price.
-const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "150px minmax(0, 1fr) 220px 130px 150px" };
+const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1.25fr) minmax(0, 1.3fr) minmax(0, 1.5fr) 112px 128px" };
 const BEFORE = "color-mix(in oklab, var(--accent-solid) 42%, var(--bg))";
 
 /** The bar scale shared by every line of a plan: the largest weight or target plus some headroom, so a target tick is always inside the track. */
@@ -26,6 +28,7 @@ const rowSx = {
   alignItems: "center",
   px: { xs: 2, md: 2.5 },
   py: 1.5,
+  minHeight: { md: 64 },
   borderTop: "1px solid var(--line)",
 } as const;
 // On a phone: amount beside the ticker, the rest full width below, no price.
@@ -34,6 +37,19 @@ const amountCell = { gridRow: { xs: 1, md: "auto" }, gridColumn: { xs: 2, md: "a
 const priceCell = { display: { xs: "none", md: "block" }, textAlign: "right" } as const;
 
 const TICK = { width: 2, borderRadius: 2, bgcolor: "var(--text)" } as const;
+
+/** The company: a round logo (initials when there is none), the ticker and the name. */
+function Company({ ticker, name }: { ticker: string; name: string }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+      <Logo ticker={ticker} name={name} size={36} />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 650, fontSize: "0.8125rem" }}>{ticker}</Typography>
+        <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{name}</Typography>
+      </Box>
+    </Box>
+  );
+}
 
 /**
  * Before (lighter) and after (solid) on one track scaled to the largest weight or target in the plan,
@@ -74,8 +90,7 @@ function Row({ line, whole, scale }: { line: PlanLine; whole: boolean; scale: nu
   return (
     <Box role="row" sx={rowSx}>
       <Box role="cell" sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 650, fontSize: "0.875rem" }}>{line.ticker}</Typography>
-        <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{line.name}</Typography>
+        <Company ticker={line.ticker} name={line.name} />
       </Box>
       <Box role="cell" sx={{ ...wide, fontSize: "0.8125rem", color: "var(--text2)" }}>
         {line.reason_text}
@@ -107,8 +122,7 @@ function LeftOutRow({ entry }: { entry: LeftOut }) {
   return (
     <Box role="row" sx={{ ...rowSx, color: "var(--muted)" }}>
       <Box role="cell" sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontWeight: 650, fontSize: "0.875rem" }}>{entry.ticker}</Typography>
-        <Typography sx={{ ...muted, overflowWrap: "anywhere" }}>{entry.name}</Typography>
+        <Company ticker={entry.ticker} name={entry.name} />
       </Box>
       <Box role="cell" sx={{ ...wide, fontSize: "0.8125rem" }}>
         {entry.reason}
@@ -153,7 +167,7 @@ export function LeftOutList({ entries, title }: { entries: LeftOut[]; title?: st
 export function PlanNotes({ notes }: { notes: string[] }) {
   if (notes.length === 0) return null;
   return (
-    <Box component="ul" aria-label="Plan notes" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
+    <Box component="ul" aria-label="Plan notes" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 1 }}>
       {notes.map((note) => (
         <Box component="li" key={note} sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", fontSize: "0.8125rem", color: "var(--text2)", lineHeight: 1.5 }}>
           <Box component="span" sx={{ color: "var(--warn)", mt: "2px", display: "flex" }}>
@@ -169,11 +183,11 @@ export function PlanNotes({ notes }: { notes: string[] }) {
 function NothingToFund({ plan }: { plan: Plan }) {
   const wholeSharesTooSmall = plan.left_out.some((e) => e.kind === "too_small");
   return (
-    <Panel sx={{ p: { xs: "20px 16px", md: "28px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 620 }}>
-      <Typography component="h2" sx={{ fontSize: "1.125rem", fontWeight: 650 }}>
+    <Panel sx={{ p: { xs: "20px 16px", md: "22px 24px" }, display: "flex", flexDirection: "column", gap: 1.5, maxWidth: 640 }}>
+      <Typography component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
         Nothing to fund this month
       </Typography>
-      <Typography sx={{ color: "var(--text2)" }}>
+      <Typography sx={{ color: "var(--text2)", fontSize: "0.8125rem", lineHeight: 1.55 }}>
         {wholeSharesTooSmall
           ? "This amount is not enough for one whole share of the tickers with a target. Turn off Whole shares only or raise the amount."
           : "Every ticker with a target is left out, so the plan proposes nothing."}{" "}
@@ -190,40 +204,53 @@ function NothingToFund({ plan }: { plan: Plan }) {
   );
 }
 
-/** The ledger: one row per line, a total row, the notes, and `footer` (Save plan or a saved note). */
+/** The ledger: a titled panel with one row per line, a total row, then the notes and `footer` (Save plan or a saved note). */
 export function PlanResult({ plan, footer }: { plan: Plan; footer?: ReactNode }) {
   if (plan.lines.length === 0) return <NothingToFund plan={plan} />;
   const total = plan.lines.reduce((sum, l) => sum + l.amount_eur, 0);
   const scale = weightScale(plan);
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
-      <Panel role="table" aria-label="Plan lines" sx={{ pt: 0.75, overflow: "hidden" }}>
-        <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>
-          <span role="columnheader">Ticker</span>
-          <span role="columnheader">Why</span>
-          <span role="columnheader">Weight, before to after</span>
-          <Box component="span" role="columnheader" sx={{ textAlign: "right" }}>
-            Price in EUR
-          </Box>
-          <Box component="span" role="columnheader" sx={{ textAlign: "right" }}>
-            Amount
+      <Panel sx={{ pt: 0.75, overflow: "hidden" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", px: { xs: 2, md: 2.5 }, pt: 1.5, pb: 1 }}>
+          <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
+            Plan for {formatAmount(plan.amount_eur)} EUR
+          </Typography>
+          <Box sx={{ ml: { sm: "auto" }, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Pill tone="accent">{plan.lines.length} funded</Pill>
+            {plan.left_out.length > 0 && <Pill>{plan.left_out.length} left out</Pill>}
           </Box>
         </Box>
-        {plan.lines.map((line) => (
-          <Row key={line.ticker} line={line} whole={plan.whole_shares} scale={scale} />
-        ))}
-        {plan.left_out.map((entry) => (
-          <LeftOutRow key={entry.ticker} entry={entry} />
-        ))}
-        <Box role="row" sx={{ ...rowSx, fontWeight: 650, bgcolor: "var(--tab-bg)" }}>
-          <Box role="cell">Total</Box>
-          <Box role="cell" sx={{ ...wide, ...muted, gridRow: { xs: 2, md: "auto" } }}>
-            Leftover {formatAmount(plan.leftover_eur)} EUR
+        <Box role="table" aria-label="Plan lines">
+          <Box role="row" sx={{ ...rowSx, display: { xs: "none", md: "grid" }, borderTop: 0, minHeight: 0, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 400 }}>
+            <span role="columnheader">Ticker</span>
+            <span role="columnheader">Why</span>
+            <span role="columnheader">Weight, before to after</span>
+            <Box component="span" role="columnheader" sx={{ textAlign: "right" }}>
+              Price in EUR
+            </Box>
+            <Box component="span" role="columnheader" sx={{ textAlign: "right" }}>
+              Amount
+            </Box>
           </Box>
-          <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
-          <Box role="cell" sx={priceCell} />
-          <Box role="cell" sx={{ ...amountCell, whiteSpace: "nowrap" }}>
-            {formatAmount(total)} EUR
+          {plan.lines.map((line) => (
+            <Row key={line.ticker} line={line} whole={plan.whole_shares} scale={scale} />
+          ))}
+          {plan.left_out.map((entry) => (
+            <LeftOutRow key={entry.ticker} entry={entry} />
+          ))}
+          <Box role="row" sx={{ ...rowSx, fontWeight: 650, bgcolor: "var(--track)" }}>
+            <Box role="cell" sx={{ fontSize: "0.8125rem" }}>
+              Total
+            </Box>
+            <Box role="cell" sx={{ ...wide, ...muted, gridRow: { xs: 2, md: "auto" }, fontWeight: 400 }}>
+              Leftover {formatAmount(plan.leftover_eur)} EUR
+            </Box>
+            <Box role="cell" sx={{ display: { xs: "none", md: "block" } }} />
+            <Box role="cell" sx={priceCell} />
+            <Box role="cell" sx={{ ...amountCell, whiteSpace: "nowrap", fontSize: "0.9375rem" }}>
+              {formatAmount(total)} EUR
+            </Box>
           </Box>
         </Box>
       </Panel>

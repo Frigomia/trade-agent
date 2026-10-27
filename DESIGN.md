@@ -502,4 +502,4 @@ Open items:
 
 - Cards built with `borderRadius: 2` still render at 36px (MUI multiplies the 18px base), and plain
   MUI `Paper` surfaces at 18px; the Soft panel is 22px. Each screen moves to `Panel` as it is
-  restyled.
+  restyled. The Plan views (This month, Saved plans, Orders, the Placed sheet) are restyled and use `Panel`.

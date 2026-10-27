@@ -3,38 +3,22 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import { Check, ChevronDown, ChevronUp, Circle, CircleCheck, Copy } from "lucide-react";
+import { Logo } from "@/components/ui/Logo";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
 import { copyAllText, placedFill, ticketText, unplacedLines } from "@/lib/orders";
 import { planDay as placedDay, type Plan, type PlanLine } from "@/lib/plans";
 import { IsinRow } from "./IsinRow";
+import { PlacedProgress } from "./PlacedProgress";
 import { LeftOutList, LineWeight, PlanNotes, PlanResult, muted, shares, weightScale } from "./PlanResult";
 
 const COPY_FAILED = "Could not copy. Select the ticket text and copy it by hand.";
 const COPY_ALL_FAILED = "Could not copy. Open each line and copy its ticket by hand.";
-// Ticker | why | weight | amount | mark | chevron. A phone stacks it as the approved ledger row does.
-const COLUMNS = { xs: "minmax(0, 1fr) auto 24px", md: "170px minmax(0, 1fr) 220px 150px 24px 20px" };
-const gridSx = { display: "grid", gridTemplateColumns: COLUMNS, gap: { xs: "6px 12px", md: 2 }, alignItems: "center", px: { xs: 2, md: 2.5 } } as const;
+// Company | amount | status mark | chevron. A closed line is short: the why and the weight open with it.
+const COLUMNS = "minmax(0, 1fr) auto 20px 20px";
+const gridSx = { display: "grid", gridTemplateColumns: COLUMNS, gap: { xs: "6px 10px", md: 2 }, alignItems: "center", px: { xs: 2, md: 2.5 } } as const;
 const hidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 const bigButton = { minHeight: 48, flex: 1 } as const;
-// The Orders tab's plan heading sticks to the top of the page (which scrolls) while the plan's lines
-// pass under it, edge to edge across the main padding.
-const stickySx = {
-  position: "sticky",
-  top: 0,
-  zIndex: 2,
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: { xs: "flex-start", sm: "center" },
-  gap: { xs: 1.25, sm: 2 },
-  mx: { xs: -2, md: -3 },
-  px: { xs: 2, md: 3 },
-  py: 1.25,
-  bgcolor: "var(--bg)",
-} as const;
-
-/** About the sticky heading's height: a focused card scrolls clear of it instead of under it. */
-const STICKY_HEADING_HEIGHT = 72;
 
 async function writeClipboard(text: string): Promise<boolean> {
   try {
@@ -61,27 +45,28 @@ export interface OrdersPanelProps {
   /** Under the lines, beside nothing else: the "Saved ..." note on This month. */
   footer?: ReactNode;
   /**
-   * A polite status line under the header ("EIMI.L recorded as placed. Next: ..."). Pass it (an empty
+   * A polite status line above the panel ("EIMI.L recorded as placed. Next: ..."). Pass it (an empty
    * string when there is nothing to say yet) to keep the live region mounted, so a change is announced.
    */
   status?: string;
   /** The card whose button takes the focus (by ticker), e.g. the one that just opened after Placed. */
   focusTicker?: string | null;
   /**
-   * The Orders tab's plan heading. Given, it replaces the placed count, sticks to the top while the
-   * plan's lines scroll, and the total, the left-out list, the plan notes and the hint row are left
-   * out (the tab has one hint for every plan).
+   * The Orders tab's plan heading. Given, it replaces the placed count in the panel's header, and the
+   * total, the plan notes and the hint row are left out (the tab has one hint for every plan); the
+   * left-out tickers are named in one line at the foot of the panel.
    */
   heading?: ReactNode;
-  /** Under the heading and the status line, above the cards: the Orders tab's old-plan note. */
+  /** Under the header, above the lines: the Orders tab's old-plan note. */
   notice?: ReactNode;
 }
 
 /**
- * The orders of a saved plan (direction D): a header with the placed count and Copy all lines, then
- * one card per line in the saved order. A closed card is the ledger row with a status mark; the whole
- * card is a button that opens it to show Copy, Placed, the ticket text and the ISIN. A placed line has
- * no buttons but still opens to show its ticket. Previews never come here.
+ * The orders of a saved plan, as one Soft panel: a header with the placed count (or the Orders tab's
+ * heading) and Copy all lines, then one row per line in the saved order. A closed row is the company,
+ * the amount and a status mark; the whole row is a button that opens it to show why, the weight, Copy,
+ * Placed, the ticket text and the ISIN. A placed line has no buttons but still opens to show its
+ * ticket. Previews never come here.
  */
 export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTickerChange, footer, status, focusTicker, heading, notice }: OrdersPanelProps) {
   const [ownOpen, setOwnOpen] = useState<string | null>(null);
@@ -126,55 +111,11 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
-      <Box sx={heading ? stickySx : { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-        {heading ?? (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap" }}>
-          {allPlaced ? (
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--accent)" }}>
-              <CircleCheck size={18} aria-hidden />
-              All lines placed
-            </Box>
-          ) : (
-            <Box component="span" sx={{ fontWeight: 650 }}>
-              Orders
-            </Box>
-          )}
-          <Box component="span" sx={{ ...muted, fontVariantNumeric: "tabular-nums" }}>
-            {placedCount} of {plan.lines.length} placed
-          </Box>
-          <Box component="span" aria-hidden data-testid="progress" sx={{ display: "inline-flex", gap: 0.5 }}>
-            {plan.lines.map((l) => (
-              <Box
-                component="i"
-                key={l.ticker}
-                data-placed={l.placed_at !== null}
-                sx={{ width: 18, height: 5, borderRadius: 999, bgcolor: l.placed_at !== null ? "var(--accent-solid)" : "var(--track)" }}
-              />
-            ))}
-          </Box>
-        </Box>
-        )}
-        <Button
-          variant="outlined"
-          size="small"
-          disabled={allPlaced}
-          startIcon={copied === "*" ? <Check size={14} /> : <Copy size={14} />}
-          onClick={() => void copy("*", copyAllText(plan))}
-          sx={heading ? { minHeight: 44, flex: "none" } : { minHeight: 44, width: { xs: "100%", sm: "auto" } }}
-        >
-          {copied === "*" ? "Copied" : "Copy all lines"}
-        </Button>
-      </Box>
-      {failed === "*" && (
-        <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--down)" }}>
-          {COPY_ALL_FAILED}
-        </Typography>
-      )}
       {status !== undefined && (
         <Box
           role="status"
           aria-live="polite"
-          sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: "0.875rem", color: "var(--text2)" } : hidden}
+          sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, fontSize: "0.8125rem", color: "var(--text2)" } : hidden}
         >
           {status && (
             <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>
@@ -184,27 +125,46 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
           {status}
         </Box>
       )}
-      {notice}
 
-      <Panel sx={{ pt: { md: 0.75 }, overflow: "hidden" }}>
-        <Box aria-hidden sx={{ ...gridSx, display: { xs: "none", md: "grid" }, py: 1, fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>
-          <span>Ticker</span>
-          <span>Why</span>
-          <span>Weight, before to after</span>
-          <Box component="span" sx={{ textAlign: "right" }}>
-            Amount, EUR
-          </Box>
+      <Panel sx={{ overflow: "hidden" }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: { xs: "stretch", sm: "center" }, gap: 1.5, flexWrap: "wrap", px: { xs: 2, md: 2.5 }, py: 1.75 }}>
+          {heading ?? (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", minWidth: 0, maxWidth: "100%" }}>
+              {allPlaced ? (
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 650, color: "var(--accent)" }}>
+                  <CircleCheck size={18} aria-hidden />
+                  All lines placed
+                </Box>
+              ) : (
+                <Box component="span" sx={{ fontWeight: 650, fontSize: "0.9375rem" }}>
+                  Orders
+                </Box>
+              )}
+              <Box component="span" sx={{ ...muted, fontVariantNumeric: "tabular-nums" }}>
+                {placedCount} of {plan.lines.length} placed
+              </Box>
+              <PlacedProgress placed={plan.lines.map((l) => l.placed_at !== null)} />
+            </Box>
+          )}
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={allPlaced}
+            startIcon={copied === "*" ? <Check size={14} /> : <Copy size={14} />}
+            onClick={() => void copy("*", copyAllText(plan))}
+            sx={{ minHeight: 44, width: { xs: "100%", sm: "auto" }, flex: "none" }}
+          >
+            {copied === "*" ? "Copied" : "Copy all lines"}
+          </Button>
         </Box>
-        <Box
-          component="ul"
-          aria-label="Orders"
-          sx={{
-            m: 0,
-            p: 0,
-            listStyle: "none",
-            ...(heading && { "& li, & li *": { scrollMarginTop: `${STICKY_HEADING_HEIGHT}px` } }),
-          }}
-        >
+        {failed === "*" && (
+          <Typography role="alert" sx={{ fontSize: "0.8125rem", color: "var(--down)", px: { xs: 2, md: 2.5 }, pb: 1.5 }}>
+            {COPY_ALL_FAILED}
+          </Typography>
+        )}
+        {notice && <Box sx={{ px: { xs: 2, md: 2.5 }, pb: 1.75 }}>{notice}</Box>}
+
+        <Box component="ul" aria-label="Orders" sx={{ m: 0, p: 0, listStyle: "none" }}>
           {plan.lines.map((line, i) => (
             <OrderCard
               key={line.ticker}
@@ -224,11 +184,16 @@ export function OrdersPanel({ plan, onChanged, onPlace, openTicker, onOpenTicker
           ))}
         </Box>
         {!heading && (
-        <Box sx={{ ...gridSx, py: 1.5, borderTop: "1px solid var(--line)", fontWeight: 650, bgcolor: "var(--tab-bg)" }}>
-          <Box sx={{ gridRow: 1 }}>Total</Box>
-          <Box sx={{ ...muted, gridColumn: { xs: "1 / -1", md: "2 / 4" }, gridRow: { xs: 2, md: 1 } }}>Leftover {formatAmount(plan.leftover_eur)} EUR</Box>
-          <Box sx={{ gridRow: 1, gridColumn: { xs: "2 / -1", md: 4 }, textAlign: "right", whiteSpace: "nowrap" }}>{formatAmount(total)} EUR</Box>
-        </Box>
+          <Box sx={{ ...gridSx, gridTemplateColumns: "minmax(0, 1fr) auto", py: 1.5, borderTop: "1px solid var(--line)", fontWeight: 650, bgcolor: "var(--track)" }}>
+            <Box sx={{ gridRow: 1, fontSize: "0.8125rem" }}>Total</Box>
+            <Box sx={{ gridRow: 1, gridColumn: 2, textAlign: "right", whiteSpace: "nowrap", fontSize: "0.9375rem" }}>{formatAmount(total)} EUR</Box>
+            <Box sx={{ ...muted, fontWeight: 400, gridColumn: "1 / -1", gridRow: 2 }}>Leftover {formatAmount(plan.leftover_eur)} EUR</Box>
+          </Box>
+        )}
+        {heading && plan.left_out.length > 0 && (
+          <Box sx={{ px: { xs: 2, md: 2.5 }, py: 1.5, borderTop: "1px solid var(--line)", ...muted }}>
+            Left out of this plan: {plan.left_out.map((e) => e.ticker).join(", ")}.
+          </Box>
         )}
       </Panel>
       {!heading && (
@@ -278,7 +243,7 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
   const Chevron = open ? ChevronUp : ChevronDown;
 
   return (
-    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--accent-wash)" : undefined }}>
+    <Box component="li" sx={{ borderTop: "1px solid var(--line)", bgcolor: open ? "var(--track)" : undefined }}>
       <Box
         component="button"
         ref={button}
@@ -290,69 +255,63 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
         sx={{
           ...gridSx,
           width: "100%",
-          py: 1.75,
+          minHeight: 64,
+          py: 1.25,
           border: 0,
           bgcolor: "transparent",
           color: quiet,
           font: "inherit",
           textAlign: "left",
           cursor: "pointer",
-          "&:hover": { bgcolor: open ? undefined : "var(--accent-wash)" },
+          "&:hover": { bgcolor: open ? undefined : "var(--track)" },
           "&:focus-visible": { outline: "2px solid var(--accent-solid)", outlineOffset: -2 },
         }}
       >
-        <Box component="span" sx={{ gridColumn: 1, gridRow: 1, minWidth: 0 }}>
-          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: "0.875rem" }}>
-            {line.ticker}
-          </Box>
-          <Box component="span" sx={{ ...muted, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {line.name}
-          </Box>
-        </Box>
-        <Box component="span" sx={{ gridColumn: { xs: "1 / -1", md: 2 }, gridRow: { xs: 2, md: 1 }, fontSize: "0.8125rem", color: "var(--text2)" }}>
-          {line.reason_text}
-        </Box>
-        <Box component="span" sx={{ gridColumn: { xs: "1 / 3", md: 3 }, gridRow: { xs: 3, md: 1 }, display: "flex", flexDirection: "column", gap: 0.75 }}>
-          {line.placed_at !== null ? (
-            <Box component="span" sx={muted}>
-              Placed {placedDay(line.placed_at)}
-              {fill && ` · ${fill}`}
+        <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+          <Logo ticker={line.ticker} name={line.name} size={36} />
+          <Box component="span" sx={{ minWidth: 0 }}>
+            <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: "0.8125rem" }}>
+              {line.ticker}
             </Box>
-          ) : (
-            <LineWeight line={line} scale={scale} />
-          )}
+            {line.placed_at !== null ? (
+              <Box component="span" sx={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: "var(--accent)" }}>
+                Placed {placedDay(line.placed_at)}
+                {fill && ` · ${fill}`}
+              </Box>
+            ) : (
+              <Box component="span" sx={{ ...muted, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {line.name}
+              </Box>
+            )}
+          </Box>
         </Box>
-        <Box component="span" sx={{ gridColumn: { xs: 2, md: 4 }, gridRow: 1, textAlign: "right" }}>
-          <Box component="span" sx={{ display: "block", fontWeight: 650, fontSize: "0.9375rem", whiteSpace: "nowrap" }}>
+        <Box component="span" sx={{ textAlign: "right" }}>
+          <Box component="span" sx={{ display: "block", fontWeight: placed ? 400 : 650, fontSize: placed ? "0.8125rem" : "0.9375rem", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
             {formatAmount(line.amount_eur)} EUR
           </Box>
           <Box component="span" sx={{ ...muted, display: "block" }}>
             {shares(line, plan.whole_shares)}
           </Box>
         </Box>
-        <Box component="span" aria-hidden sx={{ gridColumn: { xs: 3, md: 5 }, gridRow: 1, alignSelf: { xs: "start", md: "center" }, display: "flex", color: placed ? "var(--accent)" : "var(--muted)" }}>
-          {placed ? <CircleCheck size={22} data-testid="mark-placed" /> : <Circle size={22} data-testid="mark-open" />}
+        <Box component="span" aria-hidden sx={{ display: "flex", color: placed ? "var(--accent)" : "var(--muted)" }}>
+          {placed ? <CircleCheck size={18} data-testid="mark-placed" /> : <Circle size={18} data-testid="mark-open" />}
         </Box>
-        <Box component="span" aria-hidden sx={{ gridColumn: { xs: 3, md: 6 }, gridRow: { xs: 3, md: 1 }, alignSelf: { xs: "end", md: "center" }, display: "flex", color: "var(--muted)" }}>
+        <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--muted)" }}>
           <Chevron size={18} />
         </Box>
       </Box>
 
       {open && (
-        <Box
-          id={panelId}
-          sx={{
-            px: { xs: 2, md: 2.5 },
-            pb: 2,
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 340px" },
-            gap: { xs: 1.5, md: 2.5 },
-            alignItems: "start",
-          }}
-        >
+        <Box id={panelId} sx={{ px: { xs: 2, md: 2.5 }, pb: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
           {!placed && (
-            <Box sx={{ gridColumn: { md: 2 }, gridRow: { md: 1 }, display: "flex", flexDirection: "column", gap: 0.75 }}>
-              <Box sx={{ display: "flex", gap: 1.25 }}>
+            <Box sx={{ fontSize: "0.8125rem", color: "var(--text2)", display: "flex", flexDirection: "column", gap: 0.75, maxWidth: 480 }}>
+              <span>{line.reason_text}</span>
+              <LineWeight line={line} scale={scale} />
+            </Box>
+          )}
+          {!placed && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+              <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Button variant="outlined" onClick={onCopy} startIcon={copied ? <Check size={16} /> : <Copy size={16} />} sx={bigButton}>
                   {copied ? "Copied" : "Copy"}
                 </Button>
@@ -369,15 +328,13 @@ function OrderCard({ line, plan, scale, panelId, open, onToggle, copied, copyFai
               )}
             </Box>
           )}
-          <Box sx={{ gridColumn: { md: 1 }, gridRow: { md: placed ? "auto" : "1 / span 2" }, p: 1.75, borderRadius: "14px", border: "1px solid var(--line)", bgcolor: "var(--tab-bg)" }}>
+          <Box sx={{ p: 1.75, borderRadius: "14px", border: "1px solid var(--line)", bgcolor: "var(--panel)" }}>
             <Typography sx={{ ...muted, mb: 0.75 }}>Ticket, the text Copy copies</Typography>
-            <Typography sx={{ fontSize: "0.90625rem", lineHeight: 1.6, overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>
+            <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.6, overflowWrap: "anywhere", fontVariantNumeric: "tabular-nums" }}>
               {ticketText(line, plan.whole_shares)}
             </Typography>
           </Box>
-          <Box sx={{ gridColumn: { md: placed ? 1 : 2 } }}>
-            <IsinRow line={line} onChanged={onChanged} />
-          </Box>
+          <IsinRow line={line} onChanged={onChanged} />
         </Box>
       )}
     </Box>

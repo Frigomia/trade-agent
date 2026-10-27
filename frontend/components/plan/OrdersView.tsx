@@ -2,20 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Alert, Box, Button, Link as MuiLink, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Skeleton, Typography } from "@mui/material";
 import { ArrowRight, Check, Clock } from "lucide-react";
+import { Panel } from "@/components/ui/Panel";
 import { formatAmount } from "@/lib/format";
-import { isOldPlan, planDay, planMonth, useOpenOrders, type Plan } from "@/lib/plans";
+import { isOldPlan, planDay, planMonth, useOpenOrders, usePlans, type Plan } from "@/lib/plans";
+import { PlacedProgress } from "./PlacedProgress";
 import { OrdersSection } from "./OrdersSection";
 
-const muted = { fontSize: "0.78125rem", color: "var(--muted)" } as const;
+const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 // Kept mounted while empty, so a new message is announced.
 const visuallyHidden = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 
-function PlanHeading({ plan, created, id }: { plan: Plan; created: string; id: string }) {
+/** `total` is the plan's whole line count: the open-orders read has only the unplaced lines, so it comes from the saved plans. */
+function PlanHeading({ plan, created, id, total }: { plan: Plan; created: string; id: string; total: number | null }) {
+  const placed = total === null ? 0 : Math.max(total - plan.lines.length, 0);
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
-      <Typography id={id} component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650 }}>
+      <Typography id={id} component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
         {planMonth(created)}
         <Box component="span" sx={{ fontWeight: 500, color: "var(--text2)" }}>
           , {plan.lines.length} open
@@ -24,13 +28,21 @@ function PlanHeading({ plan, created, id }: { plan: Plan; created: string; id: s
       <Typography sx={{ ...muted, fontVariantNumeric: "tabular-nums" }}>
         Saved {planDay(created)} · {formatAmount(plan.amount_eur)} EUR plan
       </Typography>
+      {total !== null && (
+        <Box role="img" aria-label={`${placed} of ${total} placed`} sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.75, minWidth: 0 }}>
+          <PlacedProgress placed={Array.from({ length: total }, (_, i) => i < placed)} />
+          <Box component="span" aria-hidden sx={{ ...muted, flex: "none", whiteSpace: "nowrap" }}>
+            {placed} of {total} placed
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
 
 function OldNote({ iso }: { iso: string }) {
   return (
-    <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", px: 1.75, py: 1.25, borderRadius: "12px", bgcolor: "var(--warn-bg)", fontSize: "0.875rem", lineHeight: 1.5, maxWidth: 760 }}>
+    <Box sx={{ display: "flex", gap: 1.25, alignItems: "flex-start", px: 1.75, py: 1.25, borderRadius: "12px", bgcolor: "var(--warn-bg)", fontSize: "0.8125rem", lineHeight: 1.5, maxWidth: 760 }}>
       <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--warn)", pt: "2px" }}>
         <Clock size={16} />
       </Box>
@@ -41,33 +53,30 @@ function OldNote({ iso }: { iso: string }) {
 
 function Empty() {
   return (
-    <Box sx={{ maxWidth: 560, pt: 2.5, display: "flex", flexDirection: "column", gap: 1.25 }}>
-      <Typography component="h2" sx={{ fontSize: "1.1875rem", fontWeight: 650 }}>
+    <Panel sx={{ maxWidth: 640, p: { xs: "20px 16px", md: "22px 24px" }, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Typography component="h2" sx={{ fontSize: "1.25rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
         No open orders.
       </Typography>
-      <Typography sx={{ fontSize: "0.875rem", lineHeight: 1.55, color: "var(--text2)" }}>
+      <Typography sx={{ fontSize: "0.8125rem", lineHeight: 1.55, color: "var(--text2)" }}>
         Orders come from saving a plan. Make this month&apos;s plan and press Save plan; each of its lines then waits here until you
         mark it placed.
       </Typography>
-      <MuiLink
-        component={Link}
-        href="/portfolio/plan"
-        sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minHeight: 44, fontSize: "0.875rem", fontWeight: 500, alignSelf: "flex-start" }}
-      >
+      <Button component={Link} href="/portfolio/plan" variant="contained" endIcon={<ArrowRight size={16} aria-hidden />} sx={{ alignSelf: "flex-start" }}>
         Go to This month
-        <ArrowRight size={16} aria-hidden />
-      </MuiLink>
-    </Box>
+      </Button>
+    </Panel>
   );
 }
 
 /**
- * The Orders tab (direction A): every saved plan with open lines, newest first, one section each with
- * a sticky heading and that plan's open lines through OrdersSection (Copy, Placed, the sheet and the
+ * The Orders tab: every saved plan with open lines, newest first, one panel each with
+ * its heading, a progress count and that plan's open lines through OrdersSection (Copy, Placed, the sheet and the
  * auto-advance unchanged). A placed line leaves on the refetch; a plan with none left disappears.
  */
 export function OrdersView() {
   const { plans, error, isLoading, mutate } = useOpenOrders();
+  // Each plan's whole line count, to show how many are placed (null while it loads or when it fails).
+  const { plans: summaries } = usePlans();
   // Read once per visit: whether a plan is old does not need to tick while the tab is open.
   const [now] = useState(() => Date.now());
   // The section of a plan whose last line was placed is gone, so it says so here.
@@ -109,7 +118,7 @@ export function OrdersView() {
         role="status"
         aria-live="polite"
         tabIndex={-1}
-        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: "0.875rem", color: "var(--text2)", outline: "none" } : visuallyHidden}
+        sx={status ? { display: "flex", alignItems: "flex-start", gap: 1, mb: 1.5, fontSize: "0.8125rem", color: "var(--text2)", outline: "none" } : visuallyHidden}
       >
         {status && (
           <Box component="span" aria-hidden sx={{ display: "flex", color: "var(--accent)", pt: "2px" }}>
@@ -130,7 +139,7 @@ export function OrdersView() {
                 <OrdersSection
                   plan={plan}
                   onChanged={() => mutate()}
-                  heading={<PlanHeading plan={plan} created={created} id={headingId} />}
+                  heading={<PlanHeading plan={plan} created={created} id={headingId} total={summaries?.find((s) => s.id === plan.id)?.line_count ?? null} />}
                   notice={isOldPlan(created, now) ? <OldNote iso={created} /> : undefined}
                   onPlaced={(line, next) =>
                     setStatus(next ? "" : `${line.ticker} recorded as placed. It was the last open order of ${planMonth(created)}.`)

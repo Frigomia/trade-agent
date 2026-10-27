@@ -68,15 +68,24 @@ const SUMMARY = {
   watchlist: [],
 } as unknown as PortfolioSummary;
 
+// The saved plans' own line counts: the open-orders read has only the unplaced lines.
+const SUMMARIES = [
+  { id: 9, created_at: "2026-10-08T12:14:00", amount_eur: 600, line_count: 3 },
+  { id: 5, created_at: "2026-09-08T12:02:00", amount_eur: 500, line_count: 1 },
+  { id: 3, created_at: "2026-08-04T12:40:00", amount_eur: 450, line_count: 1 },
+];
 let open: Plan[];
 let failOpen: boolean;
+let failPlans: boolean;
 
 beforeEach(() => {
   apiFetch.mockReset();
   open = [OCT, SEP, AUG];
   failOpen = false;
+  failPlans = false;
   apiFetch.mockImplementation((path: string) => {
     if (path === "/portfolio/summary") return Promise.resolve(SUMMARY);
+    if (path === "/plans") return failPlans ? Promise.reject(new FakeApiError(500, "boom")) : Promise.resolve(SUMMARIES);
     if (path === "/plans/orders/open") {
       if (failOpen) return Promise.reject(new FakeApiError(500, "boom"));
       return Promise.resolve({ open_lines: open.reduce((n, p) => n + p.lines.length, 0), plans: open });
@@ -132,12 +141,23 @@ describe("OrdersView", () => {
       "NVDA",
     ]);
     expect(within(section("August 2026, 1 open")).getByText("CSSPX.MI")).toBeInTheDocument();
-    // The panel's own "Orders 0 of 2 placed" header and total are not repeated under the heading.
-    expect(screen.queryByText(/of \d placed/)).not.toBeInTheDocument();
+    // The heading carries the progress; the panel's own "Orders" header and the total are not repeated.
+    // The October plan had 3 lines and one is placed already: 1 of 3, from the saved plans' line count.
+    expect(await within(oct).findByRole("img", { name: "1 of 3 placed" })).toBeInTheDocument();
+    expect(within(section("September 2026, 1 open")).getByRole("img", { name: "0 of 1 placed" })).toBeInTheDocument();
+    expect(within(oct).queryByText("Orders")).not.toBeInTheDocument();
     expect(screen.queryByText("Total")).not.toBeInTheDocument();
     expect(screen.getByText("Tap a line to open its order. After Placed, the next open line of that plan opens by itself.")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "Orders, 4 open orders" })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/\b(Buy|Sell)\b/i);
+  });
+
+  it("leaves the progress out when the saved plans could not be read", async () => {
+    failPlans = true;
+    renderView();
+    await screen.findByRole("heading", { name: "October 2026, 2 open" });
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/plans"));
+    expect(screen.queryByRole("img", { name: /placed/ })).not.toBeInTheDocument();
   });
 
   it("shows the old-plan note from 15 days, not at exactly 14", async () => {
@@ -203,13 +223,6 @@ describe("OrdersView", () => {
     expect(await within(sheet).findByText("This line is already recorded as placed.")).toBeInTheDocument();
     // The sheet stays open (the page behind it is aria-hidden), and the list behind it was reloaded.
     expect(await screen.findByRole("heading", { name: "October 2026, 1 open", hidden: true })).toBeInTheDocument();
-  });
-
-  it("puts a scroll margin the height of the sticky heading on the cards", async () => {
-    renderView();
-    await screen.findByRole("heading", { name: "October 2026, 2 open" });
-    const item = card("IWDA.L").closest("li")!;
-    expect(getComputedStyle(item).scrollMarginTop).toBe("72px");
   });
 
   it("removes a plan's section when its last line is placed, and says so", async () => {

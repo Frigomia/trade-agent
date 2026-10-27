@@ -31,10 +31,9 @@ export function PlanForm({
         e.preventDefault();
         if (valid && !pending) onSubmit();
       }}
-      sx={{ p: { xs: "14px 16px", md: "14px 18px" }, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}
+      sx={{ p: { xs: "16px", md: "16px 20px" }, display: "flex", gap: 2, alignItems: "flex-end", flexWrap: "wrap" }}
     >
       <TextField
-        size="small"
         label="Amount this month"
         value={amount}
         onChange={(e) => onAmountChange(e.target.value)}
@@ -46,8 +45,8 @@ export function PlanForm({
           input: { endAdornment: <InputAdornment position="end">EUR</InputAdornment> },
         }}
       />
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography id="plan-whole-label" component="span" sx={{ fontSize: "0.875rem" }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minHeight: 44 }}>
+        <Typography id="plan-whole-label" component="span" sx={{ fontSize: "0.8125rem" }}>
           Whole shares only
         </Typography>
         <Switch
@@ -60,7 +59,7 @@ export function PlanForm({
       <Button type="submit" variant="contained" disabled={!valid || pending} sx={{ flex: { xs: "1 1 100%", sm: "none" } }}>
         Make plan
       </Button>
-      <Typography sx={{ flex: "1 1 200px", fontSize: "0.78125rem", color: "var(--muted)", textAlign: { sm: "right" } }}>
+      <Typography sx={{ flex: "1 1 200px", fontSize: "0.75rem", color: "var(--muted)", textAlign: { sm: "right" }, pb: { sm: 1.5 } }}>
         Saved monthly amount, change it in{" "}
         <MuiLink component={Link} href="/more/preferences">
           Preferences

@@ -221,6 +221,32 @@ describe("PlanHistory", () => {
     });
   });
 
+  it("says per plan how many lines are still open, from the open-orders read", async () => {
+    const base = apiFetch.getMockImplementation()!;
+    const line = SEPTEMBER.lines[0];
+    apiFetch.mockImplementation((path: string, init?: RequestInit) =>
+      path === "/plans/orders/open"
+        ? Promise.resolve({
+            open_lines: 2,
+            plans: [{ ...SEPTEMBER, id: 9, created_at: "2026-10-15T12:00:00", lines: [{ ...line, id: 1 }, { ...line, id: 2, ticker: "SAP" }, { ...line, id: 3, ticker: "NVDA", placed_at: "2026-10-16T09:00:00" }] }],
+          })
+        : base(path, init),
+    );
+    renderFresh();
+
+    const rowOf = async (month: string) => (await screen.findByRole("button", { name: `Open the ${month} plan` })).closest('[role="row"]') as HTMLElement;
+    await waitFor(async () => expect(await rowOf("October 2026")).toHaveTextContent("2 open"));
+    expect(await rowOf("September 2026")).toHaveTextContent("All placed");
+    expect(await rowOf("August 2026")).toHaveTextContent("All placed");
+  });
+
+  it("shows no open count while the open orders could not be read", async () => {
+    renderFresh(); // the default mock rejects /plans/orders/open
+    const row = (await screen.findByRole("button", { name: "Open the October 2026 plan" })).closest('[role="row"]') as HTMLElement;
+    await act(() => new Promise((r) => setTimeout(r, 0)));
+    expect(row).not.toHaveTextContent(/open|placed/i);
+  });
+
   it("says when nothing is saved yet", async () => {
     plans = [];
     renderFresh();

@@ -15,14 +15,15 @@ import {
 } from "@mui/material";
 import { Trash2 } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
+import { Pill } from "@/components/ui/Pill";
 import { formatAmount } from "@/lib/format";
-import { planMonth, planSavedAt, usePlans, type Plan, type PlanSummary } from "@/lib/plans";
+import { planMonth, planSavedAt, useOpenOrders, usePlans, type Plan, type PlanSummary } from "@/lib/plans";
 import { useAction } from "@/lib/useAction";
 import { useWhenActive } from "@/lib/useWhenActive";
 import { OrdersSection } from "./OrdersSection";
 
-const muted = { fontSize: "0.78125rem", color: "var(--muted)" } as const;
-const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "180px minmax(0, 1fr) 140px 80px 120px" };
+const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
+const COLUMNS = { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1.2fr) minmax(0, 1.2fr) 130px 70px 110px" };
 const rowSx = {
   display: "grid",
   gridTemplateColumns: COLUMNS,
@@ -30,6 +31,7 @@ const rowSx = {
   alignItems: "center",
   px: { xs: 2, md: 2.5 },
   py: 1.5,
+  minHeight: 52,
   borderTop: "1px solid var(--line)",
 } as const;
 const right = { textAlign: "right" } as const;
@@ -37,6 +39,8 @@ const right = { textAlign: "right" } as const;
 /** Saved plans newest first; one opens below the list exactly as saved, and can be deleted after a confirm. */
 export function PlanHistory({ active = true }: { active?: boolean }) {
   const { plans, error, isLoading, load, remove } = usePlans();
+  // Which saved plans still have lines to place: the same read as the Orders tab's count.
+  const { plans: openPlans, isLoading: ordersLoading, isValidating: ordersValidating, error: ordersError } = useOpenOrders();
   const [opened, setOpened] = useState<Plan | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Kept after the dialog closes so its text does not go blank while it fades out.
@@ -68,6 +72,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
   }
 
   const sorted = [...plans].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const openCount = new Map(openPlans.map((p) => [p.id, p.lines.filter((l) => l.placed_at === null).length]));
   const month = opened?.created_at ? planMonth(opened.created_at) : "";
 
   const open = (summary: PlanSummary) =>
@@ -98,16 +103,27 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
             Lines
           </Box>
           <Box component="span" role="columnheader" sx={right}>
-            <Box component="span" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
-              Open
-            </Box>
+            Orders
           </Box>
         </Box>
         {sorted.map((p) => {
           const m = planMonth(p.created_at);
           return (
-            <Box role="row" key={p.id} sx={{ ...rowSx, bgcolor: opened?.id === p.id ? "var(--accent-wash)" : undefined }}>
-              <Box role="cell" sx={{ fontWeight: 650 }}>
+            <Box
+              role="row"
+              key={p.id}
+              sx={{ ...rowSx, position: "relative", bgcolor: opened?.id === p.id ? "var(--accent-wash)" : undefined, "&:hover": { bgcolor: opened?.id === p.id ? undefined : "var(--track)" } }}
+            >
+              <Box role="cell" sx={{ fontWeight: 650, fontSize: "0.8125rem", color: opened?.id === p.id ? "var(--accent)" : undefined }}>
+                {/* The whole row opens the plan: this button is stretched over it. */}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={() => void open(p)}
+                  disabled={action.submitting}
+                  aria-label={`Open the ${m} plan`}
+                  sx={{ position: "absolute", inset: 0, width: "100%", border: 0, bgcolor: "transparent", cursor: "pointer", "&:focus-visible": { outline: "2px solid var(--accent-solid)", outlineOffset: -2 } }}
+                />
                 {m}
               </Box>
               <Box role="cell" sx={{ ...muted, gridColumn: { xs: "1 / -1", md: "auto" } }}>
@@ -120,9 +136,8 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
                 {p.line_count}
               </Box>
               <Box role="cell" sx={{ ...right, gridColumn: { xs: "1 / -1", md: "auto" }, textAlign: { xs: "left", md: "right" } }}>
-                <Button size="small" onClick={() => void open(p)} disabled={action.submitting} aria-label={`Open the ${m} plan`}>
-                  Open
-                </Button>
+                {/* Only said when the read is settled: a plan just saved is not in it yet, and is not "placed". */}
+                {!ordersLoading && !ordersValidating && !ordersError && p.line_count > 0 && ((openCount.get(p.id) ?? 0) > 0 ? <Pill tone="accent">{openCount.get(p.id)} open</Pill> : <Pill>All placed</Pill>)}
               </Box>
             </Box>
           );
@@ -135,7 +150,7 @@ export function PlanHistory({ active = true }: { active?: boolean }) {
         <>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 1.5, flexWrap: "wrap" }}>
             <Box>
-              <Typography component="h2" sx={{ fontSize: "1rem", fontWeight: 650 }}>
+              <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
                 {month}, as saved
               </Typography>
               <Typography sx={muted}>Saved {planSavedAt(opened.created_at)}. Prices and rates of that day.</Typography>

@@ -1,6 +1,6 @@
 # Plan in the Soft direction (This month, Saved plans, Orders)
 
-Proposal, 2026-10-26, for [#195](https://github.com/Frigomia/trade-agent/issues/195) (the Soft restyle of the screens still on the older look), first screen of the list: the three Plan views of the Portfolio page. The owner chose Plan as the first screen. This is a mock and a plan, not a change to the app.
+Approved and built, 2026-10-26 (see [direction-approved.md](direction-approved.md)); written as a proposal for [#195](https://github.com/Frigomia/trade-agent/issues/195) (the Soft restyle of the screens still on the older look), first screen of the list: the three Plan views of the Portfolio page. The owner chose Plan as the first screen. This is a mock and a plan, not a change to the app.
 
 Mock: [plan-soft.html](plan-soft.html) (`plan.css`, `plan.js`; it loads the shared Soft files from `../today-discovery`, `../company-overview` and `../portfolio`). Add `?theme=dark` to start dark. Screenshots in `shots/`: desktop, phone and states, light and dark.
 
