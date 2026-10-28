@@ -30,8 +30,8 @@ export function InviteDrawer({ open, onClose, onInvited }: InviteDrawerProps) {
 
   return (
     <Drawer anchor="right" open={open} onClose={submitting ? undefined : onClose} slotProps={{ paper: { "aria-busy": submitting } }}>
-      <Box component="form" onSubmit={handleSubmit} sx={{ width: 360, p: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 650, mb: 2 }}>
+      <Box component="form" onSubmit={handleSubmit} sx={{ width: { xs: "100vw", sm: 360 }, maxWidth: "100%", p: 3 }}>
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", mb: 2 }}>
           Invite user
         </Typography>
         <TextField

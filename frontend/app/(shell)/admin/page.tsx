@@ -2,24 +2,29 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Box, Typography, Alert, Button, Chip, IconButton, useMediaQuery, useTheme } from "@mui/material";
-import { Plus, MoreHorizontal } from "lucide-react";
+import { Box, Typography, Alert, Button, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
+import { RolePill, StatusPill } from "@/components/admin/StatusPill";
 import { InviteDrawer } from "@/components/admin/InviteDrawer";
 import { UserDetailContent, UserDetailDrawer } from "@/components/admin/UserDetailDrawer";
 import { ClaudeStateChip, chipKind } from "@/components/claude/ClaudeStateChip";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
 import { Panel } from "@/components/ui/Panel";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
 type StatusFilter = "all" | "active" | "invited" | "disabled";
 
 // Fixed desktop column widths so the header and every row line up.
 const ROLE_W = 64;
-const STATUS_W = 84;
-const CLAUDE_W = 128;
+const STATUS_W = 104;
+const CLAUDE_W = 140;
 const ACTIONS_W = 150;
+
+// 36px on a desktop, 44px on a phone.
+const TOUCH = { minHeight: { xs: 44, md: 36 }, px: { xs: 1.75, md: 1.25 } } as const;
 
 // Only people who have signed in have limits and access to manage.
 const hasDetail = (user: AdminUserOut) => user.status === "active" || user.status === "disabled";
@@ -68,29 +73,27 @@ export default function AdminPage() {
       <Alert severity="info" sx={{ mb: 2 }}>
         You manage access, not data.
       </Alert>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 2 }}>
-        {(["all", "active", "invited", "disabled"] as const).map((value) => {
-          const count =
-            value === "all" ? (users ?? []).length : (users ?? []).filter((u) => u.status === value).length;
-          return (
-            <Chip
-              key={value}
-              label={`${value[0].toUpperCase()}${value.slice(1)} ${count}`}
-              onClick={() => setFilter(value)}
-              color={filter === value ? "primary" : "default"}
-            />
-          );
+      <SegmentedControl
+        label="Filter users"
+        fill
+        value={filter}
+        onChange={setFilter}
+        sx={{ mb: 2 }}
+        segments={(["all", "active", "invited", "disabled"] as const).map((value) => {
+          const label = `${value[0].toUpperCase()}${value.slice(1)}`;
+          const count = value === "all" ? (users ?? []).length : (users ?? []).filter((u) => u.status === value).length;
+          return { key: value, label, count, ariaLabel: `${label}, ${count}` };
         })}
-      </Box>
+      />
       <Box
         // minmax(0, 1fr) on phones too: a bare grid column is `auto`, which grows to its widest row.
         sx={{ display: "grid", gap: 2.25, alignItems: "start", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 340px" }, maxWidth: 1080 }}
       >
       <Box>
-      <Panel sx={{ p: "4px 18px" }}>
+      <Panel sx={{ p: "4px 20px" }}>
       <Box
         aria-hidden
-        sx={{ display: { xs: "none", md: "flex" }, gap: 1.5, py: 1, fontSize: "0.75rem", fontWeight: 600, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}
+        sx={{ display: { xs: "none", md: "flex" }, gap: 1.5, py: 1, fontSize: "0.75rem", fontWeight: 500, color: "var(--muted)", borderBottom: "1px solid var(--line)" }}
       >
         <Box sx={{ flex: 1 }}>Person</Box>
         <Box sx={{ width: ROLE_W }}>Role</Box>
@@ -114,7 +117,7 @@ export default function AdminPage() {
             borderBottom: "1px solid var(--line)",
             "&:last-of-type": { borderBottom: 0 },
             cursor: clickable ? "pointer" : "default",
-            ...(clickable && user.id === selectedUserId && { bgcolor: "var(--accent-wash)", borderRadius: "12px" }),
+            ...(clickable && user.id === selectedUserId && { bgcolor: "var(--accent-wash)", borderRadius: "14px", px: "10px", mx: "-10px", borderColor: "transparent" }),
           }}
         >
           <Avatar email={user.email} />
@@ -125,10 +128,10 @@ export default function AdminPage() {
           </Typography>
           {/* On a phone only the role drops out; status and the Claude chip stay, and the row wraps. */}
           <Box sx={{ display: { xs: "none", md: "block" }, width: ROLE_W }}>
-            <Chip label={user.role} size="small" />
+            <RolePill role={user.role} />
           </Box>
           <Box sx={{ flex: "none", width: { md: STATUS_W } }}>
-            <Chip label={user.status} size="small" color={user.status === "disabled" ? "error" : "default"} />
+            <StatusPill status={user.status} />
           </Box>
           <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
             <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
@@ -136,16 +139,16 @@ export default function AdminPage() {
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", width: { xs: "100%", md: ACTIONS_W }, justifyContent: "flex-end", "&:empty": { display: "none" } }}>
           {user.status === "invited" && (
             <>
-              <Button size="small" onClick={() => handleAction(user.id, "resend")}>
+              <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "resend")}>
                 Resend
               </Button>
-              <Button size="small" onClick={() => handleAction(user.id, "revoke")}>
+              <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "revoke")}>
                 Revoke
               </Button>
             </>
           )}
           {user.status === "disabled" && (
-            <Button size="small" onClick={() => handleAction(user.id, "enable")}>
+            <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "enable")}>
               Enable
             </Button>
           )}
@@ -153,6 +156,7 @@ export default function AdminPage() {
             <IconButton
               size="small"
               aria-label="User details"
+              sx={{ width: { xs: 44, md: 36 }, height: { xs: 44, md: 36 }, color: "var(--muted)" }}
               onClick={() => setSelectedUserId(user.id)}
             >
               <MoreHorizontal size={18} />
@@ -163,7 +167,7 @@ export default function AdminPage() {
         );
       })}
       </Panel>
-      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mt: 1.5, px: 0.5 }}>
+      <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 1.5, px: 0.5, lineHeight: 1.5 }}>
         You see only whether a key is connected, never the key and never its digits.
       </Typography>
       </Box>
@@ -177,7 +181,7 @@ export default function AdminPage() {
               onChanged={() => mutate()}
             />
           ) : (
-            <Typography sx={{ fontSize: "0.84375rem", color: "var(--muted)" }}>
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>
               Select a user to see their limits and access.
             </Typography>
           )}
