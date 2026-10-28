@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Box, TextField, Button, Alert, InputAdornment } from "@mui/material";
 import { Lock, Mail } from "lucide-react";
-import { AuthHeading, AuthShell } from "@/components/auth/AuthShell";
+import { AuthHeading, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
 import { clearRecoveryCookie, hasRecoveryCookie, siteOrigin } from "@/lib/auth/recovery";
@@ -75,34 +75,30 @@ export default function ResetPasswordPage() {
       <AuthShell>
         <Box component="form" onSubmit={handleConfirm}>
           <AuthHeading title="Choose a new password" subtitle={session?.user.email} />
-          <TextField
-            label="New password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            margin="normal"
-            required
-            autoComplete="new-password"
-            sx={{ mt: 3.25 }}
-            slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start" sx={{ color: "var(--muted)" }}>
-                <Lock size={17} />
-              </InputAdornment>
-            ),
-          },
-        }}
-          />
-          {error && (
-            <Alert severity="error" sx={{ mt: 1.5 }}>
-              {error}
-            </Alert>
-          )}
-          <Button type="submit" variant="contained" fullWidth sx={{ mt: 2.25 }} disabled={submitting}>
-            Save password
-          </Button>
+          <AuthPanel>
+            <TextField
+              label="New password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              fullWidth
+              required
+              autoComplete="new-password"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start" sx={{ color: "var(--muted)" }}>
+                      <Lock size={17} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+            {error && <Alert severity="error">{error}</Alert>}
+            <Button type="submit" variant="contained" fullWidth disabled={submitting}>
+              Save password
+            </Button>
+          </AuthPanel>
         </Box>
       </AuthShell>
     );
@@ -122,34 +118,30 @@ export default function ResetPasswordPage() {
     <AuthShell>
       <Box component="form" onSubmit={handleRequest}>
         <AuthHeading title="Reset your password" subtitle="We will email you a link to choose a new one." />
-        <TextField
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          fullWidth
-          margin="normal"
-          required
-          autoComplete="email"
-          sx={{ mt: 3.25 }}
-          slotProps={{
-          input: {
-            startAdornment: (
-              <InputAdornment position="start" sx={{ color: "var(--muted)" }}>
-                <Mail size={17} />
-              </InputAdornment>
-            ),
-          },
-        }}
-        />
-        {error && (
-          <Alert severity="error" sx={{ mt: 1.5 }}>
-            {error}
-          </Alert>
-        )}
-        <Button type="submit" variant="contained" fullWidth sx={{ mt: 2.25 }} disabled={submitting}>
-          Send reset link
-        </Button>
+        <AuthPanel>
+          <TextField
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            fullWidth
+            required
+            autoComplete="email"
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start" sx={{ color: "var(--muted)" }}>
+                    <Mail size={17} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <Button type="submit" variant="contained" fullWidth disabled={submitting}>
+            Send reset link
+          </Button>
+        </AuthPanel>
       </Box>
     </AuthShell>
   );

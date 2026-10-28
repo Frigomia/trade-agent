@@ -511,4 +511,6 @@ Open items:
   a clock on "Pending", the decision recorded as one panel) and Track record (the same bar for each group, an icon
   before each verdict word) and the Signal backtest (an arrow beside the result pills, Soft run rows, a quiet
   hit-rate table) and Admin (the pill filter with counts, status as an icon and a word with Disabled in amber, the
-  Soft bar and an amber "Near limit" or "At limit" with an icon on the usage table).
+  Soft bar and an amber "Near limit" or "At limit" with an icon on the usage table) and the sign-in screens
+  (the form in one Soft panel on a desktop and flat on a phone, a 22px acknowledgement box with an on-accent tick,
+  44px targets for the theme toggle, the show-password button and "Forgot password?").

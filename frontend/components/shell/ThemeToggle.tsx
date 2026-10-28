@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { IconButton } from "@mui/material";
 import { Sun, Moon } from "lucide-react";
 
-export function ThemeToggle() {
+/** `size` is the round button's width and height; the sign-in screens use 44 for a phone target. */
+export function ThemeToggle({ size = 34 }: { size?: number }) {
   // ponytail: known limitation — the icon on first paint is always the dark-theme icon, briefly
   // wrong for a light-theme user until the effect below corrects it after mount. Reading
   // document.documentElement.dataset.theme in the useState initializer looks like a one-line
@@ -44,8 +45,8 @@ export function ThemeToggle() {
       aria-label="Switch theme"
       size="small"
       sx={{
-        width: 34,
-        height: 34,
+        width: size,
+        height: size,
         color: "var(--text)",
         bgcolor: "var(--panel)",
         border: "1px solid var(--line)",
