@@ -42,13 +42,18 @@ describe("Logo", () => {
   it.each([
     [" azn.l ", "AZN.L"],
     [" brk/b ", "BRK%2FB"],
-  ])("normalizes and encodes ticker %s in the CDN URL", (ticker, encoded) => {
+  ])("normalizes and encodes ticker %s in this app's own logo URL", (ticker, encoded) => {
     const { container } = render(<Logo name="Company" ticker={ticker} size={32} />);
 
-    expect(container.querySelector("img")).toHaveAttribute(
-      "src",
-      `https://img.logo.dev/ticker/${encoded}?token=pk_test&size=64&fallback=404`,
-    );
+    expect(container.querySelector("img")).toHaveAttribute("src", `/api/logo/${encoded}?size=64`);
+  });
+
+  it("never puts the token or Logo.dev in the page", () => {
+    const { container } = render(<Logo name="Apple" ticker="AAPL" />);
+    const src = container.querySelector("img")?.getAttribute("src") ?? "";
+
+    expect(src).not.toContain("pk_test");
+    expect(src).not.toContain("logo.dev");
   });
 
   it("replaces an unavailable image with initials", () => {
