@@ -16,7 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
-| [scan-results](scan-results/SPEC.md) | Scan results: what a scan set aside and why ([#196](https://github.com/Frigomia/trade-agent/issues/196)) | Proposed, pending approval | 2026-10-28 | Not built |
+| [scan-results](scan-results/SPEC.md) | Scan results: what a scan set aside and why ([#196](https://github.com/Frigomia/trade-agent/issues/196)) | Approved as proposed | 2026-10-28 | Built (#196) |
 | [signin](signin/SPEC.md) | Soft restyle of the sign-in screens: Sign in, Set your password, Reset your password ([#195](https://github.com/Frigomia/trade-agent/issues/195), last screens) | Approved as proposed | 2026-10-28 | Built (#195: sign-in screens) |
 | [admin](admin/SPEC.md) | Soft restyle of Admin: Users, Usage and limits ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screens) | Approved as proposed | 2026-10-27 | Built (#195: Admin) |
 | [backtest](backtest/SPEC.md) | Soft restyle of the Signal backtest ([#195](https://github.com/Frigomia/trade-agent/issues/195), next screen) | Approved as proposed | 2026-10-27 | Built (#195: Signal backtest) |

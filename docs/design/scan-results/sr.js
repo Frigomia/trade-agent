@@ -45,7 +45,7 @@ const SR_REJECTED = [
   { id: 'm3', nm: 'Kestrel Labs', hint: 'KSTL', origin: 'tavily', why: 'Cited for a new trial result.', url: 'https://trials.example/kestrel', r: 'no_price' },
   { id: 'm4', nm: 'Pine Ridge REIT', hint: 'PINE', origin: 'industry_research', why: 'Listed among regional property names.', url: 'javascript:alert(1)', r: 'cap_reached' },
 ];
-const SR_COV = ['3 companies had no market data this week.', '2 prices are a day or more old.', '1 price could not be confirmed and is shown as it was saved.', '1 candidate could not be evaluated and is not in the counts above.', 'Research mentions were available for this scan.'];
+const SR_COV = ['3 companies had no market data.', '2 prices are out of date.', '1 price could not be confirmed and is shown as it was saved.', '1 candidate could not be evaluated and is not in the counts above.', 'Research mentions were available for this scan.'];
 
 /* ---- small pieces ---- */
 let srN = 0;

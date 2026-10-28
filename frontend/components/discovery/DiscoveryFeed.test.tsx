@@ -102,6 +102,8 @@ const SCAN: ScanRun = {
   researched: 8,
   outcome: "ideas",
   summary: "",
+  excluded: [],
+  rejected_mentions: [],
   coverage_summary: {},
   opportunities: 5,
   set_aside: 3,
@@ -434,4 +436,20 @@ describe("DiscoveryFeed", () => {
 
     expect(screen.getByRole("button", { name: /refresh scan/i })).toBeDisabled();
   });
+});
+
+it("links the scan bar to the scan results while a saved scan exists", async () => {
+  renderFeed({ latest_scan: SCAN, recommendations: [] });
+  expect(await screen.findByRole("link", { name: /scan results/i })).toHaveAttribute("href", "/today/scan");
+});
+
+it("links the no-opportunity panel to the scan results too", async () => {
+  renderFeed({ latest_scan: { ...SCAN, outcome: "none", opportunities: 0 }, recommendations: [] });
+  expect(await screen.findAllByRole("link", { name: /scan results/i })).toHaveLength(2);
+});
+
+it("has no scan results link before the first scan", async () => {
+  renderFeed({ latest_scan: null, recommendations: [] });
+  expect(await screen.findByText("Run your first scan")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /scan results/i })).not.toBeInTheDocument();
 });

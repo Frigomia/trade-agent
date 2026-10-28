@@ -1,5 +1,6 @@
+import NextLink from "next/link";
 import { Box, Button, Typography } from "@mui/material";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { ChevronRight, RefreshCw, Sparkles } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryJob, ScanRun } from "@/lib/api/discovery-types";
 import { runsExhausted, scanCounts, whenText } from "@/lib/discovery";
@@ -52,6 +53,19 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
       <Typography role="status" sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem", color: "var(--text2)" }}>
         {text}
       </Typography>
+      {/* The last saved scan is readable while a new one runs or after one failed. */}
+      {scan && (
+        <Button
+          component={NextLink}
+          href="/today/scan"
+          variant="outlined"
+          size="small"
+          endIcon={<ChevronRight size={13} aria-hidden />}
+          sx={{ borderRadius: 999, minHeight: { xs: 44, md: 36 }, fontSize: "0.75rem" }}
+        >
+          Scan results
+        </Button>
+      )}
       <Button
         variant="outlined"
         size="small"

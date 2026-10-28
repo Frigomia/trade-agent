@@ -134,6 +134,50 @@ export interface NearestMiss {
   confidence: Level;
 }
 
+/** A candidate left out before or after research, with why. `explanation` and `evidence` are untrusted text and urls. */
+export type ExclusionReason =
+  | "thesis_invalidated"
+  | "unreliable_price"
+  | "ambiguous_identity"
+  | "currency_unsupported"
+  | "insufficient_data";
+
+export interface Exclusion {
+  ticker: string;
+  name: string;
+  reason: ExclusionReason;
+  explanation: string;
+  evidence: string[];
+}
+
+export type MentionOrigin = "tavily" | "reddit" | "industry_research";
+export type MentionRejection =
+  | "ambiguous"
+  | "unresolved"
+  | "no_price"
+  | "currency_unsupported"
+  | "insufficient_data"
+  | "cap_reached"
+  | "duplicate";
+
+/** A company named by research. Every field is untrusted web text. */
+export interface Mention {
+  name: string;
+  ticker_hint: string | null;
+  exchange_hint: string | null;
+  origin: MentionOrigin;
+  reason: string;
+  url: string | null;
+}
+
+export interface RejectedMention {
+  mention: Mention;
+  reason: MentionRejection;
+}
+
+/** A researched idea that missed the score and confidence bar (`coverage_summary.set_aside_ideas`). */
+export type SetAsideIdea = NearestMiss;
+
 export interface ScanRun {
   id: number;
   created_at: string;
@@ -144,7 +188,18 @@ export interface ScanRun {
   researched: number;
   outcome: "ideas" | "none";
   summary: string;
-  coverage_summary: { nearest_misses?: NearestMiss[] } & Record<string, unknown>;
+  excluded: Exclusion[];
+  rejected_mentions: RejectedMention[];
+  coverage_summary: {
+    nearest_misses?: NearestMiss[];
+    /** Absent on scans saved before it was kept. */
+    set_aside_ideas?: SetAsideIdea[];
+    missing_snapshot_symbols?: string[];
+    stale_symbols?: string[];
+    uncertain_price_symbols?: string[];
+    candidate_failures?: string[];
+    mentions_available?: boolean;
+  } & Record<string, unknown>;
   opportunities: number | null; // null on scans saved before the count was stored
   set_aside: number | null;
 }

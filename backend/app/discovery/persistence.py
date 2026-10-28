@@ -8,6 +8,7 @@ from uuid import UUID
 from app.analysis.discovery_score import is_opportunity, rank_ideas
 from app.config import settings
 from app.db import lock_and_check_active, scoped_session
+from app.discovery.screen import SHORTLIST_SIZE
 from app.models import Recommendation, ScanRun
 from app.schemas_discovery import Exclusion, IdeaOut, RejectedMention
 
@@ -53,16 +54,22 @@ def save_scan(
         raise ValueError("Opportunities cannot exceed researched candidates")
     coverage = dict(coverage_summary or {})
     coverage["opportunities"] = len(qualifying)
+    # The researched ideas that missed the bar, best first. They are not saved as recommendations,
+    # so this is the only record the Scan results page has of them; bounded by the shortlist.
+    qualifying_tickers = {idea.ticker for idea in qualifying}
+    set_aside_ideas = [
+        {
+            "ticker": idea.ticker,
+            "name": idea.name,
+            "overall": idea.overall,
+            "confidence": idea.confidence,
+        }
+        for idea in ranked
+        if idea.ticker not in qualifying_tickers
+    ][:SHORTLIST_SIZE]
+    coverage["set_aside_ideas"] = set_aside_ideas
     if not qualifying:
-        coverage["nearest_misses"] = [
-            {
-                "ticker": idea.ticker,
-                "name": idea.name,
-                "overall": idea.overall,
-                "confidence": idea.confidence,
-            }
-            for idea in ranked[:3]
-        ]
+        coverage["nearest_misses"] = set_aside_ideas[:3]
     exclusions = [
         Exclusion.model_validate(item.model_dump()).model_dump(mode="json") for item in excluded
     ]
