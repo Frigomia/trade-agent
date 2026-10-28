@@ -8,6 +8,11 @@ describe("ThemeToggle", () => {
     localStorage.clear();
   });
 
+  it("takes its width and height from the size prop", () => {
+    render(<ThemeToggle size={44} />);
+    expect(screen.getByRole("button", { name: /switch theme/i })).toHaveStyle({ width: "44px", height: "44px" });
+  });
+
   it("flips data-theme on click and persists the choice", () => {
     document.documentElement.setAttribute("data-theme", "dark");
     render(<ThemeToggle />);

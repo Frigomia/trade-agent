@@ -2,15 +2,9 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Box,
-  TextField,
-  Button,
-  Alert,
-  Checkbox,
-  FormControlLabel,
-} from "@mui/material";
-import { AuthHeading, AuthShell } from "@/components/auth/AuthShell";
+import { Box, TextField, Button, Alert } from "@mui/material";
+import { AckCheckbox } from "@/components/auth/AckCheckbox";
+import { AuthHeading, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
@@ -99,65 +93,42 @@ export default function AcceptInvitationPage() {
           title="Set your password"
           subtitle="The administrator invited you to trade-agent. This link expires in 24 hours."
         />
-        <TextField
-          label="Email"
-          value={invitedEmail}
-          fullWidth
-          margin="normal"
-          disabled
-          sx={{ mt: 3.25 }}
-        />
-        <TextField
-          label="Create password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          fullWidth
-          margin="normal"
-          required
-          autoComplete="new-password"
-          error={passwordTooShort}
-          helperText={
-            passwordTooShort ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : undefined
-          }
-        />
-        <TextField
-          label="Confirm password"
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          fullWidth
-          margin="normal"
-          required
-          autoComplete="new-password"
-          error={passwordsDiffer}
-          helperText={passwordsDiffer ? "Passwords don't match." : undefined}
-        />
-        <FormControlLabel
-          sx={{ alignItems: "flex-start", mt: 1.5, mx: 0, "& .MuiFormControlLabel-label": { fontSize: "0.78125rem", color: "var(--text2)", lineHeight: 1.45, pt: 0.5 } }}
-          control={
-            <Checkbox
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              sx={{ p: 0.5, mr: 1 }}
-            />
-          }
-          label="I understand trade-agent gives advisory information only and is not investment advice."
-        />
-        {error && (
-          <Alert severity="error" sx={{ mt: 1.5 }}>
-            {error}
-          </Alert>
-        )}
-        <Button
-          type="submit"
-          variant="contained"
-          fullWidth
-          sx={{ mt: 2.25 }}
-          disabled={!canSubmit}
-        >
-          Create account
-        </Button>
+        <AuthPanel>
+          <TextField label="Email" value={invitedEmail} fullWidth disabled />
+          <TextField
+            label="Create password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            fullWidth
+            required
+            autoComplete="new-password"
+            error={passwordTooShort}
+            helperText={
+              passwordTooShort ? `Use at least ${MIN_PASSWORD_LENGTH} characters.` : undefined
+            }
+          />
+          <TextField
+            label="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            fullWidth
+            required
+            autoComplete="new-password"
+            error={passwordsDiffer}
+            helperText={passwordsDiffer ? "Passwords don't match." : undefined}
+          />
+          <AckCheckbox
+            checked={acceptedTerms}
+            onChange={setAcceptedTerms}
+            label="I understand trade-agent gives advisory information only and is not investment advice."
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+          <Button type="submit" variant="contained" fullWidth disabled={!canSubmit}>
+            Create account
+          </Button>
+        </AuthPanel>
       </Box>
     </AuthShell>
   );

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Box, Link, Typography } from "@mui/material";
+import { panelSx } from "@/components/ui/Panel";
 import Image from "next/image";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
@@ -40,7 +41,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <BrandMark />
-          <Typography sx={{ fontSize: "1.0625rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
+          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
             trade-agent
           </Typography>
         </Box>
@@ -51,7 +52,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           >
             It shows its work, remembers how past calls turned out, and never places a trade.
           </Typography>
-          <Typography sx={{ color: "var(--text2)", mt: 2, maxWidth: "36ch" }}>
+          <Typography sx={{ color: "var(--text2)", mt: 2, maxWidth: "36ch", fontSize: "0.8125rem", lineHeight: 1.55 }}>
             An advisory-only reasoning partner. You stay the decision-maker.
           </Typography>
           <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 4 }}>{ADVISORY}</Typography>
@@ -68,7 +69,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         }}
       >
         <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-          <ThemeToggle />
+          <ThemeToggle size={44} />
         </Box>
         <Box
           sx={{
@@ -121,13 +122,31 @@ export function AuthHeading({
       <Typography
         variant="h5"
         component="h1"
-        sx={{ fontSize: "1.75rem", letterSpacing: "-0.03em", lineHeight: 1.15 }}
+        sx={{ fontSize: { xs: "1.625rem", md: "1.875rem" }, letterSpacing: "-0.03em", lineHeight: 1.15 }}
       >
         {title}
       </Typography>
       {subtitle && (
-        <Typography sx={{ color: "var(--muted)", mt: 0.5, fontSize: "0.90625rem" }}>{subtitle}</Typography>
+        <Typography sx={{ color: "var(--muted)", mt: 0.75, fontSize: "0.8125rem", lineHeight: 1.5 }}>{subtitle}</Typography>
       )}
+    </Box>
+  );
+}
+
+/**
+ * The form's fields and button. On a desktop they sit in one Soft panel under the heading; on a
+ * phone the form stays flat on the page so no width is lost (docs/design/signin).
+ */
+export function AuthPanel({ children }: { children: ReactNode }) {
+  return (
+    <Box
+      sx={[
+        { mt: 3, display: "grid", gap: 1.75, minWidth: 0 },
+        // The panel starts at md, where the brand half appears.
+        (theme) => ({ [theme.breakpoints.up("md")]: { ...panelSx, p: "26px 26px 24px" } }),
+      ]}
+    >
+      {children}
     </Box>
   );
 }
