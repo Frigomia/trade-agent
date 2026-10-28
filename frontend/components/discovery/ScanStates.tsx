@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { Box, Button, Typography } from "@mui/material";
-import { Check, KeyRound, RefreshCw, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, KeyRound, RefreshCw, TriangleAlert } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryJob, ScanRun } from "@/lib/api/discovery-types";
 import { KEY_REJECTED_MESSAGE, SCAN_STAGES, stageIndex } from "@/lib/discovery";
@@ -128,6 +128,16 @@ export function NoOpportunity({ scan }: { scan: ScanRun }) {
           ))}
         </Box>
       )}
+      <Button
+        component={Link}
+        href="/today/scan"
+        variant="outlined"
+        size="small"
+        endIcon={<ChevronRight size={13} aria-hidden />}
+        sx={{ mt: 1.5, borderRadius: 999, minHeight: { xs: 44, md: 36 }, fontSize: "0.75rem" }}
+      >
+        Scan results
+      </Button>
     </State>
   );
 }

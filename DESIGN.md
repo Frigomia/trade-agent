@@ -513,4 +513,6 @@ Open items:
   hit-rate table) and Admin (the pill filter with counts, status as an icon and a word with Disabled in amber, the
   Soft bar and an amber "Near limit" or "At limit" with an icon on the usage table) and the sign-in screens
   (the form in one Soft panel on a desktop and flat on a phone, a 22px acknowledgement box with an on-accent tick,
-  44px targets for the theme toggle, the show-password button and "Forgot password?").
+  44px targets for the theme toggle, the show-password button and "Forgot password?"). The Scan results page
+  (a link from the scan bar) lists what a scan left out as one ledger: a pill filter with counts, rows of company,
+  where it fell out and why, each opening to the scan's explanation in the dashed box and its sources.
