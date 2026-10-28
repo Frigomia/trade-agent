@@ -158,7 +158,15 @@ def test_ideas_return_only_owners_pending_discovery_and_latest_scan(client, db_s
                 researched=0,
                 outcome="none",
                 summary=summary,
-                excluded=[],
+                excluded=[
+                    {
+                        "ticker": "EXCLUDED" if user_id == USER_ID else "PRIVATE_EXCLUDED",
+                        "name": summary,
+                        "reason": "thesis_invalidated",
+                        "explanation": "Licence revoked.",
+                        "evidence": ["https://example.com/notice"],
+                    }
+                ],
                 rejected_mentions=[],
                 coverage_summary={"nearest_misses": []},
             )
@@ -171,6 +179,9 @@ def test_ideas_return_only_owners_pending_discovery_and_latest_scan(client, db_s
     assert data["latest_scan"]["summary"] == "Own scan"
     assert data["latest_scan"]["opportunities"] is None
     assert data["latest_scan"]["set_aside"] is None
+    assert data["latest_scan"]["excluded"][0]["ticker"] == "EXCLUDED"
+    assert data["latest_scan"]["excluded"][0]["evidence"] == ["https://example.com/notice"]
+    assert data["latest_scan"]["rejected_mentions"] == []
     assert "PRIVATE" not in response.text and "Private scan" not in response.text
 
 

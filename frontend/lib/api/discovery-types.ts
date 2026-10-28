@@ -144,9 +144,50 @@ export interface ScanRun {
   researched: number;
   outcome: "ideas" | "none";
   summary: string;
-  coverage_summary: { nearest_misses?: NearestMiss[] } & Record<string, unknown>;
+  coverage_summary: {
+    nearest_misses?: NearestMiss[];
+    non_opportunities?: NonOpportunity[]; // absent on older scans
+    snapshot_symbols?: number;
+    missing_snapshot_symbols?: string[];
+    stale_symbols?: string[];
+    uncertain_price_symbols?: string[];
+    mentions_available?: boolean;
+    candidate_failures?: string[];
+  } & Record<string, unknown>;
+  excluded?: Exclusion[];
+  rejected_mentions?: RejectedMention[];
   opportunities: number | null; // null on scans saved before the count was stored
   set_aside: number | null;
+}
+
+export interface Exclusion {
+  ticker: string;
+  name: string;
+  reason: "thesis_invalidated" | "unreliable_price" | "ambiguous_identity" | "currency_unsupported" | "insufficient_data";
+  explanation: string;
+  evidence: string[];
+}
+
+export interface NonOpportunity {
+  ticker: string;
+  name: string;
+  overall: number | null;
+  confidence: Level;
+  explanation: string;
+  evidence: string[];
+  data_notes: string[];
+}
+
+export interface RejectedMention {
+  mention: {
+    name: string;
+    ticker_hint: string | null;
+    exchange_hint: string | null;
+    origin: string;
+    reason: string;
+    url: string | null;
+  };
+  reason: "ambiguous" | "unresolved" | "no_price" | "currency_unsupported" | "insufficient_data" | "cap_reached" | "duplicate";
 }
 
 export interface DiscoveryIdeas {

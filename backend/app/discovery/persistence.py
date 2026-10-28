@@ -53,6 +53,20 @@ def save_scan(
         raise ValueError("Opportunities cannot exceed researched candidates")
     coverage = dict(coverage_summary or {})
     coverage["opportunities"] = len(qualifying)
+    # Keep non-qualifying research even on scans that also found opportunities.
+    coverage["non_opportunities"] = [
+        {
+            "ticker": idea.ticker,
+            "name": idea.name,
+            "overall": idea.overall,
+            "confidence": idea.confidence,
+            "explanation": idea.conclusion,
+            "evidence": list(dict.fromkeys(claim.url for claim in idea.sources)),
+            "data_notes": idea.data_notes,
+        }
+        for idea in ranked
+        if not is_opportunity(idea)
+    ]
     if not qualifying:
         coverage["nearest_misses"] = [
             {

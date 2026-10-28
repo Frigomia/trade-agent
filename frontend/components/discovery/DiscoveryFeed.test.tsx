@@ -191,6 +191,7 @@ describe("DiscoveryFeed", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
 
     expect(screen.getByRole("status")).toHaveTextContent(/Latest AI scan · Updated .* · 5 opportunities · 3 set aside/);
+    expect(screen.getByRole("link", { name: "3 set aside" })).toHaveAttribute("href", "/today/scan-results");
     expect(screen.getByRole("button", { name: /refresh scan, 23 of 100 runs used this month\. costs 1 run/i })).toBeEnabled();
   });
 

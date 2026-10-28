@@ -1,6 +1,7 @@
 import { Box, Button, Typography } from "@mui/material";
 import { RefreshCw, Sparkles } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
+import Link from "next/link";
 import type { DiscoveryJob, ScanRun } from "@/lib/api/discovery-types";
 import { runsExhausted, scanCounts, whenText } from "@/lib/discovery";
 import type { UsageDetail } from "@/lib/usage";
@@ -33,7 +34,7 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
     text = (
       <>
         <b>Latest AI scan</b> · Updated {whenText(scan.created_at, now)}
-        {scanCounts(scan).map((part) => ` · ${part}`)}
+        {scanCounts(scan).map((part) => <span key={part}> · {part.includes("set aside") ? <Link href="/today/scan-results">{part}</Link> : part}</span>)}
       </>
     );
   } else {
@@ -49,9 +50,12 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
       >
         <Sparkles size={15} />
       </Box>
-      <Typography role="status" sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem", color: "var(--text2)" }}>
+      <Typography role="status" sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem", color: "var(--text2)", "& a": { display: "inline-flex", alignItems: "center", minHeight: 44 } }}>
         {text}
       </Typography>
+      <Button component={Link} href="/today/scan-results" size="small" sx={{ minHeight: { xs: 44, md: 36 } }}>
+        Scan results
+      </Button>
       <Button
         variant="outlined"
         size="small"

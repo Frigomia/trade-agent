@@ -504,6 +504,22 @@ does not guess from summary prose or current pending rows. Empty-opportunity sca
 company names alongside ticker, overall and confidence in `nearest_misses`. Existing JSON
 columns hold these additions, so no database migration is required.
 
+Scan results (`/today/scan-results`, reached from the Today scan bar) reuse this owner-only,
+no-store feed. The existing `excluded` and `rejected_mentions` arrays include their saved reasons,
+explanations/context and evidence URLs. These are bounded by the scan's cached universe and
+mention batch; reads select only the latest scan and make no provider calls.
+New scans also save `coverage_summary.non_opportunities`: the non-qualifying evaluated ideas
+(at most the eight-candidate shortlist), each with `ticker`, `name`, nullable `overall`,
+`confidence`, `explanation` (the saved conclusion), deduplicated `evidence` URLs and `data_notes`.
+Persistence computes this list itself, overriding caller-supplied values, including when other
+candidates qualify. No new model calls or migration are needed. Research-graph exclusions have
+`reason=thesis_invalidated`; together with non-opportunities these account for `set_aside`.
+Other exclusions failed screening and are displayed separately, as are rejected mentions and
+coverage (missing snapshots, stale/uncertain quotes, failed research and daily mention availability).
+Legacy scans lacking complete researched-result records retain their original counts and show
+an explicit missing-details notice; the UI does not invent records to make the totals match.
+All provider and web content renders as plain text, with evidence links through `safeHref`.
+
 ### Contribution planner
 
 `app/planner.py` (pure arithmetic: `Decimal`, no I/O), `app/fx.py` (currency and EUR conversion),

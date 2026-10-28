@@ -148,7 +148,31 @@ def test_no_opportunity_retains_nearest_misses_exclusions_and_rejected_mentions(
     }
     assert scan.excluded == [exclusion.model_dump(mode="json")]
     assert scan.rejected_mentions == [rejected.model_dump(mode="json")]
+    results = scan.coverage_summary["non_opportunities"]
+    assert {item["ticker"] for item in results} == {"LOW", "UNCERTAIN"}
+    assert all(item["explanation"] for item in results)
+    assert results[0]["evidence"] == list(dict.fromkeys(c.url for c in sample_idea().sources))
     assert db_session.query(Recommendation).count() == 0
+
+
+def test_mixed_scan_keeps_non_qualifying_research_and_ignores_supplied_results(
+    client, db_session, app_session_local
+):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        scan = save_scan(
+            USER_ID,
+            [_idea(ticker="PASS"), _idea(ticker="LOW", overall=50)],
+            coverage_summary={"non_opportunities": [{"ticker": "INVENTED"}]},
+            **COUNTS,
+        )
+    assert scan is not None
+    response = client.get("/discovery/ideas")
+    assert response.status_code == 200
+    latest = response.json()["latest_scan"]
+    assert latest["set_aside"] == len(latest["coverage_summary"]["non_opportunities"]) == 1
+    assert latest["coverage_summary"]["non_opportunities"][0]["ticker"] == "LOW"
+    assert "INVENTED" not in response.text
 
 
 def test_empty_shortlist_is_a_completed_no_opportunity_scan(db_session, app_session_local):
