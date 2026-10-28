@@ -102,7 +102,7 @@ Optionally set `NEXT_PUBLIC_LOGO_DEV_TOKEN` to a Logo.dev CDN publishable key (`
 logos. Without it, or when a logo is unavailable, the app shows company initials. Set this variable
 in your deployment provider before building too; Next.js embeds public variables at build time.
 Logos load through the app's own signed-in `/api/logo/<ticker>` route, not from the browser: Logo.dev
-sees this server's requests (cached for a day and shared by all users), so a person's IP address,
+sees this server's requests (each server keeps a checked logo for a day and each browser too), so a person's IP address,
 browser and the tickers they hold or watch are not tied to them. Logo.dev still learns which tickers
 the app asks for, never share counts or account identifiers. Leave the token unset to keep initials
 and make no requests at all.
