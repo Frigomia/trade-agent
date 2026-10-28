@@ -53,6 +53,15 @@ describe("AdminUsagePage", () => {
     expect(screen.getByText("42 / 500")).toBeInTheDocument();
   });
 
+  it("names each meter and marks a person at their limit with a word", async () => {
+    serve({ "/admin/users": [{ ...USERS[0], monthly_analysis_used: 100 }] });
+    renderFresh(<AdminUsagePage />);
+
+    const meter = await screen.findByRole("progressbar", { name: "a@example.com, analysis runs" });
+    expect(meter).toHaveAttribute("aria-valuetext", "100 of 100");
+    expect(screen.getByText("At limit")).toBeInTheDocument();
+  });
+
   it("totals the month's usage across people", async () => {
     serve({ "/admin/users": [USERS[0], { ...USERS[0], id: "u2", email: "b@example.com", monthly_analysis_used: 3, monthly_chat_used: 8 }] });
     renderFresh(<AdminUsagePage />);

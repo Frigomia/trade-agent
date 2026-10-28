@@ -510,4 +510,5 @@ Open items:
   beside the allowance), and the recommendation page for a call on a holding (the Soft score bar, amber under 60,
   a clock on "Pending", the decision recorded as one panel) and Track record (the same bar for each group, an icon
   before each verdict word) and the Signal backtest (an arrow beside the result pills, Soft run rows, a quiet
-  hit-rate table).
+  hit-rate table) and Admin (the pill filter with counts, status as an icon and a word with Disabled in amber, the
+  Soft bar and an amber "Near limit" or "At limit" with an icon on the usage table).

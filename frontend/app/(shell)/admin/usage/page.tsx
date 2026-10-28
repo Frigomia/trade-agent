@@ -1,35 +1,40 @@
 "use client";
 
 import useSWR from "swr";
-import { Box, LinearProgress, Table, TableHead, TableBody, TableRow, TableCell, Typography, Alert } from "@mui/material";
+import { AlertTriangle } from "lucide-react";
+import { Box, Table, TableHead, TableBody, TableRow, TableCell, Typography, Alert } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 import { DefaultLimitsPanel } from "@/components/admin/DefaultLimitsPanel";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Avatar } from "@/components/ui/Avatar";
+import { Bar } from "@/components/ui/Bar";
 import { Panel } from "@/components/ui/Panel";
 import { Pill } from "@/components/ui/Pill";
 import { usageFraction, usageLevel, type UsageDetail } from "@/lib/usage";
 
+// Both limit levels are amber with a word and an icon: red is for price moves only.
 const LEVEL = {
-  ok: { tone: "accent", label: "OK", color: "var(--accent)" },
-  warn: { tone: "warn", label: "Near limit", color: "var(--warn)" },
-  limit: { tone: "down", label: "At limit", color: "var(--down)" },
+  ok: { tone: "accent", label: "OK", caution: false },
+  warn: { tone: "warn", label: "Near limit", caution: true },
+  limit: { tone: "warn", label: "At limit", caution: true },
 } as const;
 
 // On a phone each table row becomes a two-column card (see TABLE_SX), so the cells cannot keep a
 // fixed minimum width; the label comes from `data-label` via CSS, so the DOM text is not duplicated.
-function UsageCell({ usage }: { usage: UsageDetail }) {
-  const { color } = LEVEL[usageLevel(usage)];
+function UsageCell({ usage, name }: { usage: UsageDetail; name: string }) {
+  const level = LEVEL[usageLevel(usage)];
   return (
-    <Box sx={{ minWidth: { md: 110 } }}>
-      <Typography sx={{ fontSize: "0.8125rem" }}>
+    <Box sx={{ minWidth: { md: 120 } }}>
+      <Typography sx={{ fontSize: "0.75rem", fontVariantNumeric: "tabular-nums" }}>
         {usage.used} / {usage.limit || "—"}
       </Typography>
-      <LinearProgress
-        variant="determinate"
+      <Bar
+        label={name}
         value={usageFraction(usage) * 100}
-        sx={{ mt: 0.5, "& .MuiLinearProgress-bar": { bgcolor: color } }}
+        valueText={usage.limit ? `${usage.used} of ${usage.limit}` : `${usage.used} used, no limit`}
+        caution={level.caution}
+        sx={{ mt: 0.75, height: 6 }}
       />
     </Box>
   );
@@ -40,6 +45,9 @@ const phone = (value: Record<string, unknown>) => ({ "@media (max-width: 899.95p
 // Below `md` the table is laid out as cards: the user on the first line, the two usage meters and
 // the status on the second, so nothing is wider than the screen.
 const TABLE_SX = {
+  // td/th (not .MuiTableCell-root) so the phone card rules below, which name `td`, still win.
+  "& td, & th": { fontSize: "0.8125rem", padding: "12px 8px" },
+  "& th": { fontWeight: 500 },
   ...phone({
     display: "block",
     "& thead": { display: "none" },
@@ -98,7 +106,7 @@ export default function AdminUsagePage() {
         sx={{ display: "grid", gap: 2, alignItems: "start", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "320px minmax(0, 1fr)" }, maxWidth: 1180 }}
       >
       <DefaultLimitsPanel onSaved={() => void mutate()} />
-      <Panel sx={{ p: "4px 18px" }}>
+      <Panel sx={{ p: "4px 20px" }}>
         <Table sx={TABLE_SX}>
           <TableHead>
             <TableRow>
@@ -120,13 +128,16 @@ export default function AdminUsagePage() {
                   </Box>
                 </TableCell>
                 <TableCell data-cell="analysis" data-label="Analysis runs">
-                  <UsageCell usage={user.analysis} />
+                  <UsageCell usage={user.analysis} name={`${user.email}, analysis runs`} />
                 </TableCell>
                 <TableCell data-cell="chat" data-label="Chat messages">
-                  <UsageCell usage={user.chat} />
+                  <UsageCell usage={user.chat} name={`${user.email}, chat messages`} />
                 </TableCell>
                 <TableCell data-cell="status" align="right">
-                  <Pill tone={LEVEL[user.level].tone}>{LEVEL[user.level].label}</Pill>
+                  <Pill tone={LEVEL[user.level].tone}>
+                    {user.level !== "ok" && <AlertTriangle size={12} aria-hidden />}
+                    {LEVEL[user.level].label}
+                  </Pill>
                 </TableCell>
               </TableRow>
             ))}
