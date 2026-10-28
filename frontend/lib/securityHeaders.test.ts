@@ -32,6 +32,11 @@ describe("buildSecurityHeaders", () => {
     expect(csp).toContain("default-src 'self'");
   });
 
+  it("loads images from this site only, so no page contacts Logo.dev", () => {
+    const img = header("Content-Security-Policy")!.split("; ").find((d) => d.startsWith("img-src "));
+    expect(img).toBe("img-src 'self' data: blob:");
+  });
+
   it("allows eval only in development (React refresh needs it)", () => {
     expect(header("Content-Security-Policy", { ...ENV, dev: true })).toContain("'unsafe-eval'");
     expect(header("Content-Security-Policy")).not.toContain("'unsafe-eval'");

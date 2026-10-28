@@ -6,5 +6,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // api/logo is left out: a page load has just refreshed the session, and each logo request checks it
+  // itself, so thirty logos do not mean thirty more Supabase Auth round trips.
+  matcher: ["/((?!_next/static|_next/image|api/logo/|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 };

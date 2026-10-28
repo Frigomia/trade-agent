@@ -12,7 +12,8 @@ function origin(url: string | undefined): string | null {
  * The response headers every page gets. `script-src` keeps 'unsafe-inline' because Next.js and the
  * theme bootstrap emit inline scripts; the policy still blocks framing, plugins, a hijacked <base>,
  * form posts elsewhere, and any connection except to this site, the API and Supabase, which limits
- * where an injected script could send data. A per-request nonce would tighten script-src later.
+ * where an injected script could send data. Images load from this site only: company logos come
+ * through /api/logo, so no page talks to Logo.dev. A per-request nonce would tighten script-src later.
  */
 export function buildSecurityHeaders({
   apiUrl,
@@ -28,7 +29,7 @@ export function buildSecurityHeaders({
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://img.logo.dev",
+    "img-src 'self' data: blob:",
     "font-src 'self' data:",
     `connect-src ${connect.join(" ")}${dev ? " ws:" : ""}`,
     "frame-ancestors 'none'",

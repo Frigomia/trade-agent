@@ -2,20 +2,21 @@ import { Avatar } from "@mui/material";
 import { monogram } from "@/lib/discovery";
 import { remFromPx } from "@/lib/rem";
 
-/** Company logo with initials when the CDN is unavailable or has no matching ticker. */
+/**
+ * Company logo with initials when the CDN is unavailable or has no matching ticker. It loads from
+ * this app's own /api/logo route, not from Logo.dev, so the ticker and the person's IP stay here.
+ */
 export function Logo({ name, ticker, size = 40 }: { name: string; ticker?: string; size?: number }) {
-  const token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN;
+  // The token only switches logos on; the route holds the request to Logo.dev.
+  const enabled = Boolean(process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN);
   const symbol = ticker?.trim().toUpperCase();
-  const src = token && symbol
-    ? `https://img.logo.dev/ticker/${encodeURIComponent(symbol)}?token=${encodeURIComponent(token)}&size=${size * 2}&fallback=404`
-    : undefined;
+  const src = enabled && symbol ? `/api/logo/${encodeURIComponent(symbol)}?size=${size * 2}` : undefined;
 
   return (
     <Avatar
       aria-hidden
       alt=""
       src={src}
-      slotProps={{ img: { referrerPolicy: "strict-origin-when-cross-origin" } }}
       sx={{
         width: size,
         height: size,
