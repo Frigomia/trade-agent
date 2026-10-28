@@ -1,0 +1,90 @@
+/* Scan results in the Soft direction: a single ledger. Loads after ../today-discovery/lib.css, ../company-overview/soft.css, co.css, ../portfolio/pf.css, ../plan/plan.css and ../account/acct.css.
+   Layout and the few new pieces only: panels, chips, buttons, the dashed web box and the error and warning boxes are the shared ones. */
+.sr{display:flex;flex-direction:column;gap:16px;min-width:0;min-height:700px;max-width:900px}
+.sr h1{margin:0;font-size:30px;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.sr h2,.sr h3{margin:0;font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}
+.sr p{margin:0}
+.sr small,.sr .muted{color:var(--muted);font-size:var(--fs-label)}
+.sr a:not(.btn):not(.lnk){color:var(--accent)}
+.sr .btn{min-height:44px}
+.phone .sr{min-height:640px}.phone .sr h1{font-size:26px}
+.back1{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--text2)!important;font-size:var(--fs-body);text-decoration:none}
+.back1 svg.i{width:16px;height:16px;transform:rotate(180deg)}
+.hd{display:grid;gap:4px}.hd .sub{color:var(--muted);font-size:var(--fs-body);line-height:1.5}
+.tk{font-family:"Geist Mono",ui-monospace,monospace;font-size:var(--fs-label);color:var(--muted)}
+.chip.warn svg.i,.chip.none svg.i{width:13px;height:13px}
+.lnk{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line2);background:none;color:var(--text);font-size:var(--fs-label);font-weight:500;text-decoration:none;white-space:nowrap}
+.lnk svg.i{width:13px;height:13px}
+.phone .lnk{min-height:44px}
+
+/* the way in: the scan bar with its new link */
+.sbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px}
+.sbar .ld{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:var(--up-bg);color:var(--accent);flex:none}
+.sbar .tx{flex:1;min-width:0;font-size:var(--fs-body);color:var(--text2)}
+.noopp{display:grid;gap:10px;padding:16px 18px;justify-items:start}
+.noopp .body1{color:var(--text2);font-size:var(--fs-body);line-height:1.5}
+.noopp .miss{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.noopp .miss ul{display:flex;gap:8px;flex-wrap:wrap;list-style:none;margin:0;padding:0}
+.noopp .miss .chip{min-height:28px}
+
+/* the counts: one quiet line */
+.cnt{display:flex;flex-wrap:wrap;gap:6px 22px;padding:2px 4px;color:var(--text2);font-size:var(--fs-body)}
+.cnt span{display:inline-flex;align-items:baseline;gap:6px;white-space:nowrap}
+.cnt b{font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--text)}
+.cnt .hi b{color:var(--accent)}
+.fnote{padding:0 4px;color:var(--muted);font-size:var(--fs-label);line-height:1.5}
+
+/* the filter: the shared pill control with counts */
+.flt{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--track);max-width:100%;overflow:hidden;align-self:flex-start}
+.flt button{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px;border:0;border-radius:999px;background:none;color:var(--text2);font-size:var(--fs-body);font-weight:500;white-space:nowrap}
+.flt button.on{background:var(--panel);color:var(--text);font-weight:650;box-shadow:var(--shadow)}
+.flt i{font-style:normal;min-width:20px;padding:0 6px;border-radius:999px;background:var(--track);font-size:var(--fs-label);font-variant-numeric:tabular-nums;text-align:center}
+.flt button.on i{background:var(--up-bg);color:var(--accent)}
+.phone .flt{width:100%;align-self:stretch}.phone .flt button{flex:1;padding:0 4px;min-height:44px;justify-content:center;gap:4px;font-size:var(--fs-label)}
+
+/* the ledger */
+.led{padding:4px 20px 8px;min-width:0}
+.lh,.lr{display:grid;grid-template-columns:minmax(0,1.5fr) 190px minmax(0,1.3fr) 24px;gap:14px;align-items:center}
+.lh{padding:10px 0;color:var(--muted);font-size:var(--fs-label);font-weight:500;border-bottom:1px solid var(--line)}
+.row1{border-top:1px solid var(--line)}
+.lh+.row1{border-top:0}
+.lr{min-height:56px;padding:6px 0;cursor:pointer;background:none;border:0;width:100%;text-align:left;font:inherit;color:inherit}
+.lr .who{display:flex;align-items:baseline;gap:8px;min-width:0;font-weight:650;font-size:var(--fs-body)}
+.lr .who span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .stg{color:var(--text2);font-size:var(--fs-label)}
+.lr .why{color:var(--text2);font-size:var(--fs-label);display:flex;gap:8px;align-items:center;min-width:0}
+.lr .chv{color:var(--muted);transition:transform .15s}
+.row1.open .chv{transform:rotate(90deg)}
+.dt{display:none;padding:2px 0 16px 0;gap:10px;max-width:760px}
+.row1.open .dt{display:grid}
+.dt .webbox{border:1px dashed var(--line2);border-radius:14px;padding:10px 14px;font-size:var(--fs-body);line-height:1.55;color:var(--text2);overflow-wrap:anywhere}
+.dt .webbox .wl{display:block;margin-top:8px;font-size:var(--fs-label);color:var(--muted)}
+.dt .meta1{color:var(--text2);font-size:var(--fs-label);font-variant-numeric:tabular-nums;line-height:1.5}
+.ev{display:flex;gap:8px;flex-wrap:wrap}
+.ev a,.ev span{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--line2);font-size:var(--fs-label);overflow-wrap:anywhere}
+.ev span{color:var(--muted);border-style:dashed}
+.ev svg.i{width:13px;height:13px}
+.phone .ev a,.phone .ev span{min-height:44px}
+.more1{display:flex;justify-content:center;padding:12px 0 6px;border-top:1px solid var(--line)}
+.stdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:var(--line2)}
+.stdot.a{background:var(--warn)}.stdot.b{background:var(--accent)}
+.emp{display:flex;gap:10px;align-items:center;padding:18px 0;color:var(--muted);font-size:var(--fs-body)}
+.emp svg.i{width:16px;height:16px}
+.phone .lh{display:none}
+.phone .lr{grid-template-columns:minmax(0,1fr) 24px;grid-template-areas:"w c" "s c" "y c";gap:2px 10px;padding:12px 0}
+.phone .lr .who{grid-area:w}.phone .lr .stg{grid-area:s}.phone .lr .why{grid-area:y;margin-top:4px}.phone .lr .chv{grid-area:c;align-self:center}
+.phone .led{padding:4px 14px 8px}
+.srnote{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--rc);background:var(--up-bg);color:var(--text2);font-size:var(--fs-label);line-height:1.5}
+.srnote svg.i{color:var(--accent);margin-top:1px}
+
+/* coverage notes */
+.cov{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.cov li{display:flex;gap:10px;align-items:flex-start;color:var(--text2);font-size:var(--fs-body);line-height:1.5}
+.cov li svg.i{color:var(--muted);margin-top:2px;width:16px;height:16px}
+.cvp{padding:16px 20px;display:grid;gap:10px}
+
+.empty3{display:grid;justify-items:center;text-align:center;gap:8px;padding:34px 20px}
+.empty3 .ic{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--up-bg);color:var(--accent)}
+.empty3 p{color:var(--text2);max-width:46ch;line-height:1.55}
+.region .sr{min-height:0}
+[hidden]{display:none!important}
