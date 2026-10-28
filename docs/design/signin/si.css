@@ -1,0 +1,68 @@
+/* Sign-in screens (Sign in, Set your password, Reset your password) in the Soft direction. Loads after ../today-discovery/lib.css, ../company-overview/soft.css, co.css, ../portfolio/pf.css, ../plan/plan.css and ../account/acct.css.
+   Layout and the few new pieces only: the button, the error and warning boxes and the tokens are the shared ones. */
+.afr{width:1280px;max-width:100%;min-height:720px;display:flex;background-color:var(--bg);background-image:var(--page-glow);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.bp{display:flex;flex-direction:column;justify-content:space-between;width:44%;max-width:560px;padding:40px;border-right:1px solid var(--line)}
+.bp .nm{display:flex;align-items:center;gap:12px;font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}
+.bp img{width:38px;height:38px;object-fit:contain;flex:none}
+.bp .promise{margin:0;font-size:30px;font-weight:650;letter-spacing:-.03em;line-height:1.15}
+.bp .sub{margin:16px 0 0;max-width:36ch;color:var(--text2);font-size:var(--fs-body);line-height:1.55}
+.bp .adv{margin:32px 0 0;color:var(--muted);font-size:var(--fs-label)}
+.fp{flex:1;min-width:0;display:flex;flex-direction:column;padding:12px 40px 16px}
+.fp .top{display:flex;justify-content:flex-end}
+.theme{width:44px;height:44px;margin-left:0}
+.fp .mid{flex:1;width:100%;max-width:380px;margin:0 auto;padding-top:96px}
+.fp .advm{display:none;text-align:center;color:var(--muted);font-size:var(--fs-label);padding-bottom:4px}
+
+.si{display:grid;gap:14px;min-width:0}
+.si h1{margin:0;font-size:30px;font-weight:650;letter-spacing:-.025em;line-height:1.15}
+.si .sub1{margin:6px 0 0;color:var(--muted);font-size:var(--fs-body);line-height:1.5}
+.si p{margin:0}
+.si .btn{min-height:44px;width:100%}
+.si .btn[disabled]{opacity:.45;box-shadow:none;cursor:default}
+.si .panel{border-radius:var(--rp);padding:26px 26px 24px;display:grid;gap:14px;min-width:0}
+.si small{color:var(--muted);font-size:var(--fs-label)}
+.si .frow a{color:var(--accent)}
+.mk{display:none}
+.fld{display:grid;gap:6px;min-width:0}
+.fld label small{color:var(--text2);font-weight:500}
+.si .inp{display:flex;align-items:center;gap:8px;min-height:44px;width:100%;border:1px solid var(--line2);border-radius:var(--rc);background:var(--panel);padding:0 6px 0 14px}
+.si .inp:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.si .inp>svg.i{color:var(--muted);flex:none}
+.si .inp input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:var(--fs-body);font-weight:400;font-variant-numeric:normal;color:var(--text);outline:0;height:42px;padding:0}
+.si .inp.err{border-color:var(--down)}
+.si .inp.off{background:var(--track);border-color:var(--line)}
+.si .inp.off input{color:var(--text2)}
+.si .inp:not(.has-btn){padding-right:14px}
+.eye{display:grid;place-items:center;width:44px;height:44px;margin:-1px -1px -1px 0;border:0;border-radius:var(--rc);background:none;color:var(--muted)}
+.ferr{color:var(--down);font-size:var(--fs-label)}
+.frow{display:flex;justify-content:flex-end;margin-top:-4px}
+.frow a{display:inline-flex;align-items:center;min-height:44px;font-size:var(--fs-label)}
+.info,.ok{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--rc);background:var(--up-bg);color:var(--text2);font-size:var(--fs-label);line-height:1.5}
+.info svg.i,.ok svg.i{color:var(--accent);margin-top:1px}
+.ok{color:var(--text);font-size:var(--fs-body)}
+.chk{display:flex;gap:10px;align-items:flex-start;min-height:44px;color:var(--text2);font-size:var(--fs-label);line-height:1.5;text-align:left;cursor:pointer}
+.cb{appearance:none;-webkit-appearance:none;flex:none;display:grid;place-items:center;width:22px;height:22px;margin:2px 0 0;border-radius:7px;border:1.5px solid var(--line2);background:var(--panel);cursor:pointer}
+.cb:checked{background:var(--accent-solid);border-color:var(--accent-solid)}
+.cb:checked::after{content:"";width:5px;height:10px;margin-top:-2px;border:solid var(--on-accent);border-width:0 2.5px 2.5px 0;transform:rotate(45deg)}
+.cb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.cr{display:flex;align-items:center;justify-content:center;min-height:44px;color:var(--muted);font-size:var(--fs-label);text-decoration:none}
+
+/* phone: the brand tile above the heading, one panel without the left half */
+.phone .scr.si{gap:0;padding:12px 16px 16px;display:flex;flex-direction:column;min-height:760px}
+.phone .top{display:flex;justify-content:flex-end}
+.phone .mk{display:block;margin:22px 0 18px}
+.phone .si h1{font-size:26px}
+.phone .si .panel{padding:0;border:0;box-shadow:none;background:none}
+.phone .advm{display:block;margin-top:auto;text-align:center;color:var(--muted);font-size:var(--fs-label);padding:8px 0 4px}
+.phone .mid{flex:1;display:grid;align-content:start}
+
+.region .afr{width:100%;min-height:0;border:0;border-radius:0;background:none}
+.region .fp .mid{padding-top:4px;max-width:380px;margin:0}
+.region .fp .mk{display:none}
+.region .fp{padding:0}
+[hidden]{display:none!important}
+
+/* below the md breakpoint (900px) the brand half goes, as in the app */
+@media (max-width:899px){.bp{display:none}.fp{padding:12px 20px 16px}.fp .mid{padding-top:32px}.fp .advm{display:block}.fp .mk{display:block;margin:0 0 18px}}
+
+#phones{align-items:flex-start;flex-wrap:wrap;justify-content:center}
