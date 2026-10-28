@@ -145,8 +145,21 @@ export function visibleRows(rows: LedgerRow[], filter: LedgerFilter, expanded: b
  * before `set_aside_ideas` was kept. `listed` is the number of set-aside rows. Never negative.
  */
 export function unlistedSetAside(scan: ScanRun, listed: number): number {
-  if (scan.set_aside === null) return 0;
+  if (typeof scan.set_aside !== "number") return 0;
   return Math.max(0, scan.set_aside - listed);
+}
+
+/**
+ * What an empty ledger says. A zero is stated only when the scan recorded one: a scan saved before
+ * the below-the-bar records, or without counts, has no list, which is not the same as nothing set aside.
+ * `listed` is the number of set-aside rows the ledger has.
+ */
+export function emptyText(filter: LedgerFilter, scan: ScanRun, listed: number): string {
+  if (filter === "not") return "Nothing failed a safeguard.";
+  if (filter === "men") return "No mentions were rejected.";
+  if (typeof scan.set_aside !== "number") return filter === "set" ? "This scan did not record what it set aside." : "Nothing is listed for this scan.";
+  if (unlistedSetAside(scan, listed) > 0) return "The companies this scan set aside were not saved, so they cannot be listed.";
+  return filter === "set" ? "Nothing was set aside. Every researched company was put forward." : "Nothing was left out by this scan.";
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

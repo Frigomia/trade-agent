@@ -85,6 +85,23 @@ describe("ScanResults", () => {
     expect(screen.getByRole("note")).toHaveTextContent("2 researched companies below the bar were not kept");
   });
 
+  it("does not call a mixed pre-change scan empty or fully put forward when 2 were set aside", () => {
+    const mixed: ScanRun = { ...BASE, researched: 8, opportunities: 6, set_aside: 2, excluded: [], rejected_mentions: [], coverage_summary: {} };
+    render(<ScanResults scan={mixed} />);
+    expect(screen.getByText("The companies this scan set aside were not saved, so they cannot be listed.")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing was left out by this scan.")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Set aside/ }));
+    expect(screen.getByText("The companies this scan set aside were not saved, so they cannot be listed.")).toBeInTheDocument();
+    expect(screen.queryByText(/Every researched company was put forward/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("2 researched companies below the bar were not kept");
+  });
+
+  it("says nothing was set aside only when the scan recorded a zero", () => {
+    render(<ScanResults scan={{ ...BASE, set_aside: 0, opportunities: 7, excluded: [], rejected_mentions: [], coverage_summary: { set_aside_ideas: [] } }} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Set aside/ }));
+    expect(screen.getByText("Nothing was set aside. Every researched company was put forward.")).toBeInTheDocument();
+  });
+
   it("marks a scan saved without counts and shows dashes", () => {
     render(<ScanResults scan={{ ...BASE, opportunities: null, set_aside: null }} />);
     expect(screen.getByText(/saved before its counts were kept/)).toBeInTheDocument();

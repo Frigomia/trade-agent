@@ -6,15 +6,8 @@ import { Check, Info } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { ScanRun } from "@/lib/api/discovery-types";
-import { coverageNotes, ledgerCounts, ledgerRows, unlistedSetAside, visibleRows, type LedgerFilter } from "@/lib/scanResults";
+import { coverageNotes, emptyText, ledgerCounts, ledgerRows, unlistedSetAside, visibleRows, type LedgerFilter } from "@/lib/scanResults";
 import { ScanLedger } from "./ScanLedger";
-
-const EMPTY: Record<LedgerFilter, string> = {
-  all: "Nothing was left out by this scan.",
-  set: "Nothing was set aside. Every researched company was put forward.",
-  not: "Nothing failed a safeguard.",
-  men: "No mentions were rejected.",
-};
 
 function Count({ value, label, accent }: { value: number | null; label: string; accent?: boolean }) {
   return (
@@ -77,7 +70,7 @@ export function ScanResults({ scan }: { scan: ScanRun }) {
         }}
         fill
       />
-      <ScanLedger key={filter} rows={shown} hidden={hidden} onShowMore={() => setExpanded(true)} empty={EMPTY[filter]} />
+      <ScanLedger key={filter} rows={shown} hidden={hidden} onShowMore={() => setExpanded(true)} empty={emptyText(filter, scan, counts.set)} />
       {unlisted > 0 && (filter === "all" || filter === "set") && (
         <Note>
           {unlisted} researched {unlisted === 1 ? "company" : "companies"} below the bar {unlisted === 1 ? "was" : "were"} not kept, so {unlisted === 1 ? "it" : "they"} cannot be listed. The count above still includes {unlisted === 1 ? "it" : "them"}.

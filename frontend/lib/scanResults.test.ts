@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ScanRun } from "@/lib/api/discovery-types";
-import { coverageNotes, ledgerCounts, ledgerRows, NOT_RESEARCHED_SHOWN, sentence, unlistedSetAside, visibleRows } from "./scanResults";
+import { coverageNotes, emptyText, ledgerCounts, ledgerRows, NOT_RESEARCHED_SHOWN, sentence, unlistedSetAside, visibleRows } from "./scanResults";
 
 const SCAN: ScanRun = {
   id: 1,
@@ -84,6 +84,27 @@ describe("visibleRows", () => {
   it("a filter keeps one group", () => {
     expect(visibleRows(ledgerRows(SCAN), "men", false).shown.map((r) => r.name)).toEqual(["Orange"]);
     expect(visibleRows(ledgerRows(SCAN), "set", false).hidden).toBe(0);
+  });
+});
+
+describe("emptyText", () => {
+  const known = { ...SCAN, set_aside: 0, opportunities: 7 };
+  it("states a zero only when the scan recorded one", () => {
+    expect(emptyText("set", known, 0)).toBe("Nothing was set aside. Every researched company was put forward.");
+    expect(emptyText("all", known, 0)).toBe("Nothing was left out by this scan.");
+  });
+  it("says the companies were not saved when the count says some were set aside", () => {
+    expect(emptyText("set", { ...SCAN, set_aside: 2 }, 0)).toBe("The companies this scan set aside were not saved, so they cannot be listed.");
+    expect(emptyText("all", { ...SCAN, set_aside: 2 }, 0)).toBe("The companies this scan set aside were not saved, so they cannot be listed.");
+  });
+  it("does not assert a zero for a scan without counts", () => {
+    const unknown = { ...SCAN, set_aside: null, opportunities: null };
+    expect(emptyText("set", unknown, 0)).toBe("This scan did not record what it set aside.");
+    expect(emptyText("all", unknown, 0)).toBe("Nothing is listed for this scan.");
+  });
+  it("keeps the safeguard and mention copy, which the scan always records", () => {
+    expect(emptyText("not", SCAN, 0)).toBe("Nothing failed a safeguard.");
+    expect(emptyText("men", SCAN, 0)).toBe("No mentions were rejected.");
   });
 });
 
