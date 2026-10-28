@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import useSWR from "swr";
+import { Check } from "lucide-react";
 import { Alert, Box, Button, TextField, Typography } from "@mui/material";
 import { apiFetch } from "@/lib/api/client";
 import type { LimitDefaults } from "@/lib/api/admin-types";
@@ -13,20 +14,26 @@ const MAX_LIMIT = 2_147_483_647;
 /** The monthly limits for everyone without a personal override. */
 export function DefaultLimitsPanel({ onSaved }: { onSaved: () => void }) {
   const { data, error: loadError, mutate } = useSWR<LimitDefaults>("/admin/limit-defaults", apiFetch);
+  // Held here, not in the form: a save refetches the defaults, which re-keys (remounts) the form.
+  const [saved, setSaved] = useState(false);
 
   return (
-    <Panel sx={{ p: "18px 20px" }}>
-      <Typography component="h2" sx={{ fontSize: "1.0625rem", fontWeight: 650 }}>
-        Default limits
-      </Typography>
-      <Typography sx={{ fontSize: "0.78125rem", color: "var(--muted)", mb: 1 }}>
-        For everyone without a personal limit. Personal limits are set per person on the Users page.
-      </Typography>
+    <Panel sx={{ p: "18px 20px", display: "grid", gap: 1.5 }}>
+      <Box>
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
+          Default limits
+        </Typography>
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", mt: 0.5, lineHeight: 1.5 }}>
+          For everyone without a personal limit. Personal limits are set per person on the Users page.
+        </Typography>
+      </Box>
       {loadError && <Alert severity="error">Could not load the default limits.</Alert>}
       {data && (
         <DefaultLimitsForm
           key={`${data.analysis_limit}/${data.chat_limit}`}
           initial={data}
+          saved={saved}
+          setSaved={setSaved}
           onSaved={() => {
             void mutate();
             onSaved();
@@ -37,10 +44,19 @@ export function DefaultLimitsPanel({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-function DefaultLimitsForm({ initial, onSaved }: { initial: LimitDefaults; onSaved: () => void }) {
+function DefaultLimitsForm({
+  initial,
+  saved,
+  setSaved,
+  onSaved,
+}: {
+  initial: LimitDefaults;
+  saved: boolean;
+  setSaved: (saved: boolean) => void;
+  onSaved: () => void;
+}) {
   const [analysis, setAnalysis] = useState(String(initial.analysis_limit));
   const [chat, setChat] = useState(String(initial.chat_limit));
-  const [saved, setSaved] = useState(false);
   const { run, submitting, error, setError } = useAction();
 
   function handleSubmit(event: FormEvent) {
@@ -87,7 +103,14 @@ function DefaultLimitsForm({ initial, onSaved }: { initial: LimitDefaults; onSav
         <Button type="submit" variant="contained" disabled={submitting}>
           Save defaults
         </Button>
-        {saved && <Typography color="text.secondary">Saved</Typography>}
+        <Typography role="status" sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
+          {saved && (
+            <>
+              <Check size={16} aria-hidden style={{ color: "var(--accent)" }} />
+              Saved
+            </>
+          )}
+        </Typography>
       </Box>
     </Box>
   );

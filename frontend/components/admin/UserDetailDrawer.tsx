@@ -8,6 +8,9 @@ import { ClaudeStateChip, chipKind } from "@/components/claude/ClaudeStateChip";
 import { useAction } from "@/lib/useAction";
 import type { AdminUserOut } from "@/lib/api/admin-types";
 
+// A quiet text button; 44px on a phone, 36px on a desktop.
+const USE_DEFAULT = { minHeight: { xs: 44, md: 36 } } as const;
+
 interface UserDetailProps {
   user: AdminUserOut;
   onClose: () => void;
@@ -56,19 +59,19 @@ export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: Us
 
   return (
     <Box>
-        <Typography variant="h6" sx={{ fontWeight: 650 }}>
+        <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em", overflowWrap: "anywhere" }}>
           {user.email}
         </Typography>
-        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mt: 0.5 }}>{user.status}</Typography>
+        <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", mt: 0.5, textTransform: "capitalize" }}>{user.status}</Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
-          <Typography sx={{ fontSize: "0.8125rem", fontWeight: 600 }}>Claude</Typography>
+          <Typography sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>Claude</Typography>
           <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
         </Box>
 
-        <Divider sx={{ my: 2 }} />
+        <Divider sx={{ my: 2, borderColor: "var(--line)" }} />
 
         <Box component="form" onSubmit={handleSetLimits}>
-          <Typography sx={{ fontWeight: 600, mb: 1 }}>Monthly limits</Typography>
+          <Typography component="h3" sx={{ fontSize: "0.9375rem", fontWeight: 650, mb: 1 }}>Monthly limits</Typography>
           <TextField
             label={`Analysis runs (used ${user.monthly_analysis_used ?? 0} of ${
               user.monthly_analysis_limit ?? "—"
@@ -79,7 +82,7 @@ export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: Us
             margin="normal"
             type="number"
           />
-          <Button size="small" disabled={submitting} onClick={() => patchLimits({ analysis_limit: null })}>
+          <Button size="small" sx={USE_DEFAULT} disabled={submitting} onClick={() => patchLimits({ analysis_limit: null })}>
             Use default
           </Button>
           <TextField
@@ -92,7 +95,7 @@ export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: Us
             margin="normal"
             type="number"
           />
-          <Button size="small" disabled={submitting} onClick={() => patchLimits({ chat_limit: null })}>
+          <Button size="small" sx={USE_DEFAULT} disabled={submitting} onClick={() => patchLimits({ chat_limit: null })}>
             Use default
           </Button>
           <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }} disabled={submitting}>
@@ -100,7 +103,7 @@ export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: Us
           </Button>
         </Box>
 
-        <Divider sx={{ my: 2 }} />
+        <Divider sx={{ my: 2, borderColor: "var(--line)" }} />
 
         {user.status === "active" && (
           <Button variant="outlined" fullWidth disabled={submitting} onClick={() => handleStatusAction("disable")}>
@@ -113,10 +116,10 @@ export function UserDetailContent({ user, onClose, onChanged, onBusyChange }: Us
           </Button>
         )}
 
-        <Divider sx={{ my: 2 }} />
+        <Divider sx={{ my: 2, borderColor: "var(--line)" }} />
 
-        <Typography sx={{ fontWeight: 600, mb: 1 }}>Remove user</Typography>
-        <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mb: 1 }}>
+        <Typography component="h3" sx={{ fontSize: "0.9375rem", fontWeight: 650, mb: 1 }}>Remove user</Typography>
+        <Typography sx={{ color: "var(--muted)", fontSize: "0.75rem", lineHeight: 1.5, mb: 1 }}>
           Type {user.email} to confirm. This permanently deletes their data.
         </Typography>
         <TextField
@@ -161,7 +164,7 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
       open
       onClose={busy ? undefined : onClose}
       slotProps={{
-        paper: { "aria-busy": busy, sx: { maxHeight: "92dvh", borderTopLeftRadius: 20, borderTopRightRadius: 20 } },
+        paper: { "aria-busy": busy, sx: { maxHeight: "92dvh", borderTopLeftRadius: 22, borderTopRightRadius: 22, borderLeft: 0 } },
       }}
     >
       <Box
@@ -184,14 +187,14 @@ export function UserDetailDrawer({ user, onClose, onChanged }: UserDetailDrawerP
             position: "absolute",
             top: 8,
             left: "50%",
-            width: 36,
+            width: 44,
             height: 4,
             borderRadius: 2,
             bgcolor: "var(--line2)",
             transform: "translateX(-50%)",
           }}
         />
-        <IconButton aria-label="Close" onClick={onClose} disabled={busy} size="small">
+        <IconButton aria-label="Close" onClick={onClose} disabled={busy} size="small" sx={{ width: 44, height: 44 }}>
           <X size={20} />
         </IconButton>
       </Box>

@@ -171,6 +171,18 @@ describe("AdminPage", () => {
     });
   });
 
+  it("marks the chosen filter with aria-pressed and shows the counts", async () => {
+    apiFetch.mockResolvedValue(USERS);
+    renderFresh(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
+    const all = screen.getByRole("button", { name: /^All/ });
+    expect(all).toHaveAttribute("aria-pressed", "true");
+    expect(all).toHaveTextContent("3");
+    fireEvent.click(screen.getByRole("button", { name: /^Invited/ }));
+    expect(screen.getByRole("button", { name: /^Invited/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("opens the user detail drawer when an active row's details button is clicked", async () => {
     apiFetch.mockResolvedValue(USERS);
     renderFresh(<AdminPage />);
@@ -198,7 +210,7 @@ describe("AdminPage", () => {
 
     await waitFor(() => expect(screen.getByText("active@example.com")).toBeInTheDocument());
     for (const status of ["active", "invited", "disabled"]) {
-      // The filter chip reads "Active 1"; the row chip is the exact word.
+      // The filter button is named "Active, 1"; the row pill is the exact word.
       expect(screen.getByText(status)).toBeVisible();
     }
     expect(screen.getByText("Connected")).toBeVisible();
