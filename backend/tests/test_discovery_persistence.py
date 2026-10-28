@@ -8,6 +8,7 @@ import pytest
 from app.config import settings
 from app.db import open_user_session
 from app.discovery.persistence import save_scan
+from app.discovery.screen import SHORTLIST_SIZE
 from app.models import Recommendation, ScanRun
 from app.schemas import ScanRunOut
 from app.schemas_discovery import Exclusion, IdeaOut, IdeaSnapshot, Mention, RejectedMention
@@ -62,6 +63,37 @@ def test_save_persists_full_idea_and_existing_position_sizing(
     assert float(saved.suggested_position_pct) == pytest.approx(
         settings.max_single_position_pct * fraction
     )
+
+
+def test_scan_saves_the_researched_ideas_that_missed_the_bar_best_first(
+    db_session, app_session_local
+):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        scan = save_scan(
+            USER_ID,
+            [_idea(ticker="LOW", overall=10), _idea(ticker="WIN", overall=90)],
+            **COUNTS,
+        )
+
+    assert scan is not None and scan.outcome == "ideas"
+    saved = scan.coverage_summary["set_aside_ideas"]
+    assert [item["ticker"] for item in saved] == ["LOW"]
+    assert set(saved[0]) == {"ticker", "name", "overall", "confidence"}
+    assert saved[0]["overall"] == 10
+    # The nearest misses stay a no-opportunity-only record, as before.
+    assert "nearest_misses" not in scan.coverage_summary
+
+
+def test_set_aside_ideas_are_bounded_by_the_shortlist_size(db_session, app_session_local):
+    add_app_user(db_session)
+    ideas = [_idea(ticker=f"T{i:02d}", overall=5) for i in range(SHORTLIST_SIZE + 3)]
+    with patch("app.db.SessionLocal", app_session_local):
+        scan = save_scan(USER_ID, ideas, **{**COUNTS, "researched": len(ideas)})
+
+    assert scan is not None
+    assert len(scan.coverage_summary["set_aside_ideas"]) == SHORTLIST_SIZE
+    assert scan.coverage_summary["nearest_misses"] == scan.coverage_summary["set_aside_ideas"][:3]
 
 
 def test_superseding_preserves_manual_scheduled_reviewed_and_other_users_rows(

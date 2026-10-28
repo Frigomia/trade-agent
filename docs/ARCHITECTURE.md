@@ -501,8 +501,11 @@ is `researched - opportunities`; it includes researched exclusions and non-quali
 but not failed research or screening rejections. Reviewing/superseding a recommendation never
 changes these counts. Legacy scans without a valid saved count expose null for both; the API
 does not guess from summary prose or current pending rows. Empty-opportunity scans also save
-company names alongside ticker, overall and confidence in `nearest_misses`. Existing JSON
-columns hold these additions, so no database migration is required.
+company names alongside ticker, overall and confidence in `nearest_misses`. Every scan also saves
+the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE`, as
+`coverage_summary.set_aside_ideas` (ticker, name, overall, confidence); `nearest_misses` is the first
+three of them and is still written only when nothing qualifies. Scans saved before this have no
+`set_aside_ideas`. Existing JSON columns hold these additions, so no database migration is required.
 
 ### Contribution planner
 
