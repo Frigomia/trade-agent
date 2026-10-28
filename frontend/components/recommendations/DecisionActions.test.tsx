@@ -53,7 +53,51 @@ describe("DecisionActions", () => {
     setup();
     await waitFor(() => expect(listFetcher).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    fireEvent.click(screen.getByRole("button", { name: /skip reason and dismiss/i }));
     expect(await screen.findByText("Boom")).toBeInTheDocument();
     expect(listFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens without deciding, submits a reason, and resets after cancel", async () => {
+    const onDecided = vi.fn();
+    apiFetch.mockResolvedValue({ id: 7, status: "REJECTED", dismissal_reason: "Too much tech" });
+    render(<DecisionActions id={7} onDecided={onDecided} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(apiFetch).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: /reason/i }), { target: { value: "discard me" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.getByRole("textbox", { name: /reason/i })).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox", { name: /reason/i }), { target: { value: "Too much tech" } });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss recommendation" }));
+    await waitFor(() => expect(onDecided).toHaveBeenCalledWith(expect.objectContaining({ dismissal_reason: "Too much tech" })));
+    expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7/reject", {
+      method: "POST", body: JSON.stringify({ reason: "Too much tech" }),
+    });
+  });
+
+  it("keeps the reason and error in the sheet after a failed save", async () => {
+    apiFetch.mockRejectedValue(new FakeApiError(422, "Invalid reason"));
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /reason/i }), { target: { value: "Keep me" } });
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss recommendation" }));
+    expect(await screen.findByText("Invalid reason")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /reason/i })).toHaveValue("Keep me");
+  });
+
+  it("replaces pasted control characters with spaces before saving", async () => {
+    const onDecided = vi.fn();
+    apiFetch.mockResolvedValue({ id: 7, status: "REJECTED" });
+    render(<DecisionActions id={7} onDecided={onDecided} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    const field = screen.getByRole("textbox", { name: /reason/i });
+    fireEvent.change(field, { target: { value: "Too\tmuch\u0000tech\u001fand\u007fmore\u0085risk\u009f" } });
+    expect(field).toHaveValue("Too much tech and more risk ");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss recommendation" }));
+    await waitFor(() => expect(onDecided).toHaveBeenCalled());
+    expect(apiFetch).toHaveBeenCalledWith("/analysis/recommendations/7/reject", {
+      method: "POST", body: JSON.stringify({ reason: "Too much tech and more risk " }),
+    });
   });
 });

@@ -26,7 +26,7 @@ from app.background import make_task_tracker
 from app.claude_keys import require_claude_key
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
-from app.schemas import RecommendationOut, Ticker
+from app.schemas import DismissIn, RecommendationOut, Ticker
 from app.usage import check_monthly_usage, refund_usage
 
 logger = logging.getLogger(__name__)
@@ -220,39 +220,49 @@ def approve_recommendation(
 @router.post("/recommendations/{recommendation_id}/reject", response_model=RecommendationOut)
 def reject_recommendation(
     recommendation_id: int,
+    body: DismissIn | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> Recommendation:
-    return _set_recommendation_status(db, user.id, recommendation_id, "REJECTED")
+    reason = (body.reason or "").strip() or None if body else None
+    return _set_recommendation_status(db, user.id, recommendation_id, "REJECTED", reason)
 
 
 def _set_recommendation_status(
-    db: Session, user_id: uuid.UUID, recommendation_id: int, status: str
+    db: Session,
+    user_id: uuid.UUID,
+    recommendation_id: int,
+    status: str,
+    reason: str | None = None,
 ) -> Recommendation:
     # One conditional UPDATE: a PENDING row, or one holding the opposite decision (so a decision
     # can be reversed), of this user changes. SUPERSEDED rows and a repeat of the same decision
     # match nothing, and a decision racing a re-run that supersedes the row cannot overwrite it.
     opposite = "REJECTED" if status == "APPROVED" else "APPROVED"
-    rec = db.scalars(
-        update(Recommendation)
-        .where(
-            Recommendation.id == recommendation_id,
-            Recommendation.user_id == user_id,
-            Recommendation.status.in_(("PENDING", opposite)),
-        )
-        .values(status=status, reviewed_at=datetime.now(UTC))
-        .returning(Recommendation)
-    ).one_or_none()
-    if rec is None:
-        exists = (
-            db.query(Recommendation.id)
-            .filter_by(id=recommendation_id, user_id=user_id)
-            .one_or_none()
-        )
-        if exists is None:
-            raise HTTPException(status_code=404, detail="Recommendation not found")
-        raise HTTPException(
-            status_code=409, detail="This recommendation was already decided or replaced."
-        )
-    db.commit()
+    try:
+        rec = db.scalars(
+            update(Recommendation)
+            .where(
+                Recommendation.id == recommendation_id,
+                Recommendation.user_id == user_id,
+                Recommendation.status.in_(("PENDING", opposite)),
+            )
+            .values(status=status, reviewed_at=datetime.now(UTC), dismissal_reason=reason)
+            .returning(Recommendation)
+        ).one_or_none()
+        if rec is None:
+            exists = (
+                db.query(Recommendation.id)
+                .filter_by(id=recommendation_id, user_id=user_id)
+                .one_or_none()
+            )
+            if exists is None:
+                raise HTTPException(status_code=404, detail="Recommendation not found")
+            raise HTTPException(
+                status_code=409, detail="This recommendation was already decided or replaced."
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return rec

@@ -19,6 +19,7 @@ export interface RecommendationOut {
   suggested_position_pct: number | null;
   status: RecommendationStatus;
   reviewed_at: string | null;
+  dismissal_reason?: string | null;
   fundamental_score: number | null;
   technical_signal: TechnicalSignal | null;
   price_at_recommendation: number | null;
