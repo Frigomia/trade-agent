@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   changes:
-    name: Detect changes
+    name: Backend change detection
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -145,7 +145,7 @@ jobs:
         run: uv run bandit -r app
 
   secrets-scan:
-    name: Secret scan (gitleaks)
+    name: Backend secret scan (gitleaks)
     runs-on: ubuntu-latest
     # This job scans the whole repo, not just backend/ — override the workflow's
     # backend-scoped default so `gitleaks detect`'s --source . and its default
