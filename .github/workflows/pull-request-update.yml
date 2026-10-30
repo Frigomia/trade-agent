@@ -1,0 +1,38 @@
+name: Auto-update pull requests
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-pull-requests
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'Frigomia/trade-agent' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # App-authored branch updates trigger PR CI without manual workflow approval.
+      - name: Create update token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DEPENDABOT_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDABOT_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Update all open Dependabot pull requests
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node .github/scripts/update-dependabot-prs.mjs
