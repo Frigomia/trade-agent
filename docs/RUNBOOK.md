@@ -573,6 +573,7 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 | `FLY_API_TOKEN` | GitHub Environment secret (`production`) | `fly tokens create deploy -a <app-name>` | Workflows running on `master` (Environment rule), repository admins |
 | `BACKUP_DATABASE_URL` | GitHub Environment secret (`production`) | Plain `postgresql://` URL for the `backup_reader` role (see section 2) | Workflows running on `master` (Environment rule), repository admins |
 | `BACKUP_PASSPHRASE` | GitHub Environment secret (`production`), plus your own safe copy | You choose it | Workflows running on `master` (Environment rule), repository admins, you |
+| `DEPENDABOT_MERGE_APP_PRIVATE_KEY` | GitHub repository Actions secret | Dedicated merge App's generated private key (section 9) | Trusted repository workflows, repository admins |
 
 ## 8. Known limits
 
@@ -600,3 +601,86 @@ Never commit any of these. `.env` is git-ignored; keep it that way.
 - GnuPG versions differ. Decrypt the first backup with the same `gpg` you would use in an
   emergency. If an older `gpg` cannot decrypt it, add `--rfc4880` to the `gpg` command in
   `backup-db.yml` (UNVERIFIED).
+
+## 9. Dependabot auto-merge setup
+
+[dependabot-auto-merge.yml](../.github/workflows/dependabot-auto-merge.yml) enables squash
+auto-merge for all Dependabot updates to `master`, including major versions. GitHub waits for
+the branch's required checks and other merge requirements. Human approval is unnecessary once
+the dedicated App has the review exception below. Other PRs retain the usual review rules.
+
+Use a dedicated GitHub App: merges made with `GITHUB_TOKEN` do not trigger push workflows,
+which would skip this repository's backend CI and deployment after a dependency merge.
+See [GitHub's workflow triggering documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
+
+One-time setup by a Frigomia organization owner or an administrator with the relevant access:
+
+1. In **Frigomia organization settings > Developer settings > GitHub Apps**, create an App
+   dedicated to Dependabot merging. Use the repository URL as its homepage, disable webhooks,
+   and restrict installation to this account. No callback URL or event subscriptions are needed.
+2. Grant repository **Contents: read and write**, **Pull requests: read and write**, and
+   **Workflows: read and write** (needed to merge GitHub Actions dependency updates). Metadata
+   read access is automatic. Install the App on **only `trade-agent`**.
+3. Copy the App's **Client ID** into repository **Settings > Secrets and variables > Actions >
+   Variables** as `DEPENDABOT_MERGE_APP_CLIENT_ID`. Generate a private key and put the entire PEM
+   into an Actions **repository secret** named `DEPENDABOT_MERGE_APP_PRIVATE_KEY`. Never commit
+   the PEM or paste it into chat. The workflow requests a token scoped to this repository and
+   revokes it when its job ends.
+4. Under **Settings > Branches**, edit the existing protection rule for `master`. Within
+   **Require a pull request before merging**, enable **Allow specified actors to bypass required
+   pull requests** and select **only this App**. This is the required-review exception exposed by
+   the API as `required_pull_request_reviews.bypass_pull_request_allowances.apps`; keep the
+   required checks, up-to-date branch requirement, conversation resolution, and existing human
+   review settings enabled. Add the five additional required checks listed below after the
+   updated workflows have reported them. Do not grant an all-rules bypass or remove code-owner requirements.
+   This exception gives the App review-bypass authority; keep its key dedicated to the merge
+   and PR-update workflows documented here.
+5. Under **Settings > General > Pull Requests**, keep **Allow auto-merge** and **Allow squash
+   merging** enabled. Merge the workflow through the normal review process. It runs from the
+   trusted base branch and never checks out PR code.
+6. Open a new Dependabot PR, or close and reopen an existing one, to trigger the workflow.
+   Confirm auto-merge is enabled while CI runs. A failed required check must block merging;
+   after checks pass, confirm the squash merge and the resulting push CI/deployment runs.
+
+Only checks marked **required** in branch protection block auto-merge. Keep the existing five:
+`Lint, type-check, test, build`, `Docker build and health check`, `Dependency + code security scan`,
+`Lint, format, type-check, test`, and `Dependency audit`. Also require these five so workflow
+lint, secret scans, and failures while deciding which jobs to run cannot be ignored:
+
+- `actionlint`
+- `Backend change detection`
+- `Frontend change detection`
+- `Backend secret scan (gitleaks)`
+- `Frontend secret scan (gitleaks)`
+
+The change-detection and secret-scan names are unique across workflows to avoid ambiguous
+required checks. Workflows CI reports `actionlint` on every PR; filtering it by changed paths
+would leave a required check pending forever on dependency PRs outside `.github/workflows/`.
+
+To stop automation, disable **Dependabot auto-merge** in Actions and cancel auto-merge on any
+already queued PRs. Remove the App's review exception and repository secret, or uninstall the
+App, when retiring it. Disabling the workflow alone does not cancel previously enabled auto-merge.
+
+## 10. Auto-update pull requests
+
+[pull-request-update.yml](../.github/workflows/pull-request-update.yml) runs the Marketplace
+[Update PR Branch](https://github.com/marketplace/actions/update-pr-branch)
+action after every push to `master`, or manually from the Actions tab on
+`master`. It updates eligible PR branches targeting `master`, **including Dependabot**.
+Updates use the same App
+credentials from section 9 so CI runs on the updated branches; no additional secrets are needed.
+Both actions are pinned to commit SHAs.
+
+Branch updates require zero approvals and do not require auto-merge or passing checks. Updating
+a branch reruns CI; actually merging the PR still requires the branch's required checks. The
+action checks for a clean merge and an out-of-date branch, and skips PRs with changes-requested
+reviews. It does not approve or merge PRs. Updating a branch can dismiss stale approvals under
+the existing branch rules.
+
+The similarly named **Auto-update pull requests** action from allonsy-studio excludes Dependabot
+in its source, so it cannot meet this repository's requirement. The selected action has no bot
+exclusion. It inspects the first 30 open PRs and updates one eligible PR per run. If no further
+push reaches `master`, run the workflow manually to update another eligible PR.
+For a larger queue, switch to an updater with pagination and batch updates. Merge conflicts
+still need a person. Check the workflow logs for failed updates. Disable **Auto-update pull
+requests** in Actions to stop branch updates.

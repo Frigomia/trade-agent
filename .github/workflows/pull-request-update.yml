@@ -1,0 +1,38 @@
+name: Auto-update pull requests
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: update-pull-requests
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.repository == 'Frigomia/trade-agent' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      # App-authored branch updates trigger PR CI without manual workflow approval.
+      - name: Create update token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DEPENDABOT_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDABOT_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Update open pull requests
+        # shortcut: one PR per run from the first 30; use a batch updater above 30 open PRs.
+        uses: adRise/update-pr-branch@e96e796f4ab23ab388016fdaed7092de99bd71cf # v0.11.1
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          base: master
+          required_approval_count: "0"
+          require_auto_merge_enabled: "false"
+          require_passed_checks: "false"
