@@ -659,6 +659,74 @@ corrected on the holding form, since a SELL does not restore the average cost).
 
 ---
 
+### Recurring external investments (#266)
+
+Portfolio → Recurring (`/portfolio/recurring`) tracks purchases already arranged with an
+employer or investment provider. Setup is manual: name, ticker, Stock/ETF, optional source/account,
+expected amount and three-letter currency label, monthly frequency and start date. No broker
+credentials, synchronization, market quotes or AI calls are involved. Preview is free and shows
+the next three dates and the number of entries that will be created immediately. The form explains
+the local-only behavior and requires a preview before saving.
+
+Dates are calendar dates in **UTC**, including weekends and holidays, not claims about provider
+execution. The original start day remains the anchor: January 31 → February 28/29 → March 31.
+Start dates from 2000 through 2100 are accepted. A past start creates every due occurrence through
+today as **scheduled/unconfirmed**, using the configured expected amount. It never creates shares,
+a fill price, holdings, cost basis or portfolio performance. Expected amounts remain separate from
+the monthly contribution planner; neither feature automatically adds/subtracts the other's amounts.
+
+`RecurringInvestment` (`recurring_investments`): id, user_id, name, ticker, asset_type, nullable
+source, amount Numeric(12,2), currency varchar(3), start_date, next_date (durable processing cursor),
+status active/paused/ended. At most 100 plans per user; frequency is monthly in v1.
+`RecurringOccurrence` (`recurring_occurrences`): id, user_id, plan_id, scheduled_date, snapshot
+ticker/asset_type/amount/currency, status scheduled/skipped/confirmed, nullable trade_id. Unique
+(user_id, plan_id, scheduled_date) and unique non-null trade_id, with a check that only confirmed
+rows have a trade id. Like existing plan lines, references have no foreign keys. Both tables have
+forced owner-only RLS and runtime table/sequence grants in generated revision `a266c7e91d03`.
+USER_TABLES registration covers both self-service and admin deletion. `/me/export` adds
+`recurring_investments` and `recurring_occurrences` arrays (a read of saved records, without catch-up).
+
+The daily 05:30 UTC job processes recurring entries first, including weekends; the standalone
+`python -m app.scheduled recurring` command is also available. Opening the Recurring screen catches
+up the same way and refreshes once a minute while open. Processing, editing and confirmation all
+take the existing per-user Postgres transaction lock and recheck account activity. Cursor movement
+and occurrence inserts commit together, so retries, overlapping jobs/reads and downtime catch-up
+cannot duplicate dates. Database uniqueness is a second guard. Failure rolls the transaction back;
+a later run retries the outstanding dates.
+
+Editing or pausing first records dates already due using the old settings. Edits change only
+dates after today, including a new anchor/ticker/amount; existing entries retain their snapshots.
+Pause/end stop future dates. Resume schedules the first anchored date strictly after today,
+without backfilling the paused interval (including the resume day). Ending is permanent; a new
+plan can be created separately. Existing unconfirmed entries remain confirmable after pause/end.
+
+The existing TradeSheet collects the actual purchase date, shares and price. Confirmation calls
+the shared `apply_trade` bookkeeping, creates a zero-share holding with the occurrence's type if
+needed, and atomically links the resulting BUY trade. Retries return that same trade even if the
+retry body differs. A skipped entry must be reopened first. Future actual dates are refused.
+No fees are supported by the existing trade log; the form states this and asks for the price in
+the instrument's quote unit, independently of the plan's expected currency label. Users can correct
+expected details by entering actual values or skip/reopen an entry. Confirmed trades stay immutable,
+as in the existing order-ticket flow: a logging mistake is corrected by editing the holding's
+shares and average cost; the trade and confirmation remain in history.
+
+Authenticated, no-store API (`app/routers/recurring.py` delegates to `app/recurring.py`), 60
+requests/minute per user across these routes:
+
+| Method | Path under `/portfolio/recurring` | Result |
+|---|---|---|
+| GET | `` | Plans with next/upcoming dates and recorded occurrences; reconciles due dates |
+| POST | `/preview?editing=false` | Next three future dates and catch_up_count; editing previews dates strictly after today |
+| POST | `` | Create plan and catch up due dates (201) |
+| PUT | `/{id}` | Replace future settings; ended plans refuse changes |
+| PATCH | `/{id}/status` | active / paused / ended |
+| PATCH | `/occurrences/{id}` | scheduled / skipped; confirmed entries refuse changes |
+| POST | `/occurrences/{id}/confirm` | Actual date, shares, price; returns the linked TradeOut exactly once |
+
+Unknown and other users' identifiers both return 404. No Claude key is required.
+
+---
+
 ## 6. Multi-agent orchestration design
 
 ### Market discovery: contracts, research and evaluation
@@ -1183,7 +1251,8 @@ default — same dialect and models as production, started with
 
 | Command | What it does |
 |---|---|
-| `daily` | Snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages, for every active user |
+| `daily` | Recurring investment catch-up, snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages, for every active user |
+| `recurring` | Recurring investment catch-up only, including weekends; no broker, provider or AI calls |
 | `snapshots` | Portfolio snapshots only |
 | `outcomes` | Recommendation outcome evaluation only |
 | `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |

@@ -96,6 +96,13 @@ describe("TradeSheet", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("accepts fractional shares and prices under browser form validation", () => {
+    setup();
+    fill("2.5", "101.25");
+    expect(screen.getByLabelText("Shares")).toBeValid();
+    expect(screen.getByLabelText("Price")).toBeValid();
+  });
+
   it("logs a sale when Sold is selected", async () => {
     apiFetch.mockResolvedValue({});
     const { onLogged } = setup();

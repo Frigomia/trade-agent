@@ -22,6 +22,8 @@ USER_TABLES: tuple[str, ...] = (
     "telegram_links",
     "contribution_plans",
     "contribution_plan_lines",
+    "recurring_investments",
+    "recurring_occurrences",
 )
 
 # Every table the runtime role may touch: the user tables, the auth table and the settings row.
