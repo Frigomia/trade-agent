@@ -5,7 +5,8 @@ on:
     branches: [master]
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: update-pull-requests
@@ -16,6 +17,10 @@ jobs:
     if: github.repository == 'Frigomia/trade-agent' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       # App-authored branch updates trigger PR CI without manual workflow approval.
       - name: Create update token
         id: app-token
@@ -27,12 +32,7 @@ jobs:
           permission-pull-requests: write
           permission-workflows: write
 
-      - name: Update open pull requests
-        # shortcut: one PR per run from the first 30; use a batch updater above 30 open PRs.
-        uses: adRise/update-pr-branch@e96e796f4ab23ab388016fdaed7092de99bd71cf # v0.11.1
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          base: master
-          required_approval_count: "0"
-          require_auto_merge_enabled: "false"
-          require_passed_checks: "false"
+      - name: Update all open Dependabot pull requests
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node .github/scripts/update-dependabot-prs.mjs

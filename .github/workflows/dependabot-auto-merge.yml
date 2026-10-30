@@ -7,12 +7,18 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   auto-merge:
+    # The source-branch ruleset prevents humans from adding commits to these PRs.
     if: >-
       github.repository == 'Frigomia/trade-agent' &&
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
       !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
