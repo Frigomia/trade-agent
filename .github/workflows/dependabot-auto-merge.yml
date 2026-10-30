@@ -1,0 +1,42 @@
+name: Dependabot auto-merge
+
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    # The source-branch ruleset prevents humans from adding commits to these PRs.
+    if: >-
+      github.repository == 'Frigomia/trade-agent' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/') &&
+      !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      # Use an App token so the merge still triggers push CI and deployment.
+      - name: Create merge token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.DEPENDABOT_MERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDABOT_MERGE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      # Never check out or execute PR code in this privileged workflow.
+      - name: Enable auto-merge after required checks pass
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh pr merge --auto --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
