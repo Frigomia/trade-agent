@@ -10,6 +10,7 @@ from app import recurring, scheduled
 from app.db import open_user_session
 from app.models import Holding, RecurringInvestment, RecurringOccurrence, Trade
 from app.schemas import PlaceIn
+from app.schemas_recurring import RecurringIn
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 PATH = "/portfolio/recurring"
@@ -268,10 +269,12 @@ def test_invalid_plan_input(client_no_key, changes):
 
 
 def test_scheduled_command_catches_up_without_market_data_or_ai(
-    client_no_key, monkeypatch, app_session_local
+    db_session, monkeypatch, app_session_local
 ):
-    create(client_no_key)
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 7, 31))
+    add_app_user(db_session, USER_ID)
     monkeypatch.setattr("app.db.SessionLocal", app_session_local)
+    with open_user_session(app_session_local, USER_ID) as db:
+        recurring.save(db, USER_ID, RecurringIn.model_validate(PLAN))
+    monkeypatch.setattr(recurring, "today", lambda: date(2026, 7, 31))
     assert asyncio.run(scheduled.run_command("recurring")) == 0
-    assert len(client_no_key.get(PATH).json()["occurrences"]) == 7
+    assert db_session.query(RecurringOccurrence).count() == 7
