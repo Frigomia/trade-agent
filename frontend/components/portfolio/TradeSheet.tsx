@@ -126,6 +126,7 @@ function TradeForm({
         <TextField
           label="Shares"
           type="number"
+          slotProps={{ htmlInput: { step: "any", min: 0.000001 } }}
           value={shares}
           onChange={(e) => setShares(e.target.value)}
           fullWidth
@@ -134,6 +135,7 @@ function TradeForm({
         <TextField
           label="Price"
           type="number"
+          slotProps={{ htmlInput: { step: "any", min: 0.000001 } }}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           fullWidth

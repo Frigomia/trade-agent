@@ -91,6 +91,19 @@ def active_user_ids() -> list[uuid.UUID]:
     return [row[0] for row in rows]
 
 
+async def run_recurring(summary: Summary) -> None:
+    ids = active_user_ids()
+    if summary.users == 0:
+        summary.users = len(ids)
+    for user_id in ids:
+        try:
+            with app_db.scoped_session(user_id) as db:
+                recurring.process_due(db, user_id)
+        except Exception as exc:
+            summary.failures += 1
+            logger.warning("Recurring entries failed for user %s: %s", user_id, type(exc).__name__)
+
+
 async def run_snapshots(summary: Summary) -> None:
     ids = active_user_ids()
     if summary.users == 0:
@@ -557,15 +570,7 @@ async def run_command(command: str) -> int:
     summary = Summary()
     try:
         if command in ("daily", "recurring"):
-            for user_id in active_user_ids():
-                try:
-                    with app_db.scoped_session(user_id) as db:
-                        recurring.process_due(db, user_id)
-                except Exception as exc:
-                    summary.failures += 1
-                    logger.warning(
-                        "Recurring entries failed for user %s: %s", user_id, type(exc).__name__
-                    )
+            await run_recurring(summary)
         if command == "discovery_snapshot":
             await run_discovery_snapshot(summary)
         if command == "discovery_mentions":
