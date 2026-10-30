@@ -23,6 +23,8 @@ from app.models import (
     InvestmentPreferences,
     PortfolioSnapshot,
     Recommendation,
+    RecurringInvestment,
+    RecurringOccurrence,
     ScanRun,
     TelegramLink,
     Trade,
@@ -102,6 +104,27 @@ def add_app_user(
 
 
 ROW_FACTORIES: dict[str, Callable[[uuid.UUID], Base]] = {
+    "recurring_investments": lambda uid: RecurringInvestment(
+        user_id=uid,
+        name="Employer plan",
+        ticker="AAPL",
+        asset_type="STOCK",
+        amount=400,
+        currency="EUR",
+        start_date=date(2026, 1, 31),
+        next_date=date(2026, 1, 31),
+        status="active",
+    ),
+    "recurring_occurrences": lambda uid: RecurringOccurrence(
+        user_id=uid,
+        plan_id=1,
+        scheduled_date=date(2026, 1, 31),
+        ticker="AAPL",
+        asset_type="STOCK",
+        amount=400,
+        currency="EUR",
+        status="scheduled",
+    ),
     "company_analyses": lambda uid: CompanyAnalysis(
         user_id=uid,
         ticker="AAPL",

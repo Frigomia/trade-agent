@@ -7,6 +7,16 @@ commit them anywhere.
 
 ## 1. What runs where
 
+Recurring investments (#266) use the existing daily 05:30 UTC scheduled job, including weekends.
+Deploy backend migration `a266c7e91d03` before using the new Portfolio → Recurring screen. No
+new credentials, consent switches or provider integrations are needed. If a daily run is missed,
+the next run catches up all outstanding dates; opening the Recurring screen also catches up.
+For a local-only retry, run `uv run python -m app.scheduled recurring` from `backend/` using
+the restricted runtime database role. It creates expected, unconfirmed entries only. Check the
+scheduled job logs for `Recurring entries failed` and retry after fixing the database problem;
+retries cannot duplicate dates or already confirmed trades. The app cannot tell whether an
+external provider executed a purchase: users must confirm actual shares, price and date.
+
 | Piece | Where | Notes |
 | --- | --- | --- |
 | Frontend | Vercel | Git integration, root directory `frontend/`. |

@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 from redis.asyncio import Redis
 
-from app import claude_keys, telegram
+from app import claude_keys, recurring, telegram
 from app import db as app_db
 from app.agents import research
 from app.agents.jobs import (
@@ -529,6 +529,7 @@ async def run_notify(
 
 COMMANDS = (
     "daily",
+    "recurring",
     "snapshots",
     "outcomes",
     "analysis",
@@ -555,6 +556,16 @@ async def run_command(command: str) -> int:
     started = time.monotonic()
     summary = Summary()
     try:
+        if command in ("daily", "recurring"):
+            for user_id in active_user_ids():
+                try:
+                    with app_db.scoped_session(user_id) as db:
+                        recurring.process_due(db, user_id)
+                except Exception as exc:
+                    summary.failures += 1
+                    logger.warning(
+                        "Recurring entries failed for user %s: %s", user_id, type(exc).__name__
+                    )
         if command == "discovery_snapshot":
             await run_discovery_snapshot(summary)
         if command == "discovery_mentions":

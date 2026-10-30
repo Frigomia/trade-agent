@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
-from app import plans, telegram, usage
+from app import plans, recurring, telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
 from app.db import get_session_factory
@@ -27,7 +27,6 @@ from app.schemas import (
     ChatMessageOut,
     CompanyAnalysisExportOut,
     DataDeleteIn,
-    ExportOut,
     ExportProfileOut,
     HoldingOut,
     MeOut,
@@ -41,6 +40,7 @@ from app.schemas import (
     UsageOut,
     WatchlistItemOut,
 )
+from app.schemas_recurring import RecurringExportOut
 from app.user_data import delete_user_data
 
 # Invited or active: an invitee finishing signup can reach only these two routes.
@@ -87,15 +87,18 @@ async def get_usage_summary(
     )
 
 
-@active_router.get("/export", response_model=ExportOut, dependencies=[Depends(no_store)])
+@active_router.get("/export", response_model=RecurringExportOut, dependencies=[Depends(no_store)])
 def export_data(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
-) -> ExportOut:
+) -> RecurringExportOut:
     profile = db.get(AppUser, user.id)
     preferences = db.query(InvestmentPreferences).filter_by(user_id=user.id).one_or_none()
     link = db.query(TelegramLink).filter_by(user_id=user.id).one_or_none()
-    return ExportOut(
+    recurring_data = recurring.load(db, user.id, reconcile=False)
+    return RecurringExportOut(
+        recurring_investments=recurring_data.plans,
+        recurring_occurrences=recurring_data.occurrences,
         profile=ExportProfileOut.model_validate(profile),
         holdings=[
             HoldingOut.model_validate(h) for h in db.query(Holding).filter_by(user_id=user.id)
