@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from threading import Barrier
+from unittest.mock import Mock
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -101,6 +102,33 @@ def test_downtime_edit_pause_resume_and_end(client_no_key, monkeypatch):
     assert client.put(f"{PATH}/{pid}", json=PLAN).status_code == 409
 
 
+def test_reads_only_lock_when_an_active_plan_is_due(client_no_key, monkeypatch):
+    client = client_no_key
+    create(client, start_date="2026-04-30")
+    lock = Mock(wraps=recurring.lock_and_check_active)
+    monkeypatch.setattr(recurring, "lock_and_check_active", lock)
+    assert client.get(PATH).json()["occurrences"] == []
+    lock.assert_not_called()
+    monkeypatch.setattr(recurring, "today", lambda: date(2026, 4, 30))
+    entries = client.get(PATH).json()["occurrences"]
+    assert [entry["scheduled_date"] for entry in entries] == ["2026-04-30"]
+    lock.assert_called_once()
+    assert client.get(PATH).json()["occurrences"] == entries
+    lock.assert_called_once()
+
+
+def test_confirmation_accepts_a_local_date_one_day_ahead_of_utc(client_no_key):
+    client = client_no_key
+    create(client)
+    oid = client.get(PATH).json()["occurrences"][0]["id"]
+    response = client.post(
+        f"{PATH}/occurrences/{oid}/confirm",
+        json={"date": "2026-04-01", "shares": 2, "price": 100},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["date"] == "2026-04-01"
+
+
 def test_skip_reopen_and_confirm_actual_details_once(client_no_key, db_session):
     client = client_no_key
     create(client)
@@ -145,7 +173,7 @@ def test_confirmation_uses_existing_basis_and_rolls_back_invalid_totals(client_n
     oid = client.get(PATH).json()["occurrences"][0]["id"]
     url = f"{PATH}/occurrences/{oid}/confirm"
     assert (
-        client.post(url, json={"date": "2026-04-01", "shares": 2, "price": 100}).status_code == 422
+        client.post(url, json={"date": "2026-04-02", "shares": 2, "price": 100}).status_code == 422
     )
     assert (
         client.post(url, json={"date": "2026-03-31", "shares": 1e14, "price": 100}).status_code

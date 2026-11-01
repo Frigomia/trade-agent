@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { RecurringData } from "@/lib/api/recurring-types";
 
@@ -88,5 +88,47 @@ describe("Recurring investments", () => {
     fireEvent.click(await screen.findByRole("button", { name: "End plan" }));
     expect(screen.getByText(/permanently stops future entries/)).toBeInTheDocument();
     expect(apiFetch.mock.calls.some(([, init]) => init?.body === '{"status":"ended"}')).toBe(false);
+  });
+
+  it.each([
+    ["Add recurring investment", "Add recurring investment"],
+    ["Edit", "Edit recurring investment"],
+    ["End plan", "End Employer stock plan?"],
+  ])("names the %s dialog and closes it with Escape", async (button, title) => {
+    setup();
+    await screen.findByText("Employer stock plan");
+    fireEvent.click(screen.getByRole("button", { name: button }));
+    const dialog = screen.getByRole("dialog", { name: title });
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the plan dialog open during a preview request", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    let reject!: (error: Error) => void;
+    apiFetch.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    fireEvent.click(screen.getByRole("button", { name: "Preview dates" }));
+    const dialog = screen.getByRole("dialog", { name: "Edit recurring investment" });
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    expect(dialog).toBeInTheDocument();
+    await act(async () => { reject(new Error("Preview failed")); });
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Something went wrong.");
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("keeps the end dialog open during submission and shows its error once", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "End plan" }));
+    const dialog = screen.getByRole("dialog", { name: "End Employer stock plan?" });
+    let reject!: (error: Error) => void;
+    apiFetch.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "End plan" }));
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    expect(dialog).toBeInTheDocument();
+    await act(async () => { reject(new Error("End failed")); });
+    expect(screen.getAllByText("Something went wrong.")).toHaveLength(1);
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Something went wrong.");
   });
 });

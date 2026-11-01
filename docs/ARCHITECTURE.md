@@ -688,7 +688,9 @@ USER_TABLES registration covers both self-service and admin deletion. `/me/expor
 
 The daily 05:30 UTC job processes recurring entries first, including weekends; the standalone
 `python -m app.scheduled recurring` command is also available. Opening the Recurring screen catches
-up the same way and refreshes once a minute while open. Processing, editing and confirmation all
+up the same way and refreshes once a minute while open. A read-only due-date check skips the
+processing lock and commit when no active plan is due; due plans are read again under the lock.
+Processing, editing and confirmation all
 take the existing per-user Postgres transaction lock and recheck account activity. Cursor movement
 and occurrence inserts commit together, so retries, overlapping jobs/reads and downtime catch-up
 cannot duplicate dates. Database uniqueness is a second guard. Failure rolls the transaction back;
@@ -703,7 +705,9 @@ plan can be created separately. Existing unconfirmed entries remain confirmable 
 The existing TradeSheet collects the actual purchase date, shares and price. Confirmation calls
 the shared `apply_trade` bookkeeping, creates a zero-share holding with the occurrence's type if
 needed, and atomically links the resulting BUY trade. Retries return that same trade even if the
-retry body differs. A skipped entry must be reopened first. Future actual dates are refused.
+retry body differs. A skipped entry must be reopened first. Actual purchase dates allow one day
+ahead of UTC to accommodate provider/user time zones; later dates are refused. Form defaults and
+recurring scheduling remain UTC.
 No fees are supported by the existing trade log; the form states this and asks for the price in
 the instrument's quote unit, independently of the plan's expected currency label. Users can correct
 expected details by entering actual values or skip/reopen an entry. Confirmed trades stay immutable,

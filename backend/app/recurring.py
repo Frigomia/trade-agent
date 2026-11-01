@@ -120,6 +120,14 @@ def _materialize(db: Session, plan: RecurringInvestment, through: date) -> None:
 
 
 def process_due(db: Session, user_id: uuid.UUID) -> None:
+    if (
+        db.query(RecurringInvestment.id)
+        .filter_by(user_id=user_id, status="active")
+        .filter(RecurringInvestment.next_date <= today())
+        .first()
+        is None
+    ):
+        return
     with transaction(db, user_id):
         for plan in db.query(RecurringInvestment).filter_by(user_id=user_id, status="active"):
             _materialize(db, plan, today())
@@ -210,7 +218,8 @@ def confirm(db: Session, user_id: uuid.UUID, occurrence_id: int, payload: PlaceI
         else:
             if row.status == "skipped":
                 raise RecurringRefused("Reopen this occurrence before confirming it.")
-            if payload.date > today():
+            # A provider's local purchase date can be one day ahead of UTC.
+            if payload.date > today() + timedelta(days=1):
                 raise RecurringRefused("Enter the date of a purchase that already happened.", 422)
             holding = db.query(Holding).filter_by(user_id=user_id, ticker=row.ticker).one_or_none()
             if holding is None:

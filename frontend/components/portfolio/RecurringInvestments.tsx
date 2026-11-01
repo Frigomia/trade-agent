@@ -14,7 +14,7 @@ import { TradeSheet } from "./TradeSheet";
 
 const PATH = "/portfolio/recurring";
 
-function PlanForm({ plan, onSaved, onClose }: { plan: RecurringPlan | null; onSaved: () => void; onClose: () => void }) {
+function PlanForm({ plan, onSaved, onClose, onBusyChange }: { plan: RecurringPlan | null; onSaved: () => void; onClose: () => void; onBusyChange: (busy: boolean) => void }) {
   const [name, setName] = useState(plan?.name ?? "");
   const [ticker, setTicker] = useState(plan?.ticker ?? "");
   const [assetType, setAssetType] = useState<"STOCK" | "ETF">(plan?.asset_type ?? "STOCK");
@@ -23,7 +23,7 @@ function PlanForm({ plan, onSaved, onClose }: { plan: RecurringPlan | null; onSa
   const [currency, setCurrency] = useState(plan?.currency ?? "EUR");
   const [start, setStart] = useState(plan?.start_date ?? todayIso);
   const [preview, setPreview] = useState<{ input: string; data: RecurringPreview } | null>(null);
-  const { run, error, submitting } = useAction();
+  const { run, error, submitting } = useAction(onBusyChange);
   const payload: RecurringInput = { name, ticker: ticker.trim().toUpperCase(), asset_type: assetType, source: source.trim() || null,
     amount: Number(amount), currency: currency.trim().toUpperCase(), start_date: start, frequency: "monthly" };
   const input = JSON.stringify(payload);
@@ -74,6 +74,7 @@ export function RecurringInvestments() {
   const { data, error, mutate } = useSWR<RecurringData>(PATH, apiFetch, { refreshInterval: 60000 });
   const { mutate: mutateGlobal } = useSWRConfig();
   const [editing, setEditing] = useState<RecurringPlan | null | undefined>();
+  const [editingBusy, setEditingBusy] = useState(false);
   const [confirming, setConfirming] = useState<RecurringOccurrence | null>(null);
   const [ending, setEnding] = useState<RecurringPlan | null>(null);
   const { run, submitting, error: actionError } = useAction();
@@ -90,7 +91,7 @@ export function RecurringInvestments() {
     <Button variant="contained" onClick={() => setEditing(null)} sx={{ mb: 2 }}>Add recurring investment</Button>
     {error && <Alert severity="error">Could not load recurring investments. Try again.</Alert>}
     {!data && !error && <Typography>Loading recurring investments…</Typography>}
-    {actionError && <Alert severity="error">{actionError}</Alert>}
+    {actionError && !ending && <Alert severity="error">{actionError}</Alert>}
     <Stack spacing={2}>
       {data?.plans.length === 0 && <Panel><Typography>No recurring investments yet.</Typography></Panel>}
       {data?.plans.map(plan => <Panel key={plan.id}>
@@ -127,12 +128,12 @@ export function RecurringInvestments() {
         </Box>)}
       </Panel>
     </Stack>
-    <Dialog open={editing !== undefined} maxWidth="sm" fullWidth>
-      <DialogTitle>{editing ? "Edit recurring investment" : "Add recurring investment"}</DialogTitle>
-      <DialogContent>{editing !== undefined && <PlanForm key={editing?.id ?? "new"} plan={editing} onSaved={refresh} onClose={() => setEditing(undefined)} />}</DialogContent>
+    <Dialog open={editing !== undefined} onClose={editingBusy ? undefined : () => setEditing(undefined)} aria-labelledby="recurring-plan-title" maxWidth="sm" fullWidth>
+      <DialogTitle id="recurring-plan-title">{editing ? "Edit recurring investment" : "Add recurring investment"}</DialogTitle>
+      <DialogContent>{editing !== undefined && <PlanForm key={editing?.id ?? "new"} plan={editing} onSaved={refresh} onClose={() => setEditing(undefined)} onBusyChange={setEditingBusy} />}</DialogContent>
     </Dialog>
-    <Dialog open={!!ending} maxWidth="sm" fullWidth>
-      <DialogTitle>End {ending?.name}?</DialogTitle>
+    <Dialog open={!!ending} onClose={submitting ? undefined : () => setEnding(null)} aria-labelledby="recurring-end-title" maxWidth="sm" fullWidth>
+      <DialogTitle id="recurring-end-title">End {ending?.name}?</DialogTitle>
       <DialogContent>
         <Typography>This permanently stops future entries. Entries already due are kept. Your external provider&apos;s plan is unaffected.</Typography>
         <Button disabled={submitting} onClick={() => void run(async () => {
