@@ -3,7 +3,7 @@
 import { type Segment, SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useOpenOrders } from "@/lib/plans";
 
-export type PortfolioView = "holdings" | "month" | "saved" | "orders";
+export type PortfolioView = "holdings" | "month" | "saved" | "orders" | "recurring";
 
 // `short` is the phone label.
 const VIEWS: { key: PortfolioView; label: string; short?: string; href: string }[] = [
@@ -11,6 +11,7 @@ const VIEWS: { key: PortfolioView; label: string; short?: string; href: string }
   { key: "month", label: "This month", short: "Plan", href: "/portfolio/plan" },
   { key: "saved", label: "Saved plans", short: "Saved", href: "/portfolio/plan?tab=saved" },
   { key: "orders", label: "Orders", href: "/portfolio/plan?tab=orders" },
+  { key: "recurring", label: "Recurring", href: "/portfolio/recurring" },
 ];
 
 /** Holdings | This month | Saved plans | Orders: the views of Portfolio, as links so each is deep-linkable. */

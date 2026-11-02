@@ -124,6 +124,51 @@ class Trade(Base):
     price: Mapped[float] = mapped_column(Numeric(18, 6))
 
 
+class RecurringInvestment(Base):
+    __tablename__ = "recurring_investments"
+    __table_args__ = (
+        CheckConstraint("status IN ('active', 'paused', 'ended')", name="ck_recurring_status"),
+        CheckConstraint("amount > 0", name="ck_recurring_amount"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    ticker: Mapped[str] = mapped_column(String(20))
+    asset_type: Mapped[str] = mapped_column(String(10))
+    source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3))
+    start_date: Mapped[date] = mapped_column(Date)
+    next_date: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(10), default="active")
+
+
+class RecurringOccurrence(Base):
+    __tablename__ = "recurring_occurrences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "plan_id", "scheduled_date", name="uq_recurring_date"),
+        UniqueConstraint("trade_id", name="uq_recurring_trade"),
+        CheckConstraint(
+            "status IN ('scheduled', 'skipped', 'confirmed')", name="ck_occurrence_status"
+        ),
+        CheckConstraint(
+            "(status = 'confirmed') = (trade_id IS NOT NULL)", name="ck_occurrence_confirmation"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    plan_id: Mapped[int] = mapped_column(index=True)
+    scheduled_date: Mapped[date] = mapped_column(Date)
+    ticker: Mapped[str] = mapped_column(String(20))
+    asset_type: Mapped[str] = mapped_column(String(10))
+    amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3))
+    status: Mapped[str] = mapped_column(String(10), default="scheduled")
+    trade_id: Mapped[int | None] = mapped_column(nullable=True)
+
+
 class Recommendation(Base):
     __tablename__ = "recommendations"
 

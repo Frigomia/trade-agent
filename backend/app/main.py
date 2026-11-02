@@ -19,6 +19,7 @@ from app.claude_keys import (  # noqa: F401
 )
 from app.config import settings
 from app.db import check_runtime_role, engine
+from app.recurring import RecurringRefused
 from app.routers import (
     admin,
     analysis,
@@ -33,6 +34,7 @@ from app.routers import (
     plans,
     portfolio,
     preferences,
+    recurring,
 )
 from app.routers import telegram as telegram_routes
 from app.snapshots import PriceUnavailable
@@ -66,6 +68,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(portfolio.router)
+app.include_router(recurring.router)
 app.include_router(discover.router)
 app.include_router(market.router)
 app.include_router(analysis.router)
@@ -81,6 +84,11 @@ app.include_router(telegram_routes.webhook_router)
 app.include_router(me.router)
 app.include_router(me.active_router)
 app.include_router(admin.router)
+
+
+@app.exception_handler(RecurringRefused)
+async def _recurring_refused(_request: Request, exc: RecurringRefused) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
 
 
 @app.exception_handler(ClaudeKeyRejected)

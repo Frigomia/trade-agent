@@ -25,18 +25,19 @@ export interface TradeSheetProps {
   holdings: { ticker: string; name: string }[];
   prefill?: { ticker?: string; action?: TradeAction };
   onLogged: () => void;
+  recurringOccurrence?: { id: number; currency: string };
 }
 
 // A bottom sheet on phones, a right drawer on desktop. The form lives in an inner component so its
 // state resets every time the drawer closes (MUI unmounts a closed drawer's children).
-export function TradeSheet({ open, onClose, holdings, prefill, onLogged }: TradeSheetProps) {
+export function TradeSheet({ open, onClose, holdings, prefill, onLogged, recurringOccurrence }: TradeSheetProps) {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down("md"));
   // A trade being logged cannot be dismissed: the form would unmount with no error display.
   const [busy, setBusy] = useState(false);
   return (
     <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : onClose} slotProps={{ paper: { "aria-busy": busy } }}>
-      <TradeForm holdings={holdings} prefill={prefill} onClose={onClose} onLogged={onLogged} onBusyChange={setBusy} />
+      <TradeForm holdings={holdings} prefill={prefill} onClose={onClose} onLogged={onLogged} onBusyChange={setBusy} recurringOccurrence={recurringOccurrence} />
     </Drawer>
   );
 }
@@ -47,7 +48,8 @@ function TradeForm({
   onClose,
   onLogged,
   onBusyChange,
-}: Pick<TradeSheetProps, "holdings" | "prefill" | "onClose" | "onLogged"> & { onBusyChange: (busy: boolean) => void }) {
+  recurringOccurrence,
+}: Pick<TradeSheetProps, "holdings" | "prefill" | "onClose" | "onLogged" | "recurringOccurrence"> & { onBusyChange: (busy: boolean) => void }) {
   const [ticker, setTicker] = useState(prefill?.ticker ?? holdings[0]?.ticker ?? "");
   const [action, setAction] = useState<TradeAction>(prefill?.action ?? "BUY");
   const [shares, setShares] = useState("");
@@ -64,9 +66,11 @@ function TradeForm({
       return;
     }
     await run(async () => {
-      await apiFetch("/portfolio/trades", {
+      await apiFetch(recurringOccurrence ? `/portfolio/recurring/occurrences/${recurringOccurrence.id}/confirm` : "/portfolio/trades", {
         method: "POST",
-        body: JSON.stringify({ date, ticker, action, shares: sharesNum, price: priceNum }),
+        body: JSON.stringify(recurringOccurrence
+          ? { date, shares: sharesNum, price: priceNum }
+          : { date, ticker, action, shares: sharesNum, price: priceNum }),
       });
       onLogged();
       onClose();
@@ -80,7 +84,7 @@ function TradeForm({
       sx={{ width: { xs: "auto", md: 400 }, p: 3, pb: { xs: 4, md: 3 } }}
     >
       <Typography variant="h6" sx={{ fontWeight: 650 }}>
-        Log a trade
+        {recurringOccurrence ? "Confirm external purchase" : "Log a trade"}
       </Typography>
       <Typography sx={{ color: "var(--muted)", fontSize: "0.8125rem", mt: 0.5 }}>
         Record a trade you already placed in your broker app.
@@ -92,6 +96,7 @@ function TradeForm({
         select
         slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
         label="Ticker"
+        disabled={!!recurringOccurrence}
         value={ticker}
         onChange={(e) => setTicker(e.target.value)}
         fullWidth
@@ -103,7 +108,7 @@ function TradeForm({
           </option>
         ))}
       </TextField>
-      <ToggleButtonGroup
+      {!recurringOccurrence && <ToggleButtonGroup
         exclusive
         fullWidth
         value={action}
@@ -112,11 +117,16 @@ function TradeForm({
       >
         <ToggleButton value="BUY">Bought</ToggleButton>
         <ToggleButton value="SELL">Sold</ToggleButton>
-      </ToggleButtonGroup>
+      </ToggleButtonGroup>}
+      {recurringOccurrence && <Typography sx={{ mt: 1.5, color: "var(--muted)" }}>
+        Enter actual shares, price and date from your provider. The expected amount is in {recurringOccurrence.currency};
+        use the instrument&apos;s quote unit for the price, as on Holdings. Fees are not supported in the trade log.
+      </Typography>}
       <Box sx={{ display: "flex", gap: 1.5 }}>
         <TextField
           label="Shares"
           type="number"
+          slotProps={{ htmlInput: { step: "any", min: 0.000001 } }}
           value={shares}
           onChange={(e) => setShares(e.target.value)}
           fullWidth
@@ -125,6 +135,7 @@ function TradeForm({
         <TextField
           label="Price"
           type="number"
+          slotProps={{ htmlInput: { step: "any", min: 0.000001 } }}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           fullWidth
