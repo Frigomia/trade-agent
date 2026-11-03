@@ -64,6 +64,7 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
       sx={[
         {
           display: fill ? { xs: "grid", md: "flex" } : "inline-flex",
+          minWidth: 0,
           gridTemplateColumns: `repeat(${segments.length}, minmax(0, 1fr))`,
           gap: "2px",
           p: "3px",
@@ -98,11 +99,12 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
           justifyContent: "center",
           gap: { xs: "4px", md: "8px" },
           // A filling control has wide columns on a phone; a loose one needs room around its label.
-          px: compact ? 1 : fill ? { xs: "4px", md: "16px" } : { xs: "12px", md: "16px" },
+          px: compact ? 1 : fill ? { xs: "2px", md: "16px" } : { xs: "12px", md: "16px" },
           borderRadius: 999,
           fontSize: compact ? "0.75rem" : { xs: "0.75rem", md: "0.875rem" },
           fontWeight: on ? 650 : 500,
           whiteSpace: "nowrap",
+          letterSpacing: { xs: "-0.01em", md: 0 },
           textDecoration: "none",
           // A link marks the current page in the accent; a filter button keeps the ink colour.
           color: on ? (asNav ? "var(--accent)" : "var(--text)") : "var(--text2)",
