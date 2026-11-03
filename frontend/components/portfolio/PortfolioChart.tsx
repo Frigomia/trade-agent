@@ -83,8 +83,8 @@ export function PortfolioChart({
   // The approved range control: a rounded track, the chosen range a raised panel pill. It shares a row
   // with the title, which sits on the left.
   const header = full && (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5, minWidth: 0 }}>
-      {heading}
+    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, mb: 1.5, minWidth: 0 }}>
+      <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>{heading}</Box>
       <SegmentedControl label="Chart range" size="compact" segments={RANGE_SEGMENTS} value={range} onChange={setRange} sx={{ ml: "auto" }} />
     </Box>
   );
@@ -165,7 +165,7 @@ export function PortfolioChart({
             <Box
               key={`${tick.text}-${i}`}
               component="span"
-              sx={{ ...axisLabel, position: "absolute", top: 0, left: `${tick.at * 100}%`, transform: i === 0 ? "none" : i === all.length - 1 ? "translateX(-100%)" : "translateX(-50%)" }}
+              sx={{ ...axisLabel, position: "absolute", top: 0, left: `${tick.at * 100}%`, whiteSpace: "nowrap", display: { xs: i === 0 || i === Math.floor((all.length - 1) / 2) || i === all.length - 1 ? "block" : "none", sm: "block" }, transform: i === 0 ? "none" : i === all.length - 1 ? "translateX(-100%)" : "translateX(-50%)" }}
             >
               {tick.text}
             </Box>
