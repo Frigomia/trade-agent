@@ -53,7 +53,7 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
           )}
           {scan && (
             <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", mt: 0.75 }}>
-              {scanCounts(scan).join(" · ")}
+              {running || failed ? "Previous saved scan · " : ""}{scanCounts(scan).join(" · ")}
             </Typography>
           )}
         </Box>
