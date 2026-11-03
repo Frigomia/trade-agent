@@ -6,7 +6,7 @@ import { useSWRConfig } from "swr";
 import NextLink from "next/link";
 import { Box, TextField, Button, Alert, IconButton, InputAdornment, Link } from "@mui/material";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { AuthHeading, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
+import { AuthHeading, AuthNote, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
 
@@ -113,10 +113,10 @@ export default function LoginPage() {
             Sign in
           </Button>
         </AuthPanel>
-        <Alert severity="info" icon={<Mail size={17} />} sx={{ mt: 2 }}>
+        <AuthNote>
           trade-agent is by invitation only. If you don&apos;t have an account, ask the administrator
           to invite you.
-        </Alert>
+        </AuthNote>
       </Box>
     </AuthShell>
   );

@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Box, TextField, Button, Alert } from "@mui/material";
 import { AckCheckbox } from "@/components/auth/AckCheckbox";
-import { AuthHeading, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
+import { AuthHeading, AuthPanel, AuthShell, BackToSignIn } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
@@ -78,10 +78,14 @@ export default function AcceptInvitationPage() {
   if (!invitedEmail) {
     return (
       <AuthShell>
-        <Alert severity="warning">
-          This invitation link is no longer valid — it may have expired or already been used. Ask
-          your administrator to resend it.
-        </Alert>
+        <AuthHeading title="Link not valid" />
+        <AuthPanel>
+          <Alert severity="warning">
+            This invitation link is no longer valid — it may have expired or already been used. Ask
+            your administrator to resend it.
+          </Alert>
+        </AuthPanel>
+        <BackToSignIn />
       </AuthShell>
     );
   }

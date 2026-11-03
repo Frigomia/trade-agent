@@ -15,3 +15,14 @@ After the third round: "lets go for D1, but lets gonna position better the card,
 - **Chosen: D1 · The Reference** ([d1-reference.html](d1-reference.html)): the owner's image as a mock. Light and dark.
 - **Fix asked for and made in the mock:** on a tall window the left column stretched and pushed the headline to the top and the card to the bottom. The headline, the line under it and the research card are now one group, centred beside the form ([shots/d1-login-desk-tall-light.png](shots/d1-login-desk-tall-light.png), [shots/d1-login-desk-dark.png](shots/d1-login-desk-dark.png) at 1920x1080). On a phone the headline and the form sit together at the top instead of the form floating in the middle ([shots/d1-login-phone-light.png](shots/d1-login-phone-light.png), 489x1257).
 - **Not yet approved to build.** Still open: the owner's go-ahead on the final mock; the "+3.1%" (keep, or drop it); icons in the fields (D1 keeps them, as the reference does); where the Logo.dev credit moves to inside the app; the logo mark (raster); a "Back to sign in" link on the dead-end screens. See [SPEC.md](SPEC.md).
+
+## Go-ahead, 2026-11-03
+
+The owner merged the design PR (#271) and answered the open points:
+
+- **Build D1:** "Approved, build it".
+- **The "+3.1%":** "Keep it". It stays on the track-record strip, labelled "illustrative".
+- **The Logo.dev credit:** "Remove it". The credit leaves the sign-in screens and is not added anywhere else. (If the Logo.dev plan or use ever needs it, it goes next to the displayed logos in the app.)
+- **A "Back to sign in" link** on the dead-end screens: "Add it". Added to "Link not valid" and "Check your email", each with a short heading.
+- **Icons in the fields:** kept, as in the mock (no objection raised).
+- **Still open, not part of this build:** the raster bull logo (a vector version would sharpen it).

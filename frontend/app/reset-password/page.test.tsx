@@ -46,7 +46,10 @@ describe("ResetPasswordPage", () => {
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "a@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /send reset link/i }));
 
-    await waitFor(() => expect(screen.getByText(/check your email/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/check your email for a link/i)).toBeInTheDocument());
+    // The sent screen is a dead end otherwise: it offers the way back.
+    expect(screen.getByRole("heading", { name: "Check your email" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
     expect(resetPasswordForEmail).toHaveBeenCalledWith("a@example.com", {
       redirectTo: `${window.location.origin}/reset-password`,
     });

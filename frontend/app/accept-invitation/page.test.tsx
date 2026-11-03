@@ -49,6 +49,9 @@ describe("AcceptInvitationPage", () => {
     render(<AcceptInvitationPage />);
 
     await waitFor(() => expect(screen.getByText(/no longer valid/i)).toBeInTheDocument());
+    // The link-not-valid screen is a dead end otherwise: it offers the way back.
+    expect(screen.getByRole("heading", { name: "Link not valid" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to sign in" })).toHaveAttribute("href", "/login");
   });
 
   it("shows the invited person's email from the account, not from another session", async () => {
