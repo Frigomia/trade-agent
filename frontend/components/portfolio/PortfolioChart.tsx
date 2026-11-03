@@ -84,7 +84,7 @@ export function PortfolioChart({
   // with the title, which sits on the left.
   const header = full && (
     <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, mb: 1.5, minWidth: 0 }}>
-      <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>{heading}</Box>
+      {heading}
       <SegmentedControl label="Chart range" size="compact" segments={RANGE_SEGMENTS} value={range} onChange={setRange} sx={{ ml: "auto" }} />
     </Box>
   );
