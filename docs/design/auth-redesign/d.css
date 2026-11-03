@@ -1,0 +1,67 @@
+/* Shared by the three modern-soft options (d1, d2, d3). The owner's reference image: a pale blue field with soft
+   curves, white rounded cards with deep soft shadows, a big tight headline, a research card in the app's own anatomy.
+   Tokens come from common.css. Nothing here picks a composition; each option does that. */
+:root, :root[data-theme="light"] {
+  --f1: #e8efff; --f2: #f7f9ff; --curve1: rgba(36, 87, 214, .10); --curve2: rgba(36, 87, 214, .055); --ring: rgba(36, 87, 214, .10);
+  --cardsh: 0 1px 2px rgba(15, 26, 46, .05), 0 10px 24px -10px rgba(15, 26, 46, .10), 0 40px 70px -30px rgba(36, 87, 214, .28);
+  --inbg: #fbfcff; --btnsh: 0 10px 22px -10px rgba(36, 87, 214, .65);
+}
+:root[data-theme="dark"] {
+  --f1: #09112a; --f2: #0e1a3c; --curve1: rgba(126, 163, 255, .10); --curve2: rgba(126, 163, 255, .055); --ring: rgba(126, 163, 255, .10);
+  --cardsh: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 28px -10px rgba(0, 0, 0, .5), 0 44px 80px -30px rgba(0, 0, 0, .7);
+  --inbg: #0f1830; --btnsh: 0 10px 22px -10px rgba(126, 163, 255, .5);
+}
+body { background: var(--f2); }
+.bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: linear-gradient(135deg, var(--f2) 0%, var(--f1) 100%); }
+.bg svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bg .w1 { fill: var(--curve1); } .bg .w2 { fill: var(--curve2); } .bg .ring { fill: none; stroke: var(--ring); stroke-width: 1.5; }
+
+/* The form card */
+.fcard { width: 100%; max-width: 460px; background: var(--panel); border: 1px solid var(--line); border-radius: 24px; box-shadow: var(--cardsh); padding: clamp(24px, 3vw, 40px); position: relative; }
+.fcard h1 { margin: 0; font-size: clamp(28px, 2.4vw, 34px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.1; }
+.fcard .sub { margin: 8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; text-wrap: pretty; }
+.fcard form { margin-top: 28px; display: grid; gap: 18px; }
+.fld { display: grid; gap: 7px; } .fld .lr { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.fld label { font-size: 14px; font-weight: 500; color: var(--text); }
+.fld .lr a { font-size: 13.5px; font-weight: 500; text-underline-offset: 3px; }
+.in { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 6px 0 16px; border-radius: 14px; background: var(--inbg); border: 1px solid var(--line2); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5); }
+.in:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-wash); }
+.in > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.in input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font-size: 16px; }
+.in input::placeholder { color: color-mix(in srgb, var(--muted) 75%, transparent); }
+.in.quiet { background: var(--track); border-color: transparent; box-shadow: none; } .in.quiet input { color: var(--muted); }
+.in.bad { border-color: var(--err); }
+.noicons .in { padding-left: 16px; } .noicons .in > svg:not(.keep) { display: none; }
+.hint { font-size: 13px; color: var(--muted); }
+.cta { height: 52px; border: 0; border-radius: 14px; background: var(--accent-solid); color: var(--on-accent); font-weight: 650; font-size: 16px; cursor: pointer; box-shadow: var(--btnsh); letter-spacing: -0.005em; }
+.cta:hover { filter: brightness(1.05); }
+.msg { display: flex; gap: 10px; font-size: 14px; line-height: 1.45; padding: 12px 14px; border-radius: 14px; background: var(--track); color: var(--text2); text-wrap: pretty; }
+.msg svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.msg.err { background: color-mix(in srgb, var(--err) 9%, transparent); color: var(--err); }
+.msg.warn { background: var(--warn-bg); color: var(--warn); }
+.msg.ok { background: var(--accent-wash); color: var(--text); } .msg.ok svg { color: var(--accent); }
+.ack { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--text2); cursor: pointer; }
+.box { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line2); display: grid; place-items: center; flex: none; margin-top: 1px; color: var(--on-accent); }
+.box.on { background: var(--accent-solid); border-color: var(--accent-solid); } .box svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.fcard .inv { margin: 24px -4px 0; padding-top: 20px; border-top: 1px solid var(--line); display: flex; gap: 12px; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.fcard .inv svg { width: 18px; height: 18px; flex: none; margin-top: 2px; }
+
+/* The research card, in the app's own anatomy */
+.rc { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 20px; box-shadow: var(--cardsh); display: grid; gap: 14px; color: var(--text); }
+.ill { justify-self: start; display: inline-flex; align-items: center; min-height: 24px; padding: 0 11px; border: 1px dashed var(--line2); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.rc .id { display: flex; align-items: center; gap: 12px; }
+.rc .mono-c { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-wash); color: var(--accent); display: grid; place-items: center; font-weight: 650; font-size: 14px; flex: none; }
+.rc h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.2; }
+.rc small { display: block; font-size: 13px; color: var(--muted); }
+.rc .px { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; } .rc .px b { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-radius: 999px; background: var(--track); color: var(--text2); font-size: 12.5px; font-weight: 500; }
+.meter { display: inline-flex; gap: 2px; } .meter i { width: 8px; height: 12px; border-radius: 2px; border: 1.5px solid var(--line2); } .meter i.f { background: var(--text2); border-color: var(--text2); }
+.ai { border: 1px dashed var(--line2); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; }
+.ai p { margin: 0; font-size: 15px; line-height: 1.5; } .ai .m { font-size: 13.5px; color: var(--text2); }
+.ai .m svg { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; margin-right: 6px; color: var(--accent); }
+.ai small { font-size: 12.5px; color: var(--muted); }
+.strip { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--cardsh); padding: 14px 18px; display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--text2); }
+.strip b { color: var(--up); font-weight: 650; font-variant-numeric: tabular-nums; }
+.legal { font-size: 12.5px; color: var(--muted); }
+@media (max-width: 899px) { .fcard { border-radius: 22px; } }
