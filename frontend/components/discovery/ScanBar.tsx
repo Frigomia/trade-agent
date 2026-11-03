@@ -18,9 +18,8 @@ interface Props {
   onRun: () => void;
 }
 
-/** The one-line summary of the latest scan, with the refresh button. */
+/** Research scan status and actions, stacked so neither can squeeze the other on mobile. */
 export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props) {
-  const failed = !running && job?.status === "FAILED";
   const failed = !running && job?.status === "FAILED";
   const atLimit = runsExhausted(usage);
   const label = failed ? "Try again" : usage ? `${usage.used} of ${usage.limit} runs` : scan ? "Refresh scan" : "Run scan";
