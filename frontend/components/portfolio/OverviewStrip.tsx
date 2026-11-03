@@ -16,11 +16,11 @@ const label = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
 function Stat({ title, children, note, main = false }: { title: string; children: ReactNode; note?: ReactNode; main?: boolean }) {
   return (
-    <Box sx={{ display: "grid", gap: 0.5, minWidth: 0, gridColumn: main ? "1 / -1" : undefined }}>
+    <Box sx={{ display: "grid", gap: 0.5, minWidth: 0, gridColumn: main ? "1 / -1" : undefined, borderBottom: main ? "1px solid var(--line)" : undefined, pb: main ? 1.5 : undefined }}>
       <Typography component="small" sx={label}>
         {title}
       </Typography>
-      <Box component="b" sx={{ fontSize: main ? "2rem" : "1.375rem", fontWeight: 650, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: "var(--text)" }}>
+      <Box component="b" sx={{ fontSize: main ? { xs: "1.875rem", md: "2rem" } : "1.375rem", fontWeight: 650, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums", color: "var(--text)", overflowWrap: "anywhere" }}>
         {children}
       </Box>
       {note && <Typography component="em" sx={{ ...label, fontStyle: "normal" }}>{note}</Typography>}
@@ -29,7 +29,7 @@ function Stat({ title, children, note, main = false }: { title: string; children
 }
 
 const NotAvailable = ({ children }: { children: ReactNode }) => (
-  <Box component="span" sx={{ fontSize: "1rem", fontWeight: 500, color: "var(--text2)" }}>
+  <Box component="span" sx={{ fontSize: "0.8125rem", fontWeight: 400, color: "var(--muted)" }}>
     {children}
   </Box>
 );
@@ -100,8 +100,8 @@ export function OverviewStrip({ summary, openCount, snapshots, snapshotsFailed =
   const up = summary.total_pl >= 0;
   const Arrow = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <Panel component="section" aria-label="Portfolio overview" sx={{ p: { xs: "16px", md: "20px 24px" }, display: "grid", gap: 3, gridTemplateColumns: { md: "minmax(0, 1fr) minmax(0, 1.4fr)" }, alignItems: "center" }}>
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 20px" }}>
+    <Panel component="section" aria-label="Portfolio overview" sx={{ p: { xs: 2, md: "20px 24px" }, display: "grid", gap: { xs: 2.5, md: 3 }, gridTemplateColumns: { md: "minmax(0, 1fr) minmax(0, 1.4fr)" }, alignItems: "start", minWidth: 0 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px", minWidth: 0 }}>
         <Stat title="Total value" main note={`${openCount} holding${openCount === 1 ? "" : "s"} · amounts as entered`}>
           <Amount value={summary.total_market_value} size={32} />
         </Stat>
