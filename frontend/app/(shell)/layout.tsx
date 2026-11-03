@@ -17,7 +17,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+    <Box sx={{ display: "flex", minHeight: "100dvh" }}>
       <Sidebar role={session.role} />
       <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <Box component="main" sx={{ flex: 1, p: { xs: "16px 16px 8px", md: "22px 24px" } }}>

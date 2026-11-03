@@ -15,7 +15,7 @@ const corr = (n: number) => (Math.round(n * 100) / 100 + 0).toFixed(2);
 
 function Metric({ label, value, detail }: { label: string; value: string | null; detail: string }) {
   return (
-    <Box sx={{ bgcolor: "var(--track)", borderRadius: "14px", p: "12px 14px", display: "grid", gap: "2px", minWidth: 0 }}>
+    <Box sx={{ bgcolor: "var(--track)", borderRadius: "14px", p: "12px 14px", display: "grid", alignContent: "start", gap: "2px", minWidth: 0 }}>
       <Typography component="small" sx={{ fontSize: "0.75rem", color: "var(--text2)" }}>
         {label}
       </Typography>
@@ -31,7 +31,7 @@ function Metric({ label, value, detail }: { label: string; value: string | null;
 
 function Section({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <Panel component="section" aria-label="Risk and analytics" sx={{ p: "20px 24px", display: "grid", gap: 2 }}>
+    <Panel component="section" aria-label="Risk and analytics" sx={{ p: { xs: "16px", md: "20px 24px" }, display: "grid", gap: 2, minWidth: 0 }}>
       <Box sx={{ display: "flex", alignItems: "baseline", gap: 1.5, flexWrap: "wrap" }}>
         <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, letterSpacing: "-0.01em" }}>
           Risk and analytics
