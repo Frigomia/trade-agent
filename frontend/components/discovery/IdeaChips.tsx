@@ -33,24 +33,30 @@ export function IdeaChips({ idea }: { idea: IdeaOut }) {
   const country = idea.snapshot?.country;
   const sector = sectorText(idea);
   return (
-    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-      <Chip>
-        <Meter fill={meterFill(idea.confidence)} label={confidenceLabel(idea.confidence)} />
-      </Chip>
-      <Chip>
-        <Meter fill={meterFill(idea.risk.risk_level)} label={riskLabel(idea.risk.risk_level)} />
-      </Chip>
-      {country && (
+    <Box sx={{ display: "grid", gap: 1.25, minWidth: 0 }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
         <Chip>
-          <Globe size={13} aria-hidden />
-          {country}
+          <Meter fill={meterFill(idea.confidence)} label={confidenceLabel(idea.confidence)} />
         </Chip>
-      )}
-      {sector && (
         <Chip>
-          <SectorIcon sector={idea.snapshot?.sector} size={13} />
-          {sector}
+          <Meter fill={meterFill(idea.risk.risk_level)} label={riskLabel(idea.risk.risk_level)} />
         </Chip>
+      </Box>
+      {(country || sector) && (
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 2, rowGap: 0.75, color: "var(--muted)" }}>
+          {country && (
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.75rem" }}>
+              <Globe size={13} aria-hidden />
+              {country}
+            </Box>
+          )}
+          {sector && (
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.75rem", minWidth: 0 }}>
+              <SectorIcon sector={idea.snapshot?.sector} size={13} />
+              <Box component="span" sx={{ overflowWrap: "anywhere" }}>{sector}</Box>
+            </Box>
+          )}
+        </Box>
       )}
     </Box>
   );
