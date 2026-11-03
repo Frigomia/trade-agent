@@ -39,7 +39,10 @@ export function TabBar({ role }: { role: Role }) {
         borderTop: "1px solid var(--line)",
         position: "sticky",
         bottom: 0,
-        p: "10px 6px 16px",
+        px: 1,
+        pt: 1,
+        pb: "calc(8px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 10,
         background: "var(--tab-bg)",
       }}
     >
@@ -56,12 +59,15 @@ export function TabBar({ role }: { role: Role }) {
               flexDirection: "column",
               alignItems: "center",
               gap: 3,
-              minWidth: 56,
+              minWidth: 0,
+              minHeight: 48,
+              flex: 1,
+              justifyContent: "center",
               color: on ? "var(--accent)" : "var(--muted)",
               textDecoration: "none",
             }}
           >
-            <Icon size={20} strokeWidth={1.75} />
+            <Icon size={20} strokeWidth={1.75} aria-hidden />
             <span style={{ fontSize: "0.75rem", fontWeight: on ? 600 : 400 }}>{tab.label}</span>
           </Link>
         );
