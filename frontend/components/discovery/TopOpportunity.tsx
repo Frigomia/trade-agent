@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
@@ -19,72 +19,74 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
   return (
     <Box
       component="article"
-      aria-label={`Top opportunity: ${idea.name}`}
+      aria-label={"Top opportunity: " + idea.name}
       sx={{
         borderRadius: "22px",
         border: "1px solid var(--line)",
         boxShadow: "var(--shadow)",
         p: { xs: 2, md: 3 },
-        background: "color-mix(in srgb, var(--accent) 8%, var(--panel))",
+        bgcolor: "var(--panel)",
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr)",
         gap: 2,
+        minWidth: 0,
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
-        <Logo ticker={idea.ticker} name={idea.name} size={56} />
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography component="h3" sx={{ fontSize: "1.25rem", fontWeight: 650, letterSpacing: "-0.02em" }}>
-            {idea.name}
-          </Typography>
-          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>{listingText(idea)}</Typography>
-          {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
-        </Box>
-        <PriceBlock rec={rec} large />
-      </Box>
-      <IdeaChips idea={idea} />
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: { xs: "wrap", md: "nowrap" } }}>
-        <Box sx={{ flex: { xs: "1 1 100%", md: 1 }, minWidth: 0, border: "1px dashed var(--line2)", borderRadius: "14px", p: "14px 16px" }}>
-          <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.55, ...clampLines(3) }}>{headline}</Typography>
-          {why && (
-            <Box sx={{ display: "flex", gap: 1, mt: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
-              <Sparkles size={15} color="var(--accent)" aria-hidden style={{ flex: "none", marginTop: 2 }} />
-              <Box component="span" sx={clampLines(2)}>
-                <b>Why now.</b> {why}
-              </Box>
-            </Box>
-          )}
-          {idea.bear_case.trim() && (
-            <Typography sx={{ mt: 1, fontSize: "0.8125rem", color: "var(--text2)", ...clampLines(2) }}>
-              <b>Risk to the thesis.</b> {idea.bear_case}
+      <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "stretch", sm: "center" }, gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: 1 }}>
+          <Logo ticker={idea.ticker} name={idea.name} size={48} />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography component="h3" sx={{ fontSize: { xs: "1.125rem", md: "1.25rem" }, fontWeight: 650, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>
+              {idea.name}
             </Typography>
-          )}
-          <Typography sx={{ mt: 1.25, fontSize: "0.75rem", color: "var(--muted)" }}>
-            AI research summary · {idea.sources.length} cited source{idea.sources.length === 1 ? "" : "s"}
-          </Typography>
-        </Box>
-        <Box sx={{ display: "grid", justifyItems: "center", gap: 0.75, flex: "none", mx: { xs: "auto", md: 0 } }}>
-          <Box
-            component={Link}
-            href={`/today/${rec.id}`}
-            aria-label={`Open the full analysis of ${idea.name}`}
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              bgcolor: "var(--accent-solid)",
-              color: "var(--on-accent) !important",
-              boxShadow: "var(--btn-shadow)",
-            }}
-          >
-            <ArrowRight size={22} aria-hidden />
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", overflowWrap: "anywhere" }}>{listingText(idea)}</Typography>
+            {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
           </Box>
-          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Full analysis</Typography>
+        </Box>
+        <Box sx={{ alignSelf: { xs: "flex-start", sm: "center" }, minWidth: 0 }}>
+          <PriceBlock rec={rec} large />
         </Box>
       </Box>
-      <Box>
+
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontSize: "0.75rem", fontWeight: 650, color: "var(--muted)", mb: 1 }}>
+          RESEARCH SIGNALS
+        </Typography>
+        <IdeaChips idea={idea} />
+      </Box>
+
+      <Box sx={{ bgcolor: "var(--track)", borderRadius: "14px", p: { xs: 1.75, md: 2 }, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 1 }}>
+          <Sparkles size={15} color="var(--accent)" aria-hidden />
+          <Typography sx={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text2)" }}>AI research summary</Typography>
+        </Box>
+        <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.55, overflowWrap: "anywhere", ...clampLines(4) }}>
+          {headline}
+        </Typography>
+        {why && (
+          <Typography sx={{ mt: 1.25, fontSize: "0.8125rem", color: "var(--text2)", overflowWrap: "anywhere", ...clampLines(3) }}>
+            <b>Why now.</b> {why}
+          </Typography>
+        )}
+        {idea.bear_case.trim() && (
+          <Typography sx={{ mt: 1, fontSize: "0.8125rem", color: "var(--text2)", overflowWrap: "anywhere", ...clampLines(3) }}>
+            <b>Risk to the thesis.</b> {idea.bear_case}
+          </Typography>
+        )}
+        <Typography sx={{ mt: 1.5, fontSize: "0.75rem", color: "var(--muted)" }}>
+          {idea.sources.length} cited source{idea.sources.length === 1 ? "" : "s"} · AI-generated, not a recommendation
+        </Typography>
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.25, minWidth: 0 }}>
+        <Button
+          component={Link}
+          href={"/today/" + rec.id}
+          variant="contained"
+          endIcon={<ArrowRight size={16} aria-hidden />}
+          aria-label={"Open the full analysis of " + idea.name}
+          sx={{ minHeight: 44, borderRadius: "14px", flex: { xs: "1 1 100%", sm: "0 1 auto" } }}
+        >
+          View research
+        </Button>
         <SaveToDiscover idea={idea} />
       </Box>
     </Box>
