@@ -63,8 +63,7 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
       aria-label={label}
       sx={[
         {
-          display: fill ? { xs: "grid", md: "flex" } : "inline-flex",
-          gridTemplateColumns: `repeat(${segments.length}, minmax(0, 1fr))`,
+          display: fill ? "flex" : "inline-flex",
           gap: "2px",
           p: "3px",
           width: fill ? { xs: "100%", md: "max-content" } : "max-content",
@@ -91,6 +90,8 @@ export function SegmentedControl<K extends string>({ segments, value, onChange, 
           </>
         );
         const sxSegment = {
+          // A filling control shares the width by label length, so a long label or a count chip never clips.
+          flex: fill ? "1 1 auto" : "none",
           minWidth: compact ? 36 : 0,
           minHeight: HEIGHT[size],
           display: "inline-flex",

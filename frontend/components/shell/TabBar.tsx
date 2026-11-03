@@ -39,7 +39,9 @@ export function TabBar({ role }: { role: Role }) {
         borderTop: "1px solid var(--line)",
         position: "sticky",
         bottom: 0,
-        p: "10px 6px 16px",
+        p: "8px 6px 16px",
+        // Above anything that raises itself (a switch thumb, a sticky header) as the page scrolls under.
+        zIndex: 10,
         background: "var(--tab-bg)",
       }}
     >
@@ -56,7 +58,10 @@ export function TabBar({ role }: { role: Role }) {
               flexDirection: "column",
               alignItems: "center",
               gap: 3,
-              minWidth: 56,
+              flex: 1,
+              minWidth: 0,
+              minHeight: 48,
+              justifyContent: "center",
               color: on ? "var(--accent)" : "var(--muted)",
               textDecoration: "none",
             }}

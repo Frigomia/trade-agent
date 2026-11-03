@@ -227,6 +227,7 @@ export default function PortfolioPage() {
   return (
     <Box>
       <PageHeader
+        wideActions
         title="Portfolio"
         subtitle={`Your holdings, allocation and risk.${read === null ? "" : ` Updated today, ${formatClock(read)}.`}`}
         actions={

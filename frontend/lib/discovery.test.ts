@@ -117,6 +117,8 @@ describe("snapshot text", () => {
     expect(listingText(idea({ snapshot: null }))).toBe("HLDN");
     expect(sectorText(idea())).toBe("Software · Infrastructure");
     expect(sectorText(idea({ snapshot: null }))).toBeNull();
+    expect(sectorText(idea({ snapshot: { ...idea().snapshot!, sector: "Utilities", industry: "Utilities - Regulated Electric" } }))).toBe("Utilities - Regulated Electric");
+    expect(sectorText(idea({ snapshot: { ...idea().snapshot!, sector: "Health", industry: "Healthcare Plans" } }))).toBe("Health · Healthcare Plans");
   });
 });
 
