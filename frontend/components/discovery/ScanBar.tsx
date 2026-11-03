@@ -75,7 +75,7 @@ export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props
           disabled={running || locked || atLimit}
           onClick={onRun}
           startIcon={<RefreshCw size={15} aria-hidden />}
-          aria-label={running ? undefined : failed ? "Try the scan again. Costs 1 run." : `Refresh scan${usage ? `, ${usage.used} of ${usage.limit} runs used this month` : ""}. Costs 1 run.`}
+          aria-label={running ? undefined : failed ? "Try the scan again. Costs 1 run." : `${scan ? "Refresh" : "Run"} scan${usage ? `, ${usage.used} of ${usage.limit} runs used this month` : ""}. Costs 1 run.`
           sx={{
             minHeight: 44, minWidth: 0, borderRadius: "14px", px: 2,
             flex: { xs: "1 1 100%", sm: "0 1 auto" }, color: "var(--text2)",
