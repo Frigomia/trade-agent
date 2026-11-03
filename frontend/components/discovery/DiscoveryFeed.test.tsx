@@ -146,8 +146,10 @@ describe("DiscoveryFeed", () => {
     expect(top).toHaveTextContent("Recurring revenue priced below peers.");
     expect(top).toHaveTextContent("Why now. Q3 results on 6 Nov");
     expect(top).toHaveTextContent("Risk to the thesis. Top customers are 38% of revenue.");
-    expect(top).toHaveTextContent("AI research summary · 2 cited sources");
+    expect(top).toHaveTextContent("AI research summary");
+    expect(top).toHaveTextContent("2 cited sources · AI-generated, not a recommendation");
     expect(top).toHaveTextContent("High confidence");
+    expect(screen.getByRole("link", { name: "Open the full analysis of Halden Systems" })).toHaveTextContent("View research");
     expect(top).toHaveTextContent("Medium risk");
     expect(top).toHaveTextContent("United States");
     expect(screen.getByRole("link", { name: "Open the full analysis of Halden Systems" })).toHaveAttribute("href", "/today/1");
@@ -192,7 +194,8 @@ describe("DiscoveryFeed", () => {
   it("describes the latest scan from the saved counts and the runs used", () => {
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Halden Systems")] });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/Latest AI scan · Updated .* · 5 opportunities · 3 set aside/);
+    expect(screen.getByRole("status")).toHaveTextContent("Latest AI scan");
+    expect(screen.getByRole("status")).toHaveTextContent(/Updated .*5 opportunities · 3 set aside/);
     expect(screen.getByRole("button", { name: /refresh scan, 23 of 100 runs used this month\. costs 1 run/i })).toBeEnabled();
   });
 
@@ -387,7 +390,8 @@ describe("DiscoveryFeed", () => {
       { running: true, job: { status: "RUNNING", stage: "researching", total: 8, done: 3, error: null } },
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Scanning now · researching 3 of 8");
+    expect(screen.getByRole("status")).toHaveTextContent("Scanning now");
+    expect(screen.getByRole("status")).toHaveTextContent("Researching 3 of 8");
     expect(screen.getByRole("progressbar", { name: "Scan progress" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /running/i })).toBeDisabled();
     expect(screen.getByRole("article", { name: "Top opportunity: Halden Systems" })).toBeInTheDocument();
