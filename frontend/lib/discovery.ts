@@ -68,11 +68,13 @@ export function listingText(idea: IdeaOut): string {
   return [idea.ticker, idea.snapshot?.exchange].filter(Boolean).join(" · ");
 }
 
-/** "Software · Infrastructure"; sector alone when there is no industry. */
+/** "Software · Infrastructure"; sector alone when there is no industry, the industry alone when it already starts with the sector ("Utilities - Regulated Electric"). */
 export function sectorText(idea: IdeaOut): string | null {
   const snap = idea.snapshot;
   if (!snap?.sector) return null;
-  return snap.industry ? `${snap.sector} · ${snap.industry}` : snap.sector;
+  if (!snap.industry) return snap.sector;
+  const repeats = snap.industry.toLowerCase().startsWith(snap.sector.toLowerCase()) && !/^\p{L}/u.test(snap.industry.slice(snap.sector.length));
+  return repeats ? snap.industry : `${snap.sector} · ${snap.industry}`;
 }
 
 /** "today 06:12" for a time on the current day, otherwise "Mon 06:12". */

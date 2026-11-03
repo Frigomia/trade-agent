@@ -103,16 +103,19 @@ export default function AdminPage() {
       </Box>
       {filtered.map((user) => {
         const clickable = isDesktop && hasDetail(user);
+        const at = user.email.indexOf("@") + 1; // 0 when there is no @: the whole address after the break
         return (
         <Box
           key={user.id}
           onClick={clickable ? () => setSelectedUserId(user.id) : undefined}
           sx={{
-            display: "flex",
+            // A phone is a small grid: avatar, the whole address and the details button on top, then the
+            // status chips, then the row's buttons, both under the address. A computer is one table row.
+            display: { xs: "grid", md: "flex" },
+            gridTemplateColumns: "auto minmax(0, 1fr) auto",
             alignItems: "center",
-            // Wrap so a long address or the Resend/Revoke buttons drop to a second line on a phone.
-            flexWrap: "wrap",
-            gap: 1.5,
+            columnGap: 1.5,
+            rowGap: 1,
             py: 1.5,
             borderBottom: "1px solid var(--line)",
             "&:last-of-type": { borderBottom: 0 },
@@ -121,47 +124,57 @@ export default function AdminPage() {
           }}
         >
           <Avatar email={user.email} />
+          {/* The address wraps on a phone, so it is never cut to "mianfrigo@g…"; a computer keeps one line. */}
           <Typography
-            sx={{ fontWeight: 600, flex: "1 1 96px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            sx={{ fontWeight: 600, flex: { md: "1 1 96px" }, minWidth: 0, overflowWrap: "anywhere", overflow: { md: "hidden" }, textOverflow: { md: "ellipsis" }, whiteSpace: { md: "nowrap" } }}
           >
-            {user.email}
+            {/* A break point after the @, so a phone splits "name@" and "domain.com" rather than mid-word. */}
+            {user.email.slice(0, at)}
+            <wbr />
+            {user.email.slice(at)}
           </Typography>
-          {/* On a phone only the role drops out; status and the Claude chip stay, and the row wraps. */}
+          {/* On a phone only the role drops out. The chips share a row under the address; from md they are table columns. */}
           <Box sx={{ display: { xs: "none", md: "block" }, width: ROLE_W }}>
             <RolePill role={user.role} />
           </Box>
-          <Box sx={{ flex: "none", width: { md: STATUS_W } }}>
-            <StatusPill status={user.status} />
+          <Box sx={{ display: { xs: "flex", md: "contents" }, flexWrap: "wrap", alignItems: "center", gap: 1, gridColumn: "2 / -1", gridRow: 2 }}>
+            <Box sx={{ flex: "none", width: { md: STATUS_W } }}>
+              <StatusPill status={user.status} />
+            </Box>
+            <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
+              <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
+            </Box>
           </Box>
-          <Box sx={{ flex: "none", width: { md: CLAUDE_W } }}>
-            <ClaudeStateChip kind={chipKind(user.claude_key_state, user.role)} />
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", width: { xs: "100%", md: ACTIONS_W }, justifyContent: "flex-end", "&:empty": { display: "none" } }}>
-          {user.status === "invited" && (
-            <>
-              <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "resend")}>
-                Resend
-              </Button>
-              <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "revoke")}>
-                Revoke
-              </Button>
-            </>
-          )}
-          {user.status === "disabled" && (
-            <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "enable")}>
-              Enable
-            </Button>
-          )}
-          {hasDetail(user) && (
-            <IconButton
-              size="small"
-              aria-label="User details"
-              sx={{ width: { xs: 44, md: 36 }, height: { xs: 44, md: 36 }, color: "var(--muted)" }}
-              onClick={() => setSelectedUserId(user.id)}
-            >
-              <MoreHorizontal size={18} />
-            </IconButton>
-          )}
+          <Box sx={{ display: { xs: "contents", md: "flex" }, alignItems: "center", gap: 0.5, width: { md: ACTIONS_W }, justifyContent: "flex-end" }}>
+            {(user.status === "invited" || user.status === "disabled") && (
+              <Box sx={{ display: { xs: "flex", md: "contents" }, flexWrap: "wrap", gap: 0.5, gridColumn: "2 / -1", gridRow: 3, ml: { xs: -1.25, md: 0 } }}>
+                {user.status === "invited" && (
+                  <>
+                    <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "resend")}>
+                      Resend
+                    </Button>
+                    <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "revoke")}>
+                      Revoke
+                    </Button>
+                  </>
+                )}
+                {user.status === "disabled" && (
+                  <Button size="small" sx={TOUCH} onClick={() => handleAction(user.id, "enable")}>
+                    Enable
+                  </Button>
+                )}
+              </Box>
+            )}
+            {hasDetail(user) && (
+              <IconButton
+                size="small"
+                aria-label="User details"
+                sx={{ gridColumn: 3, gridRow: 1, mr: { xs: -1, md: 0 }, width: { xs: 44, md: 36 }, height: { xs: 44, md: 36 }, color: "var(--muted)" }}
+                onClick={() => setSelectedUserId(user.id)}
+              >
+                <MoreHorizontal size={18} />
+              </IconButton>
+            )}
           </Box>
         </Box>
         );
