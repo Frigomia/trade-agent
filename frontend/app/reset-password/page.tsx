@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Box, TextField, Button, Alert, InputAdornment } from "@mui/material";
 import { Lock, Mail } from "lucide-react";
-import { AuthHeading, AuthPanel, AuthShell } from "@/components/auth/AuthShell";
+import { AuthHeading, AuthPanel, AuthShell, BackToSignIn } from "@/components/auth/AuthShell";
 import { createClient } from "@/lib/supabase/client";
 import { useClientSession } from "@/lib/auth/useClientSession";
 import { clearRecoveryCookie, hasRecoveryCookie, siteOrigin } from "@/lib/auth/recovery";
@@ -107,9 +107,13 @@ export default function ResetPasswordPage() {
   if (sent) {
     return (
       <AuthShell>
-        <Alert severity="success" icon={<Mail size={17} />}>
-          Check your email for a link to reset your password.
-        </Alert>
+        <AuthHeading title="Check your email" />
+        <AuthPanel>
+          <Alert severity="success" icon={<Mail size={17} />}>
+            Check your email for a link to reset your password.
+          </Alert>
+        </AuthPanel>
+        <BackToSignIn />
       </AuthShell>
     );
   }

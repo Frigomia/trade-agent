@@ -512,7 +512,12 @@ Open items:
   before each verdict word) and the Signal backtest (an arrow beside the result pills, Soft run rows, a quiet
   hit-rate table) and Admin (the pill filter with counts, status as an icon and a word with Disabled in amber, the
   Soft bar and an amber "Near limit" or "At limit" with an icon on the usage table) and the sign-in screens
-  (the form in one Soft panel on a desktop and flat on a phone, a 22px acknowledgement box with an on-accent tick,
-  44px targets for the theme toggle, the show-password button and "Forgot password?"). The Scan results page
+  (D1, 2026-11-03: a soft field with two faint rings and two low waves behind a big headline, the promise, an
+  illustrative research card over a track-record strip from md, and the form in one white card with a 24px radius
+  and a deep soft shadow on every size; a 22px acknowledgement box with an on-accent tick, 44px targets for the
+  theme toggle, the show-password button and "Forgot password?", 52px fields and button, a "Back to sign in"
+  link on the screens with no form, and no Logo.dev credit: these screens show no logo). The research card is a
+  picture of the product, labelled "Illustrative example, not a real recommendation"; its company and its +3.1%
+  are made up and say so. The headline is a display size (up to 3.375rem) used only here. The Scan results page
   (a link from the scan bar) lists what a scan left out as one ledger: a pill filter with counts, rows of company,
   where it fell out and why, each opening to the scan's explanation in the dashed box and its sources.
