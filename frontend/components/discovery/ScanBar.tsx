@@ -21,62 +21,71 @@ interface Props {
 /** The one-line summary of the latest scan, with the refresh button. */
 export function ScanBar({ scan, job, running, usage, locked, now, onRun }: Props) {
   const failed = !running && job?.status === "FAILED";
-  let text: React.ReactNode;
-  if (running) {
-    text = (
-      <>
-        <b>Scanning now</b> · researching {job?.done ?? 0} of {job?.total ?? 0}
-      </>
-    );
-  } else if (failed) {
-    text = <b>Last scan did not finish</b>;
-  } else if (scan) {
-    text = (
-      <>
-        <b>Latest AI scan</b> · Updated {whenText(scan.created_at, now)}
-        {scanCounts(scan).map((part) => ` · ${part}`)}
-      </>
-    );
-  } else {
-    text = <b>No scan yet</b>;
-  }
+  const failed = !running && job?.status === "FAILED";
   const atLimit = runsExhausted(usage);
-  const label = failed ? "Try again" : usage ? `${usage.used} of ${usage.limit} runs` : "Run scan";
+  const label = failed ? "Try again" : usage ? `${usage.used} of ${usage.limit} runs` : scan ? "Refresh scan" : "Run scan";
+  const title = running ? "Scanning now" : failed ? "Last scan did not finish" : scan ? "Latest AI scan" : "No scan yet";
+  const details = running
+    ? `Researching ${job?.done ?? 0} of ${job?.total ?? 0}`
+    : scan
+      ? `Updated ${whenText(scan.created_at, now)}`
+      : null;
+
   return (
-    <Panel sx={{ display: "flex", alignItems: "center", gap: 1.5, p: "10px 14px", flexWrap: "wrap" }}>
-      <Box
-        aria-hidden
-        sx={{ width: 34, height: 34, borderRadius: "12px", display: "grid", placeItems: "center", bgcolor: "var(--accent-wash)", color: "var(--accent)", flex: "none" }}
-      >
-        <Sparkles size={15} />
-      </Box>
-      <Typography role="status" sx={{ flex: 1, minWidth: 0, fontSize: "0.8125rem", color: "var(--text2)" }}>
-        {text}
-      </Typography>
-      {/* The last saved scan is readable while a new one runs or after one failed. */}
-      {scan && (
-        <Button
-          component={NextLink}
-          href="/today/scan"
-          variant="outlined"
-          size="small"
-          endIcon={<ChevronRight size={13} aria-hidden />}
-          sx={{ borderRadius: 999, minHeight: { xs: 44, md: 36 }, fontSize: "0.75rem" }}
+    <Panel sx={{ display: "grid", gap: 2, p: { xs: 2, md: 2.5 } }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
+        <Box
+          aria-hidden
+          sx={{
+            width: 40, height: 40, borderRadius: "12px", display: "grid", placeItems: "center",
+            bgcolor: "var(--accent-wash)", color: "var(--accent)", flex: "none",
+          }}
         >
-          Scan results
+          <Sparkles size={18} />
+        </Box>
+        <Box role="status" sx={{ minWidth: 0, flex: 1 }}>
+          <Typography component="h2" sx={{ fontSize: "0.9375rem", fontWeight: 650, lineHeight: 1.4 }}>
+            {title}
+          </Typography>
+          {details && (
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", mt: 0.25, overflowWrap: "anywhere" }}>
+              {details}
+            </Typography>
+          )}
+          {scan && (
+            <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", mt: 0.75 }}>
+              {scanCounts(scan).join(" · ")}
+            </Typography>
+          )}
+        </Box>
+      </Box>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.25, minWidth: 0 }}>
+        {scan && (
+          <Button
+            component={NextLink}
+            href="/today/scan"
+            variant="contained"
+            endIcon={<ChevronRight size={16} aria-hidden />}
+            sx={{ minHeight: 44, borderRadius: "14px", flex: { xs: "1 1 100%", sm: "0 1 auto" } }}
+          >
+            View scan results
+          </Button>
+        )}
+        <Button
+          variant="outlined"
+          disabled={running || locked || atLimit}
+          onClick={onRun}
+          startIcon={<RefreshCw size={15} aria-hidden />}
+          aria-label={running ? undefined : failed ? "Try the scan again. Costs 1 run." : `Refresh scan${usage ? `, ${usage.used} of ${usage.limit} runs used this month` : ""}. Costs 1 run.`}
+          sx={{
+            minHeight: 44, minWidth: 0, borderRadius: "14px", px: 2,
+            flex: { xs: "1 1 100%", sm: "0 1 auto" }, color: "var(--text2)",
+            borderColor: "var(--line2)",
+          }}
+        >
+          {running ? "Running…" : label}
         </Button>
-      )}
-      <Button
-        variant="outlined"
-        size="small"
-        disabled={running || locked || atLimit}
-        onClick={onRun}
-        startIcon={<RefreshCw size={13} aria-hidden />}
-        aria-label={running ? undefined : failed ? "Try the scan again. Costs 1 run." : `Refresh scan${usage ? `, ${usage.used} of ${usage.limit} runs used this month` : ""}. Costs 1 run.`}
-        sx={{ borderRadius: 999, minHeight: { xs: 44, md: 36 }, fontSize: "0.75rem" }}
-      >
-        {running ? "Running…" : label}
-      </Button>
+      </Box>
     </Panel>
   );
 }
