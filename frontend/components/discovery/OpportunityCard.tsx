@@ -13,23 +13,27 @@ import { SaveToDiscover } from "./SaveToDiscover";
 export function OpportunityCard({ rec, earlier = false }: { rec: DiscoveryRecommendation; earlier?: boolean }) {
   const idea = rec.idea!;
   return (
-    <Panel component="article" aria-label={idea.name} sx={{ p: 2.5, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 1.5, alignContent: "start" }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+    <Panel component="article" aria-label={idea.name} sx={{ p: { xs: 2, md: 2.5 }, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 1.5, alignContent: "start" }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) auto" }, alignItems: "center", gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
         <Logo ticker={idea.ticker} name={idea.name} size={40} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography component="h3" sx={{ fontSize: "0.9375rem", fontWeight: 650 }}>
+          <Typography component="h3" sx={{ fontSize: "0.9375rem", fontWeight: 650, overflowWrap: "anywhere" }}>
             {idea.name}
           </Typography>
-          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{listingText(idea)}</Typography>
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", overflowWrap: "anywhere" }}>{listingText(idea)}</Typography>
           {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
         </Box>
-        <PriceBlock rec={rec} />
+        </Box>
+        <Box sx={{ justifySelf: { xs: "start", sm: "end" }, minWidth: 0 }}>
+          <PriceBlock rec={rec} />
+        </Box>
       </Box>
       <IdeaChips idea={idea} />
       <Typography sx={{ fontSize: "0.8125rem", color: "var(--text2)", lineHeight: 1.5, ...clampLines(3) }}>
         {idea.headline?.trim() || idea.thesis}
       </Typography>
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap", minWidth: 0 }}>
         <Box
           component={Link}
           href={`/today/${rec.id}`}
