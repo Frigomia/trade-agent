@@ -184,6 +184,9 @@ export function PortfolioChart({
           </Box>
         )}
       </Box>
+      <Typography sx={{ mt: 1, fontSize: "0.75rem", color: "var(--muted)" }}>
+        Saved daily values · the latest point may differ from today&apos;s portfolio total.
+      </Typography>
       {!showCosts && (
         <Typography sx={{ mt: 1, fontSize: "0.75rem", color: "var(--muted)" }}>
           Cost comparison unavailable: purchase costs are incomplete in this period.
