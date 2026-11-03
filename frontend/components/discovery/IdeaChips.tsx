@@ -51,9 +51,9 @@ export function IdeaChips({ idea }: { idea: IdeaOut }) {
             </Box>
           )}
           {sector && (
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.75rem", minWidth: 0 }}>
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: "0.75rem", minWidth: 0, overflowWrap: "anywhere" }}>
               <SectorIcon sector={idea.snapshot?.sector} size={13} />
-              <Box component="span" sx={{ overflowWrap: "anywhere" }}>{sector}</Box>
+              {sector}
             </Box>
           )}
         </Box>
