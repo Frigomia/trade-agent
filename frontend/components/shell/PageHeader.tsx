@@ -5,7 +5,7 @@ import { ThemeToggle } from "./ThemeToggle";
 /**
  * The title row every signed-in screen starts with: the page title (30px on a desktop, 26px on a
  * phone) and an optional one-line subtitle on the left, the page's actions and the round theme
- * toggle on the right.
+ * toggle on the right. Mobile actions move to their own row so titles do not get squeezed.
  */
 export function PageHeader({
   title,
