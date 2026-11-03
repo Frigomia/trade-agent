@@ -17,8 +17,17 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mb: 2.5, flexWrap: "wrap" }}>
-      <Box sx={{ flex: "1 1 180px", minWidth: 0 }}>
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) auto auto" },
+        alignItems: "start",
+        columnGap: 1.5,
+        rowGap: 1.5,
+        mb: 2.5,
+      }}
+    >
+      <Box sx={{ minWidth: 0, gridColumn: 1, gridRow: 1 }}>
         <Typography
           variant="h5"
           component="h1"
@@ -30,8 +39,14 @@ export function PageHeader({
           <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", mt: 0.5 }}>{subtitle}</Typography>
         )}
       </Box>
-      {actions}
-      <ThemeToggle />
+      {actions && (
+        <Box sx={{ gridColumn: { xs: "1 / -1", md: 2 }, gridRow: { xs: 2, md: 1 }, minWidth: 0, display: "flex", justifyContent: { md: "flex-end" }, "& > *": { maxWidth: "100%" } }}>
+          {actions}
+        </Box>
+      )}
+      <Box sx={{ gridColumn: { xs: 2, md: actions ? 3 : 2 }, gridRow: 1 }}>
+        <ThemeToggle />
+      </Box>
     </Box>
   );
 }
