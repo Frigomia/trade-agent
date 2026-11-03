@@ -20,7 +20,7 @@ export function PageHeader({
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) auto auto" },
+        gridTemplateColumns: { xs: "minmax(0, 1fr) auto", md: actions ? "minmax(0, 1fr) auto auto" : "minmax(0, 1fr) auto" },
         alignItems: "start",
         columnGap: 1.5,
         rowGap: 1.5,
