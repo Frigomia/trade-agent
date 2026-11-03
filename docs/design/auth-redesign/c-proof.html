@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C · The Proof · trade-agent sign-in</title>
+<link rel="stylesheet" href="common.css">
+<style>
+/* C · THE PROOF. Mock, not the app. Show the product before asking for the password: a drenched cobalt field
+   holds one real-looking research card (the app's own anatomy: meters, the dashed AI box, risk to the thesis,
+   cited sources) and, under it, the track record. The form beside it stays plain and fast. The card is
+   illustrative and says so. */
+:root { --field: #2457d6; --field-ink: #fff; --field-soft: rgba(255, 255, 255, .72); }
+:root[data-theme="dark"] { --field: #13245a; --field-ink: #e9eefb; --field-soft: rgba(233, 238, 251, .7); }
+.split { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 9fr); }
+.field { background: var(--field); color: var(--field-ink); padding: clamp(24px, 3.4vw, 48px); display: flex; flex-direction: column; justify-content: space-between; gap: 32px; position: relative; overflow: hidden; }
+.field .brand { color: var(--field-ink); }
+.field .brand img { background: #fff; border-radius: 12px; padding: 4px; width: 40px; height: 40px; }
+.stack { position: relative; width: min(100%, 520px); margin: 0; padding-bottom: 44px; }
+.card { position: relative; z-index: 2; background: var(--panel); color: var(--text); border-radius: 22px; padding: 22px; box-shadow: 0 30px 60px -28px rgba(5, 15, 50, .55), 0 2px 6px rgba(5, 15, 50, .12); display: grid; gap: 16px; }
+.back { position: absolute; z-index: 1; left: 5%; right: 5%; bottom: 0; height: 96px; border-radius: 0 0 20px 20px; background: color-mix(in srgb, var(--panel) 62%, var(--field)); padding: 54px 18px 0; display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text2); }
+.back b { color: var(--up); font-weight: 650; font-variant-numeric: tabular-nums; }
+.ill { justify-self: start; display: inline-flex; align-items: center; min-height: 26px; padding: 0 12px; border: 1px dashed var(--line2); border-radius: 999px; font-size: 12px; color: var(--muted); }
+.id { display: flex; align-items: center; gap: 12px; }
+.mono-c { width: 44px; height: 44px; border-radius: 50%; background: var(--accent-wash); color: var(--accent); display: grid; place-items: center; font-weight: 650; font-size: 14px; flex: none; }
+.id h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.015em; line-height: 1.2; }
+.id small { display: block; font-size: 13px; color: var(--muted); }
+.id .px { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+.id .px b { font-size: 18px; font-weight: 650; letter-spacing: -0.02em; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 0 12px; border-radius: 999px; background: var(--track); color: var(--text2); font-size: 12px; font-weight: 500; }
+.meter { display: inline-flex; gap: 2px; } .meter i { width: 8px; height: 12px; border-radius: 2px; border: 1.5px solid var(--line2); } .meter i.f { background: var(--text2); border-color: var(--text2); }
+.ai { border: 1px dashed var(--line2); border-radius: 14px; padding: 14px 16px; display: grid; gap: 8px; }
+.ai p { margin: 0; font-size: 15px; line-height: 1.5; }
+.ai .m { font-size: 13px; color: var(--text2); }
+.ai .m svg { width: 14px; height: 14px; display: inline-block; vertical-align: -2px; margin-right: 6px; color: var(--accent); }
+.ai small { font-size: 12px; color: var(--muted); }
+.say { max-width: 30ch; }
+.say p { margin: 0; font-size: clamp(24px, 2.5vw, 36px); line-height: 1.15; font-weight: 500; letter-spacing: -0.035em; text-wrap: balance; }
+.say small { display: block; margin-top: 14px; font-size: 14px; color: var(--field-soft); }
+.formside { display: grid; grid-template-rows: auto 1fr auto; padding: clamp(24px, 3.4vw, 48px); }
+.formside .top { display: flex; justify-content: flex-end; }
+.formwrap { width: min(100%, 392px); margin: 0 auto; align-self: center; padding: 24px 0; }
+h1 { margin: 0; font-size: clamp(28px, 2.6vw, 36px); font-weight: 650; letter-spacing: -0.035em; line-height: 1.1; }
+.sub { margin: 10px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; text-wrap: pretty; }
+form { margin-top: 28px; display: grid; gap: 18px; }
+.fld { display: grid; gap: 7px; } .fld > label { font-size: 13px; font-weight: 500; color: var(--text2); }
+.in { display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 6px 0 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line2); }
+.in:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.in > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.in input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font-size: 16px; }
+.in.quiet { background: var(--track); border-color: transparent; } .in.quiet input { color: var(--muted); }
+.in.bad { border-color: var(--err); }
+.hint { font-size: 12.5px; color: var(--muted); }
+.cta { height: 52px; border: 0; border-radius: 14px; background: var(--accent-solid); color: var(--on-accent); font-weight: 650; font-size: 16px; cursor: pointer; box-shadow: 0 12px 24px -12px var(--accent); }
+.msg { display: flex; gap: 10px; font-size: 14px; line-height: 1.45; padding: 12px 14px; border-radius: 14px; background: var(--track); color: var(--text2); text-wrap: pretty; }
+.msg svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+.msg.err { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
+.msg.warn { background: var(--warn-bg); color: var(--warn); }
+.msg.ok { background: var(--accent-wash); color: var(--text); } .msg.ok svg { color: var(--accent); }
+.link { justify-self: start; font-size: 14px; min-height: 44px; display: inline-flex; align-items: center; }
+.ack { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--text2); cursor: pointer; }
+.box { width: 22px; height: 22px; border-radius: 7px; border: 1.5px solid var(--line2); display: grid; place-items: center; flex: none; margin-top: 1px; color: var(--on-accent); }
+.box.on { background: var(--accent-solid); border-color: var(--accent-solid); } .box svg { width: 14px; height: 14px; stroke-width: 2.6; }
+.note { margin-top: 20px; display: flex; gap: 10px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.note svg { width: 17px; height: 17px; flex: none; margin-top: 2px; }
+.legal { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; width: min(100%, 392px); margin: 0 auto; }
+.legal a { color: var(--muted); text-underline-offset: 3px; }
+@media (max-width: 899px) {
+  .split { grid-template-columns: 1fr; }
+  .field { padding: 20px 20px 24px; gap: 20px; min-height: 0; }
+  .stack { display: none; }
+  .say p { font-size: 22px; }
+  .say small { display: none; }
+  .formside { padding: 24px 20px; }
+  .formside .top { position: absolute; top: 20px; right: 20px; }
+  .split { position: relative; }
+}
+</style>
+</head>
+<body>
+<div class="split" id="app"></div>
+<script src="common.js"></script>
+<script>
+var fld = (id, label, type, o) => { o = o || {}; return '<div class="fld"><label for="' + id + '">' + label + '</label><div class="in ' + (o.cls || "") + '">' + (o.lead || "") + '<input id="' + id + '" type="' + type + '" value="' + (o.val || "") + '" placeholder="' + (o.ph || "") + '"' + (o.dis ? " disabled" : "") + ' autocomplete="off">' + (o.trail || "") + "</div>" + (o.hint || "") + "</div>"; };
+var S = {
+  login: { h: "Sign in", sub: "to your trade-agent account", body: (e) => "<form>" + fld("em", "Email", "email", { lead: IC.mail, val: P.has("typed") ? EMAIL : "", ph: "name@example.com" }) + fld("pw", "Password", "password", { lead: IC.lock, val: P.has("typed") ? "correct horse" : "", cls: e ? "bad" : "", trail: '<button class="eye" type="button" aria-label="Show password">' + IC.eye + "</button>" }) + (e ? '<p class="msg err" role="alert">' + IC.alert + COPY.loginErr + "</p>" : "") + '<a class="link" href="#">Forgot password?</a><button class="cta" type="submit">Sign in</button></form>', note: 1 },
+  invite: { h: COPY.invite.title, sub: COPY.invite.sub, body: () => "<form>" + fld("ie", "Email", "email", { lead: IC.mail, val: EMAIL, dis: 1, cls: "quiet" }) + fld("p1", "Create password", "password", { lead: IC.lock, val: "tidewater-9", hint: '<span class="hint">Use at least 8 characters.</span>' }) + fld("p2", "Confirm password", "password", { lead: IC.lock, val: "tidewater-9" }) + '<label class="ack"><span class="box on">' + IC.check + "</span><span>" + COPY.invite.ack + '</span></label><button class="cta" type="submit">' + COPY.invite.cta + "</button></form>" },
+  invalid: { h: "Link not valid", sub: "", body: () => '<p class="msg warn" role="alert" style="margin-top:24px">' + IC.alert + COPY.invalid + "</p>" },
+  forgot: { h: COPY.forgot.title, sub: COPY.forgot.sub, body: () => "<form>" + fld("fe", "Email", "email", { lead: IC.mail, val: EMAIL }) + '<button class="cta" type="submit">' + COPY.forgot.cta + "</button></form>" },
+  sent: { h: "Check your email", sub: "", body: () => '<p class="msg ok" role="status" style="margin-top:24px">' + IC.mail + COPY.sent + "</p>" },
+  reset: { h: COPY.reset.title, sub: EMAIL, body: () => "<form>" + fld("n1", "New password", "password", { lead: IC.lock, val: "tidewater-9" }) + fld("n2", "Confirm password", "password", { lead: IC.lock, val: "tidewater-9" }) + '<button class="cta" type="submit">' + COPY.reset.cta + "</button></form>" },
+};
+var key = SCREEN, err = false;
+if (key === "loginerr") { key = "login"; err = true; P.set("typed", "1"); }
+var s = S[key] || S.login;
+var meter = (n) => '<span class="meter" aria-hidden="true">' + [1, 2, 3].map((i) => '<i class="' + (i <= n ? "f" : "") + '"></i>').join("") + "</span>";
+document.getElementById("app").innerHTML =
+  '<aside class="field"><a class="brand" href="#"><img src="../../../frontend/public/los_trading_hermanos_logo.svg" alt=""><span>trade-agent</span></a>' +
+  '<div class="stack" aria-label="An illustrative research card"><article class="card"><span class="ill">Illustrative example, not a real recommendation</span>' +
+  '<div class="id"><span class="mono-c">HS</span><div><h3>Halden Systems</h3><small>HLDN · NASDAQ</small></div><div class="px"><b>USD 184.20</b><small>Scan quote · 20 Oct</small></div></div>' +
+  '<div class="chips"><span class="chip">' + meter(3) + "High confidence</span><span class=\"chip\">" + meter(2) + "Medium risk</span></div>" +
+  '<div class="ai"><p>Recurring revenue priced below peers.</p><p class="m">' + svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>') + '<b>Why now.</b> Q3 results on 6 Nov</p><p class="m"><b>Risk to the thesis.</b> Top customers are 38% of revenue.</p><small>AI research summary · 2 cited sources</small></div></article>' +
+  '<div class="back"><span>Checked 20 trading days later</span><span><b>+3.1%</b> · illustrative</span></div></div>' +
+  '<div class="say"><p>' + COPY.promise + "</p><small>" + COPY.partner + "</small></div></aside>" +
+  '<section class="formside"><div class="top">' + themeToggle() + '</div><div class="formwrap"><h1>' + s.h + "</h1>" + (s.sub ? '<p class="sub">' + s.sub + "</p>" : "") + s.body(err) +
+  (s.note ? '<p class="note">' + IC.mail + "<span>" + COPY.invitationOnly + "</span></p>" : "") + '</div><div class="legal"><span>' + COPY.advisory + '</span><a href="#">' + COPY.logoDev + "</a></div></section>";
+</script>
+</body>
+</html>

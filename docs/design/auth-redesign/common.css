@@ -1,0 +1,38 @@
+/* Shared by the three sign-in directions: the app's real Soft tokens (frontend/app/globals.css), the reset and the
+   two controls every option keeps (theme toggle, show/hide password). Nothing here is a design decision. */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;650&family=Geist+Mono:wght@400;500&display=swap");
+
+:root,
+:root[data-theme="light"] {
+  --bg: #f5f7fb; --panel: #ffffff; --text: #0f1a2e; --text2: #34425c; --muted: #5d6b85;
+  --accent: #2457d6; --accent-solid: #2457d6; --on-accent: #ffffff; --accent-wash: rgba(36, 87, 214, 0.09);
+  --line: rgba(15, 26, 46, 0.08); --line2: rgba(15, 26, 46, 0.2); --track: rgba(15, 26, 46, 0.06);
+  --up: #0f7a4d; --up-bg: rgba(15, 122, 77, 0.1); --warn: #8a5a00; --warn-bg: rgba(200, 140, 0, 0.12); --err: #b3261e;
+  --shadow: 0 1px 2px rgba(15, 26, 46, 0.04), 0 12px 32px -14px rgba(15, 26, 46, 0.14);
+  --focus: #2457d6; color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #0c1426; --panel: #131d36; --text: #e9eefb; --text2: #c2cce3; --muted: #92a0bd;
+  --accent: #7ea3ff; --accent-solid: #7ea3ff; --on-accent: #0a1530; --accent-wash: rgba(126, 163, 255, 0.14);
+  --line: rgba(255, 255, 255, 0.07); --line2: rgba(255, 255, 255, 0.2); --track: rgba(255, 255, 255, 0.07);
+  --up: #4cc38a; --up-bg: rgba(76, 195, 138, 0.14); --warn: #e7b04a; --warn-bg: rgba(231, 176, 74, 0.14); --err: #ff8f86;
+  --shadow: 0 14px 34px -18px #000;
+  --focus: #7ea3ff; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Geist", system-ui, sans-serif; font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+a { color: var(--accent); }
+.mono { font-family: "Geist Mono", ui-monospace, monospace; font-feature-settings: "tnum"; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The round theme toggle: 44px, as in the app. */
+.tt { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); color: var(--text); display: grid; place-items: center; box-shadow: var(--shadow); cursor: pointer; }
+.tt svg { width: 18px; height: 18px; }
+.eye { width: 44px; height: 44px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; border-radius: 50%; flex: none; }
+.eye svg { width: 18px; height: 18px; }
+.brand { display: flex; align-items: center; gap: 12px; font-weight: 650; letter-spacing: -0.01em; font-size: 15px; color: var(--text); text-decoration: none; }
+.brand img { width: 38px; height: 38px; object-fit: contain; flex: none; }
+svg { display: block; }

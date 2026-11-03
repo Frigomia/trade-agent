@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C2 · The Proof, institutional · trade-agent sign-in</title>
+<link rel="stylesheet" href="common.css">
+<style>
+/* C2 · THE PROOF, second pass. Mock, not the app. Direction C, rebuilt to read as an institution, not a template:
+   the left side is a research DOCUMENT (hairlines, a ruled table, mono figures, numbered sources, a footnote),
+   not a UI card; the right side is a plain, precise form with no icons in the fields, no glow, 8px corners; and the
+   three things a careful buyer looks for are stated as facts under the form. No made-up performance numbers.
+   The left side is always the dark ink of the product's own dark theme, in both themes. */
+:root { --ink: #0b1328; --ink2: #101a33; --inkline: rgba(233, 238, 251, .11); --inktext: #e9eefb; --inkmuted: #93a1bd; --inkaccent: #7ea3ff; }
+:root[data-theme="dark"] { --ink: #0f1a33; }
+.split { min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 9fr); }
+.left { background: var(--ink); color: var(--inktext); padding: 40px clamp(28px, 4vw, 64px); display: grid; grid-template-rows: auto 1fr auto; gap: 32px; border-right: 1px solid var(--inkline); }
+.left .brand { color: var(--inktext); }
+.left .brand img { width: 34px; height: 34px; }
+.doc { align-self: center; width: 100%; max-width: 580px; border: 1px solid var(--inkline); border-radius: 6px; background: rgba(255, 255, 255, .025); font-size: 14px; line-height: 1.5; }
+.lab { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--inkmuted); font-weight: 400; }
+.sec { padding: 16px 22px; border-top: 1px solid var(--inkline); }
+.sec:first-child { border-top: 0; }
+.bar { display: flex; justify-content: space-between; gap: 16px; padding: 10px 22px; border-bottom: 1px solid var(--inkline); }
+.t1 { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding: 18px 22px 16px; }
+.t1 h3 { margin: 0; font-size: 21px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+.t1 .tk { margin-top: 4px; }
+.t1 .px { text-align: right; }
+.t1 .px b { display: block; font-family: "Geist Mono", ui-monospace, monospace; font-weight: 500; font-size: 20px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sig { display: grid; grid-template-columns: 1fr 1fr; padding: 0; }
+.sig > div { padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sig > div + div { border-left: 1px solid var(--inkline); }
+.sig b { font-weight: 500; font-size: 14px; }
+.mt { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 10px; } .mt i { width: 14px; height: 4px; background: var(--inkline); } .mt i.f { background: var(--inktext); }
+.dl { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 10px 16px; align-items: baseline; margin: 0; }
+.dl dt { margin: 0; } .dl dd { margin: 0; }
+.spark { width: 13px; height: 13px; color: var(--inkaccent); display: inline-block; vertical-align: -2px; margin-right: 6px; }
+.sc { display: grid; grid-template-columns: 112px minmax(0, 1fr) 36px; gap: 16px; align-items: center; margin-top: 8px; }
+.sc:first-of-type { margin-top: 12px; }
+.sc .tr { height: 2px; background: var(--inkline); position: relative; } .sc .tr i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--inktext); }
+.sc .n { font-family: "Geist Mono", ui-monospace, monospace; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.src { display: grid; gap: 6px; margin-top: 10px; font-size: 13px; color: var(--inkmuted); }
+.src span b { font-family: "Geist Mono", ui-monospace, monospace; font-weight: 400; color: var(--inktext); margin-right: 10px; }
+.foot-n { padding: 12px 22px; background: rgba(255, 255, 255, .03); border-top: 1px solid var(--inkline); font-size: 12.5px; color: var(--inkmuted); line-height: 1.5; }
+.say { max-width: 40ch; }
+.say p { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 300; letter-spacing: -0.02em; color: var(--inktext); text-wrap: balance; }
+.say small { display: block; margin-top: 12px; font-size: 13px; color: var(--inkmuted); }
+.right { display: grid; grid-template-rows: auto 1fr auto; padding: 24px clamp(24px, 4vw, 64px) 24px; }
+.right .top { display: flex; justify-content: flex-end; }
+.wrap { width: min(100%, 400px); margin: 0 auto; align-self: center; padding: 16px 0; }
+h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; }
+.sub { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.5; text-wrap: pretty; }
+form { margin-top: 28px; display: grid; gap: 18px; }
+.fld { display: grid; gap: 6px; }
+.fld .lr { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.fld label { font-size: 13px; font-weight: 500; color: var(--text2); }
+.fld .lr a { font-size: 13px; text-underline-offset: 3px; }
+.in { display: flex; align-items: center; gap: 4px; height: 48px; padding: 0 4px 0 14px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line2); }
+.in:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.in input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font-size: 15.5px; }
+.in.quiet { background: var(--track); border-color: transparent; } .in.quiet input { color: var(--muted); }
+.in.bad { border-color: var(--err); }
+.hint { font-size: 12.5px; color: var(--muted); }
+.cta { height: 48px; border: 0; border-radius: 8px; background: var(--accent-solid); color: var(--on-accent); font-weight: 600; font-size: 15.5px; cursor: pointer; letter-spacing: -0.005em; }
+.cta:hover { filter: brightness(1.06); }
+.msg { display: flex; gap: 10px; font-size: 13.5px; line-height: 1.45; padding: 11px 13px; border-radius: 8px; border: 1px solid var(--line2); color: var(--text2); text-wrap: pretty; }
+.msg svg { width: 17px; height: 17px; flex: none; margin-top: 1px; color: var(--muted); }
+.msg.err { border-color: color-mix(in srgb, var(--err) 45%, transparent); color: var(--err); background: color-mix(in srgb, var(--err) 6%, transparent); } .msg.err svg { color: var(--err); }
+.msg.warn { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-bg); color: var(--warn); } .msg.warn svg { color: var(--warn); }
+.ack { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; line-height: 1.5; color: var(--text2); cursor: pointer; }
+.box { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid var(--line2); display: grid; place-items: center; flex: none; margin-top: 1px; color: var(--on-accent); }
+.box.on { background: var(--accent-solid); border-color: var(--accent-solid); } .box svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.assure { margin: 36px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line2); }
+.assure li { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.45; }
+.assure b { font-weight: 600; color: var(--text); } .assure span { color: var(--muted); }
+.inv { margin: 16px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.legal { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; width: min(100%, 400px); margin: 0 auto; }
+.legal a { color: var(--muted); text-underline-offset: 3px; }
+@media (max-width: 899px) {
+  .split { grid-template-columns: 1fr; position: relative; }
+  .left { padding: 18px 20px 24px; gap: 14px; grid-template-rows: auto auto; border-right: 0; }
+  .doc { display: none; }
+  .say p { font-size: 18px; } .say small { display: none; }
+  .right { padding: 24px 20px 20px; }
+  .right .top { position: absolute; top: 14px; right: 20px; }
+  .assure li { grid-template-columns: 1fr; gap: 2px; }
+}
+</style>
+</head>
+<body>
+<div class="split" id="app"></div>
+<script src="common.js"></script>
+<script>
+var fld = (id, label, type, o) => { o = o || {}; return '<div class="fld"><div class="lr"><label for="' + id + '">' + label + "</label>" + (o.link || "") + '</div><div class="in ' + (o.cls || "") + '"><input id="' + id + '" type="' + type + '" value="' + (o.val || "") + '" placeholder="' + (o.ph || "") + '"' + (o.dis ? " disabled" : "") + ' autocomplete="off">' + (o.trail || "") + "</div>" + (o.hint || "") + "</div>"; };
+var S = {
+  login: { h: "Sign in", sub: "to your trade-agent account", assure: 1, body: (e) => "<form>" + fld("em", "Email", "email", { val: P.has("typed") ? EMAIL : "", ph: "name@example.com" }) + fld("pw", "Password", "password", { link: '<a href="#">Forgot password?</a>', val: P.has("typed") ? "correct horse" : "", cls: e ? "bad" : "", trail: '<button class="eye" type="button" aria-label="Show password">' + IC.eye + "</button>" }) + (e ? '<p class="msg err" role="alert">' + IC.alert + COPY.loginErr + "</p>" : "") + '<button class="cta" type="submit">Sign in</button></form><p class="inv">' + COPY.invitationOnly + "</p>" },
+  invite: { h: COPY.invite.title, sub: COPY.invite.sub, body: () => "<form>" + fld("ie", "Email", "email", { val: EMAIL, dis: 1, cls: "quiet" }) + fld("p1", "Create password", "password", { val: "tidewater-9", hint: '<span class="hint">Use at least 8 characters.</span>' }) + fld("p2", "Confirm password", "password", { val: "tidewater-9" }) + '<label class="ack"><span class="box on">' + IC.check + "</span><span>" + COPY.invite.ack + '</span></label><button class="cta" type="submit">' + COPY.invite.cta + "</button></form>" },
+  invalid: { h: "Link not valid", sub: "", body: () => '<p class="msg warn" role="alert" style="margin-top:24px">' + IC.alert + COPY.invalid + "</p>" },
+  forgot: { h: COPY.forgot.title, sub: COPY.forgot.sub, body: () => "<form>" + fld("fe", "Email", "email", { val: EMAIL }) + '<button class="cta" type="submit">' + COPY.forgot.cta + "</button></form>" },
+  sent: { h: "Check your email", sub: "", body: () => '<p class="msg" role="status" style="margin-top:24px">' + IC.mail + COPY.sent + "</p>" },
+  reset: { h: COPY.reset.title, sub: EMAIL, body: () => "<form>" + fld("n1", "New password", "password", { val: "tidewater-9" }) + fld("n2", "Confirm password", "password", { val: "tidewater-9" }) + '<button class="cta" type="submit">' + COPY.reset.cta + "</button></form>" },
+};
+var key = SCREEN, err = false;
+if (key === "loginerr") { key = "login"; err = true; P.set("typed", "1"); }
+var s = S[key] || S.login;
+var mt = (n) => '<span class="mt" aria-hidden="true">' + [1, 2, 3].map((i) => '<i class="' + (i <= n ? "f" : "") + '"></i>').join("") + "</span>";
+var spark = svg('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>', 'class="spark"');
+var score = (l, n) => '<div class="sc"><span class="lab">' + l + '</span><span class="tr"><i style="width:' + n + '%"></i></span><span class="n">' + n + "</span></div>";
+var doc =
+  '<article class="doc" aria-label="An illustrative research note"><div class="bar"><span class="lab">Research note · Example</span><span class="lab">' + spark + 'AI-assisted</span></div>' +
+  '<div class="t1"><div><h3>Halden Systems</h3><div class="lab tk">HLDN · NASDAQ</div></div><div class="px"><b>USD 184.20</b><span class="lab">Scan quote · 20 Oct</span></div></div>' +
+  '<div class="sec sig" style="padding:0;border-top:1px solid var(--inkline)"><div><span class="lab">Confidence</span><span><b>High</b>' + mt(3) + '</span></div><div><span class="lab">Risk</span><span><b>Medium</b>' + mt(2) + "</span></div></div>" +
+  '<div class="sec"><dl class="dl"><dt class="lab">Thesis</dt><dd>Recurring revenue priced below peers.</dd><dt class="lab">Why now</dt><dd>Q3 results on 6 Nov.</dd><dt class="lab">Risk to the thesis</dt><dd>Top customers are 38% of revenue.</dd></dl></div>' +
+  '<div class="sec"><span class="lab">Computed scores, kept apart from the text above</span>' + score("Quality", 94) + score("Valuation", 88) + score("Growth", 81) + "</div>" +
+  '<div class="sec"><span class="lab">Cited sources</span><div class="src"><span><b>[1]</b>Issuer annual report</span><span><b>[2]</b>Earnings call transcript</span></div></div>' +
+  '<div class="foot-n">Illustrative example: not a real company or recommendation. Every call is checked again 20 trading days later.</div></article>';
+var assure = '<ul class="assure"><li><b>No broker connection</b><span>Nothing here can place an order.</span></li><li><b>Private by design</b><span>The administrator manages access, not your data.</span></li><li><b>Reasoning shown</b><span>Calls list their sources and the risk to the thesis.</span></li></ul>';
+document.getElementById("app").innerHTML =
+  '<aside class="left"><a class="brand" href="#"><img src="../../../frontend/public/los_trading_hermanos_logo.svg" alt=""><span>trade-agent</span></a>' + doc +
+  '<div class="say"><p>' + COPY.promise + "</p><small>" + COPY.partner + "</small></div></aside>" +
+  '<section class="right"><div class="top">' + themeToggle() + '</div><div class="wrap"><h1>' + s.h + "</h1>" + (s.sub ? '<p class="sub">' + s.sub + "</p>" : "") + s.body(err) + (s.assure ? assure : "") +
+  '</div><div class="legal"><span>' + COPY.advisory + '</span><a href="#">' + COPY.logoDev + "</a></div></section>";
+</script>
+</body>
+</html>

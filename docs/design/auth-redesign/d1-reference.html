@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D1 · The Reference · trade-agent sign-in</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="d.css">
+<style>
+/* D1 · THE REFERENCE. Mock, not the app. The owner's image, built with care: headline top left, the research
+   card stacked over a track-record strip bottom left, the white form card right, icons in the fields, soft
+   curves behind. Two columns. The "+3.1%" is the reference's number: it is labelled illustrative and is a decision for you. */
+.page { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; padding: 28px clamp(20px, 4vw, 64px) 24px; }
+.top { display: flex; align-items: center; justify-content: space-between; }
+.main { width: 100%; max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 460px); gap: clamp(40px, 7vw, 120px); align-items: center; align-content: center; padding: 20px 0; }
+/* The headline and the card are one group, centred beside the form: they stay together on a tall window instead of
+   being pushed to the top and the bottom of the column. */
+.left { align-self: center; display: flex; flex-direction: column; gap: clamp(28px, 5vh, 52px); }
+.hero { margin: 0; font-size: clamp(32px, 3.9vw, 54px); line-height: 1.06; font-weight: 650; letter-spacing: -0.045em; max-width: 15ch; text-wrap: balance; }
+.lede { margin: 16px 0 0; font-size: 17px; line-height: 1.5; color: var(--text2); max-width: 36ch; }
+.stack { position: relative; width: min(100%, 500px); padding-bottom: 56px; }
+.stack .rc { position: relative; z-index: 2; }
+.stack .strip { position: absolute; z-index: 1; left: 9%; right: -5%; bottom: 0; height: 96px; align-items: flex-end; padding-bottom: 16px; }
+.right { display: grid; justify-items: end; }
+.legal { max-width: 1280px; width: 100%; margin: 0 auto; padding-top: 8px; }
+@media (max-width: 899px) {
+  .main { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-top: 12px; align-content: start; align-items: start; }
+  .left { gap: 0; padding: 0; } .stack { display: none; }
+  .hero { font-size: 30px; max-width: none; } .lede { font-size: 15px; margin-top: 12px; }
+  .right { grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="common.js"></script>
+<script src="d.js"></script>
+<script>
+document.getElementById("app").innerHTML = dBg() + '<div class="page"><header class="top">' + BRAND + themeToggle() + "</header>" +
+  '<main class="main"><section class="left"><div><h2 class="hero">' + COPY.promise + '</h2><p class="lede">' + COPY.partner + '</p></div>' +
+  '<div class="stack">' + researchCard() + '<div class="strip"><span>Checked 20 trading days later</span><span><b>+3.1%</b> \u00b7 illustrative</span></div></div></section>' +
+  '<section class="right">' + formCard(true) + "</section></main>" +
+  '<footer class="legal">' + COPY.advisory + "</footer></div>";
+</script>
+</body>
+</html>
