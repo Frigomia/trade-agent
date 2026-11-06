@@ -23,18 +23,8 @@ There is no corporate-action ledger. Split-affected estimates are held for revie
 replay later trades from the position saved before the estimate, refusing if the holding was
 overwritten outside the ledger or a sale would become impossible. No frontend timer posts trades.
 
-## Browser verification
+## Verification
 
-Run npm run test:e2e from frontend/. Playwright uses installed Chrome and a temporary local
-Next development route removed after the suite. API responses are intercepted with stable test
-records; no live auth credentials, broker or market data is used. It covers the actual holding/
-trade drawers, existing instrument picker, ETF recommendation entry points with and without a
-holding, backfill approval/conflicts, lifecycle and correction/
-void flows, and 320/390/430/1280px light/dark layouts. This verifies browser behavior, not database
-transactions. Database tests remain in backend/tests/test_recurring.py for the PostgreSQL/Redis
-CI environment. The owner requested Playwright instead of further local Docker troubleshooting.
-
-Verification: all 14 Playwright scenarios passed, including manual holding/trade saves. Frontend
-lint, TypeScript and production build passed. Backend Ruff lint/format, mypy and application
+Frontend lint, TypeScript and production build passed. Backend Ruff lint/format, mypy and application
 imports passed. The independent security review's findings were addressed. Live PostgreSQL/Redis
 integration and migration execution remain for CI; no migration was applied to user data locally.
