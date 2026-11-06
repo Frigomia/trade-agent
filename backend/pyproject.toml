@@ -19,6 +19,7 @@ dependencies = [
     "httpx",
     "pyjwt[crypto]>=2.15.0",
     "cryptography>=50.0.1",
+    "exchange-calendars>=4.11,<5",
 ]
 
 [dependency-groups]

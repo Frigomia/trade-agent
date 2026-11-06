@@ -135,6 +135,8 @@ class TradeOut(TradeIn):
 
     id: int
     user_id: UUID
+    provenance: str = "manual"
+    recurring_occurrence_id: int | None = None
 
 
 class DismissIn(BaseModel):

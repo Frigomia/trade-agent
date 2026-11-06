@@ -1,134 +1,104 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { RecurringData } from "@/lib/api/recurring-types";
 
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
 vi.mock("@/lib/api/client", () => ({ apiFetch, ApiError: class extends Error {} }));
-vi.mock("./PortfolioTabs", () => ({ PortfolioTabs: () => null }));
-vi.mock("@/components/shell/PageHeader", () => ({ PageHeader: ({ title }: { title: string }) => <h1>{title}</h1> }));
-
+vi.mock("@/components/ui/TickerPicker", () => ({
+  TickerPicker: ({ value, onPick }: { value: string; onPick: (m: object) => void }) =>
+    <button type="button" onClick={() => onPick({ symbol: "CNDX.L", name: "NASDAQ-100 UCITS ETF", type: "ETF", exchange: "LSE" })}>Choose ETF {value}</button>,
+}));
+import { HoldingForm } from "./HoldingForm";
+import { TradeSheet } from "./TradeSheet";
 import { RecurringInvestments } from "./RecurringInvestments";
 
 const data: RecurringData = {
-  plans: [{ id: 1, name: "Employer stock plan", ticker: "SAP.DE", asset_type: "STOCK", source: "Employer", amount: 400,
-    currency: "EUR", frequency: "monthly", start_date: "2026-01-31", next_date: "2026-04-30", status: "active",
-    upcoming_dates: ["2026-04-30", "2026-05-31", "2026-06-30"] }],
-  occurrences: [{ id: 7, plan_id: 1, scheduled_date: "2026-03-31", ticker: "SAP.DE", asset_type: "STOCK", amount: 400,
-    currency: "EUR", status: "scheduled", trade_id: null }],
+  plans: [{ id: 1, name: "SAP SE", ticker: "SAP.DE", asset_type: "STOCK", amount: "400.00",
+    currency: "EUR", frequency: "monthly", start_date: "2026-01-31", next_date: "2026-12-31",
+    status: "active", tracking_enabled: true, upcoming_dates: ["2026-12-31"] }],
+  occurrences: [{ id: 7, plan_id: 1, scheduled_date: "2026-10-31", ticker: "SAP.DE",
+    asset_type: "STOCK", amount: "400.00", currency: "EUR", status: "posted", trade_id: 2,
+    shares: "4.000000", price: "100.000000", quote_currency: "EUR", trade_date: "2026-11-02" }],
 };
-
-function setup() {
-  render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><RecurringInvestments /></SWRConfig>);
+function wrap(child: React.ReactNode) {
+  return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{child}</SWRConfig>);
 }
-
 beforeEach(() => {
   apiFetch.mockReset();
   apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
-    if (path.includes("/preview")) return { upcoming_dates: ["2026-04-30", "2026-05-31", "2026-06-30"], catch_up_count: 3 };
+    if (path.includes("/preview")) return { upcoming_dates: ["2027-01-15"], catch_up_count: 0 };
     if (!init) return structuredClone(data);
     return {};
   });
 });
 
-describe("Recurring investments", () => {
-  it("previews before saving a €400 plan and invalidates the preview when edited", async () => {
-    setup();
-    fireEvent.click(screen.getByRole("button", { name: "Add recurring investment" }));
-    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Trade Republic savings plan" } });
-    fireEvent.change(screen.getByLabelText(/^Stock \/ ETF ticker/), { target: { value: "VWCE.DE" } });
-    fireEvent.change(screen.getByLabelText(/^Expected amount/), { target: { value: "400" } });
-    fireEvent.change(screen.getByLabelText(/^Start date/), { target: { value: "2026-01-31" } });
-    expect(screen.getByText(/Entries are added automatically on the dates you set/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Preview dates" }));
-    await screen.findByText(/3 unconfirmed entries will be added now/);
-    expect(apiFetch.mock.calls.some(([, init]) => init?.method === "POST" && !String(init.body).includes("monthly"))).toBe(false);
-    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "My Trade Republic plan" } });
-    expect(screen.queryByRole("button", { name: "Save recurring investment" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Preview dates" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Save recurring investment" }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring", expect.objectContaining({ method: "POST" })));
-    const call = apiFetch.mock.calls.find(([path, init]) => path === "/portfolio/recurring" && init?.method === "POST");
-    expect(JSON.parse(call![1].body)).toMatchObject({ amount: 400, currency: "EUR", ticker: "VWCE.DE", name: "My Trade Republic plan", frequency: "monthly" });
+describe("Integrated recurring estimates", () => {
+  it("creates an ETF plan from Add Holding through the shared search without making a holding", async () => {
+    const onSaved = vi.fn();
+    wrap(<HoldingForm open onClose={vi.fn()} heldTickers={[]} onSaved={onSaved} />);
+    fireEvent.click(screen.getByRole("button", { name: "Recurring" }));
+    fireEvent.click(screen.getByRole("button", { name: /Choose ETF/ }));
+    fireEvent.change(screen.getByLabelText(/^Contribution amount/), { target: { value: "300.00" } });
+    fireEvent.change(screen.getByLabelText(/^Start \/ anchor date/), { target: { value: "2027-01-15" } });
+    expect(screen.queryByLabelText(/Shares/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Broker|Source|Employer/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Purchases are estimated from market prices/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preview schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save recurring plan" }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    const save = apiFetch.mock.calls.find(([path, init]) => path === "/portfolio/recurring" && init?.method === "POST");
+    expect(JSON.parse(save![1].body)).toMatchObject({ ticker: "CNDX.L", asset_type: "ETF", amount: "300.00", currency: "EUR", backfill: false });
+    expect(apiFetch.mock.calls.some(([path]) => path === "/portfolio/holdings")).toBe(false);
   });
 
-  it("shows expected entries and confirms through the trade sheet with actual details", async () => {
-    setup();
-    expect(await screen.findByText("Scheduled · Unconfirmed")).toBeInTheDocument();
-    expect(screen.getByText(/Expected amounts are separate from confirmed holdings/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm actual purchase" }));
-    expect(screen.getByLabelText("Ticker")).toBeDisabled();
+  it("preselects the instrument from Log Trade and leaves One-time available", () => {
+    wrap(<TradeSheet open onClose={vi.fn()} onLogged={vi.fn()} holdings={[{ ticker: "SAP.DE", name: "SAP SE", asset_type: "STOCK" }]} prefill={{ ticker: "SAP.DE" }} />);
+    expect(screen.getByRole("button", { name: "Bought" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recurring" }));
+    expect(screen.getByRole("button", { name: /Choose ETF SAP.DE/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sold" })).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Shares"), { target: { value: "2.5" } });
-    fireEvent.change(screen.getByLabelText("Price"), { target: { value: "100" } });
-    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-03-30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save to log" }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/occurrences/7/confirm", {
-      method: "POST", body: JSON.stringify({ date: "2026-03-30", shares: 2.5, price: 100 }),
-    }));
-    expect(apiFetch.mock.calls.some(([path]) => path === "/portfolio/trades")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "One-time" }));
+    expect(screen.getByRole("button", { name: "Sold" })).toBeInTheDocument();
   });
 
-  it("pauses and skips using explicit local status changes", async () => {
-    setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Pause" }));
+  it("requires explicit backfill approval and invalidates an edited preview", async () => {
+    apiFetch.mockImplementation(async (path: string) => path.includes("/preview")
+      ? { upcoming_dates: ["2027-01-15"], catch_up_count: 3, first_date: "2026-01-15", last_date: "2026-03-15" } : {});
+    wrap(<HoldingForm open onClose={vi.fn()} heldTickers={[]} onSaved={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Recurring" }));
+    fireEvent.click(screen.getByRole("button", { name: /Choose ETF/ }));
+    fireEvent.change(screen.getByLabelText(/^Contribution amount/), { target: { value: "300" } });
+    fireEvent.change(screen.getByLabelText(/^Start \/ anchor date/), { target: { value: "2026-01-15" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview schedule" }));
+    await screen.findByLabelText("Add these historical estimates to my portfolio");
+    fireEvent.click(screen.getByRole("button", { name: "Save recurring plan" }));
+    expect(apiFetch.mock.calls.some(([path]) => path === "/portfolio/recurring")).toBe(false);
+    fireEvent.change(screen.getByLabelText(/^Contribution amount/), { target: { value: "350" } });
+    expect(screen.getByRole("button", { name: "Preview schedule" })).toBeInTheDocument();
+  });
+
+  it("manages unheld plans, labels estimated history, pauses and corrects through local APIs", async () => {
+    wrap(<RecurringInvestments />);
+    fireEvent.click(screen.getByRole("button", { name: "Manage recurring plans" }));
+    await screen.findByText("SAP SE · SAP.DE");
+    expect(screen.getByText(/Estimated purchase · Plan #1/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Confirm actual purchase/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/1/status", { method: "PATCH", body: '{"status":"paused"}' }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Skip" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/occurrences/7", { method: "PATCH", body: '{"status":"skipped"}' }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct estimate" }));
+    fireEvent.change(screen.getByLabelText(/^Shares/), { target: { value: "3.9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save actual details" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/occurrences/7/estimate",
+      expect.objectContaining({ method: "PUT" })));
   });
 
-  it("shows future-only edit rules and requires a separate confirmation to end", async () => {
-    setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    expect(screen.getByText(/Edits apply after today/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Preview dates" }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/preview?editing=true", expect.objectContaining({ method: "POST" })));
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    fireEvent.click(await screen.findByRole("button", { name: "End plan" }));
-    expect(screen.getByText(/permanently stops future entries/)).toBeInTheDocument();
-    expect(apiFetch.mock.calls.some(([, init]) => init?.body === '{"status":"ended"}')).toBe(false);
-  });
-
-  it.each([
-    ["Add recurring investment", "Add recurring investment"],
-    ["Edit", "Edit recurring investment"],
-    ["End plan", "End Employer stock plan?"],
-  ])("names the %s dialog and closes it with Escape", async (button, title) => {
-    setup();
-    await screen.findByText("Employer stock plan");
-    fireEvent.click(screen.getByRole("button", { name: button }));
-    const dialog = screen.getByRole("dialog", { name: title });
-    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("keeps the plan dialog open during a preview request", async () => {
-    setup();
-    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    let reject!: (error: Error) => void;
-    apiFetch.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
-    fireEvent.click(screen.getByRole("button", { name: "Preview dates" }));
-    const dialog = screen.getByRole("dialog", { name: "Edit recurring investment" });
-    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
-    expect(dialog).toBeInTheDocument();
-    await act(async () => { reject(new Error("Preview failed")); });
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("Something went wrong.");
-    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("keeps the end dialog open during submission and shows its error once", async () => {
-    setup();
-    fireEvent.click(await screen.findByRole("button", { name: "End plan" }));
-    const dialog = screen.getByRole("dialog", { name: "End Employer stock plan?" });
-    let reject!: (error: Error) => void;
-    apiFetch.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
-    fireEvent.click(within(dialog).getByRole("button", { name: "End plan" }));
-    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
-    expect(dialog).toBeInTheDocument();
-    await act(async () => { reject(new Error("End failed")); });
-    expect(screen.getAllByText("Something went wrong.")).toHaveLength(1);
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("Something went wrong.");
+  it("shows legacy settings without enabling tracking silently", async () => {
+    apiFetch.mockResolvedValue({ ...data, plans: [{ ...data.plans[0], tracking_enabled: false }] });
+    wrap(<RecurringInvestments />);
+    fireEvent.click(screen.getByRole("button", { name: "Manage recurring plans" }));
+    await screen.findByText(/Saved legacy plan/);
+    expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 });

@@ -659,75 +659,85 @@ corrected on the holding form, since a SELL does not restore the average cost).
 
 ---
 
-### Recurring external investments (#266)
+### Recurring estimated investments
 
-Portfolio → Recurring (`/portfolio/recurring`) tracks purchases already arranged with an
-employer or investment provider. Setup is manual: name, ticker, Stock/ETF, optional source/account,
-expected amount and three-letter currency label, monthly frequency and start date. No broker
-credentials, synchronization, market quotes or AI calls are involved. Preview is free and shows
-the next three dates and the number of entries that will be created immediately. The form explains
-the local-only behavior and requires a preview before saving.
+Recurring plans track schedules already configured outside LTH. They never place orders or
+verify purchases. Portfolio's existing Add Holding and Log Trade drawers offer One-time /
+Recurring; the same form uses TickerPicker for a stock/ETF listing. A compact Manage recurring
+plans action includes plans without holdings. Holding rows carry secondary plan indicators.
+The former /portfolio/recurring screen redirects to /portfolio; there is no recurring tab.
 
-Dates are calendar dates in **UTC**, including weekends and holidays, not claims about provider
-execution. The original start day remains the anchor: January 31 → February 28/29 → March 31.
-Start dates from 2000 through 2100 are accepted. A past start creates every due occurrence through
-today as **scheduled/unconfirmed**, using the configured expected amount. It never creates shares,
-a fill price, holdings, cost basis or portfolio performance. Expected amounts remain separate from
-the monthly contribution planner; neither feature automatically adds/subtracts the other's amounts.
+**Schedules:** Europe/Berlin calendar dates, independent of DST. Weekly and biweekly use the
+start date's weekday; monthly retains its day, clamped to month end. Custom intervals are
+1–365 days, weeks or months, anchored to the original start. Optional end date is inclusive.
+Future plans create no holdings. A historical start requires preview plus explicit backfill
+approval. Backfill is refused when any holding or trade history exists for that ticker, avoiding
+duplicate imported/manual positions. Preview is bounded to 10,000 past dates.
 
-`RecurringInvestment` (`recurring_investments`): id, user_id, name, ticker, asset_type, nullable
-source, amount Numeric(12,2), currency varchar(3), start_date, next_date (durable processing cursor),
-status active/paused/ended. At most 100 plans per user; frequency is monthly in v1.
-`RecurringOccurrence` (`recurring_occurrences`): id, user_id, plan_id, scheduled_date, snapshot
-ticker/asset_type/amount/currency, status scheduled/skipped/confirmed, nullable trade_id. Unique
-(user_id, plan_id, scheduled_date) and unique non-null trade_id, with a check that only confirmed
-rows have a trade id. Like existing plan lines, references have no foreign keys. Both tables have
-forced owner-only RLS and runtime table/sequence grants in generated revision `a266c7e91d03`.
-USER_TABLES registration covers both self-service and admin deletion. `/me/export` adds
-`recurring_investments` and `recurring_occurrences` arrays (a read of saved records, without catch-up).
+**Estimation:** the existing daily server job generates up to 100 due dates per plan and posts
+at most 100 occurrences per user per pass. Reads never run catch-up. The exchange-calendars
+dependency supplies listing holidays/session closes. Weekends and holidays shift to the next
+market session; the original scheduled date is retained. Posting waits until two hours after the
+session closes and until that exact session's historical close exists. Yahoo Close with auto/back
+adjustment disabled is the proxy, never a broker fill. Yahoo still split-adjusts Close: histories
+containing splits since the first estimate are refused with a review message. There is no
+corporate-action ledger; users must reconcile split-affected holdings manually.
 
-The daily 05:30 UTC job processes recurring entries first, including weekends; the standalone
-`python -m app.scheduled recurring` command is also available. Opening the Recurring screen catches
-up the same way and refreshes once a minute while open. A read-only due-date check skips the
-processing lock and commit when no active plan is due; due plans are read again under the lock.
-Processing, editing and confirmation all
-take the existing per-user Postgres transaction lock and recheck account activity. Cursor movement
-and occurrence inserts commit together, so retries, overlapping jobs/reads and downtime catch-up
-cannot duplicate dates. Database uniqueness is a second guard. Failure rolls the transaction back;
-a later run retries the outstanding dates.
+Contribution amounts use Decimal / Numeric(12,2), in a supported major currency independent
+of the quote unit. Historical FX uses the latest common daily rate on or before the session,
+at most seven days old, reusing fx.py's EUR crosses and minor-unit rules (GBp/GBX etc.).
+Quantity = contribution × quote-units-per-contribution-unit / reference close, rounded to six
+fractional decimals. Fees are excluded and disclosed. Missing price/FX leaves a pending estimate
+with a controlled error and attempt count, never a zero or live replacement quote.
 
-Editing or pausing first records dates already due using the old settings. Edits change only
-dates after today, including a new anchor/ticker/amount; existing entries retain their snapshots.
-Pause/end stop future dates. Resume schedules the first anchored date strictly after today,
-without backfilling the paused interval (including the resume day). Ending is permanent; a new
-plan can be created separately. Existing unconfirmed entries remain confirmable after pause/end.
+**Storage:** reuse RecurringInvestment and RecurringOccurrence with their existing RLS and
+unique (user_id, plan_id, scheduled_date) / unique trade_id guards. Plans add frequency,
+interval_count/unit, end_date, provider exchange and tracking_enabled. Occurrences add
+effective_date, quote_currency, reference_price, fx_rate/date, pricing_source, error/attempts and
+position_before (the position before posting, for corrections). Status is scheduled (pending),
+skipped, confirmed (legacy actual purchase), posted (estimate), reconciled or voided.
+Trade adds provenance manual / recurring_estimated / reconciled / voided and
+recurring_occurrence_id; TradeOut and /me/export retain those fields. Estimates use the existing
+trade/holding aggregation. Portfolio labels totals, allocation and risk as estimated when they
+include these purchases; management exposes the pricing/FX audit trail.
 
-The existing TradeSheet collects the actual purchase date, shares and price. Confirmation calls
-the shared `apply_trade` bookkeeping, creates a zero-share holding with the occurrence's type if
-needed, and atomically links the resulting BUY trade. Retries return that same trade even if the
-retry body differs. A skipped entry must be reopened first. Actual purchase dates allow one day
-ahead of UTC to accommodate provider/user time zones; later dates are refused. Form defaults and
-recurring scheduling remain UTC.
-No fees are supported by the existing trade log; the form states this and asks for the price in
-the instrument's quote unit, independently of the plan's expected currency label. Users can correct
-expected details by entering actual values or skip/reopen an entry. Confirmed trades stay immutable,
-as in the existing order-ticket flow: a logging mistake is corrected by editing the holding's
-shares and average cost; the trade and confirmation remain in history.
+All writes use the active-user transaction lock and scoped sessions. Provider lookups hold no
+write lock; the worker reloads occurrence/plan under the lock before posting. Occurrence linkage,
+trade and holding changes commit together. Retries/concurrent workers cannot double-post.
+Edits preserve already-due snapshots and affect future dates. Instrument identity cannot change
+on a plan; create another independent plan instead. Pause/stop skip pending estimates; resume
+advances strictly after today with no paused-period backfill. Stop retains history and holdings.
+Skip/void cannot be reopened by an automatic run.
 
-Authenticated, no-store API (`app/routers/recurring.py` delegates to `app/recurring.py`), 60
-requests/minute per user across these routes:
+Corrections accept actual date, shares and quote-unit price, label the trade reconciled and replay
+later trades from the first estimate's saved opening position. Replay matches six-decimal database
+rounding. Corrections that oversell a later position or conflict with a direct holding overwrite are
+refused. Voiding reverses its contribution but retains trade/occurrence audit records. Existing
+manual trade routes retain their semantics.
 
-| Method | Path under `/portfolio/recurring` | Result |
+**Migration:** generated revision 148975797c40 adds columns and replaces occurrence checks.
+It drops neither table and preserves confirmed/manual history and legacy source metadata.
+Existing plans remain disabled for automatic tracking until reviewed/saved; that enables future
+tracking and marks old unconfirmed entries skipped. Downgrade refuses when estimated ledger
+rows exist rather than discarding provenance. The original RLS revision is unchanged.
+
+Authenticated, no-store API; 60 requests/minute per user across /portfolio/recurring:
+
+| Method | Suffix | Result |
 |---|---|---|
-| GET | `` | Plans with next/upcoming dates and recorded occurrences; reconciles due dates |
-| POST | `/preview?editing=false` | Next three future dates and catch_up_count; editing previews dates strictly after today |
-| POST | `` | Create plan and catch up due dates (201) |
-| PUT | `/{id}` | Replace future settings; ended plans refuse changes |
-| PATCH | `/{id}/status` | active / paused / ended |
-| PATCH | `/occurrences/{id}` | scheduled / skipped; confirmed entries refuse changes |
-| POST | `/occurrences/{id}/confirm` | Actual date, shares, price; returns the linked TradeOut exactly once |
+| GET | / | Plans, dates and occurrence/trade audit data; no writes |
+| POST | /preview?editing=false | Dates, historical count/range and overlap conflict |
+| POST | / | Validate listing, create plan and snapshot due occurrences |
+| PUT | /{id} | Validate and replace future settings; preserve history |
+| PATCH | /{id}/status | active / paused / ended (UI: stopped) |
+| PATCH | /occurrences/{id} | Skip pending estimate; automatic skips cannot reopen |
+| PUT | /occurrences/{id}/estimate | Reconcile with actual purchase details |
+| DELETE | /occurrences/{id}/estimate | Void and reverse position impact, preserving audit |
+| POST | /occurrences/{id}/confirm | Compatibility for legacy purchases only |
 
-Unknown and other users' identifiers both return 404. No Claude key is required.
+Other users' identifiers return 404. No Claude key is required. Scheduled recurring/daily
+commands post estimates before snapshots. There is no broker connection, account/source
+selector or per-purchase confirmation in the new flow.
 
 ---
 
@@ -1256,7 +1266,7 @@ default — same dialect and models as production, started with
 | Command | What it does |
 |---|---|
 | `daily` | Recurring investment catch-up, snapshots, outcome evaluation, then (weekdays only) automatic analysis and Telegram messages, for every active user |
-| `recurring` | Recurring investment catch-up only, including weekends; no broker, provider or AI calls |
+| `recurring` | Recurring estimate catch-up; historical market/FX reads, no broker or AI calls |
 | `snapshots` | Portfolio snapshots only |
 | `outcomes` | Recommendation outcome evaluation only |
 | `analysis` | Automatic analysis only (does nothing on Saturday and Sunday, UTC) |

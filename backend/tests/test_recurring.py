@@ -1,308 +1,383 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+from decimal import Decimal
 from threading import Barrier
-from unittest.mock import Mock
+from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
-from app import recurring, scheduled
+from app import recurring, recurring_market
 from app.db import open_user_session
 from app.models import Holding, RecurringInvestment, RecurringOccurrence, Trade
-from app.schemas import PlaceIn
-from app.schemas_recurring import RecurringIn
+from app.recurring_market import Estimate, MarketUnavailable
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
 
 PATH = "/portfolio/recurring"
 PLAN = {
-    "name": "Trade Republic savings plan",
-    "ticker": "VWCE.DE",
-    "asset_type": "ETF",
-    "source": "Trade Republic",
-    "amount": 400,
+    "name": "SAP SE",
+    "ticker": "SAP.DE",
+    "asset_type": "STOCK",
+    "amount": "400.00",
     "currency": "EUR",
-    "start_date": "2026-01-31",
+    "start_date": "2026-04-15",
 }
 
 
 @pytest.fixture(autouse=True)
-def clock(monkeypatch):
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 3, 31))
+def inputs(monkeypatch):
+    monkeypatch.setattr(recurring, "today", lambda: date(2026, 4, 15))
+    monkeypatch.setattr(
+        recurring_market,
+        "instrument",
+        AsyncMock(return_value={"exchange": "GER", "currency": "EUR", "name": "SAP SE"}),
+    )
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(
+            return_value=Estimate(
+                date(2026, 4, 15), Decimal("100"), "EUR", Decimal(1), date(2026, 4, 15)
+            )
+        ),
+    )
 
 
-def create(client, **changes):
-    response = client.post(PATH, json=PLAN | changes)
+def create(client, **over):
+    response = client.post(PATH, json=PLAN | over)
     assert response.status_code == 201, response.text
     return response.json()
 
 
-def test_month_end_leap_year_and_year_rollover():
-    assert recurring.upcoming(date(2024, 1, 31), date(2024, 2, 1)) == [
-        date(2024, 2, 29),
-        date(2024, 3, 31),
-        date(2024, 4, 30),
-    ]
-    assert recurring.scheduled_on_or_after(date(2025, 12, 31), date(2026, 1, 1)) == date(
-        2026, 1, 31
-    )
-    assert recurring.scheduled_on_or_after(date(2026, 1, 30), date(2026, 3, 1)) == date(2026, 3, 30)
+def process(app_session_local):
+    with open_user_session(app_session_local, USER_ID) as db:
+        return asyncio.run(recurring.post_due(db, USER_ID))
 
 
-def test_preview_catch_up_and_no_holdings_until_confirmation(client_no_key, db_session):
-    client = client_no_key
-    preview = client.post(f"{PATH}/preview", json=PLAN).json()
-    assert preview == {
-        "catch_up_count": 3,
-        "upcoming_dates": ["2026-04-30", "2026-05-31", "2026-06-30"],
-    }
-    assert db_session.query(RecurringInvestment).count() == 0
-    plan = create(client)
-    assert plan["amount"] == 400
-    assert plan["next_date"] == "2026-04-30"
-    for _ in range(2):
-        entries = client.get(PATH).json()["occurrences"]
-        assert [e["scheduled_date"] for e in entries] == ["2026-03-31", "2026-02-28", "2026-01-31"]
-        assert all(e["status"] == "scheduled" and e["trade_id"] is None for e in entries)
-    assert db_session.query(Holding).count() == db_session.query(Trade).count() == 0
-    employer = create(client, name="Employer stock plan", ticker="SAP.DE", asset_type="STOCK")
-    assert employer["asset_type"] == "STOCK"
-    assert client.get(PATH).headers["cache-control"] == "no-store"
-
-
-def test_downtime_edit_pause_resume_and_end(client_no_key, monkeypatch):
-    client = client_no_key
-    plan = create(client)
-    pid = plan["id"]
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 6, 30))
-    # Editing catches up the old schedule and keeps its expected amounts.
-    changed = PLAN | {
-        "amount": 500,
-        "start_date": "2026-01-15",
-        "ticker": "SAP.DE",
-        "asset_type": "STOCK",
-    }
-    assert client.put(f"{PATH}/{pid}", json=changed).json()["next_date"] == "2026-07-15"
-    entries = client.get(PATH).json()["occurrences"]
-    assert len(entries) == 6
-    assert all(e["amount"] == 400 and e["ticker"] == "VWCE.DE" for e in entries)
-    assert client.patch(f"{PATH}/{pid}/status", json={"status": "paused"}).status_code == 200
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 9, 15))
-    resumed = client.patch(f"{PATH}/{pid}/status", json={"status": "active"}).json()
-    assert resumed["next_date"] == "2026-10-15"
-    assert len(client.get(PATH).json()["occurrences"]) == 6
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 10, 15))
-    assert client.patch(f"{PATH}/{pid}/status", json={"status": "ended"}).status_code == 200
-    monkeypatch.setattr(recurring, "today", lambda: date(2027, 1, 1))
-    data = client.get(PATH).json()
-    assert len(data["occurrences"]) == 7
-    assert data["occurrences"][0]["amount"] == 500
-    assert data["plans"][0]["next_date"] is None
-    assert client.patch(f"{PATH}/{pid}/status", json={"status": "active"}).status_code == 409
-    assert client.put(f"{PATH}/{pid}", json=PLAN).status_code == 409
-
-
-def test_reads_only_lock_when_an_active_plan_is_due(client_no_key, monkeypatch):
-    client = client_no_key
-    create(client, start_date="2026-04-30")
-    lock = Mock(wraps=recurring.lock_and_check_active)
-    monkeypatch.setattr(recurring, "lock_and_check_active", lock)
-    assert client.get(PATH).json()["occurrences"] == []
-    lock.assert_not_called()
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 4, 30))
-    entries = client.get(PATH).json()["occurrences"]
-    assert [entry["scheduled_date"] for entry in entries] == ["2026-04-30"]
-    lock.assert_called_once()
-    assert client.get(PATH).json()["occurrences"] == entries
-    lock.assert_called_once()
-
-
-def test_confirmation_accepts_a_local_date_one_day_ahead_of_utc(client_no_key):
-    client = client_no_key
-    create(client)
-    oid = client.get(PATH).json()["occurrences"][0]["id"]
-    response = client.post(
-        f"{PATH}/occurrences/{oid}/confirm",
-        json={"date": "2026-04-01", "shares": 2, "price": 100},
-    )
-    assert response.status_code == 200, response.text
-    assert response.json()["date"] == "2026-04-01"
-
-
-def test_skip_reopen_and_confirm_actual_details_once(client_no_key, db_session):
-    client = client_no_key
-    create(client)
-    oid = client.get(PATH).json()["occurrences"][0]["id"]
-    url = f"{PATH}/occurrences/{oid}"
-    assert client.patch(url, json={"status": "skipped"}).status_code == 200
-    actual = {"date": "2026-03-30", "shares": 2.5, "price": 101.25}
-    assert client.post(f"{url}/confirm", json=actual).status_code == 409
-    assert client.patch(url, json={"status": "scheduled"}).status_code == 200
-    first = client.post(f"{url}/confirm", json=actual)
-    assert first.status_code == 200, first.text
-    second = client.post(f"{url}/confirm", json=actual | {"shares": 99})
-    assert first.json() == second.json()
-    assert first.json()["shares"] == 2.5
+def test_no_position_until_job_then_post_once(client_no_key, db_session, app_session_local):
+    plan = create(client_no_key)
+    assert plan["tracking_enabled"]
+    assert client_no_key.get(PATH).headers["cache-control"] == "no-store"
+    assert db_session.query(Holding).count() == 0
+    assert process(app_session_local) == (1, 0)
+    assert process(app_session_local) == (0, 0)
     holding = db_session.query(Holding).one()
-    assert float(holding.shares) == 2.5
-    assert float(holding.cost_basis) == 101.25
-    assert holding.first_purchase_date == date(2026, 3, 30)
+    assert Decimal(str(holding.shares)) == Decimal(4)
+    assert Decimal(str(holding.cost_basis)) == Decimal(100)
+    trade = db_session.query(Trade).one()
+    assert trade.provenance == "recurring_estimated"
+    entry = client_no_key.get(PATH).json()["occurrences"][0]
+    assert entry["status"] == "posted" and entry["trade_id"] == trade.id
+    assert entry["quote_currency"] == "EUR" and Decimal(entry["shares"]) == 4
+
+
+def test_eur_usd_etf_uses_fractional_units(
+    client_no_key, db_session, app_session_local, monkeypatch
+):
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(
+            return_value=Estimate(
+                date(2026, 4, 15), Decimal("200"), "USD", Decimal("1.2"), date(2026, 4, 15)
+            )
+        ),
+    )
+    create(client_no_key, ticker="CNDX.L", asset_type="ETF", amount="300")
+    process(app_session_local)
+    assert db_session.query(Holding).one().shares == Decimal("1.8")
+    entry = client_no_key.get(PATH).json()["occurrences"][0]
+    assert Decimal(entry["amount"]) == 300 and Decimal(entry["fx_rate"]) == Decimal("1.2")
+
+
+def test_missing_inputs_retry_and_tiny_purchase_never_creates_empty_holding(
+    client_no_key, db_session, app_session_local, monkeypatch
+):
+    create(client_no_key)
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(side_effect=MarketUnavailable("Waiting for historical FX.")),
+    )
+    assert process(app_session_local) == (0, 1)
+    assert db_session.query(Trade).count() == db_session.query(Holding).count() == 0
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(
+            return_value=Estimate(
+                date(2026, 4, 15),
+                Decimal("1000000000"),
+                "EUR",
+                Decimal("0.000001"),
+                date(2026, 4, 15),
+            )
+        ),
+    )
+    assert process(app_session_local) == (0, 1)
+    assert db_session.query(Holding).count() == 0
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(
+            return_value=Estimate(
+                date(2026, 4, 15), Decimal(100), "EUR", Decimal(1), date(2026, 4, 15)
+            )
+        ),
+    )
+    assert process(app_session_local) == (1, 0)
     assert db_session.query(Trade).count() == 1
-    assert client.patch(url, json={"status": "skipped"}).status_code == 409
-    pid = client.get(PATH).json()["plans"][0]["id"]
-    assert client.put(f"{PATH}/{pid}", json=PLAN | {"amount": 999}).status_code == 200
-    saved = client.get(PATH).json()["occurrences"][0]
-    assert saved["status"] == "confirmed" and saved["amount"] == 400
-    assert saved["trade_id"] == first.json()["id"]
 
 
-def test_confirmation_uses_existing_basis_and_rolls_back_invalid_totals(client_no_key, db_session):
-    client = client_no_key
+def test_backfill_preview_requires_approval_and_refuses_overlap(client_no_key, db_session):
+    payload = PLAN | {"start_date": "2026-01-31"}
+    preview = client_no_key.post(f"{PATH}/preview", json=payload).json()
+    assert preview["catch_up_count"] == 3
+    assert preview["first_date"] == "2026-01-31" and preview["last_date"] == "2026-03-31"
+    assert client_no_key.post(PATH, json=payload).status_code == 422
+    created = client_no_key.post(PATH, json=payload | {"backfill": True})
+    assert created.status_code == 201
     db_session.add(
         Holding(
             user_id=USER_ID,
-            ticker="VWCE.DE",
-            name="ETF",
-            asset_type="ETF",
-            shares=10,
-            cost_basis=80,
+            ticker="SAP.DE",
+            name="SAP",
+            asset_type="STOCK",
+            shares=2,
+            cost_basis=50,
         )
     )
     db_session.commit()
-    create(client)
-    oid = client.get(PATH).json()["occurrences"][0]["id"]
-    url = f"{PATH}/occurrences/{oid}/confirm"
-    assert (
-        client.post(url, json={"date": "2026-04-02", "shares": 2, "price": 100}).status_code == 422
-    )
-    assert (
-        client.post(url, json={"date": "2026-03-31", "shares": 1e14, "price": 100}).status_code
-        == 422
-    )
-    db_session.expire_all()
-    assert float(db_session.query(Holding).one().shares) == 10
-    assert db_session.query(Trade).count() == 0
-    assert (
-        client.post(url, json={"date": "2026-03-31", "shares": 2, "price": 110}).status_code == 200
-    )
-    db_session.expire_all()
-    assert float(db_session.query(Holding).one().cost_basis) == 85
+    assert client_no_key.post(f"{PATH}/preview", json=payload).json()["conflict"]
+    assert client_no_key.post(PATH, json=payload | {"backfill": True}).status_code == 409
+    assert db_session.query(Holding).one().shares == 2
 
 
-def test_owner_scoped_routes_export_and_delete(client_no_key, db_session):
-    client = client_no_key
-    plan = create(client)
-    entry = client.get(PATH).json()["occurrences"][0]
-    add_app_user(db_session, OTHER_USER_ID)
-    headers = auth_headers(OTHER_USER_ID)
-    assert client.get(PATH, headers=headers).json() == {"plans": [], "occurrences": []}
-    assert client.put(f"{PATH}/{plan['id']}", headers=headers, json=PLAN).status_code == 404
-    assert (
-        client.patch(
-            f"{PATH}/{plan['id']}/status", headers=headers, json={"status": "ended"}
-        ).status_code
-        == 404
-    )
-    assert (
-        client.patch(
-            f"{PATH}/occurrences/{entry['id']}", headers=headers, json={"status": "skipped"}
-        ).status_code
-        == 404
-    )
-    assert (
-        client.post(
-            f"{PATH}/occurrences/{entry['id']}/confirm",
-            headers=headers,
-            json={"date": "2026-03-31", "shares": 1, "price": 400},
-        ).status_code
-        == 404
-    )
-    exported = client.get("/me/export").json()
-    assert len(exported["recurring_investments"]) == 1
-    assert len(exported["recurring_occurrences"]) == 3
-    other = client.post(
-        PATH, headers=headers, json=PLAN | {"name": "Other owner", "ticker": "SAP.DE"}
-    )
-    assert other.status_code == 201
-    assert client.request("DELETE", "/me/data", json={"confirm": True}).status_code == 204
-    assert [p.user_id for p in db_session.query(RecurringInvestment)] == [OTHER_USER_ID]
-    assert all(o.user_id == OTHER_USER_ID for o in db_session.query(RecurringOccurrence))
-
-
-def test_concurrent_catch_up_and_confirmation(client_no_key, app_session_local, monkeypatch):
-    create(client_no_key)
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 5, 31))
-    barrier = Barrier(2)
-
-    def catch_up(_):
-        with open_user_session(app_session_local, USER_ID) as db:
-            barrier.wait(timeout=10)
-            recurring.process_due(db, USER_ID)
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        list(pool.map(catch_up, range(2)))
-    data = client_no_key.get(PATH).json()
-    assert len(data["occurrences"]) == 5
-    oid = data["occurrences"][0]["id"]
-    barrier = Barrier(2)
-
-    def confirm(_):
-        with open_user_session(app_session_local, USER_ID) as db:
-            barrier.wait(timeout=10)
-            return recurring.confirm(
-                db, USER_ID, oid, PlaceIn(date=date(2026, 5, 31), shares=2, price=200)
-            ).id
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        ids = list(pool.map(confirm, range(2)))
-    assert ids[0] == ids[1]
-    with open_user_session(app_session_local, USER_ID) as db:
-        assert db.query(Trade).count() == 1
-        assert float(db.query(Holding).one().shares) == 2
-
-
-def test_database_uniqueness_constraint(client_no_key, db_session):
+def test_lifecycle_edits_future_only_and_multiple_plans(
+    client_no_key, app_session_local, monkeypatch
+):
     plan = create(client_no_key)
+    create(client_no_key, amount="300")  # independent plan for the same instrument
+    process(app_session_local)
+    old = client_no_key.get(PATH).json()["occurrences"]
+    assert len(old) == 2
+    edit = client_no_key.put(f"{PATH}/{plan['id']}", json=PLAN | {"amount": "500"})
+    assert edit.status_code == 200
+    assert edit.json()["next_date"] == "2026-05-15"
+    assert (
+        client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": "paused"}).status_code
+        == 200
+    )
+    monkeypatch.setattr(recurring, "today", lambda: date(2026, 7, 15))
+    resumed = client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": "active"})
+    assert resumed.json()["next_date"] == "2026-08-15"
+    assert (
+        client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": "ended"}).status_code
+        == 200
+    )
+    assert (
+        client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": "active"}).status_code
+        == 409
+    )
+    assert client_no_key.get(PATH).json()["occurrences"] == old
+
+
+def test_corrections_voids_and_manual_trades_survive_retries(
+    client_no_key, db_session, app_session_local
+):
+    create(client_no_key)
+    process(app_session_local)
+    entry = client_no_key.get(PATH).json()["occurrences"][0]
+    url = f"{PATH}/occurrences/{entry['id']}/estimate"
+    corrected = client_no_key.put(url, json={"date": "2026-04-15", "shares": 3, "price": 120})
+    assert corrected.status_code == 200, corrected.text
+    assert corrected.json()["status"] == "reconciled"
+    assert (
+        client_no_key.post(
+            "/portfolio/trades",
+            json={
+                "ticker": "SAP.DE",
+                "date": "2026-04-15",
+                "action": "BUY",
+                "shares": 2,
+                "price": 80,
+            },
+        ).status_code
+        == 200
+    )
+    voided = client_no_key.delete(url)
+    assert voided.status_code == 200, voided.text
+    db_session.expire_all()
+    holding = db_session.query(Holding).one()
+    assert holding.shares == 2 and holding.cost_basis == 80
+    process(app_session_local)
+    assert db_session.query(Trade).count() == 2
+    assert db_session.query(Trade).filter_by(provenance="voided").count() == 1
+    exported = client_no_key.get("/me/export").json()
+    assert any(t["provenance"] == "voided" for t in exported["trades"])
+    assert (
+        client_no_key.patch(
+            f"{PATH}/occurrences/{entry['id']}", json={"status": "scheduled"}
+        ).status_code
+        == 409
+    )
+
+
+def test_correction_refuses_overselling_or_overwritten_position(
+    client_no_key, db_session, app_session_local
+):
+    create(client_no_key)
+    process(app_session_local)
+    entry = client_no_key.get(PATH).json()["occurrences"][0]
+    client_no_key.post(
+        "/portfolio/trades",
+        json={
+            "ticker": "SAP.DE",
+            "date": "2026-04-15",
+            "action": "SELL",
+            "shares": 3,
+            "price": 110,
+        },
+    )
+    url = f"{PATH}/occurrences/{entry['id']}/estimate"
+    assert client_no_key.delete(url).status_code == 422
+    db_session.expire_all()
+    assert db_session.query(Holding).one().shares == 1
+    assert db_session.query(RecurringOccurrence).one().status == "posted"
+
+
+def test_ownership_isolation_and_index_refusal(client_no_key, db_session, monkeypatch):
+    plan = create(client_no_key)
+    add_app_user(db_session, OTHER_USER_ID)
+    client_no_key.headers.update(auth_headers(OTHER_USER_ID))
+    assert client_no_key.get(PATH).json() == {"plans": [], "occurrences": []}
+    assert client_no_key.put(f"{PATH}/{plan['id']}", json=PLAN).status_code == 404
+    assert (
+        client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": "ended"}).status_code
+        == 404
+    )
+    client_no_key.headers.update(auth_headers(USER_ID))
+    monkeypatch.setattr(
+        recurring_market,
+        "instrument",
+        AsyncMock(side_effect=MarketUnavailable("Choose a stock or ETF listing.")),
+    )
+    assert client_no_key.post(PATH, json=PLAN | {"ticker": "^NDX"}).status_code == 422
+
+
+def test_legacy_records_remain_disabled_until_review(client_no_key, db_session):
+    row = RecurringInvestment(
+        user_id=USER_ID,
+        name="Legacy",
+        ticker="SAP.DE",
+        asset_type="STOCK",
+        source="Preserved source",
+        amount=400,
+        currency="RUB",
+        start_date=date(2026, 1, 1),
+        next_date=date(2026, 5, 1),
+        status="active",
+        tracking_enabled=False,
+    )
+    db_session.add(row)
+    db_session.flush()
     db_session.add(
         RecurringOccurrence(
             user_id=USER_ID,
-            plan_id=plan["id"],
-            scheduled_date=date(2026, 1, 31),
-            ticker="VWCE.DE",
-            asset_type="ETF",
+            plan_id=row.id,
+            scheduled_date=date(2026, 4, 1),
+            ticker="SAP.DE",
+            asset_type="STOCK",
             amount=400,
             currency="EUR",
+            status="scheduled",
         )
     )
-    with pytest.raises(IntegrityError):
-        db_session.commit()
-    db_session.rollback()
+    db_session.commit()
+    # Old plans accepted arbitrary three-letter labels; stricter writes must not break their export.
+    assert client_no_key.get(PATH).status_code == 200
+    assert client_no_key.get("/me/export").status_code == 200
+    response = client_no_key.put(f"{PATH}/{row.id}", json=PLAN)
+    assert response.status_code == 200, response.text
+    assert response.json()["tracking_enabled"]
+    db_session.expire_all()
+    assert db_session.query(RecurringInvestment).one().source == "Preserved source"
+    assert db_session.query(RecurringOccurrence).one().status == "skipped"
+    assert db_session.query(Trade).count() == 0
 
 
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"amount": 0},
-        {"amount": 0.001},
-        {"amount": "NaN"},
-        {"currency": "eur"},
-        {"ticker": "../bad"},
-        {"frequency": "daily"},
-        {"name": " "},
-        {"start_date": "1900-01-01"},
-    ],
-)
-def test_invalid_plan_input(client_no_key, changes):
-    assert client_no_key.post(PATH, json=PLAN | changes).status_code == 422
-
-
-def test_scheduled_command_catches_up_without_market_data_or_ai(
-    db_session, monkeypatch, app_session_local
+def test_correction_preserves_a_manually_edited_purchase_date(
+    client_no_key, db_session, app_session_local
 ):
-    add_app_user(db_session, USER_ID)
-    monkeypatch.setattr("app.db.SessionLocal", app_session_local)
+    create(client_no_key)
+    process(app_session_local)
+    holding = db_session.query(Holding).one()
+    holding.first_purchase_date = date(2026, 4, 1)
+    db_session.commit()
+    occurrence = client_no_key.get(PATH).json()["occurrences"][0]
+    response = client_no_key.put(
+        f"{PATH}/occurrences/{occurrence['id']}/estimate",
+        json={"date": "2026-04-15", "shares": 4, "price": 100},
+    )
+    assert response.status_code == 409
+    db_session.expire_all()
+    assert db_session.query(Holding).one().first_purchase_date == date(2026, 4, 1)
+
+
+def test_concurrent_workers_post_once(client_no_key, db_session, app_session_local):
+    create(client_no_key)
+    barrier = Barrier(2)
+
+    def run():
+        barrier.wait()
+        return process(app_session_local)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: run(), range(2)))
+    assert sum(posted for posted, _ in results) == 1
+    db_session.expire_all()
+    assert db_session.query(Trade).count() == 1
+    assert db_session.query(Holding).one().shares == 4
+
+
+def test_correction_replays_database_rounding_after_every_purchase(
+    client_no_key, db_session, app_session_local, monkeypatch
+):
+    plan = create(
+        client_no_key, start_date="2026-01-15", amount="100", currency="USD", backfill=True
+    )
     with open_user_session(app_session_local, USER_ID) as db:
-        recurring.save(db, USER_ID, RecurringIn.model_validate(PLAN))
-    monkeypatch.setattr(recurring, "today", lambda: date(2026, 7, 31))
-    assert asyncio.run(scheduled.run_command("recurring")) == 0
-    assert db_session.query(RecurringOccurrence).count() == 7
+        rows = (
+            db.query(RecurringOccurrence)
+            .filter_by(plan_id=plan["id"])
+            .order_by(RecurringOccurrence.scheduled_date)
+            .all()
+        )
+        rows[3].status = "skipped"
+        db.commit()
+    values = {
+        date(2026, 1, 15): (Decimal("0.18"), Decimal("93.26")),
+        date(2026, 2, 15): (Decimal("0.98"), Decimal("10.34")),
+        date(2026, 3, 15): (Decimal("0.33"), Decimal("19.32")),
+    }
+
+    async def quote(ticker, asset_type, scheduled, currency, earliest):
+        shares, price = values[scheduled]
+        return Estimate(scheduled, price, "EUR", shares * price / 100, scheduled)
+
+    monkeypatch.setattr(recurring_market, "estimate", quote)
+    process(app_session_local)
+    db_session.expire_all()
+    assert db_session.query(Holding).one().cost_basis == Decimal("22.346041")
+    entries = client_no_key.get(PATH).json()["occurrences"]
+    posted = [e for e in entries if e["status"] == "posted"]
+    last = posted[0]
+    response = client_no_key.put(
+        f"{PATH}/occurrences/{last['id']}/estimate",
+        json={
+            "date": last["trade_date"],
+            "shares": float(last["shares"]),
+            "price": float(last["price"]),
+        },
+    )
+    assert response.status_code == 200, response.text

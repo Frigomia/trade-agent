@@ -36,27 +36,32 @@ def list_recurring(
 
 
 @router.post("/preview", response_model=RecurringPreviewOut)
-def preview(payload: RecurringIn, editing: bool = False) -> RecurringPreviewOut:
-    return recurring.preview(payload, editing=editing)
+def preview(
+    payload: RecurringIn,
+    editing: bool = False,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> RecurringPreviewOut:
+    return recurring.preview(payload, editing=editing, db=db, user_id=user.id)
 
 
 @router.post("", response_model=RecurringOut, status_code=201)
-def create(
+async def create(
     payload: RecurringIn,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> RecurringOut:
-    return recurring.save(db, user.id, payload)
+    return await recurring.validated_save(db, user.id, payload)
 
 
 @router.put("/{plan_id}", response_model=RecurringOut)
-def edit(
+async def edit(
     plan_id: int,
     payload: RecurringIn,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_user_db),
 ) -> RecurringOut:
-    return recurring.save(db, user.id, payload, plan_id)
+    return await recurring.validated_save(db, user.id, payload, plan_id)
 
 
 @router.patch("/{plan_id}/status", response_model=RecurringOut)
@@ -87,3 +92,22 @@ def confirm(
     db: Session = Depends(get_user_db),
 ) -> Trade:
     return recurring.confirm(db, user.id, occurrence_id, payload)
+
+
+@router.put("/occurrences/{occurrence_id}/estimate", response_model=OccurrenceOut)
+def correct(
+    occurrence_id: int,
+    payload: PlaceIn,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> OccurrenceOut:
+    return recurring.correct_estimate(db, user.id, occurrence_id, payload)
+
+
+@router.delete("/occurrences/{occurrence_id}/estimate", response_model=OccurrenceOut)
+def void(
+    occurrence_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> OccurrenceOut:
+    return recurring.correct_estimate(db, user.id, occurrence_id, None)
