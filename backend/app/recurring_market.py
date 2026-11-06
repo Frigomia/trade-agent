@@ -110,9 +110,8 @@ async def historical_fx(contribution: str, quote: str, day: date) -> tuple[Decim
             rate_from_price(c, 1 if minor_unit(c)[0] == "EUR" else h.get(candidate))
             for c, h in zip(currencies, histories, strict=True)
         ]
-        if all(r is not None for r in rates):
-            source, target = rates
-            assert source is not None and target is not None
+        source, target = rates
+        if source is not None and target is not None:
             return source / target, fx_day
     raise MarketUnavailable(
         "Waiting for historical FX (no common published rate within seven days)."

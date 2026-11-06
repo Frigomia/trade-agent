@@ -561,7 +561,10 @@ def correct_estimate(
 
         def replay() -> Holding:
             initial = anchor.position_before
-            assert initial is not None
+            if initial is None:
+                raise RecurringRefused(
+                    "The original holding is missing; reconcile the position manually."
+                )
             position = Holding(
                 shares=float(initial["shares"]),
                 cost_basis=initial["basis"],
