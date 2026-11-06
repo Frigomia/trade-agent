@@ -22,6 +22,7 @@ export interface HoldingFormProps {
   holding?: HoldingSummary; // edit mode when set
   heldTickers: string[];
   prefillTicker?: string;
+  prefillAssetType?: AssetType;
   onSaved: () => void;
 }
 
@@ -37,7 +38,7 @@ export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
     <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : close} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-label": mode === "recurring" ? "Recurring investment" : undefined, "aria-labelledby": mode === "once" ? "holding-form-title" : undefined, "aria-busy": busy } }}>
       {!rest.holding && <Box sx={{ px: 3, pt: 2 }}><SegmentedControl label="Holding type" segments={[{ key: "once", label: "One-time" }, { key: "recurring", label: "Recurring" }]} value={mode} onChange={busy ? undefined : setMode} fill /></Box>}
       {mode === "recurring" && !rest.holding ? <Box sx={{ width: { xs: "auto", md: 400 }, p: 3 }}>
-        <RecurringPlanForm prefill={rest.prefillTicker ? { ticker: rest.prefillTicker } : undefined} onSaved={rest.onSaved} onClose={close} onBusyChange={setBusy} />
+        <RecurringPlanForm prefill={rest.prefillTicker ? { ticker: rest.prefillTicker, asset_type: rest.prefillAssetType } : undefined} onSaved={rest.onSaved} onClose={close} onBusyChange={setBusy} />
       </Box> : <HoldingFormBody onClose={close} onBusyChange={setBusy} {...rest} />}
     </Drawer>
   );

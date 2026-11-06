@@ -19,7 +19,7 @@ test.afterAll(async () => {
   }
 });
 
-async function prepare(page: Page) {
+async function prepare(page: Page, heldEtf = false) {
   await page.clock.setFixedTime(new Date("2026-11-06T12:00:00+01:00"));
   const calls: { path: string; method: string; body: Record<string, unknown> }[] = [];
   const plans: Record<string, unknown>[] = [{
@@ -59,7 +59,10 @@ async function prepare(page: Page) {
         ? [{ symbol: "SAP.DE", name: "SAP SE", type: "STOCK", exchange: "GER" }]
         : [{ symbol: "CNDX.L", name: "iShares NASDAQ-100 UCITS ETF USD Accumulating Long Instrument Name", type: "ETF", exchange: "LSE" }];
     } else if (url.pathname === "/plans/orders/open") result = { open_lines: 0, plans: [] };
-    else if (url.pathname === "/portfolio/summary") result = {};
+    else if (url.pathname === "/portfolio/summary") result = {
+      holdings: heldEtf ? [{ ticker: "CNDX.L", name: "iShares NASDAQ-100 UCITS ETF", asset_type: "ETF" }] : [],
+      watchlist: [], total_market_value: 0, total_cost_basis: 0, total_pl: 0, total_pl_pct: null, unpriced_count: 0,
+    };
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(result),
       headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS" } });
   });
@@ -186,3 +189,21 @@ test("one-time holding keeps the existing manual endpoint", async ({ page }) => 
     .toMatchObject({ ticker: "SAP.DE", shares: 2, asset_type: "STOCK" });
   expect(calls.some((c) => c.path === "/portfolio/recurring" && c.method === "POST")).toBe(false);
 });
+
+for (const heldEtf of [false, true]) {
+  test(`ETF recommendation keeps its type in recurring ${heldEtf ? "trade" : "holding"} flow`, async ({ page }) => {
+    const calls = await prepare(page, heldEtf);
+    await page.getByRole("button", { name: "Log the trade I placed", exact: true }).click();
+    await page.getByRole("button", { name: "Recurring", exact: true }).click();
+    await expect(page.getByLabel("Stock / ETF")).toHaveValue("CNDX.L");
+    await page.getByLabel("Contribution amount").fill("300.00");
+    await page.getByLabel("Start / anchor date").fill("2027-01-15");
+    await page.getByRole("button", { name: "Preview schedule" }).click();
+    await page.getByRole("button", { name: "Save recurring plan" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("alert").filter({ hasText: "Saved to your portfolio." })).toBeVisible();
+    expect(calls.find((c) => c.path === "/portfolio/recurring" && c.method === "POST")?.body)
+      .toMatchObject({ ticker: "CNDX.L", asset_type: "ETF", amount: "300.00" });
+    expect(calls.some((c) => ["/portfolio/holdings", "/portfolio/trades"].includes(c.path) && c.method === "POST")).toBe(false);
+  });
+}
