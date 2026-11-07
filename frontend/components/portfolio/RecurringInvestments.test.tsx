@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import type { RecurringData } from "@/lib/api/recurring-types";
@@ -11,7 +11,7 @@ vi.mock("@/components/ui/TickerPicker", () => ({
 }));
 import { HoldingForm } from "./HoldingForm";
 import { TradeSheet } from "./TradeSheet";
-import { RecurringInvestments } from "./RecurringInvestments";
+import { RecurringInvestments, RecurringPlanForm } from "./RecurringInvestments";
 
 const data: RecurringData = {
   plans: [{ id: 1, name: "SAP SE", ticker: "SAP.DE", asset_type: "STOCK", amount: "400.00",
@@ -32,6 +32,7 @@ beforeEach(() => {
     return {};
   });
 });
+afterEach(() => vi.useRealTimers());
 
 describe("Integrated recurring estimates", () => {
   it("creates an ETF plan from Add Holding through the shared search without making a holding", async () => {
@@ -100,5 +101,42 @@ describe("Integrated recurring estimates", () => {
     await screen.findByText(/Saved legacy plan/);
     expect(screen.queryByRole("button", { name: "Pause" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("records an actual purchase for a legacy pending entry", async () => {
+    apiFetch.mockImplementation(async (_path: string, init?: RequestInit) => init ? {} : {
+      plans: [{ ...data.plans[0], tracking_enabled: false }],
+      occurrences: [{ ...data.occurrences[0], status: "scheduled", trade_id: null, shares: null, price: null }],
+    });
+    wrap(<RecurringInvestments />);
+    fireEvent.click(screen.getByRole("button", { name: "Manage recurring plans" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Record actual purchase" }));
+    expect(screen.queryByRole("button", { name: "Void estimate" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Shares/), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText(/^Price/), { target: { value: "125" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save actual details" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring/occurrences/7/confirm",
+      expect.objectContaining({ method: "POST" })));
+  });
+
+  it("uses Berlin for the default date and the server preview for historical approval", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-06T22:30:00Z"));
+    apiFetch.mockResolvedValue({ upcoming_dates: ["2026-08-06"], catch_up_count: 1,
+      first_date: "2026-07-06", last_date: "2026-07-06" });
+    wrap(<RecurringPlanForm prefill={{ ticker: "SAP.DE" }} onSaved={vi.fn()} onClose={vi.fn()} onBusyChange={vi.fn()} />);
+    expect(screen.getByLabelText(/^Start \/ anchor date/)).toHaveValue("2026-07-07");
+    fireEvent.change(screen.getByLabelText(/^Start \/ anchor date/), { target: { value: "2026-07-06" } });
+    fireEvent.change(screen.getByLabelText(/^Contribution amount/), { target: { value: "300" } });
+    fireEvent.click(screen.getByRole("button", { name: "Preview schedule" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save recurring plan" }));
+    expect(screen.getByLabelText("Add these historical estimates to my portfolio")).toBeInTheDocument();
+    await screen.findByText("Approve the previewed historical estimates before saving.");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save recurring plan" })).toBeEnabled());
+    expect(apiFetch.mock.calls.some(([path]) => path === "/portfolio/recurring")).toBe(false);
+    fireEvent.click(screen.getByLabelText("Add these historical estimates to my portfolio"));
+    fireEvent.click(screen.getByRole("button", { name: "Save recurring plan" }));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/portfolio/recurring",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"backfill":true') })));
   });
 });

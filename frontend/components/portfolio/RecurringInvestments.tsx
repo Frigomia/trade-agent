@@ -7,7 +7,7 @@ import { apiFetch } from "@/lib/api/client";
 import type { RecurringData, RecurringInput, RecurringOccurrence, RecurringPlan, RecurringPreview } from "@/lib/api/recurring-types";
 import type { AssetType } from "@/lib/api/portfolio-types";
 import type { SymbolMatch } from "@/lib/tickerSearch";
-import { formatAmount, todayIso } from "@/lib/format";
+import { formatAmount } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 import { TickerPicker } from "@/components/ui/TickerPicker";
 import { Panel } from "@/components/ui/Panel";
@@ -36,21 +36,23 @@ export function RecurringPlanForm({ plan, prefill, onSaved, onClose, onBusyChang
   const [frequency, setFrequency] = useState<RecurringInput["frequency"]>(plan?.frequency ?? "monthly");
   const [count, setCount] = useState(String(plan?.interval_count ?? 1));
   const [unit, setUnit] = useState<"days" | "weeks" | "months">(plan?.interval_unit ?? "months");
-  const [start, setStart] = useState(plan?.start_date ?? todayIso);
+  const [start, setStart] = useState(() => plan?.start_date ?? new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date()));
   const [end, setEnd] = useState(plan?.end_date ?? "");
   const [approveBackfill, setApproveBackfill] = useState(false);
   const [preview, setPreview] = useState<{ key: string; data: RecurringPreview } | null>(null);
   const { mutate } = useSWRConfig();
   const { run, error, submitting, setError } = useAction(onBusyChange);
   const payload: RecurringInput = {
-    ticker, name: plan?.name ?? picked?.name ?? prefill?.name ?? ticker,
+    ticker, name: plan?.name ?? picked?.name ?? prefill?.name ?? ticker, source: plan?.source,
     asset_type: plan?.asset_type ?? picked?.type ?? prefill?.asset_type ?? "STOCK",
     amount, currency, frequency, interval_count: Number(count), interval_unit: unit,
     start_date: start, end_date: end || null,
   };
   const key = JSON.stringify(payload);
   const current = preview?.key === key ? preview.data : null;
-  const historical = !plan && start < todayIso();
+  const historical = !plan && (current?.catch_up_count ?? 0) > 0;
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!plan && !prefill?.ticker && (!picked || picked.symbol !== ticker)) {
@@ -100,6 +102,7 @@ export function RecurringPlanForm({ plan, prefill, onSaved, onClose, onBusyChang
     <Typography sx={{ fontSize: "0.8125rem" }}>{amount || "0"} {currency} into {payload.name || "your selected instrument"} {schedule}. LTH will automatically add estimated purchases to your portfolio.</Typography>
     <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{DISCLAIMER} Fractional units are estimated to six decimals; fees are excluded.</Typography>
     {plan && <Typography sx={{ fontSize: "0.8125rem" }}>Edits apply after today. Existing history stays intact.</Typography>}
+    {plan && !plan.tracking_enabled && <Alert severity="warning">Saving enables future estimates and skips unconfirmed legacy entries. Record past purchases before saving.</Alert>}
     {current && <Alert severity={current.conflict ? "warning" : "info"}>
       Next dates: {current.upcoming_dates.join(", ") || "None before the end date"}.
       {historical && ` ${current.catch_up_count} historical estimates, ${current.first_date} to ${current.last_date}.`}
@@ -113,26 +116,27 @@ export function RecurringPlanForm({ plan, prefill, onSaved, onClose, onBusyChang
 }
 
 function CorrectionForm({ item, onDone, onBusyChange }: { item: RecurringOccurrence; onDone: () => void; onBusyChange: (busy: boolean) => void }) {
+  const legacy = item.status === "scheduled";
   const [shares, setShares] = useState(item.shares ?? "");
   const [price, setPrice] = useState(item.price ?? "");
   const [date, setDate] = useState(item.trade_date ?? item.effective_date ?? item.scheduled_date);
   const [voiding, setVoiding] = useState(false);
   const { run, submitting, error } = useAction(onBusyChange);
   const save = () => run(async () => {
-    await apiFetch(`${RECURRING_PATH}/occurrences/${item.id}/estimate`, { method: "PUT", body: JSON.stringify({ date, shares: Number(shares), price: Number(price) }) }); onDone();
+    await apiFetch(`${RECURRING_PATH}/occurrences/${item.id}/${legacy ? "confirm" : "estimate"}`, { method: legacy ? "POST" : "PUT", body: JSON.stringify({ date, shares: Number(shares), price: Number(price) }) }); onDone();
   });
   return <Box component="form" onSubmit={(e) => { e.preventDefault(); void save(); }} sx={{ display: "grid", gap: 2 }}>
-    <Typography variant="h6">Correct estimate · {item.ticker}</Typography>
-    <Typography>Enter actual details to reconcile this purchase. Corrections stay unchanged on future runs.</Typography>
+    <Typography variant="h6">{legacy ? "Record actual purchase" : "Correct estimate"} · {item.ticker}</Typography>
+    <Typography>{legacy ? "Enter details of a purchase that already happened." : "Enter actual details to reconcile this purchase. Corrections stay unchanged on future runs."}</Typography>
     <TextField label="Shares" required type="number" value={shares} onChange={(e) => setShares(e.target.value)} slotProps={{ htmlInput: { min: 0.000001, step: "any" } }} />
     <TextField label={`Price (${item.quote_currency ?? "quote unit"})`} required type="number" value={price} onChange={(e) => setPrice(e.target.value)} slotProps={{ htmlInput: { min: 0.000001, step: "any" } }} />
     <TextField label="Purchase date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
     {error && <Alert severity="error">{error}</Alert>}
     <Button variant="contained" type="submit" disabled={submitting}>Save actual details</Button>
-    {voiding ? <>
+    {!legacy && (voiding ? <>
       <Typography>Remove this estimate from your position? Its audit record will remain and the job will never recreate it.</Typography>
       <Button color="error" disabled={submitting} onClick={() => void run(async () => { await apiFetch(`${RECURRING_PATH}/occurrences/${item.id}/estimate`, { method: "DELETE" }); onDone(); })}>Confirm void estimate</Button>
-    </> : <Button disabled={submitting} onClick={() => setVoiding(true)}>Void estimate</Button>}
+    </> : <Button disabled={submitting} onClick={() => setVoiding(true)}>Void estimate</Button>)}
     <Button disabled={submitting} onClick={onDone}>Back to plans</Button>
   </Box>;
 }
@@ -166,6 +170,7 @@ export function RecurringInvestments({ ticker, onChanged }: { ticker?: string; o
         : <>
           <Typography component="h2" variant="h6">Recurring plans{ticker ? ` · ${ticker}` : ""}</Typography>
           <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{DISCLAIMER}</Typography>
+          {(data?.occurrences.length ?? 0) >= 500 && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>Showing the latest 500 entries. Export your data for the full history.</Typography>}
           {error && <Alert severity="error">Could not load recurring plans.</Alert>}
           {data && plans.length === 0 && <Typography>No recurring plans. Create one from Add holding or Log a trade.</Typography>}
           {plans.map((p) => <Panel key={p.id} sx={{ p: 2, display: "grid", gap: 1, overflowWrap: "anywhere" }}>
@@ -179,16 +184,18 @@ export function RecurringInvestments({ ticker, onChanged }: { ticker?: string; o
               <Button disabled={submitting} onClick={() => setEnding(p.id)}>Stop</Button>
             </Box>}
             {ending === p.id && <>
-              <Typography>Stop future estimates? Posted purchases and holdings stay intact.</Typography>
+              <Typography>Stop future estimates? Purchases already due will still be processed. Posted purchases and holdings stay intact.</Typography>
               <Button disabled={submitting} onClick={() => void change(p.id, "ended")}>Confirm stop</Button>
               <Button disabled={submitting} onClick={() => setEnding(null)}>Keep plan</Button>
             </>}
             {(data?.occurrences ?? []).filter((o) => o.plan_id === p.id).map((o) => <Box key={o.id} sx={{ py: 1, borderTop: "1px solid var(--line)" }}>
-              <Typography sx={{ fontSize: "0.8125rem" }}>{o.scheduled_date} · {o.status === "posted" ? "Estimated" : o.status === "scheduled" ? "Pending estimate" : o.status} · {formatAmount(Number(o.amount))} {o.currency}</Typography>
-              {o.shares && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{o.shares} units · {o.price} {o.quote_currency} · {o.trade_date}. {o.status === "posted" ? "Estimated purchase" : "Recorded purchase"} · Plan #{p.id}</Typography>}
+              <Typography sx={{ fontSize: "0.8125rem" }}>{o.scheduled_date} · {o.status === "posted" ? "Estimated" : o.status === "scheduled" ? p.tracking_enabled ? "Pending estimate" : "Awaiting purchase details" : o.status} · {formatAmount(Number(o.amount))} {o.currency}</Typography>
+              {o.shares && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{o.shares} units · {o.price} {o.quote_currency} · {o.trade_date}. {o.status === "posted" ? "Estimated purchase" : o.status === "voided" ? "Voided estimate (excluded from position)" : "Recorded purchase"} · Plan #{p.id}</Typography>}
               {o.reference_price && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)" }}>{o.pricing_source}. Reference {o.reference_price} {o.quote_currency} on {o.effective_date}; FX {o.fx_rate} on {o.fx_date}.</Typography>}
               {o.error && <Typography role="status" sx={{ fontSize: "0.75rem", color: "var(--warn)" }}>{o.error}</Typography>}
               {(o.status === "posted" || o.status === "reconciled") && <Button size="small" sx={{ minHeight: { xs: 44, md: 36 } }} onClick={() => setCorrecting(o)}>Correct estimate</Button>}
+              {!p.tracking_enabled && o.status === "scheduled" && <Button size="small" onClick={() => setCorrecting(o)}>Record actual purchase</Button>}
+              {!p.tracking_enabled && o.status === "skipped" && <Button size="small" disabled={submitting} onClick={() => void run(async () => { await apiFetch(`${RECURRING_PATH}/occurrences/${o.id}`, { method: "PATCH", body: JSON.stringify({ status: "scheduled" }) }); await refresh(); })}>Reopen purchase</Button>}
               {o.status === "scheduled" && <Button size="small" sx={{ minHeight: { xs: 44, md: 36 } }} disabled={submitting} onClick={() => void run(async () => { await apiFetch(`${RECURRING_PATH}/occurrences/${o.id}`, { method: "PATCH", body: JSON.stringify({ status: "skipped" }) }); await refresh(); })}>Skip estimate</Button>}
             </Box>)}
           </Panel>)}

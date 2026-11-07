@@ -1,6 +1,6 @@
 """Closed-session estimation inputs. Never a live quote or a broker fill."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -41,8 +41,8 @@ class MarketUnavailable(Exception):
 
 
 async def instrument(ticker: str, asset_type: str) -> dict[str, str]:
-    def read() -> dict[str, str]:
-        info = yf.Ticker(ticker).info
+    try:
+        info = await _retry_fetch(lambda: yf.Ticker(ticker).info)
         expected = "ETF" if asset_type == "ETF" else "EQUITY"
         if info.get("quoteType") != expected or info.get("exchange") not in EXCHANGES:
             raise MarketUnavailable("Choose a stock or ETF listing on a supported exchange.")
@@ -55,8 +55,6 @@ async def instrument(ticker: str, asset_type: str) -> dict[str, str]:
             "name": str(info.get("shortName") or info.get("longName") or ticker)[:200],
         }
 
-    try:
-        return await _retry_fetch(read)
     except MarketUnavailable:
         raise
     except Exception:
@@ -80,7 +78,9 @@ def effective_session(exchange: str, scheduled: date, now: datetime) -> date:
     return session.date()  # type: ignore[no-any-return]
 
 
-async def historical_fx(contribution: str, quote: str, day: date) -> tuple[Decimal, date]:
+async def historical_fx(
+    contribution: str, quote: str, day: date, batch: "MarketBatch | None" = None
+) -> tuple[Decimal, date]:
     source_major, source_unit = minor_unit(contribution)
     target_major, target_unit = minor_unit(quote)
     if source_major == target_major:
@@ -95,9 +95,17 @@ async def historical_fx(contribution: str, quote: str, day: date) -> tuple[Decim
         symbol = rate_symbol(currency)
         if symbol is None:
             raise MarketUnavailable("Historical FX is not supported for this currency.")
-        histories.append(
-            await fetch_closes_between(symbol, day - timedelta(days=7), day + timedelta(days=1))
-        )
+        if batch is None:
+            history = await fetch_closes_between(
+                symbol, day - timedelta(days=7), day + timedelta(days=1)
+            )
+        else:
+            if symbol not in batch.fx:
+                batch.fx[symbol] = await fetch_closes_between(
+                    symbol, batch.start - timedelta(days=7), batch.now.date() + timedelta(days=1)
+                )
+            history = batch.fx[symbol]
+        histories.append(history)
     candidates = {day.isoformat()}
     for history in histories:
         if history:
@@ -127,6 +135,15 @@ class Estimate:
     fx_date: date
 
 
+@dataclass
+class MarketBatch:
+    start: date
+    now: datetime = field(default_factory=lambda: datetime.now(UTC))
+    listings: dict[tuple[str, str], dict[str, str]] = field(default_factory=dict)
+    histories: dict[str, Any] = field(default_factory=dict)
+    fx: dict[str, dict[str, float]] = field(default_factory=dict)
+
+
 async def estimate(
     ticker: str,
     asset_type: str,
@@ -134,37 +151,47 @@ async def estimate(
     contribution: str,
     earliest: date | None = None,
     now: datetime | None = None,
+    *,
+    batch: MarketBatch | None = None,
 ) -> Estimate:
-    now = now or datetime.now(UTC)
+    batch = batch or MarketBatch(
+        start=min(earliest or scheduled, scheduled), now=now or datetime.now(UTC)
+    )
+    now = now or batch.now
     try:
-        listing = await instrument(ticker, asset_type)
+        key = (ticker, asset_type)
+        if key not in batch.listings:
+            batch.listings[key] = await instrument(ticker, asset_type)
+        listing = batch.listings[key]
         day = effective_session(listing["exchange"], scheduled, now)
 
         # Yahoo Close is split-adjusted even with auto_adjust=False. Without a corporate-action
         # ledger we refuse the affected history instead of turning it into fictitious quantities.
-        def read_close() -> Decimal:
-            frame = yf.Ticker(ticker).history(
-                start=min(earliest or day, day),
-                end=now.date() + timedelta(days=1),
-                auto_adjust=False,
-                back_adjust=False,
-                actions=True,
-                raise_errors=True,
-            )
-            if "Stock Splits" in frame and any(v != 0 for v in frame["Stock Splits"].fillna(0)):
-                raise MarketUnavailable(
-                    "Stock split requires manual review; no estimate was posted."
+        if ticker not in batch.histories:
+            batch.histories[ticker] = await _retry_fetch(
+                lambda: yf.Ticker(ticker).history(
+                    start=min(batch.start, earliest or day, day),
+                    end=now.date() + timedelta(days=1),
+                    auto_adjust=False,
+                    back_adjust=False,
+                    actions=True,
+                    raise_errors=True,
                 )
-            for stamp, value in frame["Close"].items():
-                if stamp.date() == day:
-                    price = _positive(value)
-                    if price is not None and price.quantize(Decimal("0.000001")) > 0:
-                        return price.quantize(Decimal("0.000001"))
+            )
+        frame = batch.histories[ticker]
+        relevant = frame.loc[frame.index.date >= min(earliest or day, day)]
+        if "Stock Splits" in relevant and any(v != 0 for v in relevant["Stock Splits"].fillna(0)):
+            raise MarketUnavailable("Stock split requires manual review; no estimate was posted.")
+        price = None
+        for stamp, value in frame["Close"].items():
+            if stamp.date() == day:
+                price = _positive(value)
+                break
+        if price is None or price.quantize(Decimal("0.000001")) <= 0:
             raise MarketUnavailable("Waiting for the effective session's historical daily close.")
 
-        price = await _retry_fetch(read_close)
-        rate, fx_day = await historical_fx(contribution, listing["currency"], day)
-        return Estimate(day, price, listing["currency"], rate, fx_day)
+        rate, fx_day = await historical_fx(contribution, listing["currency"], day, batch)
+        return Estimate(day, price.quantize(Decimal("0.000001")), listing["currency"], rate, fx_day)
     except MarketUnavailable:
         raise
     except Exception:

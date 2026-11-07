@@ -214,7 +214,9 @@ def test_corrections_voids_and_manual_trades_survive_retries(
     assert db_session.query(Trade).count() == 2
     assert db_session.query(Trade).filter_by(provenance="voided").count() == 1
     exported = client_no_key.get("/me/export").json()
-    assert any(t["provenance"] == "voided" for t in exported["trades"])
+    assert all(t["provenance"] != "voided" for t in exported["trades"])
+    assert sum(Decimal(str(t["shares"])) for t in exported["trades"]) == holding.shares
+    assert exported["recurring_occurrences"][0]["status"] == "voided"
     assert (
         client_no_key.patch(
             f"{PATH}/occurrences/{entry['id']}", json={"status": "scheduled"}
@@ -361,7 +363,7 @@ def test_correction_replays_database_rounding_after_every_purchase(
         date(2026, 3, 15): (Decimal("0.33"), Decimal("19.32")),
     }
 
-    async def quote(ticker, asset_type, scheduled, currency, earliest):
+    async def quote(ticker, asset_type, scheduled, currency, earliest, **kwargs):
         shares, price = values[scheduled]
         return Estimate(scheduled, price, "EUR", shares * price / 100, scheduled)
 
@@ -381,3 +383,124 @@ def test_correction_replays_database_rounding_after_every_purchase(
         },
     )
     assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("status", ["paused", "ended"])
+def test_pause_stop_preserves_unpriced_due_purchases(
+    client_no_key, db_session, app_session_local, monkeypatch, status
+):
+    plan = create(client_no_key)
+    monkeypatch.setattr(
+        recurring_market, "estimate", AsyncMock(side_effect=MarketUnavailable("Waiting."))
+    )
+    assert process(app_session_local) == (0, 1)
+    response = client_no_key.patch(f"{PATH}/{plan['id']}/status", json={"status": status})
+    assert response.status_code == 200
+    assert client_no_key.get(PATH).json()["occurrences"][0]["status"] == "scheduled"
+    monkeypatch.setattr(
+        recurring_market,
+        "estimate",
+        AsyncMock(
+            return_value=Estimate(
+                date(2026, 4, 15), Decimal(100), "EUR", Decimal(1), date(2026, 4, 15)
+            )
+        ),
+    )
+    assert process(app_session_local) == (1, 0)
+    assert db_session.query(Holding).one().shares == 4
+
+
+def test_failed_backlog_does_not_starve_other_tickers_and_source_is_saved(
+    client_no_key, db_session, app_session_local, monkeypatch
+):
+    create(
+        client_no_key,
+        start_date="2025-01-01",
+        frequency="custom",
+        interval_unit="days",
+        source="My provider",
+        backfill=True,
+    )
+    create(client_no_key, ticker="MSFT")
+    calls = []
+
+    async def quote(ticker, asset_type, scheduled, currency, earliest, **kwargs):
+        calls.append(ticker)
+        if ticker == "SAP.DE":
+            raise MarketUnavailable("Manual review required.")
+        return Estimate(scheduled, Decimal(100), "EUR", Decimal(1), scheduled)
+
+    monkeypatch.setattr(recurring_market, "estimate", quote)
+    assert process(app_session_local) == (1, 1)
+    assert calls.count("SAP.DE") == calls.count("MSFT") == 1
+    assert (
+        db_session.query(RecurringInvestment).filter_by(ticker="SAP.DE").one().source
+        == "My provider"
+    )
+    assert db_session.query(Holding).one().ticker == "MSFT"
+
+
+def test_daily_backfill_materializes_and_posts_in_one_pass_then_ends(
+    client_no_key, db_session, app_session_local
+):
+    plan = create(
+        client_no_key,
+        start_date="2025-01-01",
+        end_date="2025-12-31",
+        frequency="custom",
+        interval_unit="days",
+        backfill=True,
+    )
+    assert plan["status"] == "ended"
+    assert db_session.query(RecurringOccurrence).count() == 365
+    assert process(app_session_local) == (365, 0)
+    assert process(app_session_local) == (0, 0)
+    assert db_session.query(Trade).count() == 365
+
+
+def test_legacy_due_entries_can_still_be_confirmed(client_no_key, db_session, app_session_local):
+    plan = create(client_no_key)
+    row = db_session.get(RecurringInvestment, plan["id"])
+    row.tracking_enabled = False
+    db_session.commit()
+    assert process(app_session_local) == (0, 0)
+    entry = client_no_key.get(PATH).json()["occurrences"][0]
+    response = client_no_key.post(
+        f"{PATH}/occurrences/{entry['id']}/confirm",
+        json={"date": "2026-04-15", "shares": 3, "price": 125},
+    )
+    assert response.status_code == 200
+    assert db_session.query(Holding).one().shares == 3
+
+
+def test_history_is_bounded_but_export_retains_every_occurrence(client_no_key, db_session):
+    create(
+        client_no_key,
+        start_date="2024-01-01",
+        end_date="2025-12-31",
+        frequency="custom",
+        interval_unit="days",
+        backfill=True,
+    )
+    assert len(client_no_key.get(PATH).json()["occurrences"]) == 500
+    assert len(client_no_key.get("/me/export").json()["recurring_occurrences"]) == 731
+
+
+def test_validated_save_runs_database_work_off_the_event_loop(monkeypatch):
+    import threading
+    from unittest.mock import Mock
+
+    from app.schemas_recurring import RecurringIn
+
+    loop_thread = threading.get_ident()
+
+    def save(*args, **kwargs):
+        assert threading.get_ident() != loop_thread
+        assert kwargs["exchange"] == "GER"
+        return "saved"
+
+    monkeypatch.setattr(recurring, "save", save)
+    result = asyncio.run(
+        recurring.validated_save(Mock(), USER_ID, RecurringIn.model_validate(PLAN))
+    )
+    assert result == "saved"

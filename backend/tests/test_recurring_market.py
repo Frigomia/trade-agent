@@ -170,3 +170,53 @@ def test_alembic_revision_preserves_legacy_rows_and_guards_downgrade():
     with Operations.context(context):
         module.downgrade()
     assert "RAISE EXCEPTION" in output.getvalue()
+
+
+def test_market_batch_reuses_listing_history_and_does_not_retry_domain_errors(monkeypatch):
+    from unittest.mock import Mock
+
+    import pandas as pd
+
+    from app import recurring_market
+
+    listing = AsyncMock(return_value={"exchange": "GER", "currency": "USD"})
+    history = Mock(
+        return_value=pd.DataFrame(
+            {"Close": [100.0, 120.0], "Stock Splits": [0.0, 0.0]},
+            index=pd.to_datetime(["2026-04-07", "2026-04-08"]),
+        )
+    )
+    provider = Mock(history=history)
+    monkeypatch.setattr(recurring_market, "instrument", listing)
+    monkeypatch.setattr(recurring_market.yf, "Ticker", lambda _: provider)
+    fx = AsyncMock(return_value={"2026-04-07": 1.2, "2026-04-08": 1.3})
+    monkeypatch.setattr(recurring_market, "fetch_closes_between", fx)
+
+    async def run():
+        batch = recurring_market.MarketBatch(
+            start=date(2026, 4, 7), now=datetime(2026, 4, 10, tzinfo=UTC)
+        )
+        for day, expected in [(7, 100), (8, 120)]:
+            result = await recurring_market.estimate(
+                "SAP.DE", "STOCK", date(2026, 4, day), "EUR", batch=batch
+            )
+            assert result.price == expected
+        with pytest.raises(MarketUnavailable, match="historical daily close"):
+            await recurring_market.estimate("SAP.DE", "STOCK", date(2026, 4, 9), "EUR", batch=batch)
+
+    asyncio.run(run())
+    assert listing.await_count == history.call_count == fx.await_count == 1
+
+
+def test_unsupported_instrument_is_not_retried(monkeypatch):
+    from unittest.mock import Mock, PropertyMock
+
+    from app import recurring_market
+
+    provider = Mock()
+    info = PropertyMock(return_value={"quoteType": "INDEX", "exchange": "UNKNOWN"})
+    type(provider).info = info
+    monkeypatch.setattr(recurring_market.yf, "Ticker", lambda _: provider)
+    with pytest.raises(MarketUnavailable, match="supported exchange"):
+        asyncio.run(recurring_market.instrument("^NDX", "STOCK"))
+    assert info.call_count == 1

@@ -9,8 +9,10 @@ from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.db import lock_and_check_active
 from app.limits import MAX_HOLDINGS, cap_message
@@ -74,7 +76,11 @@ def _next(plan: RecurringInvestment, lower: date) -> date:
 def _overlap(db: Session, user_id: uuid.UUID, ticker: str) -> bool:
     return (
         db.query(Holding.id).filter_by(user_id=user_id, ticker=ticker).first() is not None
-        or db.query(Trade.id).filter_by(user_id=user_id, ticker=ticker).first() is not None
+        or db.query(Trade.id)
+        .filter_by(user_id=user_id, ticker=ticker)
+        .filter(Trade.provenance != "voided")
+        .first()
+        is not None
     )
 
 
@@ -152,7 +158,7 @@ def _occurrence(db: Session, user_id: uuid.UUID, occurrence_id: int) -> Recurrin
 def _materialize(db: Session, plan: RecurringInvestment, through: date) -> None:
     if plan.status != "active":
         return
-    for _ in range(100):
+    for _ in range(10000):
         if plan.next_date > through or (
             plan.end_date is not None and plan.next_date > plan.end_date
         ):
@@ -170,21 +176,21 @@ def _materialize(db: Session, plan: RecurringInvestment, through: date) -> None:
             )
         )
         plan.next_date = _next(plan, plan.next_date + timedelta(days=1))
+    if plan.end_date is not None and plan.next_date > plan.end_date:
+        plan.status = "ended"
 
 
 def process_due(db: Session, user_id: uuid.UUID) -> None:
     if (
         db.query(RecurringInvestment.id)
-        .filter_by(user_id=user_id, status="active", tracking_enabled=True)
+        .filter_by(user_id=user_id, status="active")
         .filter(RecurringInvestment.next_date <= today())
         .first()
         is None
     ):
         return
     with transaction(db, user_id):
-        for plan in db.query(RecurringInvestment).filter_by(
-            user_id=user_id, status="active", tracking_enabled=True
-        ):
+        for plan in db.query(RecurringInvestment).filter_by(user_id=user_id, status="active"):
             _materialize(db, plan, today())
 
 
@@ -201,8 +207,20 @@ def plan_out(row: RecurringInvestment) -> RecurringOut:
     return result
 
 
-def load(db: Session, user_id: uuid.UUID, *, reconcile: bool = True) -> RecurringListOut:
+def load(db: Session, user_id: uuid.UUID, *, limit: int | None = 500) -> RecurringListOut:
     # Reads never generate or post estimates; the server job owns catch-up.
+    query = (
+        db.query(RecurringOccurrence)
+        .filter_by(user_id=user_id)
+        .order_by(RecurringOccurrence.scheduled_date.desc(), RecurringOccurrence.id.desc())
+    )
+    rows = query.limit(limit).all() if limit is not None else query.all()
+    trade_ids = query.with_entities(RecurringOccurrence.trade_id)
+    if limit is not None:
+        trade_ids = trade_ids.limit(limit)
+    trades = {
+        t.id: t for t in db.query(Trade).filter(Trade.user_id == user_id, Trade.id.in_(trade_ids))
+    }
     return RecurringListOut(
         plans=[
             plan_out(p)
@@ -210,12 +228,7 @@ def load(db: Session, user_id: uuid.UUID, *, reconcile: bool = True) -> Recurrin
             .filter_by(user_id=user_id)
             .order_by(RecurringInvestment.id.desc())
         ],
-        occurrences=[
-            occurrence_out(db, o)
-            for o in db.query(RecurringOccurrence)
-            .filter_by(user_id=user_id)
-            .order_by(RecurringOccurrence.scheduled_date.desc(), RecurringOccurrence.id.desc())
-        ],
+        occurrences=[occurrence_out(db, o, trades=trades) for o in rows],
     )
 
 
@@ -254,14 +267,16 @@ def save(
             if row.ticker != payload.ticker or row.asset_type != payload.asset_type:
                 raise RecurringRefused("Create a separate plan to change the instrument.", 422)
             if row.tracking_enabled:
+                status = row.status
                 _materialize(db, row, now)
+                row.status = status  # The replacement schedule determines whether this plan ends.
                 if (
                     row.status == "active"
                     and row.next_date <= now
                     and (row.end_date is None or row.next_date <= row.end_date)
                 ):
                     raise RecurringRefused(
-                        "Catch-up is outstanding. Pause to cancel it or wait before editing."
+                        "Catch-up is outstanding. Wait for the next scheduler pass before editing."
                     )
             else:
                 for old in db.query(RecurringOccurrence).filter_by(
@@ -275,7 +290,10 @@ def save(
                 payload.interval_unit,
             )
             row.tracking_enabled = True
-        for field, value in payload.model_dump(exclude={"backfill", "source"}).items():
+        fields = payload.model_dump(exclude={"backfill"})
+        if "source" not in payload.model_fields_set:
+            fields.pop("source")
+        for field, value in fields.items():
             setattr(row, field, value)
         row.exchange = exchange
         db.flush()  # a new plan's id is needed for its occurrences
@@ -289,13 +307,14 @@ def set_status(db: Session, user_id: uuid.UUID, plan_id: int, status: str) -> Re
         if row.status == "ended" and status != "ended":
             raise RecurringRefused("An ended plan cannot be resumed.")
         now = today()
-        if row.tracking_enabled:
-            _materialize(db, row, now)
+        _materialize(db, row, now)
         if status == "active" and row.status == "paused":
             row.next_date = _next(row, now + timedelta(days=1))
         if status != "active":
-            for pending in db.query(RecurringOccurrence).filter_by(
-                user_id=user_id, plan_id=row.id, status="scheduled"
+            for pending in (
+                db.query(RecurringOccurrence)
+                .filter_by(user_id=user_id, plan_id=row.id, status="scheduled")
+                .filter(RecurringOccurrence.scheduled_date > now)
             ):
                 pending.status = "skipped"
         if status == "active" and not row.tracking_enabled:
@@ -361,10 +380,16 @@ def confirm(db: Session, user_id: uuid.UUID, occurrence_id: int, payload: PlaceI
     return trade
 
 
-def occurrence_out(db: Session, row: RecurringOccurrence) -> OccurrenceOut:
+def occurrence_out(
+    db: Session, row: RecurringOccurrence, *, trades: dict[int, Trade] | None = None
+) -> OccurrenceOut:
     result = OccurrenceOut.model_validate(row)
     if row.trade_id is not None:
-        trade = db.query(Trade).filter_by(user_id=row.user_id, id=row.trade_id).one_or_none()
+        trade = (
+            trades.get(row.trade_id)
+            if trades is not None
+            else db.query(Trade).filter_by(user_id=row.user_id, id=row.trade_id).one_or_none()
+        )
         if trade is not None:
             result.shares = Decimal(str(trade.shares))
             result.price = Decimal(str(trade.price))
@@ -385,7 +410,8 @@ async def validated_save(
     except MarketUnavailable as exc:
         raise RecurringRefused(str(exc), 422) from None
     # Listing identity and display name come from the provider, never a client-supplied index name.
-    return save(
+    return await run_in_threadpool(
+        save,
         db,
         user_id,
         payload.model_copy(update={"name": listing["name"] if plan_id is None else payload.name}),
@@ -404,23 +430,39 @@ def _position(holding: Holding) -> dict[str, object]:
 
 async def post_due(db: Session, user_id: uuid.UUID) -> tuple[int, int]:
     """One bounded pass: the same user lock guards plans, occurrences, trade and holding writes."""
-    from app.recurring_market import MarketUnavailable, estimate
+    from app.recurring_market import MarketBatch, MarketUnavailable, estimate
 
     process_due(db, user_id)
-    ids = [
-        r[0]
-        for r in db.query(RecurringOccurrence.id)
+    # Interleave tickers so an unpriceable backlog cannot fill the whole batch.
+    candidates = (
+        db.query(
+            RecurringOccurrence.id,
+            RecurringOccurrence.scheduled_date,
+            func.row_number()
+            .over(
+                partition_by=RecurringOccurrence.ticker,
+                order_by=(RecurringOccurrence.scheduled_date, RecurringOccurrence.id),
+            )
+            .label("rank"),
+        )
         .join(RecurringInvestment, RecurringInvestment.id == RecurringOccurrence.plan_id)
         .filter(
             RecurringOccurrence.user_id == user_id,
             RecurringOccurrence.status == "scheduled",
             RecurringInvestment.user_id == user_id,
-            RecurringInvestment.status == "active",
             RecurringInvestment.tracking_enabled.is_(True),
+            RecurringOccurrence.scheduled_date <= today(),
         )
-        .order_by(RecurringOccurrence.scheduled_date, RecurringOccurrence.id)
-        .limit(100)
+        .subquery()
+    )
+    ids = [
+        r[0]
+        for r in db.query(candidates.c.id)
+        .order_by(candidates.c.rank, candidates.c.scheduled_date, candidates.c.id)
+        .limit(10000)
     ]
+    first = db.query(func.min(candidates.c.scheduled_date)).scalar()
+    market = MarketBatch(start=first or today())
     posted = waiting = 0
     blocked: set[str] = set()
     for occurrence_id in ids:
@@ -446,7 +488,12 @@ async def post_due(db: Session, user_id: uuid.UUID) -> tuple[int, int]:
         db.rollback()  # Release the read transaction for I/O; recheck under the write lock.
         try:
             quote = await estimate(
-                ticker, asset_type, scheduled, currency, earliest[0] if earliest else None
+                ticker,
+                asset_type,
+                scheduled,
+                currency,
+                earliest[0] if earliest else None,
+                batch=market,
             )
             error = None
         except MarketUnavailable as exc:
@@ -456,7 +503,7 @@ async def post_due(db: Session, user_id: uuid.UUID) -> tuple[int, int]:
             db.expire_all()
             row = _occurrence(db, user_id, occurrence_id)
             plan = _plan(db, user_id, row.plan_id)
-            if row.status != "scheduled" or plan.status != "active" or not plan.tracking_enabled:
+            if row.status != "scheduled" or not plan.tracking_enabled:
                 continue
             row.attempts += 1
             if quote is None:

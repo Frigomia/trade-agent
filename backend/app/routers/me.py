@@ -95,7 +95,7 @@ def export_data(
     profile = db.get(AppUser, user.id)
     preferences = db.query(InvestmentPreferences).filter_by(user_id=user.id).one_or_none()
     link = db.query(TelegramLink).filter_by(user_id=user.id).one_or_none()
-    recurring_data = recurring.load(db, user.id, reconcile=False)
+    recurring_data = recurring.load(db, user.id, limit=None)
     return RecurringExportOut(
         recurring_investments=recurring_data.plans,
         recurring_occurrences=recurring_data.occurrences,
@@ -107,7 +107,10 @@ def export_data(
             WatchlistItemOut.model_validate(w)
             for w in db.query(WatchlistItem).filter_by(user_id=user.id)
         ],
-        trades=[TradeOut.model_validate(t) for t in db.query(Trade).filter_by(user_id=user.id)],
+        trades=[
+            TradeOut.model_validate(t)
+            for t in db.query(Trade).filter_by(user_id=user.id).filter(Trade.provenance != "voided")
+        ],
         recommendations=[
             RecommendationOut.model_validate(r)
             for r in db.query(Recommendation).filter_by(user_id=user.id)

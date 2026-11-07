@@ -674,10 +674,14 @@ Future plans create no holdings. A historical start requires preview plus explic
 approval. Backfill is refused when any holding or trade history exists for that ticker, avoiding
 duplicate imported/manual positions. Preview is bounded to 10,000 past dates.
 
-**Estimation:** the existing daily server job generates up to 100 due dates per plan and posts
-at most 100 occurrences per user per pass. Reads never run catch-up. The exchange-calendars
-dependency supplies listing holidays/session closes. Weekends and holidays shift to the next
-market session; the original scheduled date is retained. Posting waits until two hours after the
+**Estimation:** the existing daily server job generates up to 10,000 due dates per plan and selects
+at most 10,000 occurrences per user per pass, interleaving tickers so failed backlogs cannot
+starve other instruments. Listing details, price history and FX history are fetched once per
+instrument/currency per run; deterministic missing-input decisions are not retried within a run.
+Plans move to ended after their last date is materialized; pending purchases still post afterwards.
+Legacy schedules also materialize due entries but never post estimates. Reads never run catch-up.
+The exchange-calendars dependency supplies listing holidays/session closes. Weekends and holidays
+shift to the next market session; the original scheduled date is retained. Posting waits until two hours after the
 session closes and until that exact session's historical close exists. Yahoo Close with auto/back
 adjustment disabled is the proxy, never a broker fill. Yahoo still split-adjusts Close: histories
 containing splits since the first estimate are refused with a review message. There is no
@@ -697,15 +701,17 @@ effective_date, quote_currency, reference_price, fx_rate/date, pricing_source, e
 position_before (the position before posting, for corrections). Status is scheduled (pending),
 skipped, confirmed (legacy actual purchase), posted (estimate), reconciled or voided.
 Trade adds provenance manual / recurring_estimated / reconciled / voided and
-recurring_occurrence_id; TradeOut and /me/export retain those fields. Estimates use the existing
-trade/holding aggregation. Portfolio labels totals, allocation and risk as estimated when they
-include these purchases; management exposes the pricing/FX audit trail.
+recurring_occurrence_id; TradeOut and /me/export retain those fields. Export excludes voided trade
+rows from the replayable trade list; their occurrence audit records retain the original details.
+Estimates use the existing trade/holding aggregation. Portfolio labels totals, allocation and risk
+as estimated when they include these purchases; management exposes the pricing/FX audit trail.
 
 All writes use the active-user transaction lock and scoped sessions. Provider lookups hold no
 write lock; the worker reloads occurrence/plan under the lock before posting. Occurrence linkage,
 trade and holding changes commit together. Retries/concurrent workers cannot double-post.
 Edits preserve already-due snapshots and affect future dates. Instrument identity cannot change
-on a plan; create another independent plan instead. Pause/stop skip pending estimates; resume
+on a plan; create another independent plan instead. Pause/stop skip only future pending estimates;
+already-due purchases remain pending and can post while paused or stopped. Resume
 advances strictly after today with no paused-period backfill. Stop retains history and holdings.
 Skip/void cannot be reopened by an automatic run.
 
@@ -725,7 +731,7 @@ Authenticated, no-store API; 60 requests/minute per user across /portfolio/recur
 
 | Method | Suffix | Result |
 |---|---|---|
-| GET | / | Plans, dates and occurrence/trade audit data; no writes |
+| GET | / | Plans and latest 500 occurrences with trade audit data; no writes; export retains full history |
 | POST | /preview?editing=false | Dates, historical count/range and overlap conflict |
 | POST | / | Validate listing, create plan and snapshot due occurrences |
 | PUT | /{id} | Validate and replace future settings; preserve history |
@@ -733,7 +739,7 @@ Authenticated, no-store API; 60 requests/minute per user across /portfolio/recur
 | PATCH | /occurrences/{id} | Skip pending estimate; automatic skips cannot reopen |
 | PUT | /occurrences/{id}/estimate | Reconcile with actual purchase details |
 | DELETE | /occurrences/{id}/estimate | Void and reverse position impact, preserving audit |
-| POST | /occurrences/{id}/confirm | Compatibility for legacy purchases only |
+| POST | /occurrences/{id}/confirm | Record an actual purchase for a legacy pending entry |
 
 Other users' identifiers return 404. No Claude key is required. Scheduled recurring/daily
 commands post estimates before snapshots. There is no broker connection, account/source
