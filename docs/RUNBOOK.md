@@ -7,15 +7,25 @@ commit them anywhere.
 
 ## 1. What runs where
 
-Recurring investments (#266) use the existing daily 05:30 UTC scheduled job, including weekends.
-Deploy backend migration `a266c7e91d03` before using the new Portfolio → Recurring screen. No
-new credentials, consent switches or provider integrations are needed. If a daily run is missed,
-the next run catches up all outstanding dates; opening the Recurring screen also catches up.
-For a local-only retry, run `uv run python -m app.scheduled recurring` from `backend/` using
-the restricted runtime database role. It creates expected, unconfirmed entries only. Check the
-scheduled job logs for `Recurring entries failed` and retry after fixing the database problem;
-retries cannot duplicate dates or already confirmed trades. The app cannot tell whether an
-external provider executed a purchase: users must confirm actual shares, price and date.
+Recurring estimated tracking uses the existing daily 05:30 UTC job, including weekends.
+Deploy generated migration 148975797c40 before the new UI. Legacy plans retain all history
+and remain disabled for automatic tracking until reviewed/saved in Portfolio → Manage recurring
+plans. There are no new secrets or broker connections.
+
+Run uv run python -m app.scheduled recurring from backend/ for a bounded catch-up through
+Europe/Berlin's current date. Each pass generates at most 100 dates per plan and posts at most
+100 estimates per user. Repeat for a long backlog; retries cannot duplicate trades. Opening the
+page never runs catch-up. Logs report posted/waiting counts and occurrence IDs with safe reasons.
+Pending market/FX failures retry later. The daily close must be available at least two hours after
+market close; the 05:30 job generally posts the previous session. Split-affected history requires
+manual review.
+
+Manage recurring plans offers skip, correction and void actions. Pause/stop skips pending
+estimates; resume schedules strictly after today. Backfill requires preview and approval and
+refuses instruments with existing holdings or trade history. To cancel backfill, pause or stop its
+plan; posted entries remain auditable and may be voided if later sales permit it. Downgrade
+deliberately refuses to discard generated estimate provenance.
+
 
 | Piece | Where | Notes |
 | --- | --- | --- |

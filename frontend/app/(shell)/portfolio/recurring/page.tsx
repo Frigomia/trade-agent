@@ -1,5 +1,3 @@
-import { RecurringInvestments } from "@/components/portfolio/RecurringInvestments";
+import { redirect } from "next/navigation";
 
-export default function RecurringPage() {
-  return <RecurringInvestments />;
-}
+export default function RecurringPage() { redirect("/portfolio"); }
