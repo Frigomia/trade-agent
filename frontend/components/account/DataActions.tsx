@@ -10,6 +10,7 @@ import { downloadJson } from "@/lib/download";
 import { todayIso } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
 import { useAction } from "@/lib/useAction";
+import { ImportData } from "./ImportData";
 
 export function DataActions({ email }: { email: string }) {
   const router = useRouter();
@@ -47,6 +48,7 @@ export function DataActions({ email }: { email: string }) {
         >
           Export my data
         </Button>
+        <ImportData />
         {!confirming && (
           <Button
             color="error"

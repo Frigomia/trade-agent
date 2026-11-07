@@ -18,6 +18,7 @@ from app.claude_keys import (  # noqa: F401
     check_master_secret,
 )
 from app.config import settings
+from app.data_import import ImportRefused
 from app.db import check_runtime_role, engine
 from app.recurring import RecurringRefused
 from app.routers import (
@@ -91,6 +92,11 @@ async def _recurring_refused(_request: Request, exc: RecurringRefused) -> JSONRe
     return JSONResponse(status_code=exc.status_code, content={"detail": str(exc)})
 
 
+@app.exception_handler(ImportRefused)
+async def _import_refused(_request: Request, exc: ImportRefused) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+
 @app.exception_handler(ClaudeKeyRejected)
 async def _claude_key_rejected(_request: Request, exc: ClaudeKeyRejected) -> JSONResponse:
     """The frontend branches on `code`; the message never carries the key or Anthropic's reply."""
@@ -103,17 +109,23 @@ async def _claude_key_rejected(_request: Request, exc: ClaudeKeyRejected) -> JSO
 async def _validation_error_without_input(
     request: Request, exc: RequestValidationError
 ) -> Response:
-    """Pydantic echoes the request body as `input` in a 422; on the key route that body is a secret,
-    so drop it there. Every other route keeps FastAPI's usual response (input-free only when the
+    """Pydantic echoes the request body as `input` in a 422; on the key route that body is a secret
+    and on the import route it is the person's whole financial history, so drop it there. Every
+    other route keeps FastAPI's usual response (input-free only when the
     input itself cannot be encoded)."""
     # endswith, not ==: the path may carry a root-path or mount prefix.
-    if not request.url.path.endswith("/me/claude-key"):
+    if not request.url.path.endswith(("/me/claude-key", "/me/import")):
         try:
             return await request_validation_exception_handler(request, exc)
         except ValueError:
             # An echoed input such as `inf` cannot be written as JSON: answer without the input.
             pass
-    errors = [{k: v for k, v in e.items() if k != "input"} for e in exc.errors()]
+    # `ctx` can carry a fragment of the value too (and the uuid message quotes the bad character).
+    # A 5 MiB file of bad rows would otherwise answer with one error per row.
+    errors = [{k: v for k, v in e.items() if k not in ("input", "ctx")} for e in exc.errors()[:20]]
+    for error in errors:
+        if error["type"] == "uuid_parsing":
+            error["msg"] = "Input should be a valid UUID."
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})
 
 
