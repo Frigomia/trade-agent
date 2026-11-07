@@ -5,6 +5,7 @@ from starlette.concurrency import run_in_threadpool
 from app import plans, recurring, telegram, usage
 from app.admin import service
 from app.auth.deps import CurrentUser, get_current_user, get_known_user, get_user_db
+from app.data_import import restore_data
 from app.db import get_session_factory
 from app.http_headers import no_store
 from app.models import (
@@ -21,6 +22,7 @@ from app.models import (
     Trade,
     WatchlistItem,
 )
+from app.rate_limit import rate_limiter
 from app.schemas import (
     AcceptIn,
     BacktestResultOut,
@@ -40,6 +42,7 @@ from app.schemas import (
     UsageOut,
     WatchlistItemOut,
 )
+from app.schemas_import import ImportFile, ImportResultOut
 from app.schemas_recurring import RecurringExportOut
 from app.user_data import delete_user_data
 
@@ -98,7 +101,10 @@ def export_data(
     recurring_data = recurring.load(db, user.id, limit=None)
     return RecurringExportOut(
         recurring_investments=recurring_data.plans,
-        recurring_occurrences=recurring_data.occurrences,
+        recurring_occurrences=[
+            o.model_copy(update={"trade_id": None}) if o.status == "voided" else o
+            for o in recurring_data.occurrences
+        ],
         profile=ExportProfileOut.model_validate(profile),
         holdings=[
             HoldingOut.model_validate(h) for h in db.query(Holding).filter_by(user_id=user.id)
@@ -151,6 +157,20 @@ def export_data(
             else None
         ),
     )
+
+
+@active_router.post(
+    "/import",
+    response_model=ImportResultOut,
+    dependencies=[Depends(no_store), Depends(rate_limiter("import", limit=5))],
+)
+def import_data(
+    file: ImportFile,
+    dry_run: bool = False,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_user_db),
+) -> ImportResultOut:
+    return restore_data(db, user.id, file, dry_run=dry_run)
 
 
 @active_router.delete("/data", status_code=204)

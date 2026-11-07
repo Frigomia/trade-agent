@@ -16,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from app import planner, trades
 from app.db import lock_user_for_insert
 from app.fx import eur_prices
-from app.limits import MAX_HOLDINGS, cap_message
+from app.limits import MAX_HOLDINGS, MAX_PLANS, cap_message
 from app.models import (
     ContributionPlan,
     ContributionPlanLine,
@@ -38,8 +38,6 @@ from app.schemas import (
     TradeIn,
 )
 from app.trades import TradeRefused, apply_trade
-
-MAX_PLANS = 120
 
 
 def _load(

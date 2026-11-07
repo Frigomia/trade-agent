@@ -1,6 +1,8 @@
 """List-size caps shared by the routes that can grow a person's lists."""
 
 MAX_HOLDINGS = 100
+MAX_PLANS = 120
+MAX_RECURRING = 100
 
 
 def cap_message(what: str, cap: int) -> str:

@@ -504,7 +504,12 @@ Open items:
   MUI `Paper` surfaces at 18px; the Soft panel is 22px. Each screen moves to `Panel` as it is
   restyled. The Plan views (This month, Saved plans, Orders, the Placed sheet) are restyled and use `Panel`.
   The Account screen is restyled too (two columns on a desktop, the usage bar, the Claude and Telegram panels, the
-  shared state chip with an icon and the word), and so is Preferences (pill segmented controls for risk and
+  shared state chip with an icon and the word; the data actions are quiet text buttons in ink, "Export my data",
+  then "Import my data" with an upload icon, then "Delete my data" in the error colour). Import opens a file
+  chooser; the chosen file is checked first and a plain panel says "This file will restore:" with a short list of
+  counts and Restore and Cancel buttons; after Restore a second panel lists "Restored:" with the counts, then what
+  was kept or left off and what to connect again, in small muted lines. A refusal (an account that already has
+  data, a file that is not an export) shows in the shared error box, in plain words), and so is Preferences (pill segmented controls for risk and
   appearance, tags for the sectors, the sticky save bar with its status line) and Chat (a squared tail corner on each
   message, the starters as rows, the message box as one rounded field with Send inside it, "Near limit" and "At limit"
   beside the allowance), and the recommendation page for a call on a holding (the Soft score bar, amber under 60,

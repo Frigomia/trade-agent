@@ -206,8 +206,8 @@ ScanRun
   excluded (JSON list of Exclusion), rejected_mentions (JSON list of RejectedMention),
   coverage_summary (JSON object -- includes up to three ranked nearest misses when outcome is
       "none", each with ticker, overall and confidence)
-  -- Forced owner-only RLS, runtime table/sequence grants, USER_TABLES registration, export and
-  -- deletion coverage ship together. An empty shortlist still produces a completed scan row.
+  -- Forced owner-only RLS, runtime table/sequence grants, USER_TABLES registration, export,
+  -- deletion coverage and its import classification (see "Importing your data") ship together. An empty shortlist still produces a completed scan row.
 
 ChatMessage
   id, user_id, created_at, session_id, role ("user"|"assistant"), content
@@ -407,7 +407,8 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | GET | `/me` | — | The caller's own id, email, role, status, `accepted_terms_at`; allowed for invited and active users |
 | POST | `/me/accept` | `{accept_terms: true}` | Records terms acceptance and activates an invited user (idempotent) |
 | GET | `/me/usage` | — | The caller's own usage this month and effective limits: `{analysis_runs: {used, limit}, chat_messages: {used, limit}}` |
-| GET | `/me/export` | — | The caller's own data as JSON: profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list, each line with its `id`, resolved `isin` and placed fields; holdings and watchlist items carry their `isin`; the `telegram` block includes `plan_reminder_enabled`). Includes complete discovery `idea` JSON on recommendations and the caller's `scan_runs` list with counts, exclusions, rejected mentions and coverage summary |
+| GET | `/me/export` | — | The caller's own data as JSON: a top-level `format_version` (currently `1`; `EXPORT_FORMAT_VERSION` in `app/schemas.py`), profile fields plus every row in each user-data table (saved plans carry their lines, under `contribution_plans`, all of them with no cap on the list, each line with its `id`, resolved `isin` and placed fields; holdings and watchlist items carry their `isin`; the `telegram` block includes `plan_reminder_enabled`). Includes complete discovery `idea` JSON on recommendations and the caller's `scan_runs` list with counts, exclusions, rejected mentions and coverage summary |
+| POST | `/me/import?dry_run=` | The `GET /me/export` file; `dry_run` is `true` or `false` (default `false`) | Restores the data a person entered from their own export file into an **empty** account (see "Importing your data"). Active users only; 5 requests a minute per user; `Cache-Control: no-store`. Returns `{dry_run, restored, skipped, next_steps}`: `restored` maps each list to the number of rows written (or, in a dry run, that would be), `skipped` and `next_steps` are plain sentences. `dry_run=true` does everything except commit. `409` "This account already has data..." when any table the import restores into has rows; `422` when the file is not a valid export, has another `format_version`, or a row breaks a rule (the body never echoes the file); `413` over 5 MiB; `503` with `Retry-After: 5` when two large uploads are already being read; `429` over the rate limit |
 | DELETE | `/me/data` | `{confirm: true}` | Deletes the caller's own rows in every user-data table (not the account); `422` without `confirm: true` |
 | GET | `/me/claude-key` | — | `{connected, last4, needs_attention}`; never the key |
 | PUT | `/me/claude-key` | `{api_key}` | Checks the shape, then one free call to Anthropic with the key (`422` with a `code` when it is invalid or unusable, `502` when Anthropic is unreachable); stores it encrypted (AES-256-GCM, `KEY_ENCRYPTION_SECRET`); 10 requests a minute per user |
@@ -430,7 +431,14 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 Cross-cutting behaviour: every request body is capped at 64 KiB (`app/body_limit.py`, plain ASGI
 middleware); a larger one, declared by `Content-Length` or streamed, gets `413
 {"detail": "Request body too large."}` before it is buffered or parsed, and `GET`/`HEAD`
-are untouched. Responses under `/portfolio` and `GET /me/export` carry `Cache-Control: no-store`.
+are untouched. The one exception is `POST /me/import`, capped at 5 MiB (`LARGE_BODY_LIMITS`), and
+only for a request that carries an `Authorization: Bearer` header: the middleware runs before
+authentication, so this checks that the header is present, not that the token is valid. Without
+it the 64 KiB limit applies. At most 2 such large bodies are read at once (a module-level
+counter in `app/body_limit.py`); a further one is answered `503` with `Retry-After: 5` until a slot
+frees, so an anonymous flood carrying a Bearer header cannot buffer 5 MiB per request. Requests on
+the 64 KiB limit are never held up by it. Responses under `/portfolio`, `GET /me/export` and `POST /me/import`
+carry `Cache-Control: no-store`.
 
 Every route except `/health` and `POST /telegram/webhook` (public, checked by its secret header instead, see below) requires `Authorization: Bearer <Supabase access token>`; `401` for a missing or invalid token, `403` for a valid token whose user has no active `app_users` row (an `invited` user is admitted only to `/me` and `/me/accept`, see below), and `503` when tokens cannot be verified right now (`SUPABASE_URL` unset, or the JWKS endpoint unreachable with the signing key not yet cached). Job status for another user's job returns `404`.
 
@@ -506,6 +514,69 @@ the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE
 `coverage_summary.set_aside_ideas` (ticker, name, overall, confidence); `nearest_misses` is the first
 three of them and is still written only when nothing qualifies. Scans saved before this have no
 `set_aside_ideas`. Existing JSON columns hold these additions, so no database migration is required.
+
+### Importing your data
+
+`POST /me/import` (`app/routers/me.py`, logic in `app/data_import.py`, file shape in
+`app/schemas_import.py`) restores what a person entered from the file `GET /me/export` produced.
+Design: `docs/superpowers/specs/2026-11-06-data-import-design.md`. It runs no model call, touches
+no monthly allowance and never calls a broker.
+
+- **File and version.** The export carries `format_version` (an integer, `1`). The import accepts
+  `1`; a file with no `format_version` is read as the current shape; any other value is refused
+  with a message saying it was made by a different version. Unknown top-level keys are ignored
+  (the profile, `telegram` and the AI output are never read); an unknown field inside a list that
+  is restored is a `422`. Each field is held to the rules of the matching typed input (the same
+  ticker, label and sector rules, finite numbers within the column). Text the app only stores
+  (names, sectors, notes, plan text) may hold any character but NUL, since market data names can;
+  it keeps its length limit. Each list has a cap: holdings 100, saved plans 120, recurring plans
+  100 (the caps the app already enforces, `app/limits.py`), watchlist 100, trades 10,000, daily
+  snapshots 10,000, recurring entries 20,000. The over-limit message uses the words the screen
+  shows ("saved plans", "recurring entries").
+- **Empty accounts only.** The import is refused with `409` unless every table in `DATA_TABLES`
+  has no row for the person: holdings, watchlist items, trades, portfolio snapshots, saved plans
+  and their lines, recurring plans and their entries (what the import writes). AI output
+  (`AI_OUTPUT_TABLES`: recommendations, scan runs, company analyses, chat messages, backtest
+  results) never blocks an import and is left as it is. Preferences, the Claude key and the
+  Telegram link are settings (`SETTINGS_TABLES`) and do not count. There is no merge.
+- **Restored:** holdings, watchlist items, trades, daily portfolio snapshots, saved plans with
+  their lines, recurring plans with their entries, and preferences. **Never restored:**
+  recommendations, scan runs, company analyses, chats and backtest results (AI output); the
+  Telegram settings (the chat id is never exported, so there is nothing to attach them to); the
+  Claude key (not in the file); the profile (id, email, role, status) and the usage counters and
+  limits. The import does not read or write `app_users`.
+- **Preferences** are restored only when the account has none; otherwise the current ones stay
+  and `skipped` says so. `auto_analysis` and `auto_discovery` are always saved off, and `skipped`
+  says so when the file had either on.
+- **Ids and links.** Every row gets the signed-in person's id and a new id; the file's `id` and
+  `user_id` are ignored. Four links are rewritten to the new ids: an entry's `plan_id` and
+  `trade_id`, and a saved-plan line's `plan_id` and `placed_trade_id`. A link to something not in
+  the file, a confirmed entry without a trade, or two entries for one plan and date make the
+  file invalid. Holdings and trades are copied as they are; no trade logic runs. Recurring plans
+  keep their status and `next_date` (a plan that is not active gets its `start_date`, since the
+  export blanks it), and nothing is regenerated. Entry dates must be consistent: none may be in
+  the future, and every entry of an active plan must be dated before that plan's `next_date`
+  (the daily job continues from it, so an entry at or after it would be duplicated).
+- **One transaction.** The route takes the per-person lock first with `lock_and_check_active`
+  (the lock jobs and "Delete my data" use) and refuses with `403` if the account is not active,
+  checks the account is empty, writes everything and commits once;
+  any error rolls back all of it. A database rule or column limit the file breaks (an integrity or
+  data error) is a `422` with a fixed message.
+  A dry run does the same work and rolls back. The real call re-checks everything; nothing is
+  kept from the dry run. The log line holds counts only. Validation errors on this route and on
+  `PUT /me/claude-key` leave out the echoed `input` and `ctx`, and a bad UUID gets a fixed message
+  (`app/main.py`), so no fragment of the file comes back.
+- **A new user table** must be listed in `DATA_TABLES`, `AI_OUTPUT_TABLES` or `SETTINGS_TABLES` in
+  `app/data_import.py`; `test_every_user_table_is_classified` compares them with
+  `app/rls.py` `USER_TABLES` and fails otherwise. A table the import should restore also goes in
+  `RESTORED_TABLES` and gets its own restore step.
+- **Screen.** Account, under "Export my data": the browser reads the file (refusing one that is
+  not a JSON object), keeps only the restorable part (`format_version` and the eight lists above,
+  dropping the profile and AI output the import ignores, which can make a real export pass 5 MiB),
+  sends that with `dry_run=true`, shows the counts and the `skipped` notes, and on Restore sends
+  the same text again. The browser sends only the restorable part and the server refuses a body
+  over 5 MiB. The result lists the counts, `skipped` and `next_steps`
+  ("Connect Claude again.", "Connect Telegram again."). A refusal shows in the shared error box.
 
 ### Contribution planner
 
@@ -702,7 +773,8 @@ position_before (the position before posting, for corrections). Status is schedu
 skipped, confirmed (legacy actual purchase), posted (estimate), reconciled or voided.
 Trade adds provenance manual / recurring_estimated / reconciled / voided and
 recurring_occurrence_id; TradeOut and /me/export retain those fields. Export excludes voided trade
-rows from the replayable trade list; their occurrence audit records retain the original details.
+rows from the replayable trade list; their exported occurrences have a null trade_id and retain
+the purchase/pricing audit details. Local occurrence-to-trade links remain intact.
 Estimates use the existing trade/holding aggregation. Portfolio labels totals, allocation and risk
 as estimated when they include these purchases; management exposes the pricing/FX audit trail.
 

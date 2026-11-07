@@ -192,6 +192,13 @@ def test_corrections_voids_and_manual_trades_survive_retries(
     corrected = client_no_key.put(url, json={"date": "2026-04-15", "shares": 3, "price": 120})
     assert corrected.status_code == 200, corrected.text
     assert corrected.json()["status"] == "reconciled"
+    before_void = client_no_key.get("/me/export").json()
+    exported_trade_ids = {t["id"] for t in before_void["trades"]}
+    assert all(
+        o["trade_id"] is None or o["trade_id"] in exported_trade_ids
+        for o in before_void["recurring_occurrences"]
+    )
+    assert before_void["recurring_occurrences"][0]["trade_id"] == entry["trade_id"]
     assert (
         client_no_key.post(
             "/portfolio/trades",
@@ -217,6 +224,17 @@ def test_corrections_voids_and_manual_trades_survive_retries(
     assert all(t["provenance"] != "voided" for t in exported["trades"])
     assert sum(Decimal(str(t["shares"])) for t in exported["trades"]) == holding.shares
     assert exported["recurring_occurrences"][0]["status"] == "voided"
+    exported_trade_ids = {t["id"] for t in exported["trades"]}
+    assert all(
+        o["trade_id"] is None or o["trade_id"] in exported_trade_ids
+        for o in exported["recurring_occurrences"]
+    )
+    audit = exported["recurring_occurrences"][0]
+    assert audit["trade_id"] is None
+    assert Decimal(audit["shares"]) == 3 and Decimal(audit["price"]) == 120
+    # Only the export drops the link; the local audit trail remains complete.
+    assert db_session.query(RecurringOccurrence).one().trade_id == entry["trade_id"]
+    assert client_no_key.get(PATH).json()["occurrences"][0]["trade_id"] == entry["trade_id"]
     assert (
         client_no_key.patch(
             f"{PATH}/occurrences/{entry['id']}", json={"status": "scheduled"}

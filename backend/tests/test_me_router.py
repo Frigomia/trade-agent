@@ -1,13 +1,17 @@
 import asyncio
-from datetime import date, datetime
+import json
+import logging
+from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 import app.redis_client as redis_client_module
 from app import rls, telegram
 from app.config import settings
+from app.data_import import RESTORED_TABLES
 from app.db import Base
 from app.models import (
     AppUser,
@@ -17,7 +21,9 @@ from app.models import (
     InvestmentPreferences,
     TelegramLink,
 )
+from app.user_data import delete_user_data
 from tests.auth_support import OTHER_USER_ID, ROW_FACTORIES, USER_ID, add_app_user, auth_headers
+from tests.test_schemas_import import seed_one_of_everything
 
 
 def test_me_returns_the_callers_own_state(client):
@@ -224,6 +230,10 @@ def test_the_export_has_no_telegram_block_when_not_linked(client):
     assert client.get("/me/export").json()["telegram"] is None
 
 
+def test_export_has_a_format_version(client):
+    assert client.get("/me/export").json()["format_version"] == 1
+
+
 def test_export_is_403_for_an_invited_user(client, db_session):
     add_app_user(db_session, OTHER_USER_ID, status="invited")
     response = client.get("/me/export", headers=auth_headers(OTHER_USER_ID))
@@ -368,3 +378,232 @@ def test_the_export_includes_the_holding_isin(client, db_session):
     )
     db_session.commit()
     assert client.get("/me/export").json()["holdings"][0]["isin"] == "IE00BKM4GZ66"
+
+
+def _exported_file(client, db_session, app_session_local) -> dict:
+    """A real export of a full account, taken before the account is emptied."""
+    seed_one_of_everything(db_session)
+    exported = client.get("/me/export").json()
+    delete_user_data(app_session_local, USER_ID)
+    return exported
+
+
+def _post_import(client, file, **kwargs):
+    return client.post("/me/import", json=file, **kwargs)
+
+
+SMALL_FILE = {
+    "holdings": [
+        {
+            "ticker": "VWCE.DE",
+            "name": "Vanguard All-World",
+            "asset_type": "ETF",
+            "shares": 10,
+            "cost_basis": 1000,
+        }
+    ]
+}
+
+
+def test_import_restores_into_an_empty_account(client, db_session, engine, app_session_local):
+    file = _exported_file(client, db_session, app_session_local)
+
+    response = _post_import(client, file)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["dry_run"] is False
+    assert body["restored"]["holdings"] == 1
+    assert body["restored"]["trades"] == 1
+    for name in RESTORED_TABLES:
+        assert _count(engine, name, USER_ID) == 1, name
+    assert client.get("/me/export").json()["holdings"][0]["ticker"] == file["holdings"][0]["ticker"]
+
+
+def test_import_dry_run_returns_counts_and_writes_nothing(
+    client, db_session, engine, app_session_local
+):
+    file = _exported_file(client, db_session, app_session_local)
+
+    response = client.post("/me/import", params={"dry_run": True}, json=file)
+
+    assert response.status_code == 200
+    assert response.json()["dry_run"] is True
+    assert response.json()["restored"]["holdings"] == 1
+    for name in RESTORED_TABLES:
+        assert _count(engine, name, USER_ID) == 0, name
+
+
+def test_import_is_refused_with_409_when_the_account_has_data(client, db_session):
+    db_session.add(ROW_FACTORIES["holdings"](USER_ID))
+    db_session.commit()
+
+    response = _post_import(client, SMALL_FILE)
+
+    assert response.status_code == 409
+    assert "already has data" in response.json()["detail"]
+
+
+def test_importing_twice_is_refused_the_second_time(client):
+    assert _post_import(client, SMALL_FILE).status_code == 200
+
+    second = _post_import(client, SMALL_FILE)
+
+    assert second.status_code == 409
+
+
+def test_import_is_403_for_an_invited_user(client, db_session):
+    add_app_user(db_session, OTHER_USER_ID, status="invited")
+    response = _post_import(client, SMALL_FILE, headers=auth_headers(OTHER_USER_ID))
+    assert response.status_code == 403
+
+
+def test_import_is_401_without_a_token(anon_client):
+    assert _post_import(anon_client, SMALL_FILE).status_code == 401
+
+
+def test_import_ignores_a_role_and_a_user_id_in_the_file(
+    client, db_session, engine, app_session_local
+):
+    file = _exported_file(client, db_session, app_session_local)
+    other = str(OTHER_USER_ID)
+    file["profile"] = {
+        "id": other,
+        "email": "evil@example.com",
+        "role": "admin",
+        "status": "active",
+    }
+    for name in (
+        "holdings",
+        "watchlist_items",
+        "trades",
+        "recurring_investments",
+        "recurring_occurrences",
+    ):
+        assert file[name], name
+        for row in file[name]:
+            row["user_id"] = other
+
+    assert _post_import(client, file).status_code == 200
+
+    db_session.expire_all()
+    me = db_session.get(AppUser, USER_ID)
+    assert (me.role, me.email, me.status) == ("user", "user@example.com", "active")
+    assert db_session.get(AppUser, OTHER_USER_ID) is None
+    for name in RESTORED_TABLES:
+        assert _count(engine, name, OTHER_USER_ID) == 0, name
+        assert _count(engine, name, USER_ID) == 1, name
+
+
+def test_a_file_that_is_not_json_or_is_an_array_is_422(client):
+    headers = {"content-type": "application/json"}
+    assert client.post("/me/import", content=b"not json {", headers=headers).status_code == 422
+    assert client.post("/me/import", content=b"[1, 2]", headers=headers).status_code == 422
+
+
+def test_a_validation_error_does_not_echo_the_file(client):
+    file = {
+        "holdings": [
+            {
+                "ticker": "PRIVATE-TICKER",
+                "name": "Private Name 12345",
+                "asset_type": "ETF",
+                "shares": -5,
+                "cost_basis": 98765.4321,
+            }
+        ],
+        "secret_extra": "Private Extra Value",
+    }
+
+    response = _post_import(client, file)
+
+    assert response.status_code == 422
+    assert all("input" not in error for error in response.json()["detail"])
+    for value in ("PRIVATE-TICKER", "Private Name 12345", "98765.4321", "Private Extra Value"):
+        assert value not in response.text
+
+
+def test_a_bad_user_id_is_refused_without_echoing_any_of_it(client):
+    file = {
+        "holdings": [
+            {
+                "user_id": "SECRET-FRAGMENT-xyz",
+                "ticker": "AAPL",
+                "name": "Apple",
+                "asset_type": "STOCK",
+                "shares": 1,
+            }
+        ]
+    }
+
+    response = _post_import(client, file)
+
+    assert response.status_code == 422
+    assert "SECRET" not in response.text and "xyz" not in response.text
+    assert all("ctx" not in error and "input" not in error for error in response.json()["detail"])
+    assert any(error["type"] == "uuid_parsing" for error in response.json()["detail"])
+
+
+def test_import_is_rate_limited(client):
+    for _ in range(5):
+        assert (
+            client.post("/me/import", params={"dry_run": True}, json=SMALL_FILE).status_code == 200
+        )
+    assert client.post("/me/import", params={"dry_run": True}, json=SMALL_FILE).status_code == 429
+
+
+def test_import_response_is_no_store(client):
+    response = client.post("/me/import", params={"dry_run": True}, json=SMALL_FILE)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_no_raw_error_text_in_the_response(client, db_session, caplog):
+    broken = IntegrityError("INSERT INTO t", {"v": "secret-value"}, Exception("secret detail"))
+    with (
+        caplog.at_level(logging.DEBUG),
+        patch("app.data_import._restore_holdings", side_effect=broken),
+    ):
+        response = _post_import(client, SMALL_FILE)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "This file could not be restored because a row breaks a rule the app keeps. "
+        "Nothing was changed."
+    }
+    assert "secret" not in response.text
+    assert "secret" not in caplog.text  # nor in the logs
+    assert "Vanguard" not in caplog.text and "VWCE" not in caplog.text  # none of the file either
+    assert db_session.query(Holding).filter_by(user_id=USER_ID).count() == 0
+
+
+def test_a_file_of_about_2mb_imports_through_the_real_middleware(client, engine):
+    start = datetime(2000, 1, 1)
+    file = {
+        "portfolio_snapshots": [
+            {
+                "created_at": (start + timedelta(hours=i)).isoformat(),
+                "total_market_value": 1000.5,
+                "total_cost_basis": 900.25,
+                "cost_basis_complete": True,
+            }
+            for i in range(10_000)
+        ]
+    }
+    body = json.dumps(file, indent=2).encode()
+    assert 1_500_000 < len(body) < 5 * 1024 * 1024  # far over the 64 KB default, under 5 MB
+
+    response = client.post("/me/import", content=body, headers={"content-type": "application/json"})
+
+    assert response.status_code == 200
+    assert response.json()["restored"]["portfolio_snapshots"] == 10_000
+    assert _count(engine, "portfolio_snapshots", USER_ID) == 10_000
+
+
+def test_many_bad_rows_answer_with_a_bounded_error_list(client):
+    rows = [{"ticker": "AAPL", "name": "Apple", "asset_type": "STOCK", "shares": -1}] * 80
+
+    response = _post_import(client, {"holdings": rows})
+
+    assert response.status_code == 422
+    assert len(response.json()["detail"]) <= 20

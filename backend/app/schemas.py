@@ -558,7 +558,11 @@ class CompanyAnalysisExportOut(CompanyAnalysisOut):
     idea: IdeaOut | None
 
 
+EXPORT_FORMAT_VERSION = 1
+
+
 class ExportOut(BaseModel):
+    format_version: int = EXPORT_FORMAT_VERSION
     profile: ExportProfileOut
     holdings: list[HoldingOut]
     watchlist_items: list[WatchlistItemOut]
