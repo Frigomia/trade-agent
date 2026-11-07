@@ -10,7 +10,7 @@ from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.db import lock_and_check_active
-from app.limits import MAX_HOLDINGS, cap_message
+from app.limits import MAX_HOLDINGS, MAX_RECURRING, cap_message
 from app.models import Holding, RecurringInvestment, RecurringOccurrence, Trade
 from app.schemas import PlaceIn, TradeIn
 from app.schemas_recurring import (
@@ -167,8 +167,10 @@ def save(
     with transaction(db, user_id):
         now = today()
         if plan_id is None:
-            if db.query(RecurringInvestment).filter_by(user_id=user_id).count() >= 100:
-                raise RecurringRefused("You can save at most 100 recurring investments.")
+            if db.query(RecurringInvestment).filter_by(user_id=user_id).count() >= MAX_RECURRING:
+                raise RecurringRefused(
+                    f"You can save at most {MAX_RECURRING} recurring investments."
+                )
             row = RecurringInvestment(
                 user_id=user_id, status="active", next_date=payload.start_date
             )
