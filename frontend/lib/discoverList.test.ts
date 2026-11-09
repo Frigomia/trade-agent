@@ -163,6 +163,7 @@ describe("decisionChip and viewLabel", () => {
     expect(decisionChip(item("A", { report_status: "PENDING" }))).toBeNull();
     expect(decisionChip(item("A", { report_status: null }))).toBeNull();
     expect(decisionChip(item("A"))).toBeNull();
+    expect(decisionChip(item("A", { report_status: "constructor" as never }))).toBeNull();
   });
 
   it("says View decision only for a decided idea", () => {

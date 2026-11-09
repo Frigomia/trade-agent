@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { calendarDateText } from "./discovery";
 import { decisionStamp, moveSinceRecommended } from "./decisionView";
 
 const move = (price_at_recommendation: number | null, current_price: number | null) =>
@@ -37,7 +36,10 @@ describe("decisionStamp", () => {
     expect(decisionStamp({ reviewed_at: null })).toBeNull();
   });
 
-  it("formats the review day like other calendar dates", () => {
-    expect(decisionStamp({ reviewed_at: "2026-10-20T08:00:00" })).toBe(calendarDateText("2026-10-20"));
+  it("shows the viewer's local day for a timestamp near midnight", () => {
+    const t = new Date(2026, 9, 21, 0, 30); // local 00:30 on 21 Oct, whatever the zone
+    expect(decisionStamp({ reviewed_at: t.toISOString().slice(0, 19) })).toBe(
+      t.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" }), // the local 21st, in the viewer's locale
+    );
   });
 });

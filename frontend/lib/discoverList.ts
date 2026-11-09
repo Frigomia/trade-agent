@@ -1,4 +1,5 @@
 import type { DiscoverItem } from "@/lib/api/discover-types";
+import type { RecommendationStatus } from "@/lib/api/recommendation-types";
 import { toTime } from "@/lib/format";
 import { fractionToPercentText } from "@/lib/targetWeight";
 
@@ -19,10 +20,13 @@ export const SORTS: { key: DiscoverSort; label: string }[] = [
 
 export type DecisionChip = "approved" | "dismissed" | "withdrawn";
 
-const CHIPS: Record<string, DecisionChip> = { APPROVED: "approved", REJECTED: "dismissed", SUPERSEDED: "withdrawn" };
+const CHIPS: Partial<Record<RecommendationStatus, DecisionChip>> = { APPROVED: "approved", REJECTED: "dismissed", SUPERSEDED: "withdrawn" };
 
 /** What became of the company's idea; null while it is still pending or when there is no report. */
-export const decisionChip = (item: DiscoverItem): DecisionChip | null => CHIPS[item.report_status ?? ""] ?? null;
+export function decisionChip(item: DiscoverItem): DecisionChip | null {
+  const status = item.report_status;
+  return status && Object.hasOwn(CHIPS, status) ? (CHIPS[status] ?? null) : null;
+}
 
 /** The button words: a decision can be reviewed, a withdrawn idea is just opened. */
 export const viewLabel = (chip: DecisionChip | null): "View decision" | "View" =>
