@@ -4,6 +4,7 @@ Read-only lookups for GET /analysis/recommendations/{id}; nothing here writes.
 """
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,12 @@ def successor_id(db: Session, rec: Recommendation) -> int | None:
     return newest[0] if newest is not None else None
 
 
+def _dicts(value: object) -> list[dict[str, Any]]:
+    """The dict elements of a stored JSON list; anything malformed counts as absent, because a
+    read-only lookup must never fail the page over a bad stored element."""
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
+
+
 def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut | None:
     """Why a superseded idea with no successor was withdrawn; None for any other row.
 
@@ -51,7 +58,7 @@ def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut | None:
     )
     for scan in scans:
         if invalidated is None:
-            for entry in scan.excluded or []:
+            for entry in _dicts(scan.excluded):
                 is_it = entry.get("ticker") == rec.ticker
                 if is_it and entry.get("reason") == "thesis_invalidated":
                     invalidated = (
@@ -64,7 +71,8 @@ def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut | None:
                     )
                     break
         if set_aside is None:
-            ideas = (scan.coverage_summary or {}).get("set_aside_ideas") or []
+            summary = scan.coverage_summary
+            ideas = _dicts(summary.get("set_aside_ideas") if isinstance(summary, dict) else None)
             if any(i.get("ticker") == rec.ticker for i in ideas):
                 set_aside = (
                     scan.created_at,

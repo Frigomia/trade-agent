@@ -181,3 +181,18 @@ def test_another_users_scan_and_ideas_are_never_used(db_session):
     assert successor_id(db_session, old) is None
     out = withdrawal_for(db_session, old)
     assert (out.kind, out.reason, out.as_of) == ("not_compelling", None, None)
+
+
+def test_malformed_scan_json_is_ignored(db_session):
+    old = rec(db_session)
+    row = scan(db_session, excluded=["NESN.SW", None, 7])
+    row.coverage_summary = {"set_aside_ideas": [3, "NESN.SW", None]}
+    db_session.commit()
+    row = scan(db_session, age=4)
+    row.excluded = "not a list"
+    row.coverage_summary = {"set_aside_ideas": 5}
+    db_session.commit()
+
+    out = withdrawal_for(db_session, old)
+
+    assert (out.kind, out.reason, out.as_of) == ("not_compelling", None, None)

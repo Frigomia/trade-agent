@@ -7,7 +7,7 @@ import logging
 import math
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Literal, Self
+from typing import Literal, Self, cast, get_args
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -62,13 +62,6 @@ PROFILE_FIELDS = {"name": 200, "exchange": 60, "currency": 10}
 
 
 ReportStatus = Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]
-# Looked up by name so a status outside the four comes back as None, typed.
-REPORT_STATUSES: dict[str, ReportStatus] = {
-    "PENDING": "PENDING",
-    "APPROVED": "APPROVED",
-    "REJECTED": "REJECTED",
-    "SUPERSEDED": "SUPERSEDED",
-}
 
 
 class DiscoverItemOut(BaseModel):
@@ -179,7 +172,9 @@ def _item_out(
         insight=found[1] if found else None,
         report_id=found[0] if found else None,
         # A status outside the four (a bad row) shows as none instead of failing the whole list.
-        report_status=REPORT_STATUSES.get(found[2]) if found else None,
+        report_status=cast(ReportStatus, found[2])
+        if found and found[2] in get_args(ReportStatus)
+        else None,
         owned=owned,
     )
 
