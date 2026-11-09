@@ -6,7 +6,9 @@ import pytest
 
 from app.claude_keys import encrypt_key
 from app.models import AppUser, Holding, Recommendation, UserApiKey
+from app.schemas_discovery import IdeaSnapshot
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
+from tests.discovery_fixtures import sample_candidate
 from tests.test_discovery_withdrawal import invalidated
 from tests.test_discovery_withdrawal import rec as discovery_rec
 from tests.test_discovery_withdrawal import scan as discovery_scan
@@ -863,3 +865,132 @@ def test_recommendations_carry_the_company_name_from_the_holding_or_the_idea(cli
     assert names["WATCHED"] is None  # only watched, so there is no stored name
     assert names[idea.ticker] == idea.name
     assert one.json()["name"] == names[one.json()["ticker"]]
+
+
+QUOTE = {"price": 1234.0, "closes": [1200.0, 1234.0]}
+
+
+def _discovery_idea_quoted_in(db, snapshot_currency, **kwargs):
+    row = discovery_rec(db, status="APPROVED", age=2, **kwargs)
+    candidate = sample_candidate()
+    snapshot = IdeaSnapshot(
+        exchange=candidate.exchange,
+        country=candidate.country,
+        sector=candidate.sector,
+        industry=candidate.industry,
+        currency=snapshot_currency,
+        price=95.0,
+        price_as_of=candidate.price_as_of,
+        fundamentals=candidate.fundamentals,
+        coverage=candidate.coverage,
+    )
+    row.idea = {**row.idea, "snapshot": snapshot.model_dump(mode="json")}
+    db.commit()
+    return row
+
+
+def test_get_recommendation_attaches_a_live_quote_to_a_decided_row(client, db_session):
+    rows = [_rec(USER_ID, "AAPL"), _rec(USER_ID, "MSFT"), _rec(USER_ID, "NVDA")]
+    rows[0].status, rows[1].status, rows[2].status = "APPROVED", "REJECTED", "SUPERSEDED"
+    db_session.add_all(rows)
+    db_session.commit()
+
+    for row in rows:
+        with patch(
+            "app.routers.analysis.fetch_quote_and_history",
+            AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+        ):
+            body = client.get(f"/analysis/recommendations/{row.id}").json()
+        assert body["current_price"] == 186.40
+        assert round(body["price_change_pct"], 4) == round((186.40 - 184.0) / 184.0 * 100, 4)
+
+
+def test_the_list_still_attaches_quotes_to_pending_rows_only(client, db_session):
+    pending, approved = _rec(USER_ID, "AAPL"), _rec(USER_ID, "MSFT")
+    approved.status = "APPROVED"
+    db_session.add_all([pending, approved])
+    db_session.commit()
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)
+    ) as mock_fetch:
+        rows = {r["ticker"]: r for r in client.get("/analysis/recommendations").json()}
+
+    mock_fetch.assert_awaited_once_with("AAPL")
+    assert rows["AAPL"]["current_price"] == 1234.0
+    assert rows["MSFT"]["current_price"] is None
+
+
+def test_a_pence_quoted_discovery_idea_gets_its_current_price_in_pounds(client, db_session):
+    row = _discovery_idea_quoted_in(db_session, "GBp", ticker="SHEL.L")
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 12.34
+    assert round(body["price_change_pct"], 4) == round((1234.0 - 1200.0) / 1200.0 * 100, 4)
+
+
+def test_a_discovery_idea_saved_in_pounds_is_still_converted_when_the_quote_is_in_pence(
+    client, db_session
+):
+    # The snapshot stores the major unit (GBP), so the quote's unit comes from the provider.
+    row = _discovery_idea_quoted_in(db_session, "GBP", ticker="SHEL.L")
+
+    with (
+        patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)),
+        patch("app.routers.analysis.fetch_currency", AsyncMock(return_value="GBp")),
+    ):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 12.34
+
+
+def test_a_major_unit_discovery_idea_keeps_its_quote(client, db_session):
+    row = _discovery_idea_quoted_in(db_session, "CHF")
+
+    with (
+        patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)),
+        patch("app.routers.analysis.fetch_currency", AsyncMock(return_value="CHF")),
+    ):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 1234.0
+
+
+def test_an_unknown_quote_currency_leaves_a_discovery_price_unchanged(client, db_session):
+    row = _discovery_idea_quoted_in(db_session, None)
+
+    with (
+        patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)),
+        patch("app.routers.analysis.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))),
+    ):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 1234.0
+
+
+def test_a_non_discovery_row_keeps_the_raw_quote(client, db_session):
+    row = _rec(USER_ID, "SHEL.L")
+    row.status = "APPROVED"
+    db_session.add(row)
+    db_session.commit()
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 1234.0
+
+
+def test_a_failed_quote_leaves_both_fields_null_for_a_decided_row(client, db_session):
+    row = _discovery_idea_quoted_in(db_session, "GBp")
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(side_effect=RuntimeError("yfinance is down")),
+    ):
+        response = client.get(f"/analysis/recommendations/{row.id}")
+
+    assert response.status_code == 200
+    assert response.json()["current_price"] is None
+    assert response.json()["price_change_pct"] is None

@@ -3,6 +3,7 @@ import logging
 import math
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,11 +21,12 @@ from app.agents.jobs import (
     get_job_status,
     run_job,
 )
-from app.agents.market_data import fetch_quote_and_history
+from app.agents.market_data import fetch_currency, fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.claude_keys import require_claude_key
 from app.discovery.withdrawal import successor_id, withdrawal_for
+from app.fx import SUBUNITS, minor_unit
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import DismissIn, RecommendationOut, Ticker
@@ -151,20 +153,40 @@ def _attach_names(db: Session, user_id: uuid.UUID, recs: list[RecommendationOut]
         rec.name = rec.idea.name if rec.idea is not None else held.get(rec.ticker)
 
 
-async def _attach_live_quotes(recs: list[RecommendationOut]) -> None:
-    """Mutates PENDING rows in place with a live price/day-change; everything else, and any row
-    whose fetch fails, is left at the schema's None default — degrading quietly rather than
-    ever failing the request over a flaky quote."""
-    pending = [r for r in recs if r.status == "PENDING"]
-    tickers = {r.ticker for r in pending}
+async def _attach_live_quotes(
+    recs: list[RecommendationOut], statuses: tuple[str, ...] = ("PENDING",)
+) -> None:
+    """Mutates rows of the given statuses in place with a live price/day-change; everything else,
+    and any row whose fetch fails, is left at the schema's None default — degrading quietly rather
+    than ever failing the request over a flaky quote."""
+    wanted = [r for r in recs if r.status in statuses]
+    tickers = {r.ticker for r in wanted}
     if not tickers:
         return
     results = await asyncio.gather(*(_quote_for_ticker(t) for t in tickers))
     quotes = dict(zip(tickers, results, strict=True))
-    for rec in pending:
+    for rec in wanted:
         quote = quotes.get(rec.ticker)
         if quote is not None:
             rec.current_price, rec.price_change_pct = quote
+
+
+async def _price_in_major_unit(rec: RecommendationOut) -> None:
+    """A discovery idea stores its price in the major unit (pounds), but the live quote is in the
+    provider's own (pence for London). Converts the quote so the two compare. The snapshot only
+    keeps the major unit, so the quote's unit comes from the provider, unless the snapshot kept a
+    minor one. When it cannot be read the quote is left as it came."""
+    if rec.current_price is None or rec.source != "discovery" or rec.idea is None:
+        return
+    currency = rec.idea.snapshot.currency if rec.idea.snapshot else None
+    if currency not in SUBUNITS:
+        try:
+            currency = await fetch_currency(rec.ticker)
+        except Exception as exc:
+            logger.warning("Currency lookup failed for %s: %s", rec.ticker, type(exc).__name__)
+            return
+    _, factor = minor_unit(currency)
+    rec.current_price = float(Decimal(str(rec.current_price)) * factor)
 
 
 @router.get(
@@ -208,7 +230,8 @@ async def get_recommendation(
     if rec.status == "SUPERSEDED" and rec.source == "discovery" and out.successor_id is None:
         out.withdrawal = withdrawal_for(db, rec)
     db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
-    await _attach_live_quotes([out])
+    await _attach_live_quotes([out], ("PENDING", "APPROVED", "REJECTED", "SUPERSEDED"))
+    await _price_in_major_unit(out)
     return out
 
 
