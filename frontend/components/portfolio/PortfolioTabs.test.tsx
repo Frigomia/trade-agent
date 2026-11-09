@@ -23,14 +23,14 @@ describe("PortfolioTabs", () => {
     open(0);
   });
 
-  it("links the five views of Portfolio", () => {
+  it("links the four views of Portfolio without a separate recurring destination", () => {
     renderTabs();
     const nav = screen.getByRole("navigation", { name: "Portfolio views" });
     expect(within(nav).getByRole("link", { name: "Holdings" })).toHaveAttribute("href", "/portfolio");
     expect(within(nav).getByRole("link", { name: /^This month/ })).toHaveAttribute("href", "/portfolio/plan");
     expect(within(nav).getByRole("link", { name: /^Saved plans/ })).toHaveAttribute("href", "/portfolio/plan?tab=saved");
     expect(within(nav).getByRole("link", { name: "Orders" })).toHaveAttribute("href", "/portfolio/plan?tab=orders");
-    expect(within(nav).getByRole("link", { name: "Recurring" })).toHaveAttribute("href", "/portfolio/recurring");
+    expect(within(nav).queryByRole("link", { name: "Recurring" })).not.toBeInTheDocument();
   });
 
   it.each([
@@ -38,11 +38,10 @@ describe("PortfolioTabs", () => {
     ["month", "This month"],
     ["saved", "Saved plans"],
     ["orders", "Orders"],
-    ["recurring", "Recurring"],
   ] as const)("marks %s as the current view, and only it", (view, label) => {
     renderTabs(view);
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(4);
     for (const link of links) {
       if (link.textContent?.startsWith(label)) expect(link).toHaveAttribute("aria-current", "page");
       else expect(link).not.toHaveAttribute("aria-current");

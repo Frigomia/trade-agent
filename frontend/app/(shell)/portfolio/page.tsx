@@ -21,6 +21,8 @@ import { ClosedPositions } from "@/components/portfolio/ClosedPositions";
 import { TradeSheet } from "@/components/portfolio/TradeSheet";
 import { Panel } from "@/components/ui/Panel";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { RecurringInvestments, RECURRING_PATH } from "@/components/portfolio/RecurringInvestments";
+import type { RecurringData } from "@/lib/api/recurring-types";
 import { PortfolioTabs } from "@/components/portfolio/PortfolioTabs";
 import { HOLDING_COLUMNS, HOLDING_GAP } from "@/lib/portfolio/holdingColumns";
 import { allocate, largestPositions, type AllocationDim } from "@/lib/portfolio/allocation";
@@ -179,6 +181,7 @@ function HoldingRow({
 }
 
 export default function PortfolioPage() {
+  const { data: recurringData } = useSWR<RecurringData>(RECURRING_PATH, apiFetch);
   // When the figures were last read: the subtitle says so, as the approved mock does.
   const [read, setRead] = useState<number | null>(null);
   const {
@@ -243,6 +246,8 @@ export default function PortfolioPage() {
         }
       />
       <PortfolioTabs current="holdings" />
+      <RecurringInvestments onChanged={() => void mutateSummary()} />
+      {recurringData?.occurrences.some((o) => o.status === "posted") && <Alert severity="info" sx={{ mb: 2 }}>Estimated portfolio: totals, allocations and risk include automatic estimated purchases. Review or correct them in Manage recurring plans.</Alert>}
 
       {summaryError && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -314,6 +319,7 @@ export default function PortfolioPage() {
             </Typography>
           )}
           {shown.map((holding) => (
+            <Box key={holding.ticker}>
             <HoldingRow
               key={holding.ticker}
               holding={holding}
@@ -323,6 +329,8 @@ export default function PortfolioPage() {
               onLogTrade={() => setTrade({ open: true, ticker: holding.ticker })}
               onRemove={() => askRemove(holding)}
             />
+            <RecurringInvestments ticker={holding.ticker} onChanged={() => void mutateSummary()} />
+            </Box>
           ))}
         </Panel>
       )}
@@ -345,7 +353,7 @@ export default function PortfolioPage() {
         open={trade.open}
         prefill={trade.ticker ? { ticker: trade.ticker } : undefined}
         onClose={() => setTrade({ open: false })}
-        holdings={holdings.map((h) => ({ ticker: h.ticker, name: h.name }))}
+        holdings={holdings.map((h) => ({ ticker: h.ticker, name: h.name, asset_type: h.asset_type }))}
         onLogged={() => mutateSummary()}
       />
       <HoldingForm

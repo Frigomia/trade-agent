@@ -13,12 +13,16 @@ import { saveIsinAfterAdd } from "@/lib/orders";
 import { usePickedIsin } from "@/lib/usePickedIsin";
 import type { SymbolMatch } from "@/lib/tickerSearch";
 
+import { RecurringPlanForm } from "./RecurringInvestments";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+
 export interface HoldingFormProps {
   open: boolean;
   onClose: () => void;
   holding?: HoldingSummary; // edit mode when set
   heldTickers: string[];
   prefillTicker?: string;
+  prefillAssetType?: AssetType;
   onSaved: () => void;
 }
 
@@ -28,9 +32,14 @@ export function HoldingForm({ open, onClose, ...rest }: HoldingFormProps) {
   const isPhone = useMediaQuery(useTheme().breakpoints.down("md"));
   // A save or removal in flight cannot be dismissed: the form would unmount with no error display.
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("once");
+  const close = () => { setMode("once"); onClose(); };
   return (
-    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : onClose} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-labelledby": "holding-form-title", "aria-busy": busy } }}>
-      <HoldingFormBody onClose={onClose} onBusyChange={setBusy} {...rest} />
+    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : close} slotProps={{ paper: { role: "dialog", "aria-modal": true, "aria-label": mode === "recurring" ? "Recurring investment" : undefined, "aria-labelledby": mode === "once" ? "holding-form-title" : undefined, "aria-busy": busy } }}>
+      {!rest.holding && <Box sx={{ px: 3, pt: 2 }}><SegmentedControl label="Holding type" segments={[{ key: "once", label: "One-time" }, { key: "recurring", label: "Recurring" }]} value={mode} onChange={busy ? undefined : setMode} fill /></Box>}
+      {mode === "recurring" && !rest.holding ? <Box sx={{ width: { xs: "auto", md: 400 }, p: 3 }}>
+        <RecurringPlanForm prefill={rest.prefillTicker ? { ticker: rest.prefillTicker, asset_type: rest.prefillAssetType } : undefined} onSaved={rest.onSaved} onClose={close} onBusyChange={setBusy} />
+      </Box> : <HoldingFormBody onClose={close} onBusyChange={setBusy} {...rest} />}
     </Drawer>
   );
 }

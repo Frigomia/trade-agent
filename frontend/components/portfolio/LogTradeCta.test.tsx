@@ -144,7 +144,7 @@ describe("LogTradeCta", () => {
     fireEvent.change(screen.getByLabelText("Price"), { target: { value: "121.6" } });
     fireEvent.click(screen.getByRole("button", { name: /save to log/i }));
 
-    await waitFor(() => expect(screen.getByText(/trade logged/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/saved to your portfolio/i)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /log the trade i placed/i })).not.toBeInTheDocument();
   });
 });

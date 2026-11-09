@@ -167,7 +167,10 @@ def _restore_watchlist(db: Session, user_id: UUID, items: list[ImportWatchlistIt
 
 def _restore_trades(db: Session, user_id: UUID, trades: list[ImportTrade]) -> dict[int, int]:
     """Returns the file's trade id -> the new id, for the rows that point at a trade."""
-    rows = [Trade(user_id=user_id, **t.model_dump(exclude={"id", "user_id"})) for t in trades]
+    rows = [
+        Trade(user_id=user_id, **t.model_dump(exclude={"id", "user_id", "recurring_occurrence_id"}))
+        for t in trades
+    ]
     db.add_all(rows)
     db.flush()  # the new ids are assigned here
     return {t.id: row.id for t, row in zip(trades, rows, strict=True)}
@@ -226,9 +229,9 @@ def _restore_recurring(
     plans: list[ImportRecurring],
     occurrences: list[ImportOccurrence],
     trade_ids: dict[int, int],
+    trades: list[ImportTrade],
 ) -> tuple[int, int]:
-    """Plans keep their status and (when active) next date; occurrences keep their statuses and
-    nothing is generated. Returns (plans, occurrences) written."""
+    """Copy schedules and audit data; voided entries become skipped. Generate no purchases."""
     plan_ids: dict[int, int] = {}
     for plan in sorted(plans, key=lambda p: p.id):
         row = RecurringInvestment(
@@ -246,6 +249,12 @@ def _restore_recurring(
                     "currency",
                     "start_date",
                     "status",
+                    "frequency",
+                    "interval_count",
+                    "interval_unit",
+                    "end_date",
+                    "exchange",
+                    "tracking_enabled",
                 }
             ),
         )
@@ -253,17 +262,41 @@ def _restore_recurring(
         db.flush()
         plan_ids[plan.id] = row.id
     # Oldest first, as with the plans: the export lists newest first.
-    db.add_all(
-        RecurringOccurrence(
+    ordered = sorted(occurrences, key=lambda o: (o.scheduled_date, o.id or 0))
+    rows: list[RecurringOccurrence] = []
+    for o in ordered:
+        row_occurrence = RecurringOccurrence(
             user_id=user_id,
             plan_id=plan_ids[o.plan_id],  # KeyError rolls everything back
             trade_id=trade_ids[o.trade_id] if o.trade_id is not None else None,
             **o.model_dump(
-                include={"scheduled_date", "ticker", "asset_type", "amount", "currency", "status"}
+                exclude={
+                    "id",
+                    "user_id",
+                    "plan_id",
+                    "trade_id",
+                    "shares",
+                    "price",
+                    "trade_date",
+                    "status",
+                }
             ),
+            status="skipped" if o.status == "voided" else o.status,
         )
-        for o in sorted(occurrences, key=lambda o: (o.scheduled_date, o.id or 0))
-    )
+        rows.append(row_occurrence)
+    db.add_all(rows)
+    db.flush()
+    occurrence_ids = {
+        o.id: row.id for o, row in zip(ordered, rows, strict=True) if o.id is not None
+    }
+    links = {
+        trade_ids[t.id]: occurrence_ids[t.recurring_occurrence_id]
+        for t in trades
+        if t.recurring_occurrence_id is not None
+    }
+    if links:
+        for trade_row in db.query(Trade).filter(Trade.user_id == user_id, Trade.id.in_(links)):
+            trade_row.recurring_occurrence_id = links[trade_row.id]
     return len(plans), len(occurrences)
 
 
@@ -321,8 +354,17 @@ def restore_data(db: Session, user_id: UUID, file: ImportFile, *, dry_run: bool)
             db, user_id, file.contribution_plans, trade_ids
         )
         restored["recurring_investments"], restored["recurring_occurrences"] = _restore_recurring(
-            db, user_id, file.recurring_investments, file.recurring_occurrences, trade_ids
+            db,
+            user_id,
+            file.recurring_investments,
+            file.recurring_occurrences,
+            trade_ids,
+            file.trades,
         )
+        if any(o.status == "voided" for o in file.recurring_occurrences):
+            skipped.append(
+                "Voided recurring entries were restored as skipped and will not be posted again."
+            )
         restored["portfolio_snapshots"] = _restore_snapshots(db, user_id, file.portfolio_snapshots)
         restored["investment_preferences"] = _restore_preferences(
             db, user_id, file.investment_preferences, skipped

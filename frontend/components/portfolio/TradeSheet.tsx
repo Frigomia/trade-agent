@@ -19,10 +19,13 @@ import type { TradeAction } from "@/lib/api/portfolio-types";
 import { todayIso } from "@/lib/format";
 import { useAction } from "@/lib/useAction";
 
+import { RecurringPlanForm } from "./RecurringInvestments";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+
 export interface TradeSheetProps {
   open: boolean;
   onClose: () => void;
-  holdings: { ticker: string; name: string }[];
+  holdings: { ticker: string; name: string; asset_type?: "STOCK" | "ETF" }[];
   prefill?: { ticker?: string; action?: TradeAction };
   onLogged: () => void;
   recurringOccurrence?: { id: number; currency: string };
@@ -35,9 +38,15 @@ export function TradeSheet({ open, onClose, holdings, prefill, onLogged, recurri
   const isPhone = useMediaQuery(theme.breakpoints.down("md"));
   // A trade being logged cannot be dismissed: the form would unmount with no error display.
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState("once");
+  const close = () => { setMode("once"); onClose(); };
+  const selected = holdings.find((h) => h.ticker === prefill?.ticker);
   return (
-    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : onClose} slotProps={{ paper: { "aria-busy": busy } }}>
-      <TradeForm holdings={holdings} prefill={prefill} onClose={onClose} onLogged={onLogged} onBusyChange={setBusy} recurringOccurrence={recurringOccurrence} />
+    <Drawer anchor={isPhone ? "bottom" : "right"} open={open} onClose={busy ? undefined : close} slotProps={{ paper: { "aria-busy": busy } }}>
+      {!recurringOccurrence && <Box sx={{ px: 3, pt: 2 }}><SegmentedControl label="Trade type" segments={[{ key: "once", label: "One-time" }, { key: "recurring", label: "Recurring" }]} value={mode} onChange={busy ? undefined : setMode} fill /></Box>}
+      {mode === "recurring" && !recurringOccurrence ? <Box sx={{ width: { xs: "auto", md: 400 }, p: 3 }}>
+        <RecurringPlanForm prefill={prefill?.ticker ? { ticker: prefill.ticker, name: selected?.name, asset_type: selected?.asset_type } : undefined} onSaved={onLogged} onClose={close} onBusyChange={setBusy} />
+      </Box> : <TradeForm holdings={holdings} prefill={prefill} onClose={close} onLogged={onLogged} onBusyChange={setBusy} recurringOccurrence={recurringOccurrence} />}
     </Drawer>
   );
 }

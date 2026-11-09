@@ -707,3 +707,78 @@ def test_the_refusal_names_every_kind_that_blocks(db_session):
         require_empty_account(db_session, USER_ID)
 
     assert "trades, saved daily values" in refused.value.message
+
+
+@pytest.mark.parametrize("status", ["posted", "reconciled", "voided"])
+def test_estimated_import_preserves_metadata_and_remaps_both_links(
+    client, db_session, app_session_local, status
+):
+    import asyncio
+
+    from app import recurring
+    from tests.test_schemas_import import estimated_file
+
+    payload = estimated_file(status)
+    response = client.post("/me/import", json=payload)
+    assert response.status_code == 200, response.text
+    plan = db_session.query(RecurringInvestment).filter_by(user_id=USER_ID).one()
+    entry = db_session.query(RecurringOccurrence).filter_by(user_id=USER_ID).one()
+    assert plan.id != 30 and entry.id != 20
+    assert entry.plan_id == plan.id
+    assert (plan.frequency, plan.interval_count, plan.interval_unit) == ("custom", 3, "weeks")
+    assert plan.tracking_enabled and plan.exchange == "NMS"
+    assert plan.end_date == date(2099, 12, 31)
+    assert entry.reference_price == Decimal(100)
+    assert entry.fx_rate == Decimal("1.2") and entry.attempts == 2
+    assert entry.pricing_source == "Yahoo daily close"
+    assert entry.effective_date == date(2024, 1, 31)
+    assert entry.fx_date == date(2024, 1, 30) and entry.quote_currency == "USD"
+    assert db_session.query(Holding).filter_by(user_id=USER_ID).one().shares == 2
+    exported = client.get("/me/export").json()
+    ImportFile.model_validate(exported)
+    if status == "voided":
+        assert entry.status == "skipped" and entry.trade_id is None
+        assert not exported["trades"]
+        assert response.json()["skipped"]
+    else:
+        trade = db_session.query(Trade).filter_by(user_id=USER_ID).one()
+        assert trade.id != 10
+        assert trade.recurring_occurrence_id == entry.id and entry.trade_id == trade.id
+        assert trade.provenance == payload["trades"][0]["provenance"]
+        assert exported["recurring_occurrences"][0]["status"] == status
+        assert exported["trades"][0]["recurring_occurrence_id"] == entry.id
+        assert exported["recurring_occurrences"][0]["trade_id"] == trade.id
+    with open_user_session(app_session_local, USER_ID) as db:
+        assert asyncio.run(recurring.post_due(db, USER_ID)) == (0, 0)
+    if status != "voided":
+        from app.schemas import TradeIn
+        from app.trades import apply_trade
+
+        holding = db_session.query(Holding).filter_by(user_id=USER_ID).one()
+        opening = recurring._position(holding)
+        later = apply_trade(
+            db_session,
+            USER_ID,
+            holding,
+            TradeIn(date=date(2024, 2, 1), ticker="AAPL", action="BUY", shares=1, price=100),
+        )
+        db_session.flush()
+        later_entry = RecurringOccurrence(
+            user_id=USER_ID,
+            plan_id=plan.id,
+            scheduled_date=date(2024, 2, 1),
+            ticker="AAPL",
+            asset_type="STOCK",
+            amount=100,
+            currency="USD",
+            status="posted",
+            trade_id=later.id,
+            position_before=opening,
+        )
+        db_session.add(later_entry)
+        db_session.flush()
+        later.provenance, later.recurring_occurrence_id = "recurring_estimated", later_entry.id
+        db_session.commit()
+        refused = client.delete(f"/portfolio/recurring/occurrences/{entry.id}/estimate")
+        assert refused.status_code == 409
+        assert "reconcile the position manually" in refused.json()["detail"]

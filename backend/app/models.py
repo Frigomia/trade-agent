@@ -122,6 +122,8 @@ class Trade(Base):
     action: Mapped[str] = mapped_column(String(4))  # "BUY" | "SELL"
     shares: Mapped[float] = mapped_column(Numeric(18, 6))
     price: Mapped[float] = mapped_column(Numeric(18, 6))
+    provenance: Mapped[str] = mapped_column(String(24), default="manual", server_default="manual")
+    recurring_occurrence_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
 
 
 class RecurringInvestment(Base):
@@ -142,6 +144,12 @@ class RecurringInvestment(Base):
     start_date: Mapped[date] = mapped_column(Date)
     next_date: Mapped[date] = mapped_column(Date)
     status: Mapped[str] = mapped_column(String(10), default="active")
+    frequency: Mapped[str] = mapped_column(String(10), default="monthly", server_default="monthly")
+    interval_count: Mapped[int] = mapped_column(default=1, server_default="1")
+    interval_unit: Mapped[str] = mapped_column(String(6), default="months", server_default="months")
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    exchange: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    tracking_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
 
 class RecurringOccurrence(Base):
@@ -150,10 +158,12 @@ class RecurringOccurrence(Base):
         UniqueConstraint("user_id", "plan_id", "scheduled_date", name="uq_recurring_date"),
         UniqueConstraint("trade_id", name="uq_recurring_trade"),
         CheckConstraint(
-            "status IN ('scheduled', 'skipped', 'confirmed')", name="ck_occurrence_status"
+            "status IN ('scheduled', 'skipped', 'confirmed', 'posted', 'reconciled', 'voided')",
+            name="ck_occurrence_status",
         ),
         CheckConstraint(
-            "(status = 'confirmed') = (trade_id IS NOT NULL)", name="ck_occurrence_confirmation"
+            "(status IN ('confirmed', 'posted', 'reconciled', 'voided')) = (trade_id IS NOT NULL)",
+            name="ck_occurrence_confirmation",
         ),
     )
 
@@ -167,6 +177,15 @@ class RecurringOccurrence(Base):
     currency: Mapped[str] = mapped_column(String(3))
     status: Mapped[str] = mapped_column(String(10), default="scheduled")
     trade_id: Mapped[int | None] = mapped_column(nullable=True)
+    effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    quote_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    reference_price: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
+    fx_rate: Mapped[float | None] = mapped_column(Numeric(24, 12), nullable=True)
+    fx_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pricing_source: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    attempts: Mapped[int] = mapped_column(default=0, server_default="0")
+    position_before: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
 
 class Recommendation(Base):

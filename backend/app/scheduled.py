@@ -98,7 +98,8 @@ async def run_recurring(summary: Summary) -> None:
     for user_id in ids:
         try:
             with app_db.scoped_session(user_id) as db:
-                recurring.process_due(db, user_id)
+                posted, waiting = await recurring.post_due(db, user_id)
+                logger.info("Recurring user %s: posted=%d waiting=%d", user_id, posted, waiting)
         except Exception as exc:
             summary.failures += 1
             logger.warning("Recurring entries failed for user %s: %s", user_id, type(exc).__name__)

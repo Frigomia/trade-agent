@@ -526,3 +526,14 @@ Open items:
   are made up and say so. The headline is a display size (up to 3.375rem) used only here. The Scan results page
   (a link from the scan bar) lists what a scan left out as one ledger: a pill filter with counts, rows of company,
   where it fell out and why, each opening to the scan's explanation in the dashed box and its sources.
+
+
+**Recurring estimated tracking (2026-11-06):** no Recurring Portfolio tab. Add Holding and Log Trade
+share a One-time / Recurring choice and one recurring form, using the existing stock/ETF picker.
+The start/anchor date chooses weekday/day; historical preview requires explicit backfill approval.
+There is no broker/source/account field or monthly confirmation. Manage recurring plans includes
+unheld instruments; secondary holding indicators open the same mobile bottom sheet / desktop
+drawer. Preserve 44px targets, safe-area padding, wrapping names and scrolling forms. Totals
+including unverified purchases say Estimated portfolio. History labels automatic entries Estimated,
+shows plan/pricing/FX provenance and offers correction/void. Always display: “Purchases are
+estimated from market prices. No orders are placed or verified.”

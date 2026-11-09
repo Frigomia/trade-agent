@@ -36,7 +36,7 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
   if (logged) {
     return (
       <Alert severity="success" sx={{ mt: 2, textAlign: "left" }}>
-        Trade logged.
+        Saved to your portfolio.
       </Alert>
     );
   }
@@ -55,7 +55,7 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
         <TradeSheet
           open={open}
           onClose={() => setOpen(false)}
-          holdings={summary.holdings.map((h) => ({ ticker: h.ticker, name: h.name }))}
+          holdings={summary.holdings.map((h) => ({ ticker: h.ticker, name: h.name, asset_type: h.asset_type }))}
           prefill={{ ticker: recommendation.ticker, action }}
           onLogged={done}
         />
@@ -65,6 +65,7 @@ export function LogTradeCta({ recommendation }: { recommendation: Recommendation
           onClose={() => setOpen(false)}
           heldTickers={summary.holdings.map((h) => h.ticker)}
           prefillTicker={recommendation.ticker}
+          prefillAssetType={recommendation.asset_type}
           onSaved={done}
         />
       )}

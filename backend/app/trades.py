@@ -27,26 +27,31 @@ def _as_stored(value: float) -> float:
     return float(exact.quantize(STORED_STEP, ROUND_HALF_EVEN))
 
 
-def apply_trade(db: Session, user_id: uuid.UUID, holding: Holding, payload: TradeIn) -> Trade:
-    shares = _as_stored(payload.shares)
-    price = _as_stored(payload.price)
+def apply_position(holding: Holding, payload: TradeIn) -> None:
+    """Apply ledger arithmetic without committing or creating a trade (also used by corrections)."""
+    shares = Decimal(str(_as_stored(payload.shares)))
+    price = Decimal(str(_as_stored(payload.price)))
+    prior_shares = Decimal(str(holding.shares))
+    basis = None if holding.cost_basis is None else Decimal(str(holding.cost_basis))
     if payload.action == "BUY":
-        prior_shares = float(holding.shares)
-        basis = holding.cost_basis
-        holding.shares = float(holding.shares) + shares
+        total = prior_shares + shares
+        holding.shares = float(total)
         if prior_shares == 0:
-            holding.cost_basis = price
+            holding.cost_basis = float(price)
             if holding.first_purchase_date is None:
                 holding.first_purchase_date = payload.date
         elif basis is not None:
-            holding.cost_basis = (prior_shares * float(basis) + shares * price) / float(
-                holding.shares
-            )
-        # An existing position with unknown basis stays unknown after adding shares.
-    else:  # SELL (TradeIn.action is BUY or SELL)
-        if shares > float(holding.shares):
-            raise TradeRefused(f"Cannot sell {shares}; holding has {float(holding.shares)}")
-        holding.shares = float(holding.shares) - shares
+            holding.cost_basis = float((prior_shares * basis + shares * price) / total)
+    else:
+        if shares > prior_shares:
+            raise TradeRefused(f"Cannot sell {shares}; holding has {prior_shares}")
+        holding.shares = float(prior_shares - shares)
+
+
+def apply_trade(db: Session, user_id: uuid.UUID, holding: Holding, payload: TradeIn) -> Trade:
+    apply_position(holding, payload)
+    shares = _as_stored(payload.shares)
+    price = _as_stored(payload.price)
     # model_copy(update=...) is a new TradeIn with the rounded numbers; the payload is unchanged.
     stored = payload.model_copy(update={"shares": shares, "price": price})
     trade = Trade(user_id=user_id, **stored.model_dump())
