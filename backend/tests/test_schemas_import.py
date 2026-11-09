@@ -438,7 +438,7 @@ def test_the_existing_input_rules_still_apply():
         lambda d: d["watchlist_items"][0].update(target_price_low=5),  # one end only
         lambda d: d["recurring_investments"][0].update(currency="euro"),
         lambda d: d["recurring_investments"][0].update(start_date="1999-12-31"),
-        lambda d: d["recurring_investments"][0].update(frequency="weekly"),
+        lambda d: d["recurring_investments"][0].update(frequency="hourly"),
         lambda d: d["investment_preferences"].update(drift_threshold_pct=80),
         lambda d: d["investment_preferences"].update(risk_tolerance="reckless"),
         lambda d: d["holdings"][0].update(isin="not-an-isin"),
@@ -577,3 +577,82 @@ def test_a_paused_plans_occurrences_may_be_dated_any_day_up_to_today():
     data["recurring_occurrences"][0]["scheduled_date"] = "2024-12-31"
 
     ImportFile.model_validate(data)
+
+
+def estimated_file(status="posted"):
+    data = valid_file()
+    data["contribution_plans"] = []
+    data["recurring_investments"][0].update(
+        tracking_enabled=True,
+        exchange="NMS",
+        frequency="custom",
+        interval_count=3,
+        interval_unit="weeks",
+        end_date="2099-12-31",
+        next_date="2099-01-01",
+    )
+    data["recurring_occurrences"][0].update(
+        id=20,
+        status=status,
+        effective_date="2024-01-31",
+        quote_currency="USD",
+        reference_price="100.000000",
+        fx_rate="1.200000000000",
+        fx_date="2024-01-30",
+        pricing_source="Yahoo daily close",
+        error=None,
+        attempts=2,
+        shares="1.000000",
+        price="100.000000",
+        trade_date="2024-01-31",
+    )
+    if status == "voided":
+        data["trades"] = []
+        data["recurring_occurrences"][0]["trade_id"] = None
+    else:
+        data["trades"][0].update(
+            provenance="recurring_estimated" if status == "posted" else "reconciled",
+            recurring_occurrence_id=20,
+        )
+    return data
+
+
+@pytest.mark.parametrize("status", ["posted", "reconciled", "voided"])
+def test_estimated_exports_validate(status):
+    parsed = ImportFile.model_validate(estimated_file(status))
+    assert parsed.recurring_occurrences[0].status == status
+    assert parsed.recurring_investments[0].tracking_enabled
+    assert parsed.recurring_investments[0].interval_count == 3
+
+
+@pytest.mark.parametrize(
+    "frequency,count,unit",
+    [("weekly", 1, "weeks"), ("biweekly", 2, "weeks"), ("monthly", 1, "months")],
+)
+def test_import_recurring_cadences(frequency, count, unit):
+    data = estimated_file()
+    data["recurring_investments"][0]["frequency"] = frequency
+    plan = ImportFile.model_validate(data).recurring_investments[0]
+    assert (plan.interval_count, plan.interval_unit) == (count, unit)
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("trades", 0, "recurring_occurrence_id"), 999),
+        (("trades", 0, "recurring_occurrence_id"), None),
+        (("trades", 0, "provenance"), "voided"),
+        (("trades", 0, "provenance"), "manual"),
+        (("trades", 0, "ticker"), "MSFT"),
+        (("trades", 0, "action"), "SELL"),
+        (("recurring_occurrences", 0, "trade_id"), 999),
+        (("recurring_occurrences", 0, "fx_rate"), "NaN"),
+        (("recurring_occurrences", 0, "reference_price"), -1),
+        (("recurring_occurrences", 0, "attempts"), -1),
+        (("recurring_investments", 0, "interval_count"), 0),
+    ],
+)
+def test_estimated_import_rejects_invalid_metadata_and_links(path, value):
+    data = estimated_file()
+    _set(data, path, value)
+    refusal(data)

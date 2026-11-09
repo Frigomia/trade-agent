@@ -581,6 +581,11 @@ def correct_estimate(
         row = _occurrence(db, user_id, occurrence_id)
         if row.status not in {"posted", "reconciled"} or row.trade_id is None:
             raise RecurringRefused("Only a posted estimate can be corrected or voided.")
+        if row.position_before is None:
+            raise RecurringRefused(
+                "The opening position for this imported estimate is unavailable; "
+                "reconcile the position manually."
+            )
         if payload is not None and payload.date > today():
             raise RecurringRefused("A corrected purchase cannot be in the future.", 422)
         holding = db.query(Holding).filter_by(user_id=user_id, ticker=row.ticker).one_or_none()

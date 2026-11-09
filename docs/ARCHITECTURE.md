@@ -549,14 +549,21 @@ no monthly allowance and never calls a broker.
   and `skipped` says so. `auto_analysis` and `auto_discovery` are always saved off, and `skipped`
   says so when the file had either on.
 - **Ids and links.** Every row gets the signed-in person's id and a new id; the file's `id` and
-  `user_id` are ignored. Four links are rewritten to the new ids: an entry's `plan_id` and
-  `trade_id`, and a saved-plan line's `plan_id` and `placed_trade_id`. A link to something not in
+  `user_id` are ignored. Links are rewritten to the new ids: an entry's `plan_id` and
+  `trade_id`, a trade's `recurring_occurrence_id`, and a saved-plan line's `plan_id` and
+  `placed_trade_id`. Trade-to-entry links must agree in both directions, ticker and provenance.
+  A link to something not in
   the file, a confirmed entry without a trade, or two entries for one plan and date make the
   file invalid. Holdings and trades are copied as they are; no trade logic runs. Recurring plans
   keep their status and `next_date` (a plan that is not active gets its `start_date`, since the
   export blanks it), and nothing is regenerated. Entry dates must be consistent: none may be in
   the future, and every entry of an active plan must be dated before that plan's `next_date`
   (the daily job continues from it, so an entry at or after it would be duplicated).
+  Schedule cadence, tracking settings, exchange, end date, trade provenance and occurrence pricing
+  metadata are retained. Posted/reconciled entries keep their trades; exported voided entries have
+  no trade and restore as skipped, with an import-result note, so they cannot be posted again.
+  Opening position snapshots are not exported: correcting an imported estimate requires manual
+  position reconciliation rather than inventing a baseline.
 - **One transaction.** The route takes the per-person lock first with `lock_and_check_active`
   (the lock jobs and "Delete my data" use) and refuses with `403` if the account is not active,
   checks the account is empty, writes everything and commits once;

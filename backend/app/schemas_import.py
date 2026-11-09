@@ -137,6 +137,8 @@ class ImportTrade(TradeIn):
     price: TargetPrice
     id: Id  # the link key occurrences and plan lines point at
     user_id: UUID | None = None  # ignored
+    provenance: Literal["manual", "recurring_estimated", "reconciled"] = "manual"
+    recurring_occurrence_id: Id | None = None
 
 
 class ImportSnapshot(BaseModel):
@@ -211,6 +213,8 @@ class ImportRecurring(RecurringIn):
 
     id: Id
     user_id: UUID | None = None  # ignored
+    tracking_enabled: bool = False
+    exchange: Text50 | None = None
     # The export blanks it for a plan that is not active; the importer sets it (Task 5).
     next_date: RecurringDate | None = None
     status: Literal["active", "paused", "ended"]
@@ -234,8 +238,19 @@ class ImportOccurrence(BaseModel):
     asset_type: AssetType
     amount: RecurringAmount
     currency: str = Field(pattern=r"^[A-Z]{3}$")
-    status: Literal["scheduled", "skipped", "confirmed"]
+    status: Literal["scheduled", "skipped", "confirmed", "posted", "reconciled", "voided"]
     trade_id: Id | None = None
+    effective_date: RecurringDate | None = None
+    quote_currency: Text10 | None = None
+    reference_price: TargetPrice | None = None
+    fx_rate: Annotated[float, Field(gt=0, le=999_999_999_999, allow_inf_nan=False)] | None = None
+    fx_date: RecurringDate | None = None
+    pricing_source: Text100 | None = None
+    error: Text200 | None = None
+    attempts: int = Field(default=0, ge=0, le=2_147_483_647)
+    shares: TargetPrice | None = None  # computed from the trade
+    price: TargetPrice | None = None  # computed from the trade
+    trade_date: RecurringDate | None = None  # computed from the trade
 
 
 class ImportPreferences(PreferencesIn):
@@ -307,6 +322,7 @@ class ImportFile(BaseModel):
             ("trades", [t.id for t in self.trades]),
             ("saved plans", [p.id for p in self.contribution_plans]),
             ("recurring investments", [r.id for r in self.recurring_investments]),
+            ("recurring entries", [o.id for o in self.recurring_occurrences if o.id is not None]),
         ):
             if _repeated(ids):
                 raise ValueError(f"Two of the {what} in this file share an id.")
@@ -331,14 +347,44 @@ class ImportFile(BaseModel):
     def _a_confirmed_occurrence_has_its_trade(self) -> Self:
         trade_ids = {t.id for t in self.trades}
         for o in self.recurring_occurrences:
-            if o.status == "confirmed" and o.trade_id is None:
+            linked = o.status in {"confirmed", "posted", "reconciled"}
+            if linked and o.trade_id is None:
                 raise ValueError("A confirmed recurring entry in this file has no trade.")
-            if o.status == "confirmed" and o.trade_id not in trade_ids:
+            if linked and o.trade_id not in trade_ids:
                 raise ValueError(
                     "A confirmed recurring entry in this file points at a trade that is not in it."
                 )
-            if o.status != "confirmed" and o.trade_id is not None:
+            if not linked and o.trade_id is not None:
                 raise ValueError("A recurring entry in this file has a trade but is not confirmed.")
+        return self
+
+    @model_validator(mode="after")
+    def _trade_occurrence_links_are_consistent(self) -> Self:
+        occurrences = {o.id: o for o in self.recurring_occurrences if o.id is not None}
+        trades = {t.id: t for t in self.trades}
+        for o in self.recurring_occurrences:
+            if (
+                o.status in {"posted", "reconciled"}
+                and o.trade_id is not None
+                and (o.id is None or trades[o.trade_id].recurring_occurrence_id != o.id)
+            ):
+                raise ValueError("An estimated recurring entry has no matching trade backlink.")
+        for trade in self.trades:
+            key = trade.recurring_occurrence_id
+            if key is None:
+                if trade.provenance != "manual":
+                    raise ValueError("An estimated or reconciled trade has no recurring entry.")
+                continue
+            occurrence = occurrences.get(key)
+            if (
+                occurrence is None
+                or occurrence.trade_id != trade.id
+                or occurrence.ticker != trade.ticker
+                or trade.action != "BUY"
+                or (occurrence.status, trade.provenance)
+                not in {("posted", "recurring_estimated"), ("reconciled", "reconciled")}
+            ):
+                raise ValueError("A trade's recurring entry link or provenance is inconsistent.")
         return self
 
     @model_validator(mode="after")
