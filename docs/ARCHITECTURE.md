@@ -1983,3 +1983,35 @@ Discover lists researched non-opportunities honestly as analyzed, with a result 
 a fake BUY report. The free page reuses Soft panels, company identity/sector icons and the accessible
 price chart; only an explicit Analyze click starts paid work. Missing keys link to /more/account,
 quota uses actual /me/usage values, and settlement uncertainty disables retry. No broker call exists.
+
+### Reopening a saved company (#283)
+
+Design record: [reopen-saved-company](design/reopen-saved-company/SPEC.md). A discovery idea
+that was decided or replaced opens on the same company page, with a status strip above the tabs,
+instead of a dead end. `/today/{id}` routes on the by-id recommendation:
+
+- A `SUPERSEDED` idea with a `successor_id` redirects (`router.replace`) to that recommendation
+  with `?from=superseded`. If the successor is still pending the strip reads "Newer analysis"
+  (driven by the query parameter, so a refresh keeps it); if it was already approved or dismissed,
+  the page shows that decision's strip instead. The successor is the newest later recommendation
+  for the ticker of any source and status, because a manual or scheduled analysis also replaces a
+  pending idea.
+- A `SUPERSEDED` idea with no successor shows the Withdrawn view: the strip, the saved reason in
+  the dashed AI box and the date from `withdrawal`. The reason and date come from the latest saved
+  evidence after the idea: a later scan's `thesis_invalidated` exclusion, a later researched
+  `no_opportunity` company analysis, or a later scan's `set_aside_ideas`. With none of these the
+  strip uses a generic sentence and shows no date and no box.
+- An `APPROVED` or `REJECTED` idea opens the company page with the Approved or Dismissed strip
+  (the decision date and, for a dismissal, the person's own note), and a rail with the live price,
+  the move since the recommendation and only the actions that still make sense. "Change my
+  decision" reverses the decision in place and stays on the page. The "Decision recorded"
+  confirmation shows only in the visit that made the decision (client state, not a route), with a
+  "View the company page" link; a refresh or a later visit shows the page with its strip.
+- The withdrawn rail shows "Run a new analysis" disabled ("Re-running a researched company is not
+  available yet."), because `POST /discover/{ticker}/analyze` returns the saved result for a
+  researched company and would not run anything. Making it work is a separate ticket.
+- Recommendations that are not discovery ideas keep their existing pages. The Discover list marks
+  each card from `report_status` with an Approved, Dismissed or Withdrawn chip (a pending idea
+  keeps "AI analyzed"), labels the button "View decision" for the first two, and shows the
+  withdrawn card's reading as a fixed sentence. Nothing here places an order; approval and
+  dismissal only update local state.

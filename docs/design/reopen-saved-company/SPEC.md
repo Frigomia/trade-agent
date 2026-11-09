@@ -1,6 +1,6 @@
 # Reopen a saved company: Approved, Dismissed, Withdrawn, newer analysis
 
-Status: mock approved 2026-11-09 for [#283](https://github.com/Frigomia/trade-agent/issues/283); not built. Nothing here is implemented in `frontend/` or `backend/`. The company and its numbers are fictional.
+Status: built (#283), 2026-11-09. The mock was approved the same day for [#283](https://github.com/Frigomia/trade-agent/issues/283); the build differs from it in the five ways under "Changed during the build". The company and its numbers in `reopen.html` are fictional.
 
 Open `reopen.html` (add `?theme=dark`, and `?only=desk|phones|states`). `WIN=1340 docs/design/tools/shootall.sh reopen-saved-company reopen:rsc` regenerates the screenshots in `shots/` (not tracked). It loads the shared files of the Workbench and Discover mocks and changes none of them.
 
@@ -17,7 +17,7 @@ So the research page stays the research page. One **status strip** between the c
 | Waiting, newer analysis | Opened an older recommendation that a newer one replaced, and that newer one is still pending | "Newer analysis", updated date, one sentence | Approve, Save to Discover, Dismiss, Ask AI (unchanged) |
 | Approved | Status `APPROVED` | Approved chip, date, "No order was placed; trade-agent never trades. If you acted on it in your broker app, log the trade you placed." | Log the trade I placed (primary), Change my decision, Ask AI |
 | Dismissed | Status `REJECTED` | Dismissed chip, date, the person's own note if there is one | Change my decision, Ask AI |
-| Withdrawn | Status `SUPERSEDED` and no newer recommendation exists | Withdrawn chip, date, "The latest scan no longer found this compelling. The research below is the earlier analysis ...; nothing replaced it." and the scan's saved reason in a dashed AI box, labelled with its source and date | Run a new analysis (primary, "uses 1 of your monthly runs"), Company overview, Ask AI |
+| Withdrawn | Status `SUPERSEDED` and no newer recommendation exists | Withdrawn chip, date, "The latest scan no longer found this compelling. The research below is the earlier analysis ...; nothing replaced it." and the scan's saved reason in a dashed AI box, labelled with its source and date | Company overview (primary), Run a new analysis (shown but disabled, see "Changed during the build"), Ask AI |
 
 Right after deciding, the existing "Decision recorded" confirmation still appears once, with one new link, "View the company page". It is client state of that visit, not a route, so a refresh, the back button or reopening shows the decided page with its strip instead.
 
@@ -32,7 +32,7 @@ Right after deciding, the existing "Decision recorded" confirmation still appear
 
 ## Discover card
 
-The status pill becomes a decision chip: AI analyzed (unchanged, waiting), Approved, Dismissed, Withdrawn. The first button reads "View decision" for Approved and Dismissed, and "View" otherwise. For a withdrawn idea the one-line reading is replaced by the scan's reason, since the old reading is no longer the latest view. The company name keeps linking to the company overview. Edit and Remove are unchanged.
+The status pill becomes a decision chip: AI analyzed (unchanged, waiting), Approved, Dismissed, Withdrawn. The first button reads "View decision" for Approved and Dismissed, and "View" otherwise. For a withdrawn idea the one-line reading is replaced by a fixed sentence, since the old reading is no longer the latest view (the mock shows the scan's reason; the list endpoint does not return it). The company name keeps linking to the company overview. Edit and Remove are unchanged.
 
 ## Data and behaviour for the build
 
@@ -42,12 +42,24 @@ The status pill becomes a decision chip: AI analyzed (unchanged, waiting), Appro
 - **Decision date.** `reviewed_at`. **Note.** `dismissal_reason`.
 - **Withdrawn date.** A superseded idea has no review date. Use the `created_at` of the scan (or single-company analysis) that withdrew it, from the same read path as the reason; when it is not available, show the chip without a date.
 - **Rendering.** Every note and reason (the person's dismissal note, the AI's withdrawn reason) is rendered as text, never as markup. The mock builds strings for brevity; the build uses React's normal escaping.
-- **Run a new analysis.** Reuses the Discover research action and its usage message; needs a Claude key, with the existing locked state when there is none.
+- **Run a new analysis.** Disabled in the build (see "Changed during the build"); the mock's working button is not built.
 - **Scope.** Discovery ideas (the Workbench). Recommendations without an idea keep their existing pages and the existing confirmation panel.
 - **Confirmation once.** Show `ConfirmationPanel` only while the page holds the decision made in this visit; otherwise render the Workbench with the strip.
 - **Privacy.** Everything is the owner's own saved data behind the existing per-user access; no new table.
 
-## Open questions (defaults used, the owner did not answer)
+## Changed during the build
+
+The build follows the mock except for these (recorded 2026-11-09):
+
+1. **Run a new analysis is shown but disabled**, with "Re-running a researched company is not available yet." beneath it, and Company overview is the primary action. The analyze endpoint (`POST /discover/{ticker}/analyze`) returns the saved result for a researched company, so a working button would run nothing. Making it work is a separate ticket (owner decision).
+2. **The decided and withdrawn rails show the live price and the move since the recommendation.** The by-id endpoint now attaches the live quote to a discovery idea of any status (it did so for pending rows only) and, for a discovery idea, returns `current_price` in the major unit so it compares with `price_at_recommendation` (a London quote is pence). When the live quote is missing or not positive the rail shows the saved quote and no move.
+3. **The successor is the newest later recommendation of any source and status**, not only a discovery one, because a manual or scheduled analysis also replaces a pending idea. The new field is `successor_id`; `withdrawal` `{kind, reason, as_of}` is returned only when there is none.
+4. **The rails have a "See sources" row** (the source count and a link to the Sources tab), as the pending rail does.
+5. **The Discover chip and the withdrawn reading.** The Discover item carries `report_status`; the chip is shape plus word. A withdrawn card shows a fixed sentence ("The latest scan no longer found this compelling.") rather than the scan's reason, which the list endpoint does not return.
+
+## Open questions
+
+Questions 1 and 2 stay at their defaults (the owner did not answer); 3 is resolved.
 
 1. The sidebar highlights Today for this page because the route is `/today/[id]`, even when you arrive from Discover. The mock mirrors that. Worth highlighting Discover when the link came from there?
 2. The "Newer analysis" strip stays for as long as the redirect parameter is in the address and has no dismiss control. Is that enough, or should it be dismissible?

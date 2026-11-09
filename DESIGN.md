@@ -331,6 +331,9 @@ visible. Select the icon from the sector alone, not the combined sector and indu
 - **Not analyzed:** dashed circle icon, dashed edge, no fill.
 - **Analyzing:** dotted edge while a run is in progress.
 - **Disputed / Unverified** (a claim's status): the edge is dashed or dotted, with the word.
+- **Approved / Dismissed / Withdrawn** (a decision on a saved idea, in the status strip and on the
+  Discover card): Approved is a check-circle on the Cobalt Wash; Dismissed is an x-circle and
+  Withdrawn a slashed circle, both outlined with no fill. Always the icon and the word.
 
 ### Confidence and risk meters
 Three or five small bars (8 by 12px, 2px radius, 1px edge); filled bars use the secondary text
@@ -429,6 +432,17 @@ every source, data limits, unresolved evidence and the unverified community view
 facts (sector weight, concentration, volatility and correlation, before and after) come from data
 the backend saves with each new idea; an idea saved before that shows what it has and says what it
 lacks.
+
+**Built on reopening a saved company** (#283, same page): a decided or withdrawn idea shows one
+status strip between the company header and the tabs (a status chip with its date, one sentence,
+the person's dismissal note or the withdrawn reason in the dashed AI box). The rail leads with the
+live price and the move since the recommendation (green or red only on the move; the saved quote
+stands in when no live one loads), then only the actions that still make sense: Log the trade I
+placed (approved), Change my decision, Ask AI, and a "See sources" row. A withdrawn idea has
+Company overview and a disabled "Run a new analysis" with "Re-running a researched company is not
+available yet." beneath it. A superseded idea opens its newer analysis with a "Newer analysis"
+strip. On Discover the status pill becomes an Approved, Dismissed or Withdrawn chip and the first
+button reads "View decision" for the first two.
 
 **Built on Portfolio (first slice of the Explorer):** a slim overview strip (total value, gain or
 loss, today's change as "Not available" until the previous close is saved, and the value chart once
