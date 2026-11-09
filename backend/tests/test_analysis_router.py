@@ -958,16 +958,35 @@ def test_a_major_unit_discovery_idea_keeps_its_quote(client, db_session):
     assert body["current_price"] == 1234.0
 
 
-def test_an_unknown_quote_currency_leaves_a_discovery_price_unchanged(client, db_session):
+@pytest.mark.parametrize(
+    "lookup", [AsyncMock(side_effect=RuntimeError("down")), AsyncMock(return_value=None)]
+)
+def test_a_discovery_quote_with_an_unknown_unit_is_withheld(client, db_session, lookup):
     row = _discovery_idea_quoted_in(db_session, None)
 
     with (
         patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)),
-        patch("app.routers.analysis.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))),
+        patch("app.routers.analysis.fetch_currency", lookup),
     ):
         body = client.get(f"/analysis/recommendations/{row.id}").json()
 
-    assert body["current_price"] == 1234.0
+    assert body["current_price"] is None  # never a pence price read as pounds
+    assert round(body["price_change_pct"], 4) == round((1234.0 - 1200.0) / 1200.0 * 100, 4)
+
+
+def test_a_superseded_manual_row_gets_neither_field(client, db_session):
+    row = _rec(USER_ID, "AAPL")
+    row.status = "SUPERSEDED"
+    db_session.add(row)
+    db_session.commit()
+    db_session.add(_rec(USER_ID, "AAPL"))  # a newer row for the same ticker
+    db_session.commit()
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value={})):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["successor_id"] is None
+    assert body["withdrawal"] is None
 
 
 def test_a_non_discovery_row_keeps_the_raw_quote(client, db_session):

@@ -30,17 +30,20 @@ def successor_id(db: Session, rec: Recommendation) -> int | None:
     return newest[0] if newest is not None else None
 
 
-def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut:
-    """Why a superseded idea with no successor was withdrawn.
+def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut | None:
+    """Why a superseded idea with no successor was withdrawn; None for any other row.
 
     Looks for saved evidence newer than the idea and takes the latest. With none, the answer is a
     generic "not compelling" without a date: the system never invents a reason.
     """
+    if rec.status != "SUPERSEDED" or rec.source != "discovery":
+        return None
     # (a) and (c): the newest scan after the idea that excluded the company as invalidated, and
     # the newest that set it aside. ponytail: JSON is filtered in Python; one user has a few
     # scans a week, so add a SQL JSON filter only if scans ever pile up.
-    invalidated: WithdrawalOut | None = None
-    set_aside: WithdrawalOut | None = None
+    # Each answer comes with its date, so choosing the newest never compares a missing one.
+    invalidated: tuple[datetime, WithdrawalOut] | None = None
+    set_aside: tuple[datetime, WithdrawalOut] | None = None
     scans = (
         db.query(ScanRun)
         .filter(ScanRun.user_id == rec.user_id, ScanRun.created_at > rec.created_at)
@@ -51,16 +54,22 @@ def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut:
             for entry in scan.excluded or []:
                 is_it = entry.get("ticker") == rec.ticker
                 if is_it and entry.get("reason") == "thesis_invalidated":
-                    invalidated = WithdrawalOut(
-                        kind="invalidated",
-                        reason=entry.get("explanation") or None,
-                        as_of=scan.created_at,
+                    invalidated = (
+                        scan.created_at,
+                        WithdrawalOut(
+                            kind="invalidated",
+                            reason=entry.get("explanation") or None,
+                            as_of=scan.created_at,
+                        ),
                     )
                     break
         if set_aside is None:
             ideas = (scan.coverage_summary or {}).get("set_aside_ideas") or []
             if any(i.get("ticker") == rec.ticker for i in ideas):
-                set_aside = WithdrawalOut(kind="not_compelling", reason=None, as_of=scan.created_at)
+                set_aside = (
+                    scan.created_at,
+                    WithdrawalOut(kind="not_compelling", reason=None, as_of=scan.created_at),
+                )
         if invalidated is not None and set_aside is not None:
             break
 
@@ -77,16 +86,16 @@ def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut:
         .order_by(CompanyAnalysis.created_at.desc())
         .first()
     )
-    researched: WithdrawalOut | None = None
+    researched: tuple[datetime, WithdrawalOut] | None = None
     if analysis is not None:
-        researched = WithdrawalOut(
-            kind="not_compelling",
-            reason=analysis.reason,
-            as_of=analysis.finished_at or analysis.created_at,
+        analysed_at = analysis.finished_at or analysis.created_at
+        researched = (
+            analysed_at,
+            WithdrawalOut(kind="not_compelling", reason=analysis.reason, as_of=analysed_at),
         )
 
     # In tie order (a, b, c); max() keeps the first of equal dates.
     candidates = [c for c in (invalidated, researched, set_aside) if c is not None]
     if not candidates:
         return WithdrawalOut(kind="not_compelling", reason=None, as_of=None)
-    return max(candidates, key=lambda c: c.as_of or datetime.min)
+    return max(candidates, key=lambda c: c[0])[1]

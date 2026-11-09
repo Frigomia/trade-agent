@@ -61,6 +61,16 @@ LOOKUP_CONCURRENCY = 8
 PROFILE_FIELDS = {"name": 200, "exchange": 60, "currency": 10}
 
 
+ReportStatus = Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]
+# Looked up by name so a status outside the four comes back as None, typed.
+REPORT_STATUSES: dict[str, ReportStatus] = {
+    "PENDING": "PENDING",
+    "APPROVED": "APPROVED",
+    "REJECTED": "REJECTED",
+    "SUPERSEDED": "SUPERSEDED",
+}
+
+
 class DiscoverItemOut(BaseModel):
     ticker: str
     asset_type: Literal["ETF", "STOCK"]
@@ -82,7 +92,7 @@ class DiscoverItemOut(BaseModel):
     insight: str | None  # the idea's one-line reading, only when analyzed
     report_id: int | None  # the idea's id, to open its report
     # The decision on that idea; None when the item has no saved idea.
-    report_status: Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"] | None = None
+    report_status: ReportStatus | None = None
     # The person holds shares of it. Its weight target then lives on the holding, not here.
     owned: bool
     analysis: CompanyAnalysisOut | None = None
@@ -168,7 +178,8 @@ def _item_out(
         status="analyzed" if found else "none",
         insight=found[1] if found else None,
         report_id=found[0] if found else None,
-        report_status=found[2] if found else None,  # type: ignore[arg-type]  # pydantic checks it
+        # A status outside the four (a bad row) shows as none instead of failing the whole list.
+        report_status=REPORT_STATUSES.get(found[2]) if found else None,
         owned=owned,
     )
 

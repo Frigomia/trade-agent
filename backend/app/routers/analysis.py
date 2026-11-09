@@ -175,7 +175,8 @@ async def _price_in_major_unit(rec: RecommendationOut) -> None:
     """A discovery idea stores its price in the major unit (pounds), but the live quote is in the
     provider's own (pence for London). Converts the quote so the two compare. The snapshot only
     keeps the major unit, so the quote's unit comes from the provider, unless the snapshot kept a
-    minor one. When it cannot be read the quote is left as it came."""
+    minor one. When the unit cannot be read the price is withheld (None): a pence price shown as
+    pounds would be 100 times too high, and the screen falls back to the saved quote."""
     if rec.current_price is None or rec.source != "discovery" or rec.idea is None:
         return
     currency = rec.idea.snapshot.currency if rec.idea.snapshot else None
@@ -184,6 +185,9 @@ async def _price_in_major_unit(rec: RecommendationOut) -> None:
             currency = await fetch_currency(rec.ticker)
         except Exception as exc:
             logger.warning("Currency lookup failed for %s: %s", rec.ticker, type(exc).__name__)
+            currency = None
+        if currency is None:
+            rec.current_price = None
             return
     _, factor = minor_unit(currency)
     rec.current_price = float(Decimal(str(rec.current_price)) * factor)
@@ -227,8 +231,8 @@ async def get_recommendation(
     out = RecommendationOut.model_validate(rec)
     _attach_names(db, user.id, [out])
     out.successor_id = successor_id(db, rec)
-    if rec.status == "SUPERSEDED" and rec.source == "discovery" and out.successor_id is None:
-        out.withdrawal = withdrawal_for(db, rec)
+    if out.successor_id is None:
+        out.withdrawal = withdrawal_for(db, rec)  # None unless a superseded discovery idea
     db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
     await _attach_live_quotes([out], ("PENDING", "APPROVED", "REJECTED", "SUPERSEDED"))
     await _price_in_major_unit(out)

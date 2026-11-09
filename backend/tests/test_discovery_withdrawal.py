@@ -169,6 +169,7 @@ def test_other_kinds_get_neither_field(db_session):
         rec(db_session, status="SUPERSEDED", source="manual", age=10),
     ):
         assert successor_id(db_session, row) is None
+        assert withdrawal_for(db_session, row) is None
     assert newer.id  # the discovery rows above did have a newer idea to point at
 
 

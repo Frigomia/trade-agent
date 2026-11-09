@@ -177,6 +177,16 @@ def test_report_status_is_the_status_of_the_newest_saved_idea(client, db_session
     assert item["report_status"] == status
 
 
+def test_an_unknown_status_does_not_break_the_list(client, db_session):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=1, status="WITHDRAWN")  # outside the four the response knows
+
+    response = listing(client, {"HLDN": (1.0, [1.0, 1.0])})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["report_status"] is None
+
+
 def test_report_status_ignores_an_older_idea_with_a_different_status(client, db_session):
     seed(db_session, "HLDN")
     idea(db_session, "HLDN", age=5, status="APPROVED")
