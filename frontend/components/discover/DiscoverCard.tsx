@@ -1,17 +1,51 @@
 import Link from "next/link";
 import { Box, Button, Typography } from "@mui/material";
-import { Check, CircleDashed, Eye, Pencil, Sparkles, Trash2 } from "lucide-react";
+import { Ban, Check, CircleCheck, CircleDashed, CircleX, Eye, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { Change } from "@/components/ui/Change";
 import { Logo } from "@/components/ui/Logo";
 import { ResearchAction } from "./ResearchAction";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoverItem } from "@/lib/api/discover-types";
-import { addedText, isAnalyzed, metaText, nameOf, priceText, targetsText } from "@/lib/discoverList";
+import { addedText, decisionChip, isAnalyzed, metaText, nameOf, priceText, targetsText, viewLabel, type DecisionChip } from "@/lib/discoverList";
 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
-/** Status as shape plus word, never colour alone: a check for researched, a dashed circle for not. */
-export function StatusPill({ analyzed, running = false }: { analyzed: boolean; running?: boolean }) {
+const DECISIONS = {
+  approved: { Icon: CircleCheck, word: "Approved", accent: true },
+  dismissed: { Icon: CircleX, word: "Dismissed", accent: false },
+  withdrawn: { Icon: Ban, word: "Withdrawn", accent: false },
+} as const;
+
+/**
+ * Status as shape plus word, never colour alone: a check for researched, a dashed circle for not.
+ * A decision (approved, dismissed, withdrawn) replaces the analyzed pill with its own shape and word.
+ */
+export function StatusPill({ analyzed, running = false, decision = null }: { analyzed: boolean; running?: boolean; decision?: DecisionChip | null }) {
+  if (decision) {
+    const { Icon, word, accent } = DECISIONS[decision];
+    return (
+      <Box
+        component="span"
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.5,
+          px: 1.25,
+          minHeight: 26,
+          borderRadius: 999,
+          fontSize: "0.75rem",
+          fontWeight: 500,
+          whiteSpace: "nowrap",
+          color: accent ? "var(--accent)" : "var(--text2)",
+          bgcolor: accent ? "var(--accent-wash)" : "transparent",
+          border: accent ? "1px solid transparent" : "1px solid var(--line2)",
+        }}
+      >
+        <Icon size={13} aria-hidden />
+        {word}
+      </Box>
+    );
+  }
   const Icon = analyzed ? Check : CircleDashed;
   return (
     <Box
@@ -90,6 +124,8 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
   const name = nameOf(item);
   const targets = targetsText(item);
   const analyzed = isAnalyzed(item);
+  const chip = decisionChip(item);
+  const label = viewLabel(chip);
   // The first action opens a saved result or explicitly starts company research.
   const hasReport = analyzed && item.report_id !== null;
   const overview = `/discover/company/${encodeURIComponent(item.ticker)}`;
@@ -122,13 +158,13 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
               {name}
             </Box>
           )}
-          <StatusPill analyzed={analyzed} running={item.analysis?.status === "running"} />
+          <StatusPill analyzed={analyzed} running={item.analysis?.status === "running"} decision={chip} />
         </Box>
         <Typography sx={muted}>{[metaText(item), addedText(item, now)].filter(Boolean).join(" · ")}</Typography>
-        {analyzed && item.insight && (
+        {analyzed && (chip === "withdrawn" || item.insight) && (
           <Box component="p" sx={{ m: 0, display: "flex", gap: 0.75, alignItems: "flex-start", fontSize: "0.8125rem", color: "var(--text2)" }}>
             <Sparkles size={13} aria-hidden style={{ flex: "none", marginTop: 3 }} />
-            <span>{item.insight}</span>
+            <span>{chip === "withdrawn" ? "The latest scan no longer found this compelling." : item.insight}</span>
           </Box>
         )}
         {targets && <Typography sx={{ ...muted, color: "var(--text2)" }}>{targets}</Typography>}
@@ -137,8 +173,8 @@ export function DiscoverCard({ item, now, onRemove, onEdit }: { item: DiscoverIt
       {/* Edit and Remove remain separate 44px actions beside research or the saved result. */}
       <Box sx={{ display: "flex", gap: 1, gridColumn: { xs: "1 / -1", md: "auto" }, justifyContent: { md: "flex-end" } }}>
         {hasReport && (
-          <Button component={Link} href={report} variant="outlined" size="small" startIcon={<Eye size={15} aria-hidden />} aria-label={`View the report for ${name}`} sx={{ flex: { xs: 1, md: "none" }, minHeight: 44 }}>
-            View
+          <Button component={Link} href={report} variant="outlined" size="small" startIcon={<Eye size={15} aria-hidden />} aria-label={label === "View decision" ? `View the decision for ${name}` : `View the report for ${name}`} sx={{ flex: { xs: 1, md: "none" }, minHeight: 44 }}>
+            {label}
           </Button>
         )}
         {!hasReport && (item.analysis?.status === "no_opportunity" || item.analysis?.status === "ineligible") && <Button component={Link} href={overview} variant="outlined" sx={{ flex: 1, minHeight: 44 }}>View result</Button>}
