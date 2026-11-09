@@ -171,15 +171,24 @@ async def _attach_live_quotes(
             rec.current_price, rec.price_change_pct = quote
 
 
+# Majors a quote can be a subunit of (GBP for pence): a snapshot saved in one of these may still
+# be quoted in the subunit, so the provider is asked. Every other currency is quoted as stored.
+_SUBUNIT_MAJORS = frozenset(major for major, _ in SUBUNITS.values())
+DECIDED_STATUSES = ("APPROVED", "REJECTED", "SUPERSEDED")
+
+
 async def _price_in_major_unit(rec: RecommendationOut) -> None:
     """A discovery idea stores its price in the major unit (pounds), but the live quote is in the
     provider's own (pence for London). Converts the quote so the two compare. The snapshot only
-    keeps the major unit, so the quote's unit comes from the provider, unless the snapshot kept a
-    minor one. When the unit cannot be read the price is withheld (None): a pence price shown as
-    pounds would be 100 times too high, and the screen falls back to the saved quote."""
+    keeps the major unit, so for a currency that can be quoted in a subunit (or an unknown one)
+    the unit comes from the provider; any other currency is quoted as stored, with no lookup.
+    When the unit cannot be read the price is withheld (None): a pence price shown as pounds
+    would be 100 times too high, and the screen falls back to the saved quote."""
     if rec.current_price is None or rec.source != "discovery" or rec.idea is None:
         return
     currency = rec.idea.snapshot.currency if rec.idea.snapshot else None
+    if currency is not None and currency not in SUBUNITS and currency not in _SUBUNIT_MAJORS:
+        return
     if currency not in SUBUNITS:
         try:
             currency = await fetch_currency(rec.ticker)
@@ -234,7 +243,10 @@ async def get_recommendation(
     if out.successor_id is None:
         out.withdrawal = withdrawal_for(db, rec)  # None unless a superseded discovery idea
     db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
-    await _attach_live_quotes([out], ("PENDING", "APPROVED", "REJECTED", "SUPERSEDED"))
+    # Pending rows, and ideas of any status (their page shows the price since it was issued); a
+    # decided or replaced manual row shows no price, so it costs no quote fetch.
+    statuses = ("PENDING", *DECIDED_STATUSES) if out.source == "discovery" else ("PENDING",)
+    await _attach_live_quotes([out], statuses)
     await _price_in_major_unit(out)
     return out
 

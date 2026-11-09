@@ -86,6 +86,15 @@ def test_a_superseded_idea_with_a_newer_one_points_at_the_newest(db_session):
     assert successor_id(db_session, old) == newest.id
 
 
+def test_a_later_manual_recommendation_is_the_successor(db_session):
+    old = rec(db_session, age=10)
+    manual = rec(db_session, source="manual", status="PENDING", age=2)
+    rec(db_session, "OTHER", source="manual", status="PENDING", age=1)  # another ticker
+    rec(db_session, status="PENDING", age=1, user_id=OTHER_USER_ID)  # another user
+
+    assert successor_id(db_session, old) == manual.id
+
+
 def test_the_successor_may_already_be_decided(db_session):
     old = rec(db_session, age=10)
     newest = rec(db_session, status="APPROVED", age=2)

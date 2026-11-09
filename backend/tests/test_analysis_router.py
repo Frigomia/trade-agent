@@ -567,6 +567,19 @@ def test_get_recommendation_by_id_404_for_another_users_row(client, db_session):
     assert client.get(f"/analysis/recommendations/{rec.id}").status_code == 404
 
 
+def test_a_later_manual_analysis_is_the_successor_and_there_is_no_withdrawal(client, db_session):
+    old = discovery_rec(db_session, age=10)
+    newer = _rec(USER_ID, "NESN.SW")  # a manual analysis replaced the pending idea
+    db_session.add(newer)
+    db_session.commit()
+
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value={})):
+        body = client.get(f"/analysis/recommendations/{old.id}").json()
+
+    assert body["successor_id"] == newer.id
+    assert body["withdrawal"] is None
+
+
 def test_get_recommendation_returns_successor_id_for_a_superseded_discovery_idea(
     client, db_session
 ):
@@ -870,8 +883,8 @@ def test_recommendations_carry_the_company_name_from_the_holding_or_the_idea(cli
 QUOTE = {"price": 1234.0, "closes": [1200.0, 1234.0]}
 
 
-def _discovery_idea_quoted_in(db, snapshot_currency, **kwargs):
-    row = discovery_rec(db, status="APPROVED", age=2, **kwargs)
+def _discovery_idea_quoted_in(db, snapshot_currency, status="APPROVED", **kwargs):
+    row = discovery_rec(db, status=status, age=2, **kwargs)
     candidate = sample_candidate()
     snapshot = IdeaSnapshot(
         exchange=candidate.exchange,
@@ -889,20 +902,47 @@ def _discovery_idea_quoted_in(db, snapshot_currency, **kwargs):
     return row
 
 
-def test_get_recommendation_attaches_a_live_quote_to_a_decided_row(client, db_session):
-    rows = [_rec(USER_ID, "AAPL"), _rec(USER_ID, "MSFT"), _rec(USER_ID, "NVDA")]
-    rows[0].status, rows[1].status, rows[2].status = "APPROVED", "REJECTED", "SUPERSEDED"
-    db_session.add_all(rows)
+@pytest.mark.parametrize("status", ["APPROVED", "REJECTED", "SUPERSEDED"])
+def test_get_recommendation_attaches_a_live_quote_to_a_decided_row(client, db_session, status):
+    row = _discovery_idea_quoted_in(db_session, "USD", status=status, ticker="AAPL")
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
+    ):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    assert body["current_price"] == 186.40
+    assert round(body["price_change_pct"], 4) == round((186.40 - 184.0) / 184.0 * 100, 4)
+
+
+@pytest.mark.parametrize("status", ["APPROVED", "REJECTED", "SUPERSEDED"])
+def test_a_decided_manual_row_gets_no_quote_and_costs_no_fetch(client, db_session, status):
+    row = _rec(USER_ID, "AAPL")
+    row.status = status
+    db_session.add(row)
     db_session.commit()
 
-    for row in rows:
-        with patch(
-            "app.routers.analysis.fetch_quote_and_history",
-            AsyncMock(return_value={"price": 186.40, "closes": [184.0, 186.40]}),
-        ):
-            body = client.get(f"/analysis/recommendations/{row.id}").json()
-        assert body["current_price"] == 186.40
-        assert round(body["price_change_pct"], 4) == round((186.40 - 184.0) / 184.0 * 100, 4)
+    with patch("app.routers.analysis.fetch_quote_and_history", AsyncMock()) as mock_fetch:
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    mock_fetch.assert_not_awaited()
+    assert body["current_price"] is None
+
+
+def test_a_usd_discovery_idea_keeps_its_price_without_a_currency_lookup(client, db_session):
+    row = _discovery_idea_quoted_in(db_session, "USD", ticker="AAPL")
+
+    with (
+        patch("app.routers.analysis.fetch_quote_and_history", AsyncMock(return_value=QUOTE)),
+        patch(
+            "app.routers.analysis.fetch_currency", AsyncMock(side_effect=RuntimeError("down"))
+        ) as lookup,
+    ):
+        body = client.get(f"/analysis/recommendations/{row.id}").json()
+
+    lookup.assert_not_awaited()
+    assert body["current_price"] == 1234.0
 
 
 def test_the_list_still_attaches_quotes_to_pending_rows_only(client, db_session):
@@ -990,8 +1030,7 @@ def test_a_superseded_manual_row_gets_neither_field(client, db_session):
 
 
 def test_a_non_discovery_row_keeps_the_raw_quote(client, db_session):
-    row = _rec(USER_ID, "SHEL.L")
-    row.status = "APPROVED"
+    row = _rec(USER_ID, "SHEL.L")  # PENDING and manual
     db_session.add(row)
     db_session.commit()
 

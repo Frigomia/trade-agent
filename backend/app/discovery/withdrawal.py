@@ -13,7 +13,8 @@ from app.schemas import WithdrawalOut
 
 
 def successor_id(db: Session, rec: Recommendation) -> int | None:
-    """The newest discovery idea for the same company saved after this one, in any status."""
+    """The newest recommendation for the same company saved after this one, of any source (a
+    manual or scheduled analysis also replaces a pending idea) and in any status."""
     if rec.status != "SUPERSEDED" or rec.source != "discovery":
         return None
     newest = (
@@ -21,8 +22,6 @@ def successor_id(db: Session, rec: Recommendation) -> int | None:
         .filter(
             Recommendation.user_id == rec.user_id,
             Recommendation.ticker == rec.ticker,
-            Recommendation.source == "discovery",
-            Recommendation.idea.is_not(None),
             Recommendation.id > rec.id,
         )
         .order_by(Recommendation.id.desc())
