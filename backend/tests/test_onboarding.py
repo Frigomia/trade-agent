@@ -168,6 +168,23 @@ def test_quote_date_follows_last_finite_close_and_old_cache_is_stale(monkeypatch
     assert asyncio.run(market_data.fetch_quote_and_history("MSFT"))["stale"] is True
 
 
+def test_refresh_fetches_latest_quote_without_using_shared_cache(monkeypatch):
+    today = datetime.now(UTC).date()
+    redis = AsyncMock()
+    redis.get.return_value = '{"price":1,"closes":[1],"as_of":"2000-01-01"}'
+    monkeypatch.setattr(market_data, "get_redis", lambda: redis)
+    frame = pd.DataFrame(
+        {"Close": [100.0, 105.0]}, index=pd.to_datetime([today - timedelta(days=1), today])
+    )
+    with patch.object(market_data.yf, "Ticker") as ticker:
+        ticker.return_value.history.return_value = frame
+        out = asyncio.run(market_data.fetch_quote_and_history("MSFT", refresh=True))
+    assert (out["price"], out["as_of"], out["stale"]) == (105.0, today.isoformat(), False)
+    ticker.return_value.history.assert_called_once_with(period="1mo", raise_errors=True)
+    redis.get.assert_not_awaited()
+    redis.set.assert_not_awaited()
+
+
 @pytest.mark.parametrize("value", [None, "bad", "2000-01-01"])
 def test_missing_or_old_quote_date_is_stale(value):
     assert market_data.quote_is_stale(value)

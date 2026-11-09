@@ -51,10 +51,10 @@ async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
     raise AssertionError("unreachable: loop always returns or raises")
 
 
-async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
-    redis = get_redis()
+async def fetch_quote_and_history(ticker: str, *, refresh: bool = False) -> dict[str, Any]:
     cache_key = f"quote:{ticker}"
-    cached = await redis.get(cache_key)
+    redis = None if refresh else get_redis()
+    cached = await redis.get(cache_key) if redis is not None else None
     if cached is not None:
         result = dict(json.loads(cached))
         result.setdefault("as_of", None)
@@ -62,7 +62,9 @@ async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
         return result
 
     def _fetch() -> dict[str, Any]:
-        history = yf.Ticker(ticker).history(period="1y")
+        history = yf.Ticker(ticker).history(
+            **({"period": "1mo", "raise_errors": True} if refresh else {"period": "1y"})
+        )
         values = history["Close"].tolist()
         closes = _finite(values)
         valid = [i for i, value in enumerate(values) if math.isfinite(value)]
@@ -70,7 +72,8 @@ async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
         return {"price": closes[-1] if closes else None, "closes": closes, "as_of": as_of}
 
     result = await _retry_fetch(_fetch)
-    await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
+    if redis is not None:
+        await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
     result["stale"] = quote_is_stale(result.get("as_of"))
     return result
 
