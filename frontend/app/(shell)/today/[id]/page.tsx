@@ -80,8 +80,17 @@ function RecommendationDetail() {
   const [decidedId, setDecidedId] = useState<number | null>(null);
   const decidedHere = recommendation !== undefined && decidedId === recommendation.id;
   // A decision (or a changed decision) is written straight into the SWR cache — no separate
-  // local copy to keep in sync with it. A change made on a reopened page only updates it.
-  const updateCached = (updated: RecommendationOut) => void mutate(updated, { revalidate: false });
+  // local copy to keep in sync with it. Only the decision fields are taken from the answer: the
+  // approve and reject endpoints return a bare record (no live price, move or name), so replacing
+  // the cached one would drop what the page loaded. A change made on a reopened page only updates it.
+  const updateCached = (updated: RecommendationOut) =>
+    void mutate(
+      (cached) =>
+        cached
+          ? { ...cached, status: updated.status, reviewed_at: updated.reviewed_at, dismissal_reason: updated.dismissal_reason ?? null }
+          : updated,
+      { revalidate: false },
+    );
   const setDecided = (updated: RecommendationOut) => {
     setDecidedId(updated.id);
     updateCached(updated);

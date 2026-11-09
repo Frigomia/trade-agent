@@ -4,8 +4,8 @@ import { dayText } from "@/lib/discovery";
 /**
  * How far the price has moved since the idea was issued, in percent to one decimal. Null when either
  * price is missing, not finite or not positive (a zero quote is missing, not a -100% fall). The caller must only pass a pair
- * quoted in one unit: the entry price is the major unit but the live one is the provider's raw quote
- * (pence for a GBp listing), which these two fields cannot tell apart.
+ * quoted in one unit. For a discovery idea the backend gives both in the major unit (it converts the live
+ * quote, and sends none when the unit is unknown), so the pair is comparable.
  */
 export function moveSinceRecommended(rec: Pick<RecommendationOut, "price_at_recommendation" | "current_price">): number | null {
   const { price_at_recommendation: then, current_price: now } = rec;

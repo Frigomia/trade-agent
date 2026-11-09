@@ -138,7 +138,7 @@ def _owned(db: Session, user_id: UUID, ticker: str | None = None) -> set[str]:
 
 def _item_out(
     item: WatchlistItemOut,
-    found: tuple[int, str | None, str] | None,
+    found: tuple[int, str | None, str | None] | None,
     currency: str | None,
     quote: Quote | None,
     owned: bool,
@@ -206,8 +206,11 @@ def _attach_state(item: DiscoverItemOut, state: CompanyAnalysisOut | None) -> No
 
 def _analysis(
     db: Session, user_id: UUID, tickers: list[str]
-) -> dict[str, tuple[int, str | None, str]]:
-    """Each ticker's latest saved discovery idea: its id, one-line reading and status."""
+) -> dict[str, tuple[int, str | None, str | None]]:
+    """Each ticker's latest saved discovery idea: its id, one-line reading and status.
+
+    The status is None for a superseded idea that a newer recommendation of any source replaced
+    (a manual or scheduled analysis supersedes a pending idea too): that is not a withdrawal."""
     # The newest idea per ticker is the one with the highest id (ids only grow), so only those rows
     # are read, not every scan's history.
     newest = (
@@ -227,7 +230,23 @@ def _analysis(
         Recommendation.idea["headline"].as_string(),
         Recommendation.status,
     ).filter(Recommendation.id.in_(newest))
-    return {ticker: (rec_id, headline or None, status) for rec_id, ticker, headline, status in rows}
+    found: dict[str, tuple[int, str | None, str | None]] = {
+        ticker: (rec_id, headline or None, status) for rec_id, ticker, headline, status in rows
+    }
+    superseded = [t for t, (_, _, status) in found.items() if status == "SUPERSEDED"]
+    if not superseded:
+        return found
+    # One grouped query for the newest recommendation of any source, for those tickers only.
+    latest = dict(
+        db.query(Recommendation.ticker, func.max(Recommendation.id))
+        .filter(Recommendation.user_id == user_id, Recommendation.ticker.in_(superseded))
+        .group_by(Recommendation.ticker)
+    )
+    for ticker in superseded:
+        rec_id, headline, _ = found[ticker]
+        if latest[ticker] > rec_id:
+            found[ticker] = (rec_id, headline, None)  # replaced by a newer analysis, not withdrawn
+    return found
 
 
 @router.get(

@@ -50,6 +50,17 @@ function serve(byId: Record<string, RecommendationOut>, decisions: Record<string
   });
 }
 
+// A discovery idea as GET returns it: with the live quote the page shows.
+const live = (overrides: Partial<RecommendationOut> = {}) => idea({ current_price: 135.2, price_change_pct: 0.5, ...overrides });
+
+// What approve and reject really return: the bare record, with no live quote and no name.
+const bare = (overrides: Partial<RecommendationOut> = {}) => idea({ current_price: null, price_change_pct: null, name: null, ...overrides });
+
+function expectLiveQuoteAndMoveKept() {
+  expect(screen.getByText("USD 135.20")).toBeInTheDocument();
+  expect(screen.getByText("since")).toBeInTheDocument(); // 135.2 against 121.6 recommended
+}
+
 function renderFresh(ui: React.ReactElement) {
   return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>);
 }
@@ -194,7 +205,7 @@ describe("RecommendationDetailPage", () => {
   });
 
   it("deciding in this visit shows Decision recorded once, and View the company page then shows the decided view", async () => {
-    serve({ "1": idea() }, { "/analysis/recommendations/1/approve": idea({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) });
+    serve({ "1": live() }, { "/analysis/recommendations/1/approve": bare({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) });
     renderFresh(<RecommendationDetailPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
@@ -204,6 +215,7 @@ describe("RecommendationDetailPage", () => {
     expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+    expectLiveQuoteAndMoveKept(); // the bare answer did not wipe the quote the page loaded
   });
 
   it("a decided recommendation without an idea still shows the confirmation", async () => {
@@ -242,8 +254,8 @@ describe("RecommendationDetailPage", () => {
 
   it("changing an approved idea to dismissed on the reopened page shows the Dismissed strip", async () => {
     serve(
-      { "1": idea({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) },
-      { "/analysis/recommendations/1/reject": idea({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z" }) },
+      { "1": live({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) },
+      { "/analysis/recommendations/1/reject": bare({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z" }) },
     );
     renderFresh(<RecommendationDetailPage />);
 
@@ -252,18 +264,21 @@ describe("RecommendationDetailPage", () => {
     expect(await screen.findByText(/You dismissed this idea/)).toBeInTheDocument();
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+    expectLiveQuoteAndMoveKept();
   });
 
   it("changing a dismissed idea to approved on the reopened page shows the Approved strip", async () => {
     serve(
-      { "1": idea({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z" }) },
-      { "/analysis/recommendations/1/approve": idea({ status: "APPROVED", reviewed_at: "2026-10-23T09:00:00Z" }) },
+      { "1": live({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z", dismissal_reason: "Too expensive." }) },
+      { "/analysis/recommendations/1/approve": bare({ status: "APPROVED", reviewed_at: "2026-10-23T09:00:00Z" }) },
     );
     renderFresh(<RecommendationDetailPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Change my decision" }));
     expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Too expensive.")).not.toBeInTheDocument(); // the old reason went with the old decision
+    expectLiveQuoteAndMoveKept();
   });
 
   it("from=superseded on a pending idea shows the newer strip", async () => {

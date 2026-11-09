@@ -197,6 +197,40 @@ def test_report_status_ignores_an_older_idea_with_a_different_status(client, db_
     assert item["report_status"] == "REJECTED"
 
 
+def test_an_idea_superseded_by_a_later_manual_analysis_is_not_called_withdrawn(client, db_session):
+    seed(db_session, "HLDN")
+    old = idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+    idea(db_session, "HLDN", headline=None, source="manual", age=1)  # the portfolio analysis
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] is None
+    assert (item["status"], item["report_id"]) == ("analyzed", old)  # the link still opens it
+
+
+def test_a_superseded_idea_with_nothing_after_it_is_a_withdrawal(client, db_session):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == "SUPERSEDED"
+
+
+def test_a_later_row_of_another_ticker_or_another_user_does_not_replace_the_idea(
+    client, db_session
+):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+    idea(db_session, "NVKC", source="manual", age=1)
+    add_app_user(db_session, OTHER_USER_ID)
+    idea(db_session, "HLDN", user_id=OTHER_USER_ID, source="manual", age=1)
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == "SUPERSEDED"
+
+
 def test_an_item_without_a_saved_idea_has_no_report_status(client, db_session):
     seed(db_session, "NVKC")
     seed(db_session, "PLMN")

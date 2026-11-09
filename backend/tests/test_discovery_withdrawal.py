@@ -113,6 +113,16 @@ def test_no_successor_and_a_later_invalidated_exclusion_gives_its_explanation(db
     assert out.as_of == run.created_at
 
 
+def test_a_stored_explanation_that_is_not_text_gives_no_reason_and_no_error(db_session):
+    old = rec(db_session)
+    scan(db_session, excluded=[invalidated(explanation=["a", "list"])], age=6)
+    scan(db_session, excluded=[invalidated(explanation=42)], age=5)
+
+    out = withdrawal_for(db_session, old)
+
+    assert (out.kind, out.reason) == ("invalidated", None)
+
+
 def test_a_later_company_analysis_with_no_opportunity_gives_its_reason(db_session):
     old = rec(db_session)
     row = analysis(db_session, age=5)

@@ -60,11 +60,13 @@ def withdrawal_for(db: Session, rec: Recommendation) -> WithdrawalOut | None:
             for entry in _dicts(scan.excluded):
                 is_it = entry.get("ticker") == rec.ticker
                 if is_it and entry.get("reason") == "thesis_invalidated":
+                    explanation = entry.get("explanation")
                     invalidated = (
                         scan.created_at,
                         WithdrawalOut(
                             kind="invalidated",
-                            reason=entry.get("explanation") or None,
+                            # Stored JSON: only text is a reason; any other type fails the response.
+                            reason=explanation if isinstance(explanation, str) else None,
                             as_of=scan.created_at,
                         ),
                     )
