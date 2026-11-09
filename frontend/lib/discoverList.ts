@@ -17,6 +17,17 @@ export const SORTS: { key: DiscoverSort; label: string }[] = [
   { key: "change", label: "Daily change" },
 ];
 
+export type DecisionChip = "approved" | "dismissed" | "withdrawn";
+
+const CHIPS: Record<string, DecisionChip> = { APPROVED: "approved", REJECTED: "dismissed", SUPERSEDED: "withdrawn" };
+
+/** What became of the company's idea; null while it is still pending or when there is no report. */
+export const decisionChip = (item: DiscoverItem): DecisionChip | null => CHIPS[item.report_status ?? ""] ?? null;
+
+/** The button words: a decision can be reviewed, a withdrawn idea is just opened. */
+export const viewLabel = (chip: DecisionChip | null): "View decision" | "View" =>
+  chip === "approved" || chip === "dismissed" ? "View decision" : "View";
+
 export const nameOf = (item: DiscoverItem) => item.name ?? item.ticker;
 /** A saved report or durable research outcome: the rule shared by filters, counts and cards. */
 export const isAnalyzed = (item: DiscoverItem) => item.status === "analyzed" && (item.report_id !== null || item.analysis?.researched === true);

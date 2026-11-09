@@ -4,6 +4,13 @@ export type Action = "BUY" | "ADD" | "HOLD" | "TRIM" | "SELL" | "WATCH";
 export type TechnicalSignal = "NEUTRAL" | "OVERSOLD" | "STRONG_UPTREND" | "WEAK_DOWNTREND";
 export type RecommendationStatus = "PENDING" | "APPROVED" | "REJECTED" | "SUPERSEDED";
 
+/** Why a withdrawn (SUPERSEDED) idea left the list; null fields when the reason was not recorded. */
+export interface Withdrawal {
+  kind: "invalidated" | "not_compelling";
+  reason: string | null;
+  as_of: string | null;
+}
+
 export interface RecommendationOut {
   id: number;
   user_id: string;
@@ -18,6 +25,8 @@ export interface RecommendationOut {
   ai_analysis: string | null;
   suggested_position_pct: number | null;
   status: RecommendationStatus;
+  successor_id?: number | null; // the idea that replaced this one, when SUPERSEDED by a newer one
+  withdrawal?: Withdrawal | null; // set when the idea was withdrawn rather than replaced
   reviewed_at: string | null;
   dismissal_reason?: string | null;
   fundamental_score: number | null;

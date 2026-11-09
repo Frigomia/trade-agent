@@ -1,0 +1,20 @@
+import type { RecommendationOut } from "@/lib/api/recommendation-types";
+import { calendarDateText } from "@/lib/discovery";
+
+/**
+ * How far the price has moved since the idea was issued, in percent to one decimal. Null when either
+ * price is missing or not finite, or the earlier one is not positive. The caller must only pass a pair
+ * quoted in one unit: the entry price is the major unit but the live one is the provider's raw quote
+ * (pence for a GBp listing), which these two fields cannot tell apart.
+ */
+export function moveSinceRecommended(rec: Pick<RecommendationOut, "price_at_recommendation" | "current_price">): number | null {
+  const { price_at_recommendation: then, current_price: now } = rec;
+  if (then === null || now === null || !Number.isFinite(then) || !Number.isFinite(now) || then <= 0) return null;
+  const pct = (now / then - 1) * 100;
+  return Number.isFinite(pct) ? Math.round(pct * 10) / 10 + 0 : null;
+}
+
+/** The day the person decided, "20 Oct 2026"; null when the idea was never reviewed. */
+export function decisionStamp(rec: Pick<RecommendationOut, "reviewed_at">): string | null {
+  return rec.reviewed_at ? calendarDateText(rec.reviewed_at.slice(0, 10)) : null;
+}
