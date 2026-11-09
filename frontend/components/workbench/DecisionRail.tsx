@@ -6,11 +6,14 @@ import { DismissSheet } from "@/components/recommendations/DismissSheet";
 import { Alert, Box, Button, Typography } from "@mui/material";
 import { Bookmark, Check, Clock, MessageSquare, X } from "lucide-react";
 import { PriceBlock } from "@/components/discovery/PriceBlock";
+import { Change } from "@/components/ui/Change";
 import { Meter } from "@/components/ui/Meter";
 import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
-import { confidenceLabel, dateTimeText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
+import { moveSinceRecommended } from "@/lib/decisionView";
+import { confidenceLabel, dateTimeText, dayText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
+import { formatAmount } from "@/lib/format";
 import { useDecision } from "@/lib/useDecision";
 import { useSaveToDiscover } from "@/lib/useSaveToDiscover";
 
@@ -19,7 +22,7 @@ const NOTE = "Approving records your decision. Nothing is sent to a broker.";
 /** Where "Ask AI" goes: Chat, which types the question about this saved idea and sends nothing. */
 export const askHref = (ideaId: number) => `/chat?idea=${ideaId}`;
 
-function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & object }) {
+export function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & object }) {
   const fit = fitScore(idea);
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "0.8125rem", color: "var(--text2)" }}>
@@ -35,17 +38,53 @@ function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & object }) {
   );
 }
 
+const money = (rec: DiscoveryRecommendation, value: number) => `${rec.idea?.snapshot?.currency ?? ""} ${formatAmount(value)}`.trim();
+
+/** Where the price is now: the live quote with its day change. Both are in the idea's major unit. */
+function LivePrice({ rec, price }: { rec: DiscoveryRecommendation; price: number }) {
+  return (
+    <Box sx={{ display: "grid", gap: "2px" }}>
+      <Box component="span" sx={{ fontWeight: 650, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.035em", fontSize: { xs: "1.5rem", md: "1.875rem" }, lineHeight: 1.1 }}>
+        {money(rec, price)}
+      </Box>
+      {rec.price_change_pct !== null && (
+        <Box component="span" sx={{ fontSize: "0.8125rem" }}>
+          <Change pct={rec.price_change_pct} /> today
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/** "Recommended 20 Oct 2026 · USD 176.40 +4.4% since"; nothing when either price is missing. Green and red mark only the move. */
+export function SinceRecommended({ rec }: { rec: DiscoveryRecommendation }) {
+  const move = moveSinceRecommended(rec);
+  if (move === null) return null;
+  return (
+    <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "baseline", columnGap: 1.5, rowGap: 0.5, fontSize: "0.8125rem", color: "var(--text2)" }}>
+      <span>Recommended {dayText(rec.created_at)}</span>
+      <Box component="span" sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.75 }}>
+        <Box component="b" sx={{ fontWeight: 650, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{money(rec, rec.price_at_recommendation!)}</Box>
+        <Change pct={move} />
+        <span>since</span>
+      </Box>
+    </Box>
+  );
+}
+
 /**
  * Price, confidence, risk and last analysis: what a decision rests on, in one block. On a phone it
- * also carries the fit and the way to the sources (the rail has its own).
+ * also carries the fit and the way to the sources (the rail has its own). `showSince` is for a
+ * reopened idea: the live price when it loaded (else the dated scan quote) and the move since.
  */
-export function DecisionSummary({ rec, onSeeSources }: { rec: DiscoveryRecommendation; onSeeSources?: () => void }) {
+export function DecisionSummary({ rec, onSeeSources, showSince = false }: { rec: DiscoveryRecommendation; onSeeSources?: () => void; showSince?: boolean }) {
   const idea = rec.idea!;
   return (
     <Box sx={{ display: "grid", gap: 1.5 }}>
       <Box sx={{ "& > div": { justifyItems: "start", textAlign: "left" } }}>
-        <PriceBlock rec={rec} large />
+        {showSince && rec.current_price !== null ? <LivePrice rec={rec} price={rec.current_price} /> : <PriceBlock rec={rec} large />}
       </Box>
+      {showSince && <SinceRecommended rec={rec} />}
       <Box sx={{ display: "grid", gap: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
         <Meter fill={meterFill(idea.confidence)} label={confidenceLabel(idea.confidence)} />
         <Meter fill={meterFill(idea.risk.risk_level)} label={riskLabel(idea.risk.risk_level)} />

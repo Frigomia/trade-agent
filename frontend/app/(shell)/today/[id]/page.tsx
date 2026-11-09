@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Box, Typography, Alert, useMediaQuery, useTheme } from "@mui/material";
 import { ChevronLeft } from "lucide-react";
@@ -22,17 +23,18 @@ import { ConfirmationPanel } from "@/components/recommendations/ConfirmationPane
 import { RecommendationDetailDesktop } from "@/components/recommendations/RecommendationDetailDesktop";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 
-// The mockup's detail header: a quiet back link and the round theme toggle.
-function BackRow() {
+// The mockup's detail header: a quiet back link and the round theme toggle. Today lists only pending
+// ideas, so a decided, withdrawn or redirected idea was reached from Discover and goes back there.
+function BackRow({ toDiscover = false }: { toDiscover?: boolean }) {
   return (
     <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
       <Box
         component={Link}
-        href="/today"
+        href={toDiscover ? "/discover" : "/today"}
         sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minHeight: 44, textDecoration: "none", color: "var(--muted)", fontSize: "0.8125rem" }}
       >
         <ChevronLeft size={18} />
-        Today
+        {toDiscover ? "Back to Discover" : "Today"}
       </Box>
       <Box sx={{ flex: 1 }} />
       <ThemeToggle />
@@ -41,15 +43,21 @@ function BackRow() {
 }
 
 export default function RecommendationDetailPage() {
+  // useSearchParams needs a Suspense boundary for the build.
   return (
-    <>
-      <BackRow />
+    <Suspense fallback={<BackRow />}>
       <RecommendationDetail />
-    </>
+    </Suspense>
   );
 }
 
+/** A superseded idea opens its replacement; the id is the backend's, checked to be a plain integer. */
+function openSuccessor(router: ReturnType<typeof useRouter>, successorId: number) {
+  if (Number.isSafeInteger(successorId) && successorId > 0) router.replace(`/today/${successorId}?from=superseded`);
+}
+
 function RecommendationDetail() {
+  const fromSuperseded = useSearchParams().get("from") === "superseded";
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -60,80 +68,107 @@ function RecommendationDetail() {
     validId ? `/analysis/recommendations/${id}` : null,
     apiFetch,
   );
+  // A decision made in this visit shows the confirmation once; reopened later, a discovery idea shows
+  // its company page with the decision instead. Client state, not a route, so a refresh drops it.
+  const [decidedHere, setDecidedHere] = useState(false);
   // A decision (or a changed decision) is written straight into the SWR cache — no separate
   // local copy to keep in sync with it.
-  const setDecided = (updated: RecommendationOut) => mutate(updated, { revalidate: false });
+  const setDecided = (updated: RecommendationOut) => {
+    setDecidedHere(true);
+    void mutate(updated, { revalidate: false });
+  };
+  const successorId = recommendation?.status === "SUPERSEDED" ? (recommendation.successor_id ?? null) : null;
+  useEffect(() => {
+    if (successorId !== null) openSuccessor(router, successorId);
+  }, [router, successorId]);
 
-  if (!validId || loadError) {
+  const decided = recommendation?.status === "APPROVED" || recommendation?.status === "REJECTED";
+  const reopened = !!recommendation?.idea && ((decided && !decidedHere) || (recommendation.status === "SUPERSEDED" && !!recommendation.withdrawal));
+  const body = (): ReactNode => {
+    if (!validId || loadError) {
+      return (
+        <Alert severity="error">
+          {!validId
+            ? "Recommendation not found."
+            : loadError instanceof ApiError
+              ? loadError.detail
+              : "Could not load this recommendation."}
+        </Alert>
+      );
+    }
+
+    if (!recommendation || successorId !== null) {
+      return null; // loading, or on the way to the newer analysis
+    }
+
+    if (reopened) {
+      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} />;
+    }
+
+    // Manual and scheduled runs always have a replacement; a discovery idea without its research says the same.
+    if (recommendation.status === "SUPERSEDED") {
+      return (
+        <Alert severity="info">
+          A newer analysis replaced this recommendation for {recommendation.ticker}.
+        </Alert>
+      );
+    }
+
+    if (recommendation.status !== "PENDING") {
+      return (
+        <ConfirmationPanel
+          recommendation={recommendation}
+          onChanged={setDecided}
+          onBackToToday={() => router.push("/today")}
+          onViewCompany={recommendation.idea ? () => setDecidedHere(false) : undefined}
+        />
+      );
+    }
+
+    // A discovery idea gets the company page: the saved research in tabs beside a decision rail.
+    if (recommendation.idea) {
+      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} notice={fromSuperseded ? "newer" : undefined} />;
+    }
+
+    if (isDesktop) {
+      return <RecommendationDetailDesktop recommendation={recommendation} onDecided={setDecided} />;
+    }
+
+    // Phone: the evidence first, the actions pinned to the bottom of the screen.
     return (
-      <Alert severity="error">
-        {!validId
-          ? "Recommendation not found."
-          : loadError instanceof ApiError
-            ? loadError.detail
-            : "Could not load this recommendation."}
-      </Alert>
-    );
-  }
-
-  if (!recommendation) {
-    return null;
-  }
-
-  if (recommendation.status === "SUPERSEDED") {
-    return (
-      <Alert severity="info">
-        A newer analysis replaced this recommendation for {recommendation.ticker}.
-      </Alert>
-    );
-  }
-
-  if (recommendation.status !== "PENDING") {
-    return (
-      <ConfirmationPanel
-        recommendation={recommendation}
-        onChanged={setDecided}
-        onBackToToday={() => router.push("/today")}
-      />
-    );
-  }
-
-  // A discovery idea gets the company page: the saved research in tabs beside a decision rail.
-  if (recommendation.idea) {
-    return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} />;
-  }
-
-  if (isDesktop) {
-    return <RecommendationDetailDesktop recommendation={recommendation} onDecided={setDecided} />;
-  }
-
-  // Phone: the evidence first, the actions pinned to the bottom of the screen.
-  return (
-    <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
-        <Typography sx={{ fontSize: "1.875rem", fontWeight: 650, letterSpacing: "-.03em" }}>
-          {recommendation.ticker}
-        </Typography>
-        <ActionChip action={recommendation.action} />
-        <AutomaticTag source={recommendation.source} />
-        <Box sx={{ flex: 1 }} />
-        <PendingPill />
-      </Box>
-      {recommendation.current_price !== null && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
-          <Amount value={recommendation.current_price} size={20} />
-          {recommendation.price_change_pct !== null && <ChangePill pct={recommendation.price_change_pct} />}
+      <Box sx={{ width: "100%", maxWidth: 480, display: "flex", flexDirection: "column", minHeight: "calc(100dvh - 190px)" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, flexWrap: "wrap", rowGap: 0.75 }}>
+          <Typography sx={{ fontSize: "1.875rem", fontWeight: 650, letterSpacing: "-.03em" }}>
+            {recommendation.ticker}
+          </Typography>
+          <ActionChip action={recommendation.action} />
+          <AutomaticTag source={recommendation.source} />
+          <Box sx={{ flex: 1 }} />
+          <PendingPill />
         </Box>
-      )}
-      <EvidenceDetail recommendation={recommendation} />
-      <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
-      {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
-      {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
-      <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
-        <Panel sx={{ p: "12px 12px 8px" }}>
-          <DecisionActions id={recommendation.id} onDecided={setDecided} />
-        </Panel>
+        {recommendation.current_price !== null && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, mt: 0.25 }}>
+            <Amount value={recommendation.current_price} size={20} />
+            {recommendation.price_change_pct !== null && <ChangePill pct={recommendation.price_change_pct} />}
+          </Box>
+        )}
+        <EvidenceDetail recommendation={recommendation} />
+        <AskAboutThis ticker={recommendation.ticker} action={recommendation.action} />
+        {recommendation.ai_analysis && <WebOpinionBox text={recommendation.ai_analysis} />}
+        {/* Stays just above the tab bar while a long analysis scrolls underneath. */}
+        <Box sx={{ mt: "auto", pt: 2, pb: 1, position: "sticky", bottom: 64, zIndex: 1, bgcolor: "var(--bg)" }}>
+          <Panel sx={{ p: "12px 12px 8px" }}>
+            <DecisionActions id={recommendation.id} onDecided={setDecided} />
+          </Panel>
+        </Box>
       </Box>
-    </Box>
+    );
+  };
+
+  return (
+    <>
+      <BackRow toDiscover={fromSuperseded || reopened} />
+      {body()}
+    </>
   );
 }

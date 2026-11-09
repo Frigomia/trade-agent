@@ -374,6 +374,29 @@ describe("Workbench on a phone", () => {
   });
 });
 
+describe("Workbench reopened after a decision", () => {
+  it("the strip sits above the tabs and the four tabs still work read-only in a decided view", async () => {
+    apiFetch.mockImplementation((path: string) =>
+      path === "/portfolio/summary" ? Promise.resolve({ holdings: [] }) : Promise.resolve(testHistory()),
+    );
+    show({ ...testRec(), status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" });
+
+    const strip = await screen.findByRole("status");
+    expect(strip).toHaveTextContent("You approved this idea.");
+    const tablist = screen.getByRole("tablist", { name: "Company sections" });
+    expect(strip.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Your decision" })).toBeInTheDocument();
+    for (const name of ["Numbers", "Risk and fit", "Sources", "Overview"]) {
+      fireEvent.click(screen.getByRole("tab", { name }));
+      expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    }
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save to Discover" })).toBeNull();
+  });
+});
+
 describe("Workbench with a legacy idea", () => {
   it("renders without a snapshot, headline or price", async () => {
     show({ ...testRec({ snapshot: null, headline: null }), price_change_pct: null });

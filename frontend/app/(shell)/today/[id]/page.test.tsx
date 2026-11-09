@@ -22,16 +22,33 @@ vi.mock("@/lib/api/client", () => ({
 }));
 
 const push = vi.fn();
+const replace = vi.fn();
 let routeId = "1";
+let search = new URLSearchParams();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
   useParams: () => ({ id: routeId }),
+  useSearchParams: () => search,
 }));
 
 vi.mock("@/components/portfolio/LogTradeCta", () => ({ LogTradeCta: () => null }));
 
 import RecommendationDetailPage from "./page";
 import { testIdea } from "@/components/workbench/testData";
+
+// A discovery idea: the saved research, so the page opens as the company page.
+const idea = (overrides: Partial<RecommendationOut> = {}) =>
+  rec({ source: "discovery", idea: testIdea(), action: "BUY", ticker: "HLDN", ...overrides });
+
+/** Serves one recommendation by id (and a decision on it); the price history is not needed here. */
+function serve(byId: Record<string, RecommendationOut>, decisions: Record<string, RecommendationOut> = {}) {
+  apiFetch.mockImplementation((path: string, init?: RequestInit) => {
+    const id = path.match(/^\/analysis\/recommendations\/(\d+)$/)?.[1];
+    if (id && byId[id]) return Promise.resolve(byId[id]);
+    if (init?.method === "POST" && decisions[path]) return Promise.resolve(decisions[path]);
+    return Promise.reject(new Error("unexpected " + path));
+  });
+}
 
 function renderFresh(ui: React.ReactElement) {
   return render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>{ui}</SWRConfig>);
@@ -63,6 +80,7 @@ describe("RecommendationDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     routeId = "1";
+    search = new URLSearchParams();
   });
 
   it("opens a discovery idea as the company page, with the full bear case and the decision rail, not the web opinion box", async () => {
@@ -119,6 +137,93 @@ describe("RecommendationDetailPage", () => {
     await waitFor(() => expect(screen.getByText(/newer analysis replaced/i)).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: /^approve$/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+  });
+
+  it("redirects a superseded idea to its successor with from=superseded", async () => {
+    serve({ "1": idea({ status: "SUPERSEDED", successor_id: 7 }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/today/7?from=superseded"));
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/newer analysis replaced/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  });
+
+  it("a successor that is already decided shows the decided strip and never says waiting", async () => {
+    routeId = "7";
+    search = new URLSearchParams("from=superseded");
+    serve({ "7": idea({ id: 7, status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
+    expect(screen.queryByText(/waiting/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Newer analysis/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to Discover" })).toHaveAttribute("href", "/discover");
+  });
+
+  it("a superseded idea with a withdrawal shows the withdrawn view and never says replaced", async () => {
+    serve({ "1": idea({ status: "SUPERSEDED", successor_id: null, withdrawal: { kind: "invalidated", reason: "The thesis broke.", as_of: null } }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText("This idea was withdrawn.", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("The thesis broke.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+    expect(screen.queryByText(/newer analysis replaced/i)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Company overview" })[0]).toHaveAttribute("href", "/discover/company/HLDN");
+    expect(screen.getByRole("link", { name: "Back to Discover" })).toBeInTheDocument();
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("a superseded idea with no idea payload keeps the old alert", async () => {
+    serve({ "1": rec({ source: "discovery", idea: null, status: "SUPERSEDED", successor_id: null, withdrawal: null }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText(/newer analysis replaced this recommendation for NVDA/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Today" })).toBeInTheDocument();
+  });
+
+  it("a decided discovery idea opened later shows the strip and the research, not Decision recorded", async () => {
+    serve({ "1": idea({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z", dismissal_reason: "Too expensive." }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText(/You dismissed this idea/)).toBeInTheDocument();
+    expect(screen.getByText("Too expensive.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: "Company sections" })).toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+  });
+
+  it("deciding in this visit shows Decision recorded once, and View the company page then shows the decided view", async () => {
+    serve({ "1": idea() }, { "/analysis/recommendations/1/approve": idea({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    expect(await screen.findByText(/decision recorded/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View the company page" }));
+
+    expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+  });
+
+  it("a decided recommendation without an idea still shows the confirmation", async () => {
+    serve({ "1": rec({ status: "REJECTED" }) });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText(/decision recorded/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View the company page" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Today" })).toBeInTheDocument();
+  });
+
+  it("from=superseded on a pending idea shows the newer strip", async () => {
+    search = new URLSearchParams("from=superseded");
+    serve({ "1": idea() });
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByText("Newer analysis")).toBeInTheDocument();
+    expect(screen.getByText(/still waiting for your decision/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to Discover" })).toBeInTheDocument();
   });
 
   it("shows an inline error when the recommendation fails to load", async () => {
