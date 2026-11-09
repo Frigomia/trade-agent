@@ -81,6 +81,8 @@ class DiscoverItemOut(BaseModel):
     status: Literal["analyzed", "none"]
     insight: str | None  # the idea's one-line reading, only when analyzed
     report_id: int | None  # the idea's id, to open its report
+    # The decision on that idea; None when the item has no saved idea.
+    report_status: Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"] | None = None
     # The person holds shares of it. Its weight target then lives on the holding, not here.
     owned: bool
     analysis: CompanyAnalysisOut | None = None
@@ -133,7 +135,7 @@ def _owned(db: Session, user_id: UUID, ticker: str | None = None) -> set[str]:
 
 def _item_out(
     item: WatchlistItemOut,
-    found: tuple[int, str | None] | None,
+    found: tuple[int, str | None, str] | None,
     currency: str | None,
     quote: Quote | None,
     owned: bool,
@@ -166,6 +168,7 @@ def _item_out(
         status="analyzed" if found else "none",
         insight=found[1] if found else None,
         report_id=found[0] if found else None,
+        report_status=found[2] if found else None,  # type: ignore[arg-type]  # pydantic checks it
         owned=owned,
     )
 
@@ -195,8 +198,10 @@ def _attach_state(item: DiscoverItemOut, state: CompanyAnalysisOut | None) -> No
         item.report_id = state.report_id
 
 
-def _analysis(db: Session, user_id: UUID, tickers: list[str]) -> dict[str, tuple[int, str | None]]:
-    """Each ticker's latest saved discovery idea: its id and one-line reading."""
+def _analysis(
+    db: Session, user_id: UUID, tickers: list[str]
+) -> dict[str, tuple[int, str | None, str]]:
+    """Each ticker's latest saved discovery idea: its id, one-line reading and status."""
     # The newest idea per ticker is the one with the highest id (ids only grow), so only those rows
     # are read, not every scan's history.
     newest = (
@@ -211,9 +216,12 @@ def _analysis(db: Session, user_id: UUID, tickers: list[str]) -> dict[str, tuple
         .scalar_subquery()
     )
     rows = db.query(
-        Recommendation.id, Recommendation.ticker, Recommendation.idea["headline"].as_string()
+        Recommendation.id,
+        Recommendation.ticker,
+        Recommendation.idea["headline"].as_string(),
+        Recommendation.status,
     ).filter(Recommendation.id.in_(newest))
-    return {ticker: (rec_id, headline or None) for rec_id, ticker, headline in rows}
+    return {ticker: (rec_id, headline or None, status) for rec_id, ticker, headline, status in rows}
 
 
 @router.get(
