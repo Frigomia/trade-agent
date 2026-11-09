@@ -7,6 +7,9 @@ import pytest
 from app.claude_keys import encrypt_key
 from app.models import AppUser, Holding, Recommendation, UserApiKey
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user, auth_headers
+from tests.test_discovery_withdrawal import invalidated
+from tests.test_discovery_withdrawal import rec as discovery_rec
+from tests.test_discovery_withdrawal import scan as discovery_scan
 
 
 def test_run_analysis_with_no_tickers_uses_holdings(client, db_session):
@@ -560,6 +563,54 @@ def test_get_recommendation_by_id_404_for_another_users_row(client, db_session):
     db_session.refresh(rec)
 
     assert client.get(f"/analysis/recommendations/{rec.id}").status_code == 404
+
+
+def test_get_recommendation_returns_successor_id_for_a_superseded_discovery_idea(
+    client, db_session
+):
+    old = discovery_rec(db_session, age=10)
+    newest = discovery_rec(db_session, status="APPROVED", age=2)
+
+    body = client.get(f"/analysis/recommendations/{old.id}").json()
+
+    assert body["successor_id"] == newest.id
+    assert body["withdrawal"] is None
+
+
+def test_get_recommendation_returns_a_withdrawal_when_nothing_replaced_it(client, db_session):
+    old = discovery_rec(db_session, age=10)
+    run = discovery_scan(db_session, excluded=[invalidated()], age=5)
+
+    body = client.get(f"/analysis/recommendations/{old.id}").json()
+
+    assert body["successor_id"] is None
+    assert body["withdrawal"]["kind"] == "invalidated"
+    assert body["withdrawal"]["reason"] == "The recall changed the thesis."
+    assert body["withdrawal"]["as_of"] == run.created_at.isoformat()
+
+
+def test_the_list_does_not_compute_successor_or_withdrawal(client, db_session):
+    discovery_rec(db_session, age=10)
+    discovery_rec(db_session, age=2)  # a newer idea exists, but the list never looks for it
+
+    rows = client.get("/analysis/recommendations").json()
+
+    assert len(rows) == 2
+    assert all(r["successor_id"] is None and r["withdrawal"] is None for r in rows)
+
+
+def test_a_pending_idea_gets_neither_field_from_get_by_id(client, db_session):
+    pending = discovery_rec(db_session, status="PENDING", age=10)
+    discovery_rec(db_session, status="PENDING", age=2)
+
+    with patch(
+        "app.routers.analysis.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 1.0, "closes": [1.0, 1.0]}),
+    ):
+        body = client.get(f"/analysis/recommendations/{pending.id}").json()
+
+    assert body["successor_id"] is None
+    assert body["withdrawal"] is None
 
 
 def test_recommendation_exposes_outcome_fields(client, db_session):

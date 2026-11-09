@@ -24,6 +24,7 @@ from app.agents.market_data import fetch_quote_and_history
 from app.auth.deps import CurrentUser, get_current_user, get_user_db
 from app.background import make_task_tracker
 from app.claude_keys import require_claude_key
+from app.discovery.withdrawal import successor_id, withdrawal_for
 from app.models import Holding, Recommendation, WatchlistItem
 from app.rate_limit import rate_limiter
 from app.schemas import DismissIn, RecommendationOut, Ticker
@@ -203,6 +204,9 @@ async def get_recommendation(
         raise HTTPException(status_code=404, detail="Recommendation not found")
     out = RecommendationOut.model_validate(rec)
     _attach_names(db, user.id, [out])
+    out.successor_id = successor_id(db, rec)
+    if rec.status == "SUPERSEDED" and rec.source == "discovery" and out.successor_id is None:
+        out.withdrawal = withdrawal_for(db, rec)
     db.close()  # as in list_recommendations: don't hold the connection over the quote fetch
     await _attach_live_quotes([out])
     return out
