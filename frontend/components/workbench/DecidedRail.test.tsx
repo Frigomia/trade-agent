@@ -91,11 +91,22 @@ describe("DecidedRail", () => {
   });
 
   it("no since line when a price is missing", () => {
-    wrap(<DecidedRail rec={decided("REJECTED", { current_price: null })} onChanged={vi.fn()} />);
+    for (const current_price of [null, 0]) {
+      const { unmount } = wrap(<DecidedRail rec={decided("REJECTED", { current_price })} onChanged={vi.fn()} />);
+      expect(screen.queryByText(/^Recommended /)).toBeNull();
+      expect(screen.queryByText("USD 0.00")).toBeNull();
+      expect(screen.getByText("USD 184.20")).toBeInTheDocument(); // the saved scan quote, dated
+      expect(screen.getByText(/Scan quote/)).toBeInTheDocument();
+      unmount();
+    }
+  });
 
-    expect(screen.queryByText(/^Recommended /)).toBeNull();
-    expect(screen.getByText("USD 184.20")).toBeInTheDocument(); // the saved scan quote, dated
-    expect(screen.getByText(/Scan quote/)).toBeInTheDocument();
+  it("links the sources count to the Sources tab", () => {
+    const onSeeSources = vi.fn();
+    wrap(<DecidedRail rec={decided("REJECTED")} onChanged={vi.fn()} onSeeSources={onSeeSources} />);
+    expect(screen.getByText("3 sources")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "See sources" }));
+    expect(onSeeSources).toHaveBeenCalled();
   });
 
   it("no control anywhere reads buy, sell, deposit or withdraw", async () => {
@@ -118,9 +129,10 @@ describe("DecidedRail", () => {
 
 describe("WithdrawnRail", () => {
   it("withdrawn rail links to the company overview, shows Run a new analysis disabled with its explanation, makes no request when it is clicked, and has no decision buttons", () => {
-    wrap(<WithdrawnRail rec={withdrawn()} />);
+    wrap(<WithdrawnRail rec={withdrawn()} onSeeSources={vi.fn()} />);
 
     expect(screen.getByRole("link", { name: "Company overview" })).toHaveAttribute("href", "/discover/company/HLDN");
+    expect(screen.getByRole("button", { name: "See sources" })).toBeInTheDocument();
     const run = screen.getByRole("button", { name: "Run a new analysis" });
     expect(run).toHaveAttribute("aria-disabled", "true");
     expect(run).toHaveAccessibleDescription("Re-running a researched company is not available yet.");

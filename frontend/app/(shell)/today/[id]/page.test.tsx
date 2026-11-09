@@ -215,6 +215,57 @@ describe("RecommendationDetailPage", () => {
     expect(screen.getByRole("link", { name: "Today" })).toBeInTheDocument();
   });
 
+  it("a successor id that is not a plain integer keeps the old alert instead of a blank page", async () => {
+    for (const successor_id of [-1, 0]) {
+      serve({ "1": idea({ status: "SUPERSEDED", successor_id }) });
+      const { unmount } = renderFresh(<RecommendationDetailPage />);
+      expect(await screen.findByText(/newer analysis replaced this recommendation/i)).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  it("a decision in this visit does not follow the page to another idea", async () => {
+    serve(
+      { "1": idea(), "2": idea({ id: 2, status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) },
+      { "/analysis/recommendations/1/approve": idea({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) },
+    );
+    const { rerender } = renderFresh(<RecommendationDetailPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    expect(await screen.findByText(/decision recorded/i)).toBeInTheDocument();
+
+    routeId = "2";
+    rerender(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}><RecommendationDetailPage /></SWRConfig>);
+    expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+  });
+
+  it("changing an approved idea to dismissed on the reopened page shows the Dismissed strip", async () => {
+    serve(
+      { "1": idea({ status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" }) },
+      { "/analysis/recommendations/1/reject": idea({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z" }) },
+    );
+    renderFresh(<RecommendationDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Change my decision" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Skip reason and dismiss" }));
+    expect(await screen.findByText(/You dismissed this idea/)).toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
+  });
+
+  it("changing a dismissed idea to approved on the reopened page shows the Approved strip", async () => {
+    serve(
+      { "1": idea({ status: "REJECTED", reviewed_at: "2026-10-22T09:00:00Z" }) },
+      { "/analysis/recommendations/1/approve": idea({ status: "APPROVED", reviewed_at: "2026-10-23T09:00:00Z" }) },
+    );
+    renderFresh(<RecommendationDetailPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Change my decision" }));
+    expect(await screen.findByText(/You approved this idea/)).toBeInTheDocument();
+    expect(screen.queryByText(/decision recorded/i)).not.toBeInTheDocument();
+  });
+
   it("from=superseded on a pending idea shows the newer strip", async () => {
     search = new URLSearchParams("from=superseded");
     serve({ "1": idea() });

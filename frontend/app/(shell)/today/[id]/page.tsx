@@ -51,9 +51,15 @@ export default function RecommendationDetailPage() {
   );
 }
 
-/** A superseded idea opens its replacement; the id is the backend's, checked to be a plain integer. */
+/** The newer idea a superseded one points to, only when it is a plain positive integer (it goes into a URL). */
+function validSuccessor(rec: RecommendationOut | undefined): number | null {
+  const id = rec?.status === "SUPERSEDED" ? rec.successor_id : null;
+  return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+/** A superseded idea opens its replacement. */
 function openSuccessor(router: ReturnType<typeof useRouter>, successorId: number) {
-  if (Number.isSafeInteger(successorId) && successorId > 0) router.replace(`/today/${successorId}?from=superseded`);
+  router.replace(`/today/${successorId}?from=superseded`);
 }
 
 function RecommendationDetail() {
@@ -69,15 +75,18 @@ function RecommendationDetail() {
     apiFetch,
   );
   // A decision made in this visit shows the confirmation once; reopened later, a discovery idea shows
-  // its company page with the decision instead. Client state, not a route, so a refresh drops it.
-  const [decidedHere, setDecidedHere] = useState(false);
+  // its company page with the decision instead. Client state, not a route, so a refresh drops it; kept
+  // by id so it does not follow a client-side navigation to another idea.
+  const [decidedId, setDecidedId] = useState<number | null>(null);
+  const decidedHere = recommendation !== undefined && decidedId === recommendation.id;
   // A decision (or a changed decision) is written straight into the SWR cache — no separate
-  // local copy to keep in sync with it.
+  // local copy to keep in sync with it. A change made on a reopened page only updates it.
+  const updateCached = (updated: RecommendationOut) => void mutate(updated, { revalidate: false });
   const setDecided = (updated: RecommendationOut) => {
-    setDecidedHere(true);
-    void mutate(updated, { revalidate: false });
+    setDecidedId(updated.id);
+    updateCached(updated);
   };
-  const successorId = recommendation?.status === "SUPERSEDED" ? (recommendation.successor_id ?? null) : null;
+  const successorId = validSuccessor(recommendation);
   useEffect(() => {
     if (successorId !== null) openSuccessor(router, successorId);
   }, [router, successorId]);
@@ -102,7 +111,7 @@ function RecommendationDetail() {
     }
 
     if (reopened) {
-      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} />;
+      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} onChanged={updateCached} />;
     }
 
     // Manual and scheduled runs always have a replacement; a discovery idea without its research says the same.
@@ -120,14 +129,14 @@ function RecommendationDetail() {
           recommendation={recommendation}
           onChanged={setDecided}
           onBackToToday={() => router.push("/today")}
-          onViewCompany={recommendation.idea ? () => setDecidedHere(false) : undefined}
+          onViewCompany={recommendation.idea ? () => setDecidedId(null) : undefined}
         />
       );
     }
 
     // A discovery idea gets the company page: the saved research in tabs beside a decision rail.
     if (recommendation.idea) {
-      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} notice={fromSuperseded ? "newer" : undefined} />;
+      return <Workbench recommendation={recommendation as DiscoveryRecommendation} onDecided={setDecided} onChanged={updateCached} notice={fromSuperseded ? "newer" : undefined} />;
     }
 
     if (isDesktop) {

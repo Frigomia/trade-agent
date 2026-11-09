@@ -19,6 +19,8 @@ describe("moveSinceRecommended", () => {
 
   it("is null when the current price is missing or not finite", () => {
     expect(move(100, null)).toBeNull();
+    expect(move(100, 0)).toBeNull(); // a zero quote is a missing one, not a -100% fall
+    expect(move(100, -1)).toBeNull();
     expect(move(100, Number.NaN)).toBeNull();
     expect(move(100, Number.POSITIVE_INFINITY)).toBeNull();
   });

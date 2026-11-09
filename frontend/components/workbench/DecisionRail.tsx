@@ -38,12 +38,26 @@ export function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & obje
   );
 }
 
+/** "3 sources · See sources" at the foot of a rail, opening the Sources tab. */
+export function SourcesRow({ idea, onSeeSources }: { idea: DiscoveryRecommendation["idea"] & object; onSeeSources: () => void }) {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--muted)" }}>
+      <span>
+        {idea.sources.length} source{idea.sources.length === 1 ? "" : "s"}
+      </span>
+      <Box component="button" type="button" onClick={onSeeSources} sx={{ p: 0, border: 0, bgcolor: "transparent", color: "var(--accent)", fontSize: "inherit", cursor: "pointer" }}>
+        See sources
+      </Box>
+    </Box>
+  );
+}
+
 const money = (rec: DiscoveryRecommendation, value: number) => `${rec.idea?.snapshot?.currency ?? ""} ${formatAmount(value)}`.trim();
 
 /** Where the price is now: the live quote with its day change. Both are in the idea's major unit. */
 function LivePrice({ rec, price }: { rec: DiscoveryRecommendation; price: number }) {
   return (
-    <Box sx={{ display: "grid", gap: "2px" }}>
+    <Box sx={{ display: "grid", gap: "0.125rem" }}>
       <Box component="span" sx={{ fontWeight: 650, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.035em", fontSize: { xs: "1.5rem", md: "1.875rem" }, lineHeight: 1.1 }}>
         {money(rec, price)}
       </Box>
@@ -75,14 +89,15 @@ export function SinceRecommended({ rec }: { rec: DiscoveryRecommendation }) {
 /**
  * Price, confidence, risk and last analysis: what a decision rests on, in one block. On a phone it
  * also carries the fit and the way to the sources (the rail has its own). `showSince` is for a
- * reopened idea: the live price when it loaded (else the dated scan quote) and the move since.
+ * reopened idea: the live price when a positive one loaded (else the dated scan quote) and the move since.
  */
 export function DecisionSummary({ rec, onSeeSources, showSince = false }: { rec: DiscoveryRecommendation; onSeeSources?: () => void; showSince?: boolean }) {
   const idea = rec.idea!;
   return (
     <Box sx={{ display: "grid", gap: 1.5 }}>
       <Box sx={{ "& > div": { justifyItems: "start", textAlign: "left" } }}>
-        {showSince && rec.current_price !== null ? <LivePrice rec={rec} price={rec.current_price} /> : <PriceBlock rec={rec} large />}
+        {/* A zero or negative quote is not a price: fall back to the dated scan quote. */}
+        {showSince && rec.current_price !== null && rec.current_price > 0 ? <LivePrice rec={rec} price={rec.current_price} /> : <PriceBlock rec={rec} large />}
       </Box>
       {showSince && <SinceRecommended rec={rec} />}
       <Box sx={{ display: "grid", gap: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
@@ -167,14 +182,7 @@ export function DecisionRail({
         </Button>
       </Box>
       <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", textAlign: "center" }}>{NOTE}</Typography>
-      <Box sx={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--muted)" }}>
-        <span>
-          {idea.sources.length} source{idea.sources.length === 1 ? "" : "s"}
-        </span>
-        <Box component="button" type="button" onClick={onSeeSources} sx={{ p: 0, border: 0, bgcolor: "transparent", color: "var(--accent)", fontSize: "inherit", cursor: "pointer" }}>
-          See sources
-        </Box>
-      </Box>
+      <SourcesRow idea={idea} onSeeSources={onSeeSources} />
     </Panel>
   );
 }

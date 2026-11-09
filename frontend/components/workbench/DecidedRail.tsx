@@ -10,9 +10,7 @@ import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { useDecision } from "@/lib/useDecision";
-import { askHref, DecisionSummary, FitLine } from "./DecisionRail";
-
-export { SinceRecommended } from "./DecisionRail";
+import { askHref, DecisionSummary, FitLine, SourcesRow } from "./DecisionRail";
 
 const RULE = <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />;
 const NOTE_SX = { fontSize: "0.75rem", color: "var(--muted)", textAlign: "center" } as const;
@@ -35,10 +33,18 @@ function useChangeDecision(rec: DiscoveryRecommendation, onChanged: (updated: Re
 }
 
 /** The rail of an approved or dismissed idea: where the price is now, then only the actions that still make sense. */
-export function DecidedRail({ rec, onChanged }: { rec: DiscoveryRecommendation; onChanged: (updated: RecommendationOut) => void }) {
+export function DecidedRail({
+  rec,
+  onChanged,
+  onSeeSources,
+}: {
+  rec: DiscoveryRecommendation;
+  onChanged: (updated: RecommendationOut) => void;
+  onSeeSources?: () => void;
+}) {
   const { approved, change, submitting, error, sheet } = useChangeDecision(rec, onChanged);
   return (
-    <Panel component="aside" aria-label="Your decision" sx={{ p: "20px", display: "grid", gap: 2, position: { md: "sticky" }, top: 16 }}>
+    <Panel component="aside" aria-label="Your decision" sx={{ p: "1.25rem", display: "grid", gap: 2, position: { md: "sticky" }, top: "1rem" }}>
       <DecisionSummary rec={rec} showSince />
       {RULE}
       <FitLine idea={rec.idea!} />
@@ -55,6 +61,7 @@ export function DecidedRail({ rec, onChanged }: { rec: DiscoveryRecommendation; 
         </Button>
       </Box>
       <Typography sx={NOTE_SX}>{approved ? "Recorded only. No order was placed." : "Recorded only. Nothing was sent to a broker."}</Typography>
+      {onSeeSources && <SourcesRow idea={rec.idea!} onSeeSources={onSeeSources} />}
     </Panel>
   );
 }
@@ -67,9 +74,10 @@ export function RunAgainDisabled() {
       <Button
         variant="outlined"
         aria-disabled
+        disableRipple
         aria-describedby={hintId}
         startIcon={<Sparkles size={16} aria-hidden />}
-        sx={{ minHeight: 44, color: "var(--muted)", borderColor: "var(--line)", cursor: "default", "&:hover": { borderColor: "var(--line)", bgcolor: "transparent" } }}
+        sx={{ minHeight: "2.75rem", color: "var(--muted)", borderColor: "var(--line)", cursor: "default", "&:hover": { borderColor: "var(--line)", bgcolor: "transparent" } }}
       >
         Run a new analysis
       </Button>
@@ -81,9 +89,9 @@ export function RunAgainDisabled() {
 }
 
 /** The rail of a withdrawn idea: no decision to make, so the company overview leads. */
-export function WithdrawnRail({ rec }: { rec: DiscoveryRecommendation }) {
+export function WithdrawnRail({ rec, onSeeSources }: { rec: DiscoveryRecommendation; onSeeSources?: () => void }) {
   return (
-    <Panel component="aside" aria-label="Withdrawn idea" sx={{ p: "20px", display: "grid", gap: 2, position: { md: "sticky" }, top: 16 }}>
+    <Panel component="aside" aria-label="Withdrawn idea" sx={{ p: "1.25rem", display: "grid", gap: 2, position: { md: "sticky" }, top: "1rem" }}>
       <DecisionSummary rec={rec} showSince />
       {RULE}
       <Box sx={ACTIONS_SX}>
@@ -95,16 +103,17 @@ export function WithdrawnRail({ rec }: { rec: DiscoveryRecommendation }) {
           Ask AI
         </Button>
       </Box>
+      {onSeeSources && <SourcesRow idea={rec.idea!} onSeeSources={onSeeSources} />}
     </Panel>
   );
 }
 
 const BAR_SX = { position: "sticky", bottom: "var(--tabbar-h, 66px)", zIndex: 2, mx: -2, px: 2, py: 1.25, display: "grid", gap: 1, borderTop: "1px solid var(--line)", bgcolor: "var(--panel)" } as const;
-const ROW_SX = { display: "grid", gridTemplateColumns: "1fr 44px", gap: 1 } as const;
+const ROW_SX = { display: "grid", gridTemplateColumns: "1fr 2.75rem", gap: 1 } as const;
 
 function AskIcon({ rec }: { rec: DiscoveryRecommendation }) {
   return (
-    <Button component={Link} href={askHref(rec.id)} variant="outlined" aria-label="Ask AI" sx={{ minWidth: 0, minHeight: 44, p: 0 }}>
+    <Button component={Link} href={askHref(rec.id)} variant="outlined" aria-label="Ask AI" sx={{ minWidth: 0, minHeight: "2.75rem", p: 0 }}>
       <MessageSquare size={16} aria-hidden />
     </Button>
   );
@@ -119,7 +128,7 @@ export function DecidedPhoneBar({ rec, onChanged }: { rec: DiscoveryRecommendati
       {sheet}
       {approved && <LogTradeCta recommendation={rec} />}
       <Box sx={ROW_SX}>
-        <Button variant="outlined" disabled={submitting} onClick={change} sx={{ minHeight: 44 }}>
+        <Button variant="outlined" disabled={submitting} onClick={change} sx={{ minHeight: "2.75rem" }}>
           Change my decision
         </Button>
         <AskIcon rec={rec} />
@@ -132,7 +141,7 @@ export function DecidedPhoneBar({ rec, onChanged }: { rec: DiscoveryRecommendati
 export function WithdrawnPhoneBar({ rec }: { rec: DiscoveryRecommendation }) {
   return (
     <Box sx={{ ...BAR_SX, ...ROW_SX }}>
-      <Button component={Link} href={companyHref(rec.ticker)} variant="contained" startIcon={<Building2 size={16} aria-hidden />} sx={{ minHeight: 44 }}>
+      <Button component={Link} href={companyHref(rec.ticker)} variant="contained" startIcon={<Building2 size={16} aria-hidden />} sx={{ minHeight: "2.75rem" }}>
         Company overview
       </Button>
       <AskIcon rec={rec} />

@@ -42,10 +42,12 @@ function reopenedAs(rec: DiscoveryRecommendation): Exclude<StripKind, "newer"> |
 export function Workbench({
   recommendation,
   onDecided,
+  onChanged,
   notice,
 }: {
   recommendation: DiscoveryRecommendation;
-  onDecided: (updated: RecommendationOut) => void;
+  onDecided: (updated: RecommendationOut) => void; // a first decision, from the pending rail
+  onChanged: (updated: RecommendationOut) => void; // a changed decision on a reopened idea: stays on this page
   notice?: "newer";
 }) {
   const idea = recommendation.idea!;
@@ -135,9 +137,9 @@ export function Workbench({
         </Box>
         {isDesktop &&
           (view === "withdrawn" ? (
-            <WithdrawnRail rec={recommendation} />
+            <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
           ) : view ? (
-            <DecidedRail rec={recommendation} onChanged={onDecided} />
+            <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
           ) : (
             <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
           ))}
@@ -149,7 +151,7 @@ export function Workbench({
         (view === "withdrawn" ? (
           <WithdrawnPhoneBar rec={recommendation} />
         ) : view ? (
-          <DecidedPhoneBar rec={recommendation} onChanged={onDecided} />
+          <DecidedPhoneBar rec={recommendation} onChanged={onChanged} />
         ) : (
           <PhoneActions rec={recommendation} onDecided={onDecided} />
         ))}
