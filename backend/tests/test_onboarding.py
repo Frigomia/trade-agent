@@ -1,7 +1,7 @@
 import asyncio
 import threading
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -166,6 +166,81 @@ def test_quote_date_follows_last_finite_close_and_old_cache_is_stale(monkeypatch
     assert out["price"] == 100 and out["stale"] is False
     redis.get.return_value = '{"price":100,"closes":[100]}'
     assert asyncio.run(market_data.fetch_quote_and_history("MSFT"))["stale"] is True
+
+
+def test_refresh_fetches_latest_quote_without_using_shared_cache(monkeypatch):
+    today = datetime.now(UTC).date()
+    redis = AsyncMock()
+    redis.get.return_value = None
+    redis.lock = MagicMock(return_value=AsyncMock())
+    monkeypatch.setattr(market_data, "get_redis", lambda: redis)
+    frame = pd.DataFrame(
+        {"Close": [100.0, 105.0]}, index=pd.to_datetime([today - timedelta(days=1), today])
+    )
+    with patch.object(market_data.yf, "Ticker") as ticker:
+        ticker.return_value.history.return_value = frame
+        out = asyncio.run(market_data.fetch_quote_and_history("MSFT", refresh=True))
+    assert (out["price"], out["as_of"], out["stale"]) == (105.0, today.isoformat(), False)
+    ticker.return_value.history.assert_called_once_with(period="1mo", timeout=10)
+    assert redis.set.await_args.args[0] == "quote_fresh:MSFT"
+    assert redis.set.await_args.kwargs == {"ex": 60}
+
+
+@pytest.mark.parametrize("failure", [True, False])
+def test_refresh_failure_or_empty_history_uses_stale_shared_quote(monkeypatch, failure):
+    redis = AsyncMock()
+    redis.get.side_effect = [None, None, '{"price":100,"closes":[99,100],"as_of":"2026-11-09"}']
+    redis.lock = MagicMock(return_value=AsyncMock())
+    monkeypatch.setattr(market_data, "get_redis", lambda: redis)
+    monkeypatch.setattr(market_data, "RETRY_BASE_DELAY_SECONDS", 0)
+    with patch.object(market_data.yf, "Ticker") as ticker:
+        if failure:
+            ticker.return_value.history.side_effect = RuntimeError("unavailable")
+        else:
+            ticker.return_value.history.return_value = pd.DataFrame({"Close": []})
+        out = asyncio.run(market_data.fetch_quote_and_history("MSFT", refresh=True))
+    assert out["price"] == 100 and out["stale"] is True
+    assert ticker.return_value.history.call_count == (3 if failure else 1)
+
+
+def test_concurrent_refreshes_share_one_fetch_and_limit_yahoo_concurrency(monkeypatch):
+    import time
+
+    cache = {}
+    locks = {}
+    redis = AsyncMock()
+    redis.get.side_effect = lambda key: cache.get(key)
+
+    async def save(key, value, **kwargs):
+        cache[key] = value
+
+    redis.set.side_effect = save
+    redis.lock = MagicMock(side_effect=lambda key, **kwargs: locks.setdefault(key, asyncio.Lock()))
+    monkeypatch.setattr(market_data, "get_redis", lambda: redis)
+    active = peak = 0
+    guard = threading.Lock()
+
+    def history(**kwargs):
+        nonlocal active, peak
+        with guard:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        with guard:
+            active -= 1
+        return pd.DataFrame({"Close": [100]}, index=pd.to_datetime(["2026-11-09"]))
+
+    async def run():
+        return await asyncio.gather(
+            *(market_data.fetch_quote_and_history(str(i % 6), refresh=True) for i in range(12))
+        )
+
+    with patch.object(market_data.yf, "Ticker") as ticker:
+        ticker.return_value.history.side_effect = history
+        results = asyncio.run(run())
+    assert len(results) == 12
+    assert ticker.return_value.history.call_count == 6
+    assert peak <= 3
 
 
 @pytest.mark.parametrize("value", [None, "bad", "2000-01-01"])

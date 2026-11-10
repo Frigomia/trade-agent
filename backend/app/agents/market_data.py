@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import math
+import threading
 import warnings
 from collections.abc import Callable
 from datetime import UTC, date, datetime
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", message="'raise_errors' deprecated", category=DeprecationWarning)
 
 QUOTE_CACHE_TTL = 300
+FRESH_QUOTE_CACHE_TTL = 60
+_fresh_quote_slots = threading.BoundedSemaphore(3)
 FUNDAMENTALS_CACHE_TTL = 900
 HISTORY_CACHE_TTL = 86400
 SEARCH_CACHE_TTL = 3600
@@ -51,27 +54,51 @@ async def _retry_fetch[T](fetch: Callable[[], T]) -> T:
     raise AssertionError("unreachable: loop always returns or raises")
 
 
-async def fetch_quote_and_history(ticker: str) -> dict[str, Any]:
+async def fetch_quote_and_history(ticker: str, *, refresh: bool = False) -> dict[str, Any]:
+    cache_key = f"quote_fresh:{ticker}" if refresh else f"quote:{ticker}"
     redis = get_redis()
-    cache_key = f"quote:{ticker}"
     cached = await redis.get(cache_key)
     if cached is not None:
         result = dict(json.loads(cached))
         result.setdefault("as_of", None)
-        result["stale"] = quote_is_stale(result.get("as_of"))
+        result["stale"] = bool(result.get("stale")) or quote_is_stale(result.get("as_of"))
         return result
 
     def _fetch() -> dict[str, Any]:
-        history = yf.Ticker(ticker).history(period="1y")
+        if refresh:
+            # Bound Yahoo work across simultaneous list requests in this worker.
+            with _fresh_quote_slots:
+                history = yf.Ticker(ticker).history(period="1mo", timeout=10)
+        else:
+            history = yf.Ticker(ticker).history(period="1y")
         values = history["Close"].tolist()
         closes = _finite(values)
         valid = [i for i, value in enumerate(values) if math.isfinite(value)]
         as_of = history.index[valid[-1]].date().isoformat() if valid else None
         return {"price": closes[-1] if closes else None, "closes": closes, "as_of": as_of}
 
-    result = await _retry_fetch(_fetch)
-    await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
-    result["stale"] = quote_is_stale(result.get("as_of"))
+    if refresh:
+        # Redis serializes the same ticker across workers; the second reader reuses the result.
+        async with redis.lock(f"{cache_key}:lock", timeout=60, blocking_timeout=60):
+            cached = await redis.get(cache_key)
+            if cached is not None:
+                result = dict(json.loads(cached))
+            else:
+                try:
+                    result = await _retry_fetch(_fetch)
+                except Exception as exc:
+                    logger.warning("Discover quote refresh failed (%s)", type(exc).__name__)
+                    result = {"price": None, "closes": [], "as_of": None}
+                if result.get("price") is None:
+                    fallback = await redis.get(f"quote:{ticker}")
+                    if fallback is not None:
+                        result = dict(json.loads(fallback))
+                    result["stale"] = True
+                await redis.set(cache_key, json.dumps(result), ex=FRESH_QUOTE_CACHE_TTL)
+    else:
+        result = await _retry_fetch(_fetch)
+        await redis.set(cache_key, json.dumps(result), ex=QUOTE_CACHE_TTL)
+    result["stale"] = bool(result.get("stale")) or quote_is_stale(result.get("as_of"))
     return result
 
 

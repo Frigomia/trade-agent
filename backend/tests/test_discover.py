@@ -53,7 +53,8 @@ def idea(
 def listing(client, quotes):
     """GET /discover with quotes faked: {ticker: (price, closes) or an Exception}."""
 
-    async def quote(ticker):
+    async def quote(ticker, *, refresh):
+        assert refresh is True
         value = quotes[ticker]
         if isinstance(value, Exception):
             raise value
@@ -290,7 +291,8 @@ def test_the_list_holds_only_the_callers_companies_and_quotes_only_those(client,
     idea(db_session, "THEIRS", "Their private reading.", user_id=OTHER_USER_ID)
     asked = []
 
-    async def quote(ticker):
+    async def quote(ticker, *, refresh):
+        assert refresh is True
         asked.append(ticker)
         return {"price": 1.0, "closes": [1.0, 1.0], "as_of": "2026-10-21", "stale": False}
 

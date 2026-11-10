@@ -51,12 +51,12 @@ router = APIRouter(
 )
 
 MAX_DISCOVER = 100  # the same cap as the watchlist it is built on
-LIST_LIMIT_PER_MINUTE = 30  # per user: the list fans out to cached quotes
+LIST_LIMIT_PER_MINUTE = 30  # per user: the list fans out to Yahoo quotes
 ADD_LIMIT_PER_MINUTE = 60  # per user: adds and re-adds (Undo)
 EDIT_LIMIT_PER_MINUTE = 60  # per user: edits of a company's targets and note
 STORED_PRICE_STEP = Decimal("0.000001")  # the column's scale, Numeric(18,6)
 MAX_STORED_PRICE = Decimal("999999999999")  # and its 12 integer digits
-LOOKUP_CONCURRENCY = 8
+LOOKUP_CONCURRENCY = 3
 # The profile fields stored on the item, with the width of their columns.
 PROFILE_FIELDS = {"name": 200, "exchange": 60, "currency": 10}
 
@@ -101,10 +101,10 @@ Quote = tuple[float, float | None, date | None, bool]
 
 
 async def _quote(ticker: str, sem: asyncio.Semaphore) -> Quote | None:
-    """(price, daily change in percent, its date, stale) from the cached quote, or None."""
+    """(price, daily change in percent, its date, stale) from Yahoo, or None."""
     try:
         async with sem:
-            data = await fetch_quote_and_history(ticker)
+            data = await fetch_quote_and_history(ticker, refresh=True)
     except Exception as exc:
         logger.warning("Discover quote failed for %s: %s", ticker, type(exc).__name__)
         return None
