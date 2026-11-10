@@ -56,7 +56,7 @@ ADD_LIMIT_PER_MINUTE = 60  # per user: adds and re-adds (Undo)
 EDIT_LIMIT_PER_MINUTE = 60  # per user: edits of a company's targets and note
 STORED_PRICE_STEP = Decimal("0.000001")  # the column's scale, Numeric(18,6)
 MAX_STORED_PRICE = Decimal("999999999999")  # and its 12 integer digits
-LOOKUP_CONCURRENCY = 8
+LOOKUP_CONCURRENCY = 3
 # The profile fields stored on the item, with the width of their columns.
 PROFILE_FIELDS = {"name": 200, "exchange": 60, "currency": 10}
 
