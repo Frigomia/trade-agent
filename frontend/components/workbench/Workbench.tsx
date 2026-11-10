@@ -8,11 +8,13 @@ import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { listingText, sectorText } from "@/lib/discovery";
 import { SectorIcon } from "@/components/ui/SectorIcon";
+import { DecidedPhoneBar, DecidedRail, RunAgainDisabled, WithdrawnPhoneBar, WithdrawnRail } from "./DecidedRail";
 import { DecisionRail, DecisionSummary, PhoneActions } from "./DecisionRail";
 import { Numbers } from "./Numbers";
 import { Overview } from "./Overview";
 import { RiskFit } from "./RiskFit";
 import { SourcesTab } from "./SourcesTab";
+import { StatusStrip, type StripKind } from "./StatusStrip";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -22,13 +24,35 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
+/** What happened to the idea, from its status: null while it waits for a decision. */
+function reopenedAs(rec: DiscoveryRecommendation): Exclude<StripKind, "newer"> | null {
+  if (rec.status === "APPROVED") return "approved";
+  if (rec.status === "REJECTED") return "dismissed";
+  if (rec.status === "SUPERSEDED" && rec.withdrawal) return "withdrawn";
+  return null;
+}
+
 /**
  * The company page for a discovery idea: identity on top, the evidence in tabs, and a decision
  * rail that stays beside it (on a phone, the summary sits above the tabs and the actions ride
- * above the tab bar). Approve and Dismiss only record the decision.
+ * above the tab bar). Approve and Dismiss only record the decision. A decided or withdrawn idea
+ * reopens on the same page with a status strip above the tabs and a rail of what still makes sense;
+ * `notice="newer"` says a pending idea is the newer analysis of one the person opened.
  */
-export function Workbench({ recommendation, onDecided }: { recommendation: DiscoveryRecommendation; onDecided: (updated: RecommendationOut) => void }) {
+export function Workbench({
+  recommendation,
+  onDecided,
+  onChanged,
+  notice,
+}: {
+  recommendation: DiscoveryRecommendation;
+  onDecided: (updated: RecommendationOut) => void; // a first decision, from the pending rail
+  onChanged: (updated: RecommendationOut) => void; // a changed decision on a reopened idea: stays on this page
+  notice?: "newer";
+}) {
   const idea = recommendation.idea!;
+  const view = reopenedAs(recommendation);
+  const strip = view ?? notice;
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
   const [tab, setTab] = useState<TabKey>("overview");
   const panelId = useId();
@@ -66,7 +90,13 @@ export function Workbench({ recommendation, onDecided }: { recommendation: Disco
           </Box>
         </Box>
       </Box>
-      {!isDesktop && <DecisionSummary rec={recommendation} onSeeSources={() => setTab("sources")} />}
+      {strip && <StatusStrip kind={strip} rec={recommendation} />}
+      {!isDesktop && (
+        <Box sx={{ display: "grid", gap: 1.5 }}>
+          <DecisionSummary rec={recommendation} onSeeSources={() => setTab("sources")} showSince={view !== null} />
+          {view === "withdrawn" && <RunAgainDisabled />}
+        </Box>
+      )}
       <Box role="tablist" aria-label="Company sections" sx={{ display: "flex", gap: "4px", p: "4px", borderRadius: 999, bgcolor: "var(--track)", width: { xs: "100%", md: "max-content" }, maxWidth: "100%" }}>
         {TABS.map((t) => (
           <Box
@@ -105,12 +135,26 @@ export function Workbench({ recommendation, onDecided }: { recommendation: Disco
           {tab === "risk" && <RiskFit idea={idea} />}
           {tab === "sources" && <SourcesTab idea={idea} />}
         </Box>
-        {isDesktop && <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />}
+        {isDesktop &&
+          (view === "withdrawn" ? (
+            <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
+          ) : view ? (
+            <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
+          ) : (
+            <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
+          ))}
       </Box>
       <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", maxWidth: "72ch", lineHeight: 1.5 }}>
         Advisory research for human review, not investment advice. Saving or approving only records your decision; nothing is sent to a broker.
       </Typography>
-      {!isDesktop && <PhoneActions rec={recommendation} onDecided={onDecided} />}
+      {!isDesktop &&
+        (view === "withdrawn" ? (
+          <WithdrawnPhoneBar rec={recommendation} />
+        ) : view ? (
+          <DecidedPhoneBar rec={recommendation} onChanged={onChanged} />
+        ) : (
+          <PhoneActions rec={recommendation} onDecided={onDecided} />
+        ))}
     </Box>
   );
 }

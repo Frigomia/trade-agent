@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoverItem } from "@/lib/api/discover-types";
-import { addedText, counts, isAnalyzed, metaText, nameOf, priceText, rangeDecimals, targetsText, visibleItems } from "./discoverList";
+import { addedText, counts, decisionChip, isAnalyzed, metaText, nameOf, priceText, rangeDecimals, targetsText, viewLabel, visibleItems } from "./discoverList";
 
 const item = (ticker: string, over: Partial<DiscoverItem> = {}): DiscoverItem => ({
   ticker,
@@ -149,5 +149,27 @@ describe("targetsText", () => {
 
   it("shows only a whole range, never one end", () => {
     expect(set({ target_price_low: 90, target_price_high: null })).toBeNull();
+  });
+});
+
+describe("decisionChip and viewLabel", () => {
+  it("maps each status to a chip", () => {
+    expect(decisionChip(item("A", { report_status: "APPROVED" }))).toBe("approved");
+    expect(decisionChip(item("A", { report_status: "REJECTED" }))).toBe("dismissed");
+    expect(decisionChip(item("A", { report_status: "SUPERSEDED" }))).toBe("withdrawn");
+  });
+
+  it("has no chip while pending or without a report", () => {
+    expect(decisionChip(item("A", { report_status: "PENDING" }))).toBeNull();
+    expect(decisionChip(item("A", { report_status: null }))).toBeNull();
+    expect(decisionChip(item("A"))).toBeNull();
+    expect(decisionChip(item("A", { report_status: "constructor" as never }))).toBeNull();
+  });
+
+  it("says View decision only for a decided idea", () => {
+    expect(viewLabel("approved")).toBe("View decision");
+    expect(viewLabel("dismissed")).toBe("View decision");
+    expect(viewLabel("withdrawn")).toBe("View");
+    expect(viewLabel(null)).toBe("View");
   });
 });

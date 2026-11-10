@@ -26,7 +26,7 @@ import { Workbench } from "./Workbench";
 function show(rec = testRec(), onDecided = vi.fn()) {
   render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <Workbench recommendation={rec} onDecided={onDecided} />
+      <Workbench recommendation={rec} onDecided={onDecided} onChanged={onDecided} />
     </SWRConfig>,
   );
   return { onDecided };
@@ -371,6 +371,58 @@ describe("Workbench on a phone", () => {
     expect(screen.getByRole("button", { name: "Save to Discover" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Dismiss" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ask AI" })).toBeInTheDocument();
+  });
+});
+
+describe("Workbench reopened after a decision", () => {
+  it("the strip sits above the tabs and the four tabs still work read-only in a decided view", async () => {
+    apiFetch.mockImplementation((path: string) =>
+      path === "/portfolio/summary" ? Promise.resolve({ holdings: [] }) : Promise.resolve(testHistory()),
+    );
+    show({ ...testRec(), status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" });
+
+    const strip = await screen.findByRole("status");
+    expect(strip).toHaveTextContent("You approved this idea.");
+    const tablist = screen.getByRole("tablist", { name: "Company sections" });
+    expect(strip.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("complementary", { name: "Your decision" })).toBeInTheDocument();
+    for (const name of ["Numbers", "Risk and fit", "Sources", "Overview"]) {
+      fireEvent.click(screen.getByRole("tab", { name }));
+      expect(screen.getByRole("tab", { name })).toHaveAttribute("aria-selected", "true");
+    }
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save to Discover" })).toBeNull();
+  });
+});
+
+describe("Workbench reopened on a phone", () => {
+  beforeEach(() => {
+    desktop = false;
+    apiFetch.mockImplementation((path: string) => (path === "/portfolio/summary" ? Promise.resolve({ holdings: [] }) : Promise.resolve(testHistory())));
+  });
+
+  it("puts the decided and withdrawn actions in their phone bars, with no Approve", async () => {
+    const { unmount } = render(
+      <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+        <Workbench recommendation={{ ...testRec(), status: "REJECTED", reviewed_at: "2026-10-21T09:00:00Z" }} onDecided={vi.fn()} onChanged={vi.fn()} />
+      </SWRConfig>,
+    );
+    expect(await screen.findByText(/You dismissed this idea/)).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.getByRole("button", { name: "Change my decision" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ask AI" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    unmount();
+
+    show({ ...testRec(), status: "SUPERSEDED", withdrawal: { kind: "not_compelling", reason: null, as_of: null } });
+    expect(await screen.findByRole("link", { name: "Company overview" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run a new analysis" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText("Re-running a researched company is not available yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change my decision" })).toBeNull();
   });
 });
 

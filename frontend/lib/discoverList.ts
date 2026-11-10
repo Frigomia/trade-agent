@@ -1,4 +1,5 @@
 import type { DiscoverItem } from "@/lib/api/discover-types";
+import type { RecommendationStatus } from "@/lib/api/recommendation-types";
 import { toTime } from "@/lib/format";
 import { fractionToPercentText } from "@/lib/targetWeight";
 
@@ -16,6 +17,20 @@ export const SORTS: { key: DiscoverSort; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "change", label: "Daily change" },
 ];
+
+export type DecisionChip = "approved" | "dismissed" | "withdrawn";
+
+const CHIPS: Partial<Record<RecommendationStatus, DecisionChip>> = { APPROVED: "approved", REJECTED: "dismissed", SUPERSEDED: "withdrawn" };
+
+/** What became of the company's idea; null while it is still pending or when there is no report. */
+export function decisionChip(item: DiscoverItem): DecisionChip | null {
+  const status = item.report_status;
+  return status && Object.hasOwn(CHIPS, status) ? (CHIPS[status] ?? null) : null;
+}
+
+/** The button words: a decision can be reviewed, a withdrawn idea is just opened. */
+export const viewLabel = (chip: DecisionChip | null): "View decision" | "View" =>
+  chip === "approved" || chip === "dismissed" ? "View decision" : "View";
 
 export const nameOf = (item: DiscoverItem) => item.name ?? item.ticker;
 /** A saved report or durable research outcome: the rule shared by filters, counts and cards. */

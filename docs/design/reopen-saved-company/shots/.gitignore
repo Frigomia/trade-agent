@@ -1,0 +1,3 @@
+# screenshots are not tracked; regenerate with WIN=1340 docs/design/tools/shootall.sh reopen-saved-company reopen:rsc
+*
+!.gitignore

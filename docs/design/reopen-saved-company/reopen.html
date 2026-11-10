@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reopen a saved company · #283</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<link rel="stylesheet" href="../discover/dc.css">
+<style>
+/* #283 · Reopen a saved company from Discover. Extends the approved Workbench (company-overview/co-c-workbench.html) and the
+   Discover list (discover/dc-a-list.html); nothing in them is restyled. New: one status strip above the tabs, a decision
+   block at the top of the rail, and a decision chip on the Discover card.
+   Form from content: the person reopening an idea they already decided on asks "what did I decide, and where is it now?",
+   so the rail answers that first and keeps the research one click away. Not a confirmation screen: no centred card. */
+.co{display:grid;gap:16px;align-content:start}
+.hd3{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.wb{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.tabs3{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--track);margin-bottom:16px;width:max-content;max-width:100%}
+.tabs3 a{display:grid;place-items:center;min-height:36px;padding:0 18px;border-radius:999px;font-size:var(--fs-body);color:var(--text2);font-weight:500;white-space:nowrap}
+.tabs3 a.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.pane{display:grid;gap:16px;min-width:0}
+.pane>*{min-width:0}
+.decide{position:sticky;top:16px;padding:20px;display:grid;gap:16px}
+.decide .coprice{justify-items:start;text-align:left}
+.decide .coprice>b{font-size:28px}
+.decide .cometa{display:grid;gap:8px}
+.decide hr{border:0;border-top:1px solid var(--line);margin:0}
+.decide .coacts{grid-template-columns:1fr}
+.decide .fitline{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-body);color:var(--text2)}
+.decide .fitline b{font-size:var(--fs-title);font-weight:650;color:var(--text)}
+.decide .fitline .nb{font-weight:650;color:var(--text);font-size:var(--fs-body)}
+.decide .lnk{display:flex;justify-content:space-between;font-size:var(--fs-label);color:var(--muted)}
+.decide .lnk a{color:var(--accent)}
+.r2c{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.r2c>*{min-width:0}
+.region .wb,.phone .wb{grid-template-columns:1fr}
+.region .decide{position:static}
+.region .r2c,.phone .r2c{grid-template-columns:1fr}
+.phone .tabs3{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+.phone .tabs3 a{padding:0 4px;font-size:var(--fs-label);min-height:44px}
+.phone .hd3{gap:12px}
+.abar{display:grid;grid-template-columns:1fr 44px;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--panel)}
+.abar .btn{min-height:44px}
+.abar .btn.sq{padding:0}
+.abar .btn svg.i{margin:0}
+.abar .btn.wide svg.i{margin:0}
+
+/* ---- new: the status strip (one per page, above the tabs) ---- */
+.sbn{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;align-items:start;padding:14px 18px;border-radius:var(--rp);background:var(--panel);border:1px solid var(--line2);box-shadow:var(--shadow)}
+.sbn .si{grid-row:1/3;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--track);color:var(--text2)}
+.sbn.ok .si{background:var(--up-bg);color:var(--accent)}
+.sbn .st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em;color:var(--text);min-height:36px}
+.sbn .st em{font-style:normal;font-size:var(--fs-label);font-weight:400;color:var(--muted);letter-spacing:0}
+.sbn p{margin:0;font-size:var(--fs-body);line-height:1.5;color:var(--text2);max-width:68ch}
+.sbn .webbox{grid-column:2;margin-top:8px;max-width:68ch}
+.sbn .webbox p{color:var(--text)}
+.sbn .stx{grid-column:2}
+.sbn .nt{margin-top:4px;color:var(--text);overflow-wrap:anywhere}
+/* the decision block at the top of the rail: shape plus word, never colour alone */
+.since{display:grid;gap:2px;font-size:var(--fs-label);color:var(--muted)}
+.since .sc{display:flex;align-items:baseline;gap:8px;color:var(--text2)}
+.hint2{margin:-4px 0 0;font-size:var(--fs-label);color:var(--muted);text-align:center}
+.note2{margin:0;font-size:var(--fs-label);color:var(--muted);text-align:center}
+.coactions-text{display:flex;justify-content:center}
+
+/* ---- new: decision chips on the Discover card (same family as the AI analyzed pill) ---- */
+.stp.ap{background:var(--up-bg);border-color:transparent;color:var(--accent)}
+.stp.dm{border-style:solid;color:var(--text2)}
+.stp.wd{border-style:solid;color:var(--muted)}
+.rowc{padding:16px 20px;display:grid;grid-template-columns:auto minmax(0,1fr) 168px auto;gap:16px;align-items:center}
+.rowc .mid{display:grid;gap:4px;min-width:0}
+.rowc .top1{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.rowc .acts{display:flex;gap:8px;align-items:center}
+.list1{display:grid;gap:12px}
+.phone .rowc,.region .rowc{grid-template-columns:auto minmax(0,1fr);gap:12px 14px;padding:16px}
+.phone .rowc .px,.region .rowc .px{grid-column:1/-1;justify-items:start;text-align:left;grid-template-columns:auto auto 1fr;align-items:baseline;gap:4px 10px}
+.phone .rowc .px small,.region .rowc .px small{justify-self:end}
+.phone .rowc .acts,.region .rowc .acts{grid-column:1/-1}
+.phone .rowc .acts .btn:first-child,.region .rowc .acts .btn:first-child{flex:1}
+.phone .sbn,.region .sbn{padding:14px}
+.phone .sbn .st{min-height:0}
+.phone .sbn .si{grid-row:1;width:32px;height:32px}
+.phone .sbn p,.phone .sbn .webbox,.phone .sbn .stx{grid-column:1/-1}
+.phone .dcard{display:grid;gap:12px}
+</style>
+</head>
+<body>
+<div class="tag"><b>#283 · Reopen a saved company.</b> Opened from Discover. One status strip sits between the company header and the tabs; the decision rail leads with what you decided and where the price is now; the research stays in the same four tabs, read-only. Approved, Dismissed, Withdrawn and a newer analysis are shown on the approved Workbench, then the Discover cards. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> The strip and a decision summary sit above the tabs; the bar above the tab bar keeps one main action plus Ask AI. Left to right: Approved, Dismissed, Withdrawn, Newer analysis.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States at desktop width, and the Discover card.</b> Thesis invalidated, Dismissed without a note, and the existing confirmation, now shown only right after deciding, with one new link (View the company page).</div>
+<div class="grid2" id="states"></div>
+<script src="../today-discovery/lib.js"></script>
+<script src="../company-overview/co.js"></script>
+<script>
+Object.assign(I, {
+  checkc: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+  xc: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  ban: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  newer: '<path d="M4 12a8 8 0 0 1 13.7-5.6L20 9M20 4v5h-5M20 12a8 8 0 0 1-13.7 5.6L4 15M4 20v-5h5"/>',
+  note: '<path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/>',
+  trash: '<path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/>',
+});
+
+/* ---- sample facts for this page (fictional) ---- */
+const R = {
+  recDate: '20 Oct 2026', recPrice: '176.40', since: 4.4,
+  approvedOn: '21 Oct 2026', dismissedOn: '22 Oct 2026', dismissNote: 'Too expensive for my current budget.',
+  scanOn: '8 Nov 2026', newerOn: '9 Nov 2026',
+  why: 'Revenue growth slowed to 6% in the latest quarter and the shares now trade above their peer median, so the idea no longer clears the bar for a new opportunity.',
+  whyInvalid: 'Its thesis was invalidated: a filing shows two customers now make up 41% of revenue, which contradicts the diversified-customer case.',
+};
+const newerMeta = () => coMeta().replace(CO.analysed, `${R.newerOn}, 06:12`);
+const TABS = ['Overview', 'Numbers', 'Risk and fit', 'Sources'];
+const tabsHtml = (on) => `<nav class="tabs3" aria-label="Company sections">${TABS.map((t, i) => `<a href="#" class="${i === on ? 'on' : ''}" ${i === on ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
+const overview = () => `<section class="panel">${secThesis(false)}</section><section class="panel">${secChart(220)}</section><div class="r2c"><section class="panel">${secBull()}</section><section class="panel">${secBear()}</section></div>`;
+
+/* ---- the status strip ---- */
+const chip = (kind) => ({
+  ap: `<span class="stp ap">${ic('checkc', 'xs')}Approved</span>`,
+  dm: `<span class="stp dm">${ic('xc', 'xs')}Dismissed</span>`,
+  wd: `<span class="stp wd">${ic('ban', 'xs')}Withdrawn</span>`,
+}[kind]);
+const strip = (k) => ({
+  ap: `<div class="sbn ok" role="status"><span class="si">${ic('checkc')}</span><div class="st">${chip('ap')}<em>${R.approvedOn}</em></div><p class="stx">You approved this idea. No order was placed; trade-agent never trades. If you acted on it in your broker app, log the trade you placed.</p></div>`,
+  dm: `<div class="sbn" role="status"><span class="si">${ic('xc')}</span><div class="st">${chip('dm')}<em>${R.dismissedOn}</em></div><p class="stx">You dismissed this idea. The research below is what you decided on. Nothing else changed.</p><p class="stx nt"><b>Your note:</b> ${R.dismissNote}</p></div>`,
+  dm0: `<div class="sbn" role="status"><span class="si">${ic('xc')}</span><div class="st">${chip('dm')}<em>${R.dismissedOn}</em></div><p class="stx">You dismissed this idea. The research below is what you decided on. Nothing else changed.</p></div>`,
+  wd: `<div class="sbn" role="status"><span class="si">${ic('ban')}</span><div class="st">${chip('wd')}<em>${R.scanOn}</em></div><p class="stx">The latest scan no longer found this compelling. The research below is the earlier analysis from ${R.recDate}; nothing replaced it.</p>
+    <div class="webbox"><p>${R.why}</p><span class="wl">From the latest scan · ${R.scanOn}</span></div></div>`,
+  wdi: `<div class="sbn" role="status"><span class="si">${ic('ban')}</span><div class="st">${chip('wd')}<em>${R.scanOn}</em></div><p class="stx">This idea was withdrawn. The research below is the earlier analysis from ${R.recDate}; nothing replaced it.</p>
+    <div class="webbox"><p>${R.whyInvalid}</p><span class="wl">From the latest scan · ${R.scanOn}</span></div></div>`,
+  nw: `<div class="sbn" role="status"><span class="si">${ic('newer')}</span><div class="st"><b>Newer analysis</b><em>Updated ${R.newerOn}, 06:12</em></div><p class="stx">You opened an earlier analysis of this company. It was replaced, so this is the newer one, still waiting for your decision.</p></div>`,
+}[k]);
+
+/* ---- the rail ---- */
+const since = () => `<div class="since"><span>Recommended ${R.recDate}</span><span class="sc"><b class="num">${CO.cur} ${R.recPrice}</b>${chg(R.since)}<span>since</span></span></div>`;
+const fitRow = () => `<div class="fitline"><span>Portfolio fit</span><span><b class="num">${CO.scores.fit}</b> of 100</span></div>`;
+const srcRow = () => `<div class="lnk"><span>${CO.sources} sources</span><a href="#">See sources</a></div>`;
+const btn = (label, icon, cls = '') => `<button class="btn ${cls}">${icon ? ic(icon, 's') : ''}${label}</button>`;
+const link = (label, icon, cls = 'ghost') => `<a href="#" class="btn ${cls}">${icon ? ic(icon, 's') : ''}${label}</a>`;
+const rails = {
+  ap: () => `<aside class="panel decide" aria-label="Your decision">${coPrice()}${since()}${coMeta()}<hr>${fitRow()}<hr>
+    <div class="coacts">${btn('Log the trade I placed', 'check')}${btn('Change my decision', 'x', 'ghost')}${link('Ask AI', 'ask')}</div>
+    <p class="note2">Recorded only. No order was placed.</p>${srcRow()}</aside>`,
+  dm: () => `<aside class="panel decide" aria-label="Your decision">${coPrice()}${since()}${coMeta()}<hr>${fitRow()}<hr>
+    <div class="coacts">${btn('Change my decision', 'check', 'ghost')}${link('Ask AI', 'ask')}</div>
+    <p class="note2">Recorded only. Nothing was sent to a broker.</p>${srcRow()}</aside>`,
+  wd: () => `<aside class="panel decide" aria-label="Withdrawn idea">${coPrice()}${since()}${coMeta()}<hr>
+    <div class="coacts">${btn('Run a new analysis', 'spark')}${link('Company overview', 'link')}${link('Ask AI', 'ask')}</div>
+    <p class="hint2">Runs the research once and uses 1 of your monthly runs.</p>${srcRow()}</aside>`,
+  nw: () => `<aside class="panel decide" aria-label="Decision">${coPrice()}${newerMeta()}<hr>${fitRow()}<hr>${coActions()}<p class="note2">Approving records your decision. Nothing is sent to a broker.</p>${srcRow()}</aside>`,
+};
+
+/* ---- the header and the whole page ---- */
+const back = () => `<a href="#" class="back">${ic('chev', 'xs')}Back to Discover</a>`;
+const head = () => `${back()}<div class="hd3">${coIdentity(56)}</div>`;
+const page = (kind, railHtml, on = 0) => `${head()}${strip(kind)}${tabsHtml(on)}<div class="wb"><div class="pane">${overview()}</div>${railHtml}</div>${adv()}`;
+
+/* ---- phone: summary above the tabs, one action bar ---- */
+const phoneSummary = (kind) => ({
+  ap: `${coPrice()}${since()}${coMeta()}<div class="coactions-text"><a href="#" class="btn ghost" style="width:100%">${ic('x', 's')}Change my decision</a></div>`,
+  dm: `${coPrice()}${since()}${coMeta()}`,
+  wd: `${coPrice()}${since()}${coMeta()}<div class="coactions-text"><a href="#" class="btn ghost" style="width:100%">${ic('link', 's')}Company overview</a></div>`,
+  nw: `${coPrice()}${newerMeta()}`,
+}[kind]);
+const bars = {
+  ap: `<div class="abar">${btn('Log the trade I placed', 'check')}<a href="#" class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</a></div>`,
+  dm: `<div class="abar">${btn('Change my decision', 'check', 'ghost')}<a href="#" class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</a></div>`,
+  wd: `<div class="abar">${btn('Run a new analysis', 'spark')}<a href="#" class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</a></div>`,
+  nw: `<div class="abar" style="grid-template-columns:1fr 44px 44px 44px"><button class="btn">${ic('check', 's')}Approve</button><button class="btn ghost sq" aria-label="Save to Discover">${ic('bookmark', 's')}</button><button class="btn ghost sq" aria-label="Dismiss">${ic('x', 's')}</button><button class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</button></div>`,
+};
+const phoneBody = (kind) => `${back()}<div class="hd3">${coIdentity(44)}</div>${strip(kind)}${phoneSummary(kind)}${tabsHtml(0)}<div class="pane">${overview()}</div>${adv()}`;
+
+/* ---- the confirmation, shown only right after deciding (the existing screen, unchanged) ---- */
+const confirmed = () => `<div class="panel" style="text-align:center;padding:32px 28px;max-width:760px;margin:0 auto"><span class="si" style="width:64px;height:64px;border-radius:50%;display:inline-grid;place-items:center;background:var(--up-bg);color:var(--accent)">${ic('checkc')}</span>
+  <h2 style="margin:16px 0 0;font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em">Decision recorded</h2><p style="color:var(--text2);margin:8px 0 0">You approved ${CO.ticker} · BUY.</p>
+  <div style="margin:20px 0 0;padding:12px 14px;text-align:left;border-radius:14px;background:rgba(154,91,0,.08);border:1px solid var(--line2);display:flex;gap:10px;align-items:flex-start">${ic('alert', 's')}<span><b>No order was placed.</b> trade-agent never trades. If you decide to act, do it in your broker app.</span></div>
+  <div style="display:grid;gap:8px;margin-top:20px">${btn('Log the trade I placed')}<a href="#" class="btn ghost">View the company page</a><a href="#" class="btn ghost">Back to Today</a><a href="#" style="min-height:44px;display:grid;place-items:center;color:var(--accent);font-weight:650">Change my decision</a></div></div>`;
+
+/* ---- Discover cards ---- */
+const fmtP = (p) => `${CO.cur} ${p}`;
+const dcPrice = () => `<div class="px"><b class="num">${fmtP(CO.price)}</b><span>${chg(CO.chg)}</span><small>As of 14:14</small></div>`;
+const dcCard = ({ chipKind, insight, action, actionIcon = 'eye' }) => `<article class="panel rowc"><span>${logo(CO.name, 48)}</span>
+  <div class="mid"><div class="top1"><a href="#" class="nm">${CO.name}</a>${chipKind ? chip(chipKind) : `<span class="stp an">${ic('check', 'xs')}AI analyzed</span>`}</div>
+  <div class="mt3">${CO.ticker} · ${CO.exch} · ${CO.cur} · Added 12 days ago · saved from Today</div>
+  <p class="ins">${ic('spark', 'xs')}<span>${insight}</span></p></div>${dcPrice()}
+  <div class="acts"><a href="#" class="btn ghost sm" aria-label="${action} for ${CO.name}">${ic(actionIcon, 's')}${action}</a><button class="btn ghost sm iconb" aria-label="Remove ${CO.name} from Discover" title="Remove from Discover">${ic('trash', 's')}</button></div></article>`;
+const INS = 'Recurring software revenue and widening margins, priced below its peers.';
+const cards = [
+  ['Waiting for your decision', dcCard({ insight: INS, action: 'View' })],
+  ['Approved', dcCard({ chipKind: 'ap', insight: INS, action: 'View decision' })],
+  ['Dismissed', dcCard({ chipKind: 'dm', insight: INS, action: 'View decision' })],
+  ['Withdrawn (the reason replaces the old one-line reading)', dcCard({ chipKind: 'wd', insight: 'The latest scan no longer found this compelling.', action: 'View' })],
+];
+const discoverFrame = () => `<div class="frame"><aside class="side"><div class="brand"><i>${ic('today')}</i>trade-agent</div>${navItems('discover')}</aside><main class="main co"><div class="dcx">
+  <div class="dch"><div><h1>Discover</h1><div class="sub">Companies you are monitoring. You do not need to own them.</div></div></div>
+  <div class="list1">${cards.map(([l, c]) => `<div><div class="cap" style="margin:0 0 6px">${l}</div>${c}</div>`).join('')}</div></div></main></div>`;
+
+/* ---- mount ---- */
+const D = [['Approved', 'ap', rails.ap()], ['Dismissed, with your note', 'dm', rails.dm()], ['Withdrawn: no newer analysis exists', 'wd', rails.wd()], ['A newer analysis exists: opened automatically', 'nw', rails.nw()]];
+document.getElementById('desk').innerHTML = D.map(([l, k, r]) => `<div class="cap" style="margin:18px 0 8px">${l}</div>${coDesktop(page(k, r))}`).join('') + `<div class="cap" style="margin:18px 0 8px">Discover cards: what the list says before you open one</div>${discoverFrame()}`;
+document.getElementById('phones').innerHTML = [['Approved', 'ap'], ['Dismissed', 'dm'], ['Withdrawn', 'wd'], ['Newer analysis', 'nw']].map(([l, k]) => `<div><div class="cap">${l}</div>${coPhone(phoneBody(k), bars[k])}</div>`).join('');
+document.getElementById('states').innerHTML = [
+  ['Withdrawn: the thesis was invalidated', `<div class="region"><div class="co">${page('wdi', rails.wd())}</div></div>`],
+  ['Dismissed without a note', `<div class="region"><div class="co">${page('dm0', rails.dm())}</div></div>`],
+  ['Right after deciding: the existing confirmation, shown once; View the company page is the one new link', `<div class="region"><div class="co">${confirmed()}</div></div>`],
+].map(([l, h]) => `<div><div class="cap">${l}</div>${h}</div>`).join('');
+</script>
+</body>
+</html>

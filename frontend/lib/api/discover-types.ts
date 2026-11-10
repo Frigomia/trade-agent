@@ -1,3 +1,5 @@
+import type { RecommendationStatus } from "./recommendation-types";
+
 // Mirrors DiscoverItemOut and DiscoverOut in backend/app/routers/discover.py (GET /discover): the
 // watchlist as a browsable list, with each company's cached quote and what a scan found about it.
 export interface DiscoverItem {
@@ -19,6 +21,7 @@ export interface DiscoverItem {
   status: "analyzed" | "none"; // analyzed: a saved report or a researched company outcome
   insight: string | null; // the idea's one-line reading, only when analyzed. Scan text: render as text.
   report_id: number | null; // the idea's id, to open its report at /today/{id}
+  report_status?: RecommendationStatus | null; // that idea's decision state; absent from older deployments
   owned: boolean; // the person holds shares of it: its weight target lives on the holding, not here
   analysis?: CompanyAnalysisState | null; // optional for responses from older deployments
 }

@@ -14,10 +14,12 @@ export function ConfirmationPanel({
   recommendation,
   onChanged,
   onBackToToday,
+  onViewCompany,
 }: {
   recommendation: RecommendationOut;
   onChanged: (updated: RecommendationOut) => void;
   onBackToToday: () => void;
+  onViewCompany?: () => void; // a discovery idea: back to its company page, now showing the decision
 }) {
   const { run, submitting, error } = useAction();
   const [dismissing, setDismissing] = useState(false);
@@ -87,7 +89,12 @@ export function ConfirmationPanel({
           {error}
         </Alert>
       )}
-      <Button variant="outlined" fullWidth sx={{ mt: 2.5 }} onClick={onBackToToday}>
+      {onViewCompany && (
+        <Button variant="outlined" fullWidth sx={{ mt: 2.5 }} onClick={onViewCompany}>
+          View the company page
+        </Button>
+      )}
+      <Button variant="outlined" fullWidth sx={{ mt: onViewCompany ? 1 : 2.5 }} onClick={onBackToToday}>
         Back to Today
       </Button>
       <Button
