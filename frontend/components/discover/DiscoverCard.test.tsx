@@ -128,6 +128,55 @@ describe("DiscoverCard", () => {
   });
 });
 
+describe("DiscoverCard decision chip", () => {
+  it("shows Approved, Dismissed and Withdrawn chips with a shape and a word", () => {
+    for (const [report_status, word] of [["APPROVED", "Approved"], ["REJECTED", "Dismissed"], ["SUPERSEDED", "Withdrawn"]] as const) {
+      const { unmount } = render(<ul><DiscoverCard item={item({ report_status })} now={NOW} onRemove={vi.fn()} onEdit={vi.fn()} /></ul>);
+      const chip = screen.getByText(word);
+      expect(chip.querySelector("svg")).not.toBeNull();
+      expect(screen.getByRole("listitem")).not.toHaveTextContent("AI analyzed");
+      unmount();
+    }
+  });
+
+  it("the first button says View decision for approved and dismissed", () => {
+    for (const report_status of ["APPROVED", "REJECTED"] as const) {
+      const { unmount } = render(<ul><DiscoverCard item={item({ report_status })} now={NOW} onRemove={vi.fn()} onEdit={vi.fn()} /></ul>);
+      const link = screen.getByRole("link", { name: "View the decision for Halden Systems" });
+      expect(link).toHaveTextContent("View decision");
+      expect(link).toHaveAttribute("href", "/today/42");
+      unmount();
+    }
+  });
+
+  it("a withdrawn card replaces the old reading with the scan sentence", () => {
+    show({ report_status: "SUPERSEDED" });
+
+    const card = screen.getByRole("listitem");
+    expect(card).toHaveTextContent("The latest scan no longer found this compelling.");
+    expect(card).not.toHaveTextContent("Recurring software revenue");
+    expect(screen.getByRole("link", { name: "View the report for Halden Systems" })).toHaveTextContent(/^View$/);
+  });
+
+  it("a pending card keeps AI analyzed and View", () => {
+    show({ report_status: "PENDING" });
+
+    const card = screen.getByRole("listitem");
+    expect(card).toHaveTextContent("AI analyzed");
+    expect(card).toHaveTextContent("Recurring software revenue and widening margins.");
+    expect(screen.getByRole("link", { name: "View the report for Halden Systems" })).toHaveTextContent(/^View$/);
+  });
+
+  it("a card without report_status behaves as before", () => {
+    show({ report_status: null });
+
+    const card = screen.getByRole("listitem");
+    expect(card).toHaveTextContent("AI analyzed");
+    expect(card).not.toHaveTextContent(/Approved|Dismissed|Withdrawn/);
+    expect(screen.getByRole("link", { name: "View the report for Halden Systems" })).toBeInTheDocument();
+  });
+});
+
 describe("DiscoverCard targets", () => {
   it("says the saved weight target and price range in words, in the card's currency", () => {
     show({ target_weight: 0.05, target_price_low: 90, target_price_high: 110.5 });

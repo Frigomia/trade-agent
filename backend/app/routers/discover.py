@@ -7,7 +7,7 @@ import logging
 import math
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Literal, Self
+from typing import Literal, Self, cast, get_args
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -61,6 +61,9 @@ LOOKUP_CONCURRENCY = 8
 PROFILE_FIELDS = {"name": 200, "exchange": 60, "currency": 10}
 
 
+ReportStatus = Literal["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"]
+
+
 class DiscoverItemOut(BaseModel):
     ticker: str
     asset_type: Literal["ETF", "STOCK"]
@@ -81,6 +84,8 @@ class DiscoverItemOut(BaseModel):
     status: Literal["analyzed", "none"]
     insight: str | None  # the idea's one-line reading, only when analyzed
     report_id: int | None  # the idea's id, to open its report
+    # The decision on that idea; None when the item has no saved idea.
+    report_status: ReportStatus | None = None
     # The person holds shares of it. Its weight target then lives on the holding, not here.
     owned: bool
     analysis: CompanyAnalysisOut | None = None
@@ -133,7 +138,7 @@ def _owned(db: Session, user_id: UUID, ticker: str | None = None) -> set[str]:
 
 def _item_out(
     item: WatchlistItemOut,
-    found: tuple[int, str | None] | None,
+    found: tuple[int, str | None, str | None] | None,
     currency: str | None,
     quote: Quote | None,
     owned: bool,
@@ -166,6 +171,10 @@ def _item_out(
         status="analyzed" if found else "none",
         insight=found[1] if found else None,
         report_id=found[0] if found else None,
+        # A status outside the four (a bad row) shows as none instead of failing the whole list.
+        report_status=cast(ReportStatus, found[2])
+        if found and found[2] in get_args(ReportStatus)
+        else None,
         owned=owned,
     )
 
@@ -195,8 +204,13 @@ def _attach_state(item: DiscoverItemOut, state: CompanyAnalysisOut | None) -> No
         item.report_id = state.report_id
 
 
-def _analysis(db: Session, user_id: UUID, tickers: list[str]) -> dict[str, tuple[int, str | None]]:
-    """Each ticker's latest saved discovery idea: its id and one-line reading."""
+def _analysis(
+    db: Session, user_id: UUID, tickers: list[str]
+) -> dict[str, tuple[int, str | None, str | None]]:
+    """Each ticker's latest saved discovery idea: its id, one-line reading and status.
+
+    The status is None for a superseded idea that a newer recommendation of any source replaced
+    (a manual or scheduled analysis supersedes a pending idea too): that is not a withdrawal."""
     # The newest idea per ticker is the one with the highest id (ids only grow), so only those rows
     # are read, not every scan's history.
     newest = (
@@ -211,9 +225,28 @@ def _analysis(db: Session, user_id: UUID, tickers: list[str]) -> dict[str, tuple
         .scalar_subquery()
     )
     rows = db.query(
-        Recommendation.id, Recommendation.ticker, Recommendation.idea["headline"].as_string()
+        Recommendation.id,
+        Recommendation.ticker,
+        Recommendation.idea["headline"].as_string(),
+        Recommendation.status,
     ).filter(Recommendation.id.in_(newest))
-    return {ticker: (rec_id, headline or None) for rec_id, ticker, headline in rows}
+    found: dict[str, tuple[int, str | None, str | None]] = {
+        ticker: (rec_id, headline or None, status) for rec_id, ticker, headline, status in rows
+    }
+    superseded = [t for t, (_, _, status) in found.items() if status == "SUPERSEDED"]
+    if not superseded:
+        return found
+    # One grouped query for the newest recommendation of any source, for those tickers only.
+    latest = dict(
+        db.query(Recommendation.ticker, func.max(Recommendation.id))
+        .filter(Recommendation.user_id == user_id, Recommendation.ticker.in_(superseded))
+        .group_by(Recommendation.ticker)
+    )
+    for ticker in superseded:
+        rec_id, headline, _ = found[ticker]
+        if latest[ticker] > rec_id:
+            found[ticker] = (rec_id, headline, None)  # replaced by a newer analysis, not withdrawn
+    return found
 
 
 @router.get(

@@ -32,6 +32,7 @@ def idea(
     user_id=USER_ID,
     source="discovery",
     age=0,
+    status="PENDING",
 ):
     rec = Recommendation(
         user_id=user_id,
@@ -40,7 +41,7 @@ def idea(
         action="BUY",
         reasoning=["r"],
         source=source,
-        status="PENDING",
+        status=status,
         idea={"headline": headline} if headline is not None else {},
         created_at=now() - timedelta(days=age),
     )
@@ -164,6 +165,80 @@ def test_status_and_insight_come_from_the_latest_saved_discovery_idea_only(clien
     )
     assert items["NVKC"]["status"] == "none" and items["NVKC"]["insight"] is None
     assert items["PLMN"]["status"] == "none"  # a manual recommendation is not research
+
+
+@pytest.mark.parametrize("status", ["PENDING", "APPROVED", "REJECTED", "SUPERSEDED"])
+def test_report_status_is_the_status_of_the_newest_saved_idea(client, db_session, status):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=1, status=status)
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == status
+
+
+def test_an_unknown_status_does_not_break_the_list(client, db_session):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=1, status="WITHDRAWN")  # outside the four the response knows
+
+    response = listing(client, {"HLDN": (1.0, [1.0, 1.0])})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["report_status"] is None
+
+
+def test_report_status_ignores_an_older_idea_with_a_different_status(client, db_session):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=5, status="APPROVED")
+    idea(db_session, "HLDN", age=1, status="REJECTED")
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == "REJECTED"
+
+
+def test_an_idea_superseded_by_a_later_manual_analysis_is_not_called_withdrawn(client, db_session):
+    seed(db_session, "HLDN")
+    old = idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+    idea(db_session, "HLDN", headline=None, source="manual", age=1)  # the portfolio analysis
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] is None
+    assert (item["status"], item["report_id"]) == ("analyzed", old)  # the link still opens it
+
+
+def test_a_superseded_idea_with_nothing_after_it_is_a_withdrawal(client, db_session):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == "SUPERSEDED"
+
+
+def test_a_later_row_of_another_ticker_or_another_user_does_not_replace_the_idea(
+    client, db_session
+):
+    seed(db_session, "HLDN")
+    idea(db_session, "HLDN", age=5, status="SUPERSEDED")
+    idea(db_session, "NVKC", source="manual", age=1)
+    add_app_user(db_session, OTHER_USER_ID)
+    idea(db_session, "HLDN", user_id=OTHER_USER_ID, source="manual", age=1)
+
+    item = listing(client, {"HLDN": (1.0, [1.0, 1.0])}).json()["items"][0]
+
+    assert item["report_status"] == "SUPERSEDED"
+
+
+def test_an_item_without_a_saved_idea_has_no_report_status(client, db_session):
+    seed(db_session, "NVKC")
+    seed(db_session, "PLMN")
+    idea(db_session, "PLMN", source="manual", status="APPROVED")  # not research
+
+    items = listing(client, {t: (1.0, [1.0, 1.0]) for t in ("NVKC", "PLMN")}).json()["items"]
+
+    assert [i["report_status"] for i in items] == [None, None]
 
 
 def test_an_analyzed_company_without_a_headline_has_no_insight(client, db_session):

@@ -143,6 +143,12 @@ class DismissIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500, pattern=r"^[^\x00-\x1f\x7f-\x9f]*$")
 
 
+class WithdrawalOut(BaseModel):
+    kind: Literal["invalidated", "not_compelling"]
+    reason: str | None = None
+    as_of: datetime | None = None
+
+
 class RecommendationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -177,6 +183,10 @@ class RecommendationOut(BaseModel):
     # attached.
     current_price: float | None = None
     price_change_pct: float | None = None
+    # Computed only by GET /analysis/recommendations/{id}, for a SUPERSEDED discovery idea: the
+    # newer idea that replaced it, else why it was withdrawn. None everywhere else.
+    successor_id: int | None = None
+    withdrawal: WithdrawalOut | None = None
 
 
 class EquityCurveOut(BaseModel):
