@@ -69,9 +69,16 @@ def test_yfinance_is_told_to_raise_chart_errors_instead_of_hiding_them(
             return pd.DataFrame({"Close": [1.0]}, index=pd.to_datetime(["2026-10-15"]))
 
     monkeypatch.setattr(fetching.yf, "Ticker", Spy)
-    monkeypatch.setattr(fetching.yf.config.debug, "hide_exceptions", True)
-
-    fetch_yfinance("SAP.DE")
+    # Set and restore the setting by hand. yfinance serves it through __getattr__ from a dict, so
+    # monkeypatch.setattr cannot undo it: since pytest 9.2 undo() tries to delete the attribute,
+    # which raises AttributeError at teardown.
+    debug_config = fetching.yf.config.debug
+    original = debug_config.hide_exceptions
+    debug_config.hide_exceptions = True
+    try:
+        fetch_yfinance("SAP.DE")
+    finally:
+        debug_config.hide_exceptions = original
 
     assert seen == [False]
 
