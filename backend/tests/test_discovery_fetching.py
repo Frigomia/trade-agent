@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 from typing import Any
 
 import pandas as pd
@@ -69,7 +70,10 @@ def test_yfinance_is_told_to_raise_chart_errors_instead_of_hiding_them(
             return pd.DataFrame({"Close": [1.0]}, index=pd.to_datetime(["2026-10-15"]))
 
     monkeypatch.setattr(fetching.yf, "Ticker", Spy)
-    monkeypatch.setattr(fetching.yf.config.debug, "hide_exceptions", True)
+    # yfinance's dynamic config wrapper is not a normal attribute target for patch teardown.
+    monkeypatch.setattr(
+        fetching.yf, "config", SimpleNamespace(debug=SimpleNamespace(hide_exceptions=True))
+    )
 
     fetch_yfinance("SAP.DE")
 
