@@ -540,6 +540,11 @@ Open items:
   are made up and say so. The headline is a display size (up to 3.375rem) used only here. The Scan results page
   (a link from the scan bar) lists what a scan left out as one ledger: a pill filter with counts, rows of company,
   where it fell out and why, each opening to the scan's explanation in the dashed box and its sources.
+  The invitation and reset-password emails (`docs/email-templates/`) follow the same Soft look: a pale blue field,
+  one white card with a 24px radius, the app icon beside the wordmark, a navy headline, a 14px-radius cobalt button
+  (full width on a phone) and the fallback link in a soft box. They are light only, with no dark version. Inline
+  styles and tables only, with the system font stack as the fallback for Geist, because mail clients ignore most
+  modern CSS.
 
 
 **Recurring estimated tracking (2026-11-06):** no Recurring Portfolio tab. Add Holding and Log Trade
