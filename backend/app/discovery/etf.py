@@ -6,15 +6,26 @@ explanation. Keeping only the cheapest of several near-copy candidates is the sh
 """
 
 import math
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from app.analysis.portfolio import ReturnSeries, pairwise_correlation
-from app.discovery.risk import market_cap_to_eur
-from app.discovery.snapshot import SymbolSnapshot
+from app.analysis.discovery_score import fit_dimension
+from app.analysis.portfolio import (
+    Histories,
+    ReturnSeries,
+    clean_history,
+    log_returns,
+    marginal_effect,
+    pairwise_correlation,
+)
+from app.discovery.risk import build_risk_profile, market_cap_to_eur
+from app.discovery.screen import PRICE_DATE_UNCERTAIN_PREFIX
+from app.discovery.snapshot import Freshness, SymbolSnapshot, etf_coverage_of
 from app.fx import SUPPORTED
-from app.schemas_discovery import Exclusion
+from app.schemas_discovery import CandidateMetrics, Exclusion, PortfolioExposure
 
 ETF_SLOTS = 3
 ETF_MAX_EXPENSE_RATIO = 0.005  # a fraction: 0.50% a year, proposed
@@ -79,6 +90,20 @@ def _is_leveraged(snap: SymbolSnapshot) -> bool:
     return any(marker in text for marker in LEVERAGED_MARKERS)
 
 
+def _is_near_copy(
+    category_a: str | None, category_b: str | None, returns_a: ReturnSeries, returns_b: ReturnSeries
+) -> bool:
+    """The one near-copy rule, for held ETFs and for rival candidates alike.
+
+    The same category and a correlation at or above the limit make a copy. When either category is
+    unknown the correlation alone decides: a missing category cannot prove two funds differ.
+    """
+    if category_a and category_b and category_a.casefold() != category_b.casefold():
+        return False
+    correlation = pairwise_correlation(returns_a, returns_b)
+    return correlation is not None and correlation >= ETF_NEAR_COPY_CORRELATION
+
+
 def _overlapping_holding(
     snap: SymbolSnapshot,
     returns: ReturnSeries,
@@ -86,20 +111,12 @@ def _overlapping_holding(
     held_etfs: Collection[str],
     held_categories: Mapping[str, str | None],
 ) -> str | None:
-    """The held ETF this fund is a near-copy of, if any.
-
-    The same category and a correlation at or above the limit make a copy. When either category is
-    unknown the correlation alone decides: a missing category cannot prove two funds differ.
-    """
+    """The held ETF this fund is a near-copy of, if any."""
     for held in held_etfs:
         held_returns = holding_returns.get(held)
         if held_returns is None:
             continue
-        category = held_categories.get(held)
-        if snap.category and category and snap.category.casefold() != category.casefold():
-            continue
-        correlation = pairwise_correlation(returns, held_returns)
-        if correlation is not None and correlation >= ETF_NEAR_COPY_CORRELATION:
+        if _is_near_copy(snap.category, held_categories.get(held), returns, held_returns):
             return held
     return None
 
@@ -121,9 +138,7 @@ def etf_exclusion(
     """
 
     def out(reason: ExcludedFor, explanation: str) -> Exclusion:
-        return Exclusion(
-            ticker=snap.ticker, name=snap.name, reason=reason, explanation=explanation, evidence=[]
-        )
+        return _exclusion(snap, reason, explanation)
 
     if not snap.ucits:
         return out("not_ucits", "not available to EU retail investors")
@@ -173,3 +188,162 @@ def etf_exclusion(
             f"EUR {ETF_MIN_SIZE_EUR / 1e6:,.0f} million minimum",
         )
     return None
+
+
+def build_etf_candidate(
+    snap: SymbolSnapshot, rates: Mapping[str, Decimal], uncertain: str | None
+) -> CandidateMetrics:
+    """The candidate for one ETF: no peer table; the fund's cost and size travel in `fundamentals`.
+
+    The market cap is left out of the risk profile on purpose: a fund's size is not a company's
+    size and must not raise a "small cap" flag. Volatility, drawdown and liquidity still apply.
+    """
+    risk = build_risk_profile(
+        group="etf",
+        market_cap=None,
+        currency=snap.currency or "",
+        rates=dict(rates),
+        avg_volume=snap.avg_volume,
+        price=snap.price,
+        closes=snap.closes,
+        metrics=snap.metrics,
+    )
+    return CandidateMetrics(
+        ticker=snap.ticker,
+        name=snap.name,
+        asset_type="ETF",
+        exchange=snap.exchange,
+        country=snap.country,
+        sector=None,
+        industry=snap.category,
+        currency=snap.currency,
+        price=snap.price,
+        price_as_of=datetime.fromisoformat(snap.dates[-1]).replace(tzinfo=UTC)
+        if snap.dates
+        else None,
+        fundamentals=snap.metrics,
+        coverage=etf_coverage_of(snap.metrics),
+        peers=[],
+        risk=risk,
+        origin="universe",
+        origin_note=None,
+        data_notes=[f"{PRICE_DATE_UNCERTAIN_PREFIX} {uncertain}"] if uncertain else [],
+    )
+
+
+@dataclass(frozen=True)
+class EtfShortlist:
+    candidates: list[CandidateMetrics]  # best gap score first, at most one per category
+    excluded: list[Exclusion]
+    eligible: int  # funds scored, one per category, before the cut to `size`
+    skipped_reason: str | None  # set when the lane did not run; not an "ETF found nothing" result
+
+
+def _exclusion(snap: SymbolSnapshot, reason: ExcludedFor, explanation: str) -> Exclusion:
+    return Exclusion(
+        ticker=snap.ticker, name=snap.name, reason=reason, explanation=explanation, evidence=[]
+    )
+
+
+def shortlist_etfs(
+    snapshots: Sequence[SymbolSnapshot],
+    freshness: Freshness,
+    rates: Mapping[str, Decimal],
+    *,
+    holdings: Collection[str],
+    held_etfs: Collection[str],
+    exposure: PortfolioExposure,
+    histories: Histories,
+    today: date,
+    size: int = ETF_SLOTS,
+) -> EtfShortlist:
+    """The ETFs that fill the biggest gaps in the portfolio, best first.
+
+    `histories` must hold only holdings with usable history (as `load_fit_context` returns them):
+    a candidate that lacks 60 shared return intervals with any one of them is excluded, so a
+    holding without a usable history would exclude every fund.
+    """
+    if len(exposure.positions) < ETF_MIN_HOLDINGS:
+        return EtfShortlist([], [], 0, "ETF ideas need at least two holdings with price history")
+    held = {t.casefold() for t in holdings}
+    holding_returns = {ticker: log_returns(values) for ticker, values in histories.items()}
+    category_of = {s.ticker: s.category for s in snapshots}
+    held_categories = {ticker: category_of.get(ticker) for ticker in held_etfs}
+
+    excluded: list[Exclusion] = []
+    survivors: list[SymbolSnapshot] = []
+    returns: dict[str, ReturnSeries] = {}
+    for snap in snapshots:
+        if snap.asset_type != "ETF" or snap.ticker.casefold() in held:
+            continue
+        returns[snap.ticker] = log_returns(
+            clean_history(dict(zip(snap.dates, snap.closes, strict=True)), today)
+        )
+        why = etf_exclusion(
+            snap,
+            stale=freshness.stale.get(snap.ticker),
+            rates=rates,
+            returns=returns[snap.ticker],
+            holding_returns=holding_returns,
+            held_etfs=held_etfs,
+            held_categories=held_categories,
+        )
+        if why is None:
+            survivors.append(snap)
+        else:
+            excluded.append(why)
+
+    def cheapest_then_largest(snap: SymbolSnapshot) -> tuple[float, float, str]:
+        # etf_exclusion has already required a finite expense ratio; an unknown size sorts last
+        cost = snap.metrics["expenseRatio"] or 0.0
+        return (cost, -(fund_size_eur(snap, rates) or 0.0), snap.ticker)
+
+    # Near-copies: of each group the cheapest fund stays (then the largest); the rest say who did.
+    kept: list[SymbolSnapshot] = []
+    for snap in sorted(survivors, key=cheapest_then_largest):
+        mine = returns[snap.ticker]
+        twin = next(
+            (k for k in kept if _is_near_copy(snap.category, k.category, mine, returns[k.ticker])),
+            None,
+        )
+        if twin is None:
+            kept.append(snap)
+        else:
+            excluded.append(
+                _exclusion(
+                    snap,
+                    "fails_quality_filter",
+                    f"moves almost exactly like {twin.ticker}, which is cheaper or larger "
+                    f"(correlation at least {ETF_NEAR_COPY_CORRELATION:.2f}); only that one "
+                    "is kept",
+                )
+            )
+
+    scored: list[tuple[int, CandidateMetrics]] = []
+    for snap in kept:
+        fit = marginal_effect(
+            exposure,
+            returns[snap.ticker],
+            None,
+            ticker=snap.ticker,
+            portfolio_returns=holding_returns,
+        )
+        score = fit_dimension(fit).score
+        if score is None:
+            unmeasured = "its effect on the portfolio cannot be measured"
+            excluded.append(_exclusion(snap, "insufficient_data", unmeasured))
+        else:
+            candidate = build_etf_candidate(snap, rates, freshness.uncertain.get(snap.ticker))
+            scored.append((score, candidate))
+    scored.sort(key=lambda row: (-row[0], row[1].ticker))
+
+    # One fund per category; a fund with no category cannot share one, so it always stays.
+    chosen: list[CandidateMetrics] = []
+    seen: set[str] = set()
+    for _, candidate in scored:
+        category = (candidate.industry or "").casefold()
+        if category and category in seen:
+            continue
+        seen.add(category)
+        chosen.append(candidate)
+    return EtfShortlist(chosen[: max(size, 0)], excluded, len(chosen), None)

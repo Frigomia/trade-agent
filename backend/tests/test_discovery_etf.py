@@ -1,3 +1,4 @@
+import math
 import random
 from dataclasses import replace
 from datetime import date, timedelta
@@ -8,10 +9,14 @@ import pytest
 from app.analysis.portfolio import MIN_RETURNS, ReturnSeries, log_returns
 from app.discovery.etf import (
     ETF_MIN_SHARED_INTERVALS,
+    EtfShortlist,
+    build_etf_candidate,
     etf_exclusion,
     fund_size_eur,
+    shortlist_etfs,
 )
-from app.discovery.snapshot import SymbolSnapshot
+from app.discovery.snapshot import Freshness, SymbolSnapshot
+from tests.discovery_fixtures import sample_exposure
 
 RATES = {
     "USD": Decimal("0.9"),
@@ -271,3 +276,212 @@ def test_an_unknown_size_does_not_fail_the_fund() -> None:
     assert fund_size_eur(sized("EUR", None), RATES) is None
     assert check(sized("EUR", None)) is None
     assert check(sized("GBp", 1.0), rates={}) is None  # a size that cannot be converted is unknown
+
+
+# ---- shortlist ------------------------------------------------------------------------------
+
+
+def noise(seed: int, scale: float = 0.01) -> list[float]:
+    rng = random.Random(seed)
+    return [rng.gauss(0, scale) for _ in range(DAYS - 1)]
+
+
+MARKET = [r + 0.0003 for r in noise(100)]
+
+
+def closes_from(rets: list[float], scale: float = 1.0) -> list[float]:
+    """Closes whose log returns are `rets`; `scale` changes the price level, not the returns."""
+    closes = [100.0 * scale]
+    for r in rets:
+        closes.append(closes[-1] * math.exp(r))
+    return closes
+
+
+def dated(closes: list[float]) -> dict[str, float]:
+    return {day(i): c for i, c in enumerate(closes)}
+
+
+# Two holdings that follow the market, as sample_exposure() describes (SAP.DE and AAPL).
+HIST = {
+    "SAP.DE": dated(closes_from([m + n for m, n in zip(MARKET, noise(101, 0.005), strict=True)])),
+    "AAPL": dated(closes_from([m + n for m, n in zip(MARKET, noise(102, 0.005), strict=True)])),
+}
+
+
+def etf(
+    ticker: str,
+    rets: list[float],
+    *,
+    ter: float = 0.002,
+    size: float = 5e9,
+    category: str | None = "Global Equity",
+    scale: float = 1.0,
+) -> SymbolSnapshot:
+    closes = closes_from(rets, scale)
+    return with_metrics(
+        fund(
+            ticker=ticker,
+            name=f"{ticker} UCITS ETF",
+            category=category,
+            closes=closes,
+            price=closes[-1],
+            dates=[day(i) for i in range(len(closes))],
+        ),
+        expenseRatio=ter,
+        fundSizeEur=size,
+    )
+
+
+def run(snaps: list[SymbolSnapshot], **over: object) -> EtfShortlist:
+    kwargs: dict[str, object] = {
+        "holdings": ["SAP.DE", "AAPL"],
+        "held_etfs": [],
+        "exposure": sample_exposure(),
+        "histories": HIST,
+        "today": date(2026, 1, 1),
+    }
+    return shortlist_etfs(snaps, Freshness({}, {}), RATES, **(kwargs | over))  # type: ignore[arg-type]
+
+
+def tickers(result: EtfShortlist) -> list[str]:
+    return [c.ticker for c in result.candidates]
+
+
+def reasons(result: EtfShortlist) -> dict[str, str]:
+    return {e.ticker: e.reason for e in result.excluded}
+
+
+def test_near_copies_leave_only_the_cheapest() -> None:
+    # VT, VWCE and IWDA-like: the same returns at different price levels and costs.
+    result = run(
+        [
+            etf("VT", MARKET, ter=0.0020, scale=1.1),
+            etf("VWCE", MARKET, ter=0.0022, scale=2.0),
+            etf("IWDA", MARKET, ter=0.0007, scale=3.0),
+        ]
+    )
+
+    assert tickers(result) == ["IWDA"]
+    assert reasons(result) == {"VT": "fails_quality_filter", "VWCE": "fails_quality_filter"}
+    assert all("IWDA" in e.explanation for e in result.excluded)
+
+
+def test_equal_cost_near_copies_keep_the_largest() -> None:
+    result = run([etf("SMALL", MARKET, size=2e8), etf("BIG", MARKET, size=9e9, scale=2.0)])
+
+    assert tickers(result) == ["BIG"]
+    assert reasons(result) == {"SMALL": "fails_quality_filter"}
+
+
+def test_a_near_copy_in_another_known_category_is_kept_apart() -> None:
+    result = run([etf("A", MARKET, category="World"), etf("B", MARKET, category="Europe")])
+
+    assert sorted(tickers(result)) == ["A", "B"]
+
+
+def test_an_unknown_category_leaves_the_correlation_to_decide_between_candidates() -> None:
+    result = run([etf("A", MARKET, ter=0.001, category="World"), etf("B", MARKET, category=None)])
+
+    assert tickers(result) == ["A"]
+    assert reasons(result) == {"B": "fails_quality_filter"}
+
+
+def test_a_low_correlation_fund_outranks_a_high_correlation_one() -> None:
+    result = run([etf("EQ", MARKET, category="Equity"), etf("BOND", noise(200), category="Bond")])
+
+    assert tickers(result) == ["BOND", "EQ"]
+    assert result.eligible == 2
+    assert result.skipped_reason is None
+
+
+def test_ties_are_broken_by_ticker() -> None:
+    same = noise(201)
+    result = run([etf("B", same, category="X"), etf("A", same, category="Y")])
+
+    assert tickers(result) == ["A", "B"]
+
+
+def test_at_most_one_fund_per_category_and_the_cut_to_size() -> None:
+    snaps = [
+        etf("BOND1", noise(200), category="Bond"),
+        etf("BOND2", noise(201), category="Bond"),  # same category, not a near-copy
+        etf("GOLD", noise(202), category="Gold"),
+        etf("EM", noise(203), category="Emerging"),
+        etf("REIT", noise(204), category="Property"),
+    ]
+
+    result = run(snaps)
+
+    assert len(result.candidates) == 3  # ETF_SLOTS
+    assert result.eligible == 4  # one Bond fund went; the cut to 3 comes after the count
+    assert len({c.industry for c in result.candidates}) == 3
+    assert not {"BOND1", "BOND2"} <= set(tickers(result))
+    assert reasons(result) == {}  # a set-aside duplicate category is not an exclusion
+    assert len(run(snaps, size=2).candidates) == 2
+
+
+def test_a_held_etf_is_not_recommended_and_leaves_no_exclusion() -> None:
+    held = etf("HELD", MARKET, category="World")
+
+    result = run(
+        [held, etf("BOND", noise(200), category="Bond")], holdings=["SAP.DE", "AAPL", "HELD"]
+    )
+
+    assert tickers(result) == ["BOND"]
+    assert result.excluded == []
+
+
+def test_a_copy_of_a_held_etf_overlaps_it() -> None:
+    held = etf("HELD", MARKET, category="World")
+    result = run(
+        [held, etf("COPY", MARKET, category="World", scale=2.0), etf("BOND", noise(200))],
+        holdings=["SAP.DE", "AAPL", "HELD"],
+        held_etfs=["HELD"],
+        histories={**HIST, "HELD": dated(held.closes)},
+    )
+
+    assert tickers(result) == ["BOND"]
+    assert reasons(result) == {"COPY": "overlaps_holding"}
+
+
+def test_fewer_than_two_positions_skips_the_lane() -> None:
+    exposure = sample_exposure()
+    one = exposure.model_copy(update={"positions": exposure.positions[:1]})
+
+    result = run([etf("BOND", noise(200))], exposure=one)
+
+    assert result.candidates == [] and result.excluded == [] and result.eligible == 0
+    assert result.skipped_reason == "ETF ideas need at least two holdings with price history"
+
+
+def test_a_fund_whose_fit_cannot_be_measured_is_insufficient_data() -> None:
+    flat = etf("FLAT", [0.0] * (DAYS - 1))  # no movement: correlation is undefined
+
+    result = run([flat, etf("BOND", noise(200), category="Bond")])
+
+    assert tickers(result) == ["BOND"]
+    assert reasons(result) == {"FLAT": "insufficient_data"}
+
+
+def test_stocks_are_not_this_lanes_business() -> None:
+    stock = replace(etf("STK", MARKET), asset_type="STOCK")
+
+    result = run([stock, replace(etf("US", noise(200)), ucits=False)])
+
+    assert result.candidates == []
+    assert reasons(result) == {"US": "not_ucits"}
+
+
+def test_an_etf_candidate_carries_the_fund_facts_and_a_real_risk_level() -> None:
+    snap = etf("BOND", noise(200), category="Bond")
+
+    candidate = build_etf_candidate(snap, RATES, "last close is one day old")
+
+    assert candidate.asset_type == "ETF"
+    assert candidate.sector is None and candidate.industry == "Bond" and candidate.peers == []
+    assert candidate.fundamentals == snap.metrics
+    assert candidate.coverage.core_metrics_present == candidate.coverage.core_metrics_total
+    assert candidate.risk.size_bucket == "unknown"  # a fund's size is not a company's
+    assert candidate.risk.risk_level != "unknown"
+    assert candidate.risk.volatility_annualized is not None
+    assert candidate.data_notes == ["price date uncertain: last close is one day old"]

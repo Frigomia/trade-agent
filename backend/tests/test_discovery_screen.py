@@ -352,13 +352,13 @@ def test_an_etf_is_excluded_with_an_explicit_reason_even_with_full_data() -> Non
     assert "separate criteria" in why.explanation
 
 
-def test_an_etf_never_reaches_the_shortlist_and_is_listed_as_excluded() -> None:
+def test_an_etf_never_reaches_the_stock_shortlist_and_adds_no_exclusion() -> None:
     result = screen(
         [snap(i) for i in range(12)] + [snap(30, ticker="VT", asset_type="ETF")], size=20
     )
 
     assert "VT" not in [c.ticker for c in result.candidates]
-    assert [e.ticker for e in result.excluded] == ["VT"]
+    assert result.excluded == []  # the ETF lane reports funds; no "needs separate criteria" noise
 
 
 def test_the_listing_country_is_carried_into_the_candidate() -> None:

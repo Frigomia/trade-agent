@@ -135,6 +135,8 @@ def shortlist_for_user(
     for snap, record in zip(snapshots, records, strict=True):
         if snap.ticker.casefold() in held or (snap.sector or "").casefold() in avoided:
             continue
+        if snap.asset_type == "ETF":  # the ETF lane (`discovery.etf`) handles funds
+            continue
         ok, why = is_eligible(snap, freshness.stale.get(snap.ticker))
         if why is not None:
             excluded.append(why)

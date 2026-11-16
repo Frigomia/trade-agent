@@ -68,7 +68,7 @@ def _fundamental_dimension(
     return DimensionScore(name=name, score=score, reasons=reasons)
 
 
-def _fit_dimension(fit: CandidateFit | None) -> DimensionScore:
+def fit_dimension(fit: CandidateFit | None) -> DimensionScore:
     """Mean of three bounded measures, requiring every measurement.
 
     Correlation contributes 100*(1-correlation)/2. Volatility and HHI each contribute
@@ -198,7 +198,7 @@ def evaluate(
     scores = [
         _fundamental_dimension(candidate, group, "quality"),
         _fundamental_dimension(candidate, group, "valuation"),
-        _fit_dimension(fit),
+        fit_dimension(fit),
     ]
     have = [score for score in scores if score.name in OVERALL_WEIGHTS and score.score is not None]
     overall = (
@@ -235,7 +235,7 @@ def rank_ideas(
         if fits is None:
             fit_score = next(score.score for score in idea.scores if score.name == "fit")
         else:
-            fit_score = _fit_dimension(fits.get(idea.ticker)).score
+            fit_score = fit_dimension(fits.get(idea.ticker)).score
         return (
             idea.overall is None,
             -(idea.overall if idea.overall is not None else 0),
