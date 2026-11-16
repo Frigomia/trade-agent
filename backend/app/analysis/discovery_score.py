@@ -22,6 +22,7 @@ from app.sectors import Sector
 
 OVERALL_WEIGHTS = {"quality": 1, "valuation": 1}
 NO_OPPORTUNITY_MIN_OVERALL = 60
+ETF_NO_OPPORTUNITY_MIN_OVERALL = 60  # same number as stocks today, its own knob
 MIN_CONFIDENCE_COVERAGE = 0.5
 HIGH_CONFIDENCE_COVERAGE = 0.8
 QUALITY_STYLE_MIN = 70
@@ -122,27 +123,16 @@ def fit_dimension(fit: CandidateFit | None) -> DimensionScore:
     )
 
 
-def _confidence(
-    candidate: CandidateMetrics, evidence: ResearchEvidence, scores: Sequence[DimensionScore]
-) -> Literal["high", "medium", "low"]:
-    coverage = candidate.coverage
-    fraction = (
-        coverage.core_metrics_present / coverage.core_metrics_total
-        if coverage.core_metrics_total
-        else 0.0
-    )
-    have = [score.score for score in scores if score.name in OVERALL_WEIGHTS]
+@dataclass(frozen=True)
+class _ResearchChecks:
+    available: bool  # any non-forum claim exists: below this, confidence is low
+    capped: bool  # uncertain price date, conflicts, gaps, unresolved negatives or no official fact
+
+
+def _research_checks(candidate: CandidateMetrics, evidence: ResearchEvidence) -> _ResearchChecks:
+    """The research and price-date checks that stock and ETF confidence share."""
     # Presence of research is a coverage check, never a score or a count-based strength claim.
-    research_available = any(claim.kind != "forum" for claim in evidence.claims)
-    if (
-        all(score is None for score in have)
-        or fraction < MIN_CONFIDENCE_COVERAGE
-        or candidate.price is None
-        or candidate.price <= 0
-        or candidate.price_as_of is None
-        or not research_available
-    ):
-        return "low"
+    available = any(claim.kind != "forum" for claim in evidence.claims)
     uncertain_price = any(
         note.casefold().startswith(PRICE_DATE_UNCERTAIN_PREFIX.casefold())
         for note in candidate.data_notes
@@ -156,15 +146,65 @@ def _confidence(
         claim.kind == "fact" and claim.source_tier in ("official", "reliable_reporting")
         for claim in evidence.claims
     )
+    capped = (
+        uncertain_price
+        or bool(evidence.conflicts)
+        or bool(evidence.gaps)
+        or unresolved
+        or not qualified_research
+    )
+    return _ResearchChecks(available, capped)
+
+
+def _confidence(
+    candidate: CandidateMetrics, evidence: ResearchEvidence, scores: Sequence[DimensionScore]
+) -> Literal["high", "medium", "low"]:
+    coverage = candidate.coverage
+    fraction = (
+        coverage.core_metrics_present / coverage.core_metrics_total
+        if coverage.core_metrics_total
+        else 0.0
+    )
+    have = [score.score for score in scores if score.name in OVERALL_WEIGHTS]
+    research = _research_checks(candidate, evidence)
+    if (
+        all(score is None for score in have)
+        or fraction < MIN_CONFIDENCE_COVERAGE
+        or candidate.price is None
+        or candidate.price <= 0
+        or candidate.price_as_of is None
+        or not research.available
+    ):
+        return "low"
     if (
         any(score is None for score in have)
         or fraction < HIGH_CONFIDENCE_COVERAGE
-        or uncertain_price
-        or evidence.conflicts
-        or evidence.gaps
-        or unresolved
-        or not qualified_research
+        or research.capped
     ):
+        return "medium"
+    return "high"
+
+
+def _etf_confidence(
+    candidate: CandidateMetrics, evidence: ResearchEvidence, fit_score: int | None
+) -> Literal["high", "medium", "low"]:
+    """Low without a fit, expense ratio, category, dated price or research; medium for the rest.
+
+    An unknown fund size only caps confidence at medium (owner ruling), so it never excludes.
+    """
+    missing = candidate.coverage.missing
+    research = _research_checks(candidate, evidence)
+    if (
+        fit_score is None
+        or "expenseRatio" in missing
+        or not candidate.industry
+        or candidate.price is None
+        or candidate.price <= 0
+        or candidate.price_as_of is None
+        or not research.available
+    ):
+        return "low"
+    if "fundSize" in missing or research.capped:
         return "medium"
     return "high"
 
@@ -194,6 +234,12 @@ def evaluate(
     """Score this candidate without network, model calls, or changes to the input objects."""
     if evidence.ticker != candidate.ticker or (fit is not None and fit.ticker != candidate.ticker):
         raise ValueError("Research and portfolio fit must belong to the candidate ticker")
+    if candidate.asset_type == "ETF":
+        # The gap score is the fit score itself; the stock peer scoring is not touched.
+        fit_score = fit_dimension(fit)
+        return Evaluation(
+            [fit_score], fit_score.score, _etf_confidence(candidate, evidence, fit_score.score), []
+        )
     group = metric_group(candidate.sector, candidate.industry, candidate.asset_type)
     scores = [
         _fundamental_dimension(candidate, group, "quality"),
@@ -219,9 +265,12 @@ def evaluate(
 
 
 def is_opportunity(idea: IdeaOut) -> bool:
+    minimum = (
+        ETF_NO_OPPORTUNITY_MIN_OVERALL if idea.asset_type == "ETF" else NO_OPPORTUNITY_MIN_OVERALL
+    )
     return (
         idea.overall is not None
-        and idea.overall >= NO_OPPORTUNITY_MIN_OVERALL
+        and idea.overall >= minimum
         and idea.confidence in ("medium", "high")
     )
 
