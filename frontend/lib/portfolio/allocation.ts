@@ -86,3 +86,40 @@ export function largestPositions(holdings: HoldingSummary[], count = 5): Positio
     .sort((a, b) => b.value - a.value || a.ticker.localeCompare(b.ticker))
     .slice(0, count);
 }
+
+/**
+ * A caption cut into at most `maxLines` lines of `maxChars`, for SVG text that cannot wrap itself.
+ * Breaks at spaces; a word longer than a line breaks at its hyphens, then hard. Cut text ends in "…".
+ */
+export function wrapCaption(text: string, maxChars: number, maxLines: number): string[] {
+  const atoms: { s: string; glue: boolean }[] = [];
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (word.length <= maxChars) atoms.push({ s: word, glue: false });
+    else {
+      let first = true;
+      for (const piece of word.match(/[^-]+-?|-/g) ?? []) {
+        for (let i = 0; i < piece.length; i += maxChars) {
+          atoms.push({ s: piece.slice(i, i + maxChars), glue: !first });
+          first = false;
+        }
+      }
+    }
+  }
+  const lines: string[] = [];
+  let cut = false;
+  for (const { s, glue } of atoms) {
+    const last = lines.length - 1;
+    const sep = glue ? "" : " ";
+    if (last >= 0 && lines[last].length + sep.length + s.length <= maxChars) lines[last] += sep + s;
+    else if (lines.length < maxLines) lines.push(s);
+    else {
+      cut = true;
+      break;
+    }
+  }
+  if (cut) {
+    const last = lines.length - 1;
+    lines[last] = (lines[last].length >= maxChars ? lines[last].slice(0, maxChars - 1) : lines[last]) + "…";
+  }
+  return lines;
+}

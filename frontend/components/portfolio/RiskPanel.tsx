@@ -251,8 +251,8 @@ export function RiskPanel({
                 ...(spreadFacts.unclassifiedSector !== null ? [["Sector not known", formatShare(spreadFacts.unclassifiedSector)]] : []),
               ].map(([label, value]) => (
                 <Box key={label} sx={{ display: "flex", justifyContent: "space-between", gap: 2, py: 0.75, borderTop: "1px solid var(--line)", fontSize: "0.8125rem", "&:first-of-type": { borderTop: 0 } }}>
-                  <Box component="dt" sx={{ color: "var(--text2)" }}>{label}</Box>
-                  <Box component="dd" sx={{ m: 0, fontWeight: 650, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{value}</Box>
+                  <Box component="dt" sx={{ color: "var(--text2)", flex: "none" }}>{label}</Box>
+                  <Box component="dd" sx={{ m: 0, minWidth: 0, overflowWrap: "anywhere", fontWeight: 650, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{value}</Box>
                 </Box>
               ))}
             </Box>

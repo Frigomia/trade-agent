@@ -6,13 +6,16 @@ import { Logo } from "@/components/ui/Logo";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Panel } from "@/components/ui/Panel";
 import { formatAmount, formatShare } from "@/lib/format";
-import { ALLOCATION_DIMS, type Allocation, type AllocationDim, type Position } from "@/lib/portfolio/allocation";
+import { ALLOCATION_DIMS, wrapCaption, type Allocation, type AllocationDim, type Position } from "@/lib/portfolio/allocation";
 
 const SIZE = 220;
 const STROKE = 26;
 const RADIUS = SIZE / 2 - 16;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const GAP = 2; // a hairline between slices, in the dash length
+// The hole's caption at 0.75rem: 22 characters are about 140px, inside the 149px chord of the second line.
+const CAPTION_CHARS = 22;
+const CAPTION_LINES = 2;
 
 const color = (i: number) => `var(--c${(i % 6) + 1})`;
 
@@ -23,6 +26,7 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
   const dimLabel = ALLOCATION_DIMS.find((d) => d.key === dim)?.label.toLowerCase();
   const focus = hover ?? allocation.groups.findIndex((g) => g.id === selected);
   const shown = allocation.groups[focus] ?? null;
+  const caption = shown ? wrapCaption(shown.name, CAPTION_CHARS, CAPTION_LINES) : [allocation.groups.length === 1 ? dimLabel : `${dimLabel}s`];
   // Where each slice starts along the circle: the shares before it.
   const starts = allocation.groups.map((_, i) => allocation.groups.slice(0, i).reduce((sum, g) => sum + g.share, 0) * CIRCUMFERENCE);
   return (
@@ -34,6 +38,7 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
       aria-label={`Allocation by ${dimLabel}: ${allocation.groups.map((g) => `${g.name} ${formatShare(g.share)}`).join(", ")}`}
       style={{ flex: "none", maxWidth: "100%" }}
     >
+      {shown && <title>{shown.name}</title>}
       <circle cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} fill="none" stroke="var(--track)" strokeWidth={STROKE} />
       {allocation.groups.map((g, i) => {
         const length = g.share * CIRCUMFERENCE;
@@ -58,7 +63,11 @@ function Donut({ allocation, dim, selected, hover }: { allocation: Allocation; d
         {shown ? formatShare(shown.share) : allocation.groups.length}
       </text>
       <text x="50%" y="58%" textAnchor="middle" style={{ fontSize: "0.75rem", fill: "var(--muted)" }}>
-        {shown ? shown.name : allocation.groups.length === 1 ? dimLabel : `${dimLabel}s`}
+        {caption.map((line, i) => (
+          <tspan key={i} x="50%" dy={i === 0 ? 0 : "1.2em"}>
+            {line}
+          </tspan>
+        ))}
       </text>
     </svg>
   );
