@@ -9,7 +9,6 @@ from decimal import Decimal
 from uuid import UUID
 
 from anthropic import Anthropic
-from app.tracing import traced
 from pydantic import TypeAdapter
 
 from app import fx
@@ -134,7 +133,6 @@ async def evaluate_candidate(
     return await run_discovery_graph(candidate, client, fit=fit)
 
 
-@traced("discovery.scan")
 async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) -> ScanEvaluation:
     """No scheduling, global paid theme searches or database writes; at most eight graph calls."""
     await progress("screening", 0, 0)
