@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- The ETF qualifying gate is its own constant, 50 (owner decision 2026-11-16, after the gap score proved to sit at 37 to 54 for realistic funds: stocks keep 60). The frontend mirrors it as `ETF_GATE = 50` in `lib/etfIdea.ts` with a comment pointing at `ETF_NO_OPPORTUNITY_MIN_OVERALL` in `backend/app/analysis/discovery_score.py`.
+- The ETF qualifying gate is its own constant, 50 (controller ruling 2026-11-16 after the owner asked for separate gates, chosen as the recommended 50 over 45; the gap score proved to sit at 37 to 54 for realistic funds: stocks keep 60). The frontend mirrors it as `ETF_GATE = 50` in `lib/etfIdea.ts` with a comment pointing at `ETF_NO_OPPORTUNITY_MIN_OVERALL` in `backend/app/analysis/discovery_score.py`.
 - Branch on `idea.asset_type === "ETF"`; every stock render and every existing stock test stays byte-identical and untouched.
 - DESIGN.md (the Soft look): rem sizes only (body 0.875rem, labels at least 0.75rem), green and red only for price moves, pass and unknown carried by shape plus a word (a filled circle with a tick and "Pass"; a dashed circle and "Unknown"), AI text in dashed boxes marked "Written by AI" or "AI headline", no emoji, no decorative icons, colours only through the existing CSS variables (`var(--text)`, `var(--accent)`, `var(--line2)`, ...), light and dark.
 - The score is always called "Gap score", never quality or overall quality. No peers table, no quality or valuation scores, no sector, no competitors for ETFs.
