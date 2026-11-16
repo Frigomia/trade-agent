@@ -143,6 +143,29 @@ describe("spread", () => {
     expect(result).toEqual({ sectors: 2, countries: 0, currencies: 1, largestSector: { label: "Technology", weight: 0.3 }, unclassifiedSector: 0.5 });
   });
 
+  it("does not count the Funds country slice as a country", () => {
+    const countries = (by_country: { label: string; weight: number }[]) => spread(analytics({ by_country })).countries;
+
+    expect(countries([{ label: "Germany", weight: 0.4 }, { label: "Funds", weight: 0.5 }, { label: "Unclassified", weight: 0.1 }])).toBe(1);
+    expect(countries([{ label: "Funds", weight: 1 }])).toBe(0);
+  });
+
+  it("counts a fund category as a sector, can name it the largest, and reads only the Unclassified slice as the gap", () => {
+    const result = spread(
+      analytics({
+        by_sector: [
+          { label: "ETF: Global Equity", weight: 0.5 },
+          { label: "Technology", weight: 0.3 },
+          { label: "Unclassified", weight: 0.2 },
+        ],
+        by_country: [{ label: "Funds", weight: 0.5 }, { label: "Japan", weight: 0.5 }],
+      }),
+    );
+
+    expect(result).toEqual({ sectors: 2, countries: 1, currencies: 2, largestSector: { label: "ETF: Global Equity", weight: 0.5 }, unclassifiedSector: 0.2 });
+    expect(result.largestSector?.label).not.toBe("Funds");
+  });
+
   it("has no largest sector when nothing is classified", () => {
     expect(spread(analytics({ by_sector: [] })).largestSector).toBeNull();
   });
