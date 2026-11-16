@@ -879,11 +879,12 @@ missing snapshot fails with an explicit refresh message rather than a misleading
 Partial coverage, stale/uncertain prices, unavailable mentions and individual candidate failures
 are recorded in `coverage_summary`. It loads only the caller's open holdings and avoided sectors,
 admits cached mentions through the same safeguards, then ranks universe and admitted candidates
-for one eight-candidate stock shortlist, plus up to three ETFs from the ETF lane (see "ETF
-ideas" below). It never refreshes all 600 symbols or funds a global theme batch
-from a manual request. Candidate evaluation uses the caller's explicit client, at most three graphs
-at once and a 15-minute provider-work timeout; a scan runs at most eleven graphs. No candidates is a valid completed `none` scan;
-failure of every shortlisted graph is a failed job, never a no-opportunity claim.
+for one eight-candidate stock shortlist, plus up to three ETFs from the ETF lane (see "ETF ideas"
+below). It never refreshes all 600 symbols or funds a global theme batch from a manual request.
+Candidate evaluation uses the caller's explicit client, at most three graphs at once and a
+15-minute provider-work timeout; a scan runs at most eleven graphs. No candidates is a valid
+completed `none` scan; failure of every shortlisted graph is a failed job, never a
+no-opportunity claim.
 
 Portfolio fit reuses the analytics loader, retaining dated holding histories and removing future
 bars from both holding and candidate returns. An empty/inapplicable portfolio leaves fit absent.
