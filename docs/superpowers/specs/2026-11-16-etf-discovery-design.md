@@ -143,8 +143,10 @@ The fund's 0 to 100 gap score reuses the existing fit calculation (`analysis/dis
 volatility and lower concentration after a hypothetical 5% weight. A held ETF in the same Yahoo
 category with return correlation of 0.95 or more makes the candidate an overlap: it is excluded as
 "overlaps a holding", not scored low. The ETF's overall is its gap score. An ETF is an opportunity
-when the gap score is at least 60 (proposed, mirroring the stock gate) and confidence is `medium`
-or `high`.
+when the gap score is at least 50 (`ETF_NO_OPPORTUNITY_MIN_OVERALL`; the stock gate stays at 60)
+and confidence is `medium` or `high`. Measured with the real formula at a 5% weight, realistic funds
+score 37 (world equity), 43 (emerging-market equity), 50 (gold), 54 (government bonds) and 61 (a
+negatively correlated hedge), so the stock gate of 60 would almost never qualify an ETF.
 
 Consequence to accept: for an equity-heavy portfolio the strongest gaps will often be bond and gold
 funds, because they are the least correlated. That is a real diversification idea, not a bug. The

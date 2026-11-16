@@ -22,7 +22,9 @@ from app.sectors import Sector
 
 OVERALL_WEIGHTS = {"quality": 1, "valuation": 1}
 NO_OPPORTUNITY_MIN_OVERALL = 60
-ETF_NO_OPPORTUNITY_MIN_OVERALL = 60  # same number as stocks today, its own knob
+# Gap scores for realistic funds sit at 37 to 54, so the stock gate of 60 is unreachable; see the
+# 2026-11-16 ETF discovery design.
+ETF_NO_OPPORTUNITY_MIN_OVERALL = 50
 MIN_CONFIDENCE_COVERAGE = 0.5
 HIGH_CONFIDENCE_COVERAGE = 0.8
 QUALITY_STYLE_MIN = 70

@@ -450,7 +450,7 @@ def test_an_idea_with_no_price_date_or_snapshot_is_left_unmeasured(db_session, a
     assert saved.price_at_recommendation is None and saved.price_as_of is None
 
 
-@pytest.mark.parametrize(("score", "fraction"), [(60, 0.5), (79, 0.5), (80, 1.0)])
+@pytest.mark.parametrize(("score", "fraction"), [(50, 0.5), (79, 0.5), (80, 1.0)])
 def test_a_qualifying_etf_is_saved_as_a_pending_buy_sized_like_a_stock(
     db_session, app_session_local, score, fraction
 ):
@@ -477,7 +477,7 @@ def test_a_qualifying_etf_is_saved_as_a_pending_buy_sized_like_a_stock(
 def test_an_etf_under_its_gate_is_set_aside_not_saved(db_session, app_session_local):
     add_app_user(db_session)
     with patch("app.db.SessionLocal", app_session_local):
-        scan = save_scan(USER_ID, [_etf_idea(overall=59)], **COUNTS)
+        scan = save_scan(USER_ID, [_etf_idea(overall=49)], **COUNTS)
 
     assert scan is not None and scan.outcome == "none"
     assert [i["ticker"] for i in scan.coverage_summary["set_aside_ideas"]] == ["IWDA.AS"]

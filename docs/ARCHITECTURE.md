@@ -958,8 +958,8 @@ rows, same peer scoring, the same 60 gate and eight slots.
   "STOXX50" is not), or a word such as "leveraged", "inverse" or "daily short".
 - *Score and gate.* The gap score is the existing `fit` dimension (correlation, volatility and
   concentration change when the fund is added at a hypothetical 5% weight) and is also the
-  `overall`. An ETF qualifies at `ETF_NO_OPPORTUNITY_MIN_OVERALL = 60` with `medium` or `high`
-  confidence; a qualifying fund is saved as a pending BUY discovery recommendation by the same
+  `overall`. An ETF qualifies at `ETF_NO_OPPORTUNITY_MIN_OVERALL = 50` (stocks stay at
+  `NO_OPPORTUNITY_MIN_OVERALL = 60`) with `medium` or `high` confidence; a qualifying fund is saved as a pending BUY discovery recommendation by the same
   persistence code, and the usual superseding applies by ticker. Funds that passed both filters
   and scored under the gate are set aside, with the other researched ideas.
 - *Skipped lane.* With fewer than two holdings with price history, or with any valued holding

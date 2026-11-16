@@ -473,10 +473,10 @@ def test_etf_uncertain_price_date_caps_confidence_at_medium() -> None:
 
 @pytest.mark.parametrize(
     ("overall", "confidence", "expected"),
-    [(59, "high", False), (60, "low", False), (60, "medium", True), (60, "high", True)],
+    [(49, "high", False), (50, "low", False), (50, "medium", True), (50, "high", True)],
 )
 def test_etf_opportunity_gate(overall: int, confidence: str, expected: bool) -> None:
-    assert ETF_NO_OPPORTUNITY_MIN_OVERALL == 60
+    assert ETF_NO_OPPORTUNITY_MIN_OVERALL == 50
     etf = idea(asset_type="ETF", scores=ETF_SCORES, overall=overall, confidence=confidence)
     assert is_opportunity(etf) is expected
 
@@ -484,6 +484,10 @@ def test_etf_opportunity_gate(overall: int, confidence: str, expected: bool) -> 
 def test_stock_opportunity_gate_is_unchanged_next_to_the_etf_gate() -> None:
     assert is_opportunity(idea(overall=59, confidence="high")) is False
     assert is_opportunity(idea(overall=60, confidence="medium")) is True
+
+
+def test_stock_and_etf_gates_are_separate_constants() -> None:
+    assert ETF_NO_OPPORTUNITY_MIN_OVERALL != NO_OPPORTUNITY_MIN_OVERALL
 
 
 def test_etf_ideas_rank_by_overall_then_ticker() -> None:
