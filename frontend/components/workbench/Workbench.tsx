@@ -77,6 +77,15 @@ export function Workbench({
     setTab(tabs[to].key);
     document.getElementById(`${panelId}-${tabs[to].key}-tab`)?.focus();
   };
+  // A stock's rail is the grid item itself (it is sticky); an ETF's rail shares a wrapper with the fund panels.
+  const rail =
+    view === "withdrawn" ? (
+      <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
+    ) : view ? (
+      <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
+    ) : (
+      <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
+    );
   const country = idea.snapshot?.country;
   const sector = sectorText(idea);
   return (
@@ -148,18 +157,7 @@ export function Workbench({
           {tab === "risk" && <RiskFit idea={idea} />}
           {tab === "sources" && <SourcesTab idea={idea} />}
         </Box>
-        {isDesktop && (
-          <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
-            {view === "withdrawn" ? (
-              <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
-            ) : view ? (
-              <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
-            ) : (
-              <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
-            )}
-            {etf && <EtfSideColumn idea={idea} />}
-          </Box>
-        )}
+        {isDesktop && (etf ? <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>{rail}<EtfSideColumn idea={idea} /></Box> : rail)}
       </Box>
       <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", maxWidth: "72ch", lineHeight: 1.5 }}>
         Advisory research for human review, not investment advice. Saving or approving only records your decision; nothing is sent to a broker.

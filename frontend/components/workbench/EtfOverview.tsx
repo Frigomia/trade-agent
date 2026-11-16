@@ -10,7 +10,7 @@ import { EtfSideColumn } from "./EtfSideColumn";
 import { SourcesTab } from "./SourcesTab";
 
 const paragraphs = (text: string) => text.split(/\n+/).filter((p) => p.trim());
-const TEXT = { m: 0, fontSize: "0.875rem", lineHeight: 1.55, color: "var(--text)", maxWidth: "72ch" } as const;
+const TEXT = { m: 0, fontSize: "0.875rem", lineHeight: 1.55, color: "var(--text)", maxWidth: "72ch", overflowWrap: "anywhere" } as const;
 
 /** A titled panel whose body is AI text in the dashed box, closed by the "Written by AI" label. */
 function AiPanel({ title, note, label, lead, children }: { title: string; note?: string; label: string; lead?: boolean; children: ReactNode }) {

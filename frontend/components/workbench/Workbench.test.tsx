@@ -525,6 +525,23 @@ describe("Workbench for an ETF idea", () => {
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
+  it("puts the rail and the fund panels in one wrapper beside the page", async () => {
+    show(etfRec());
+
+    const rail = await screen.findByRole("complementary", { name: "Decision" });
+    const facts = screen.getByRole("heading", { name: "Fund facts" }).closest("section")!;
+    expect(rail.parentElement).toBe(facts.parentElement);
+    expect(rail.parentElement).not.toBe(screen.getByRole("tabpanel").parentElement); // a wrapper, not the grid itself
+    expect(rail.parentElement!.parentElement).toBe(screen.getByRole("tabpanel").parentElement);
+  });
+
+  it("keeps a stock rail as a direct child of the page grid, with no wrapper (it stays sticky)", async () => {
+    show();
+
+    const rail = await screen.findByRole("complementary", { name: "Decision" });
+    expect(rail.parentElement).toBe(screen.getByRole("tabpanel").parentElement);
+  });
+
   it("keeps a stock idea on its four tabs and Portfolio fit", async () => {
     show();
 

@@ -55,6 +55,14 @@ describe("EtfOverview", () => {
     expect(facts.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("lets a long unbroken AI text wrap instead of overflowing its box", () => {
+    const long = "x".repeat(300);
+    render(<EtfOverview idea={idea({ thesis: long, bear_case: long, conclusion: long })} />);
+
+    for (const el of screen.getAllByText(long)) expect(el).toHaveStyle({ overflowWrap: "anywhere" });
+    expect(screen.getAllByText(long)).toHaveLength(3);
+  });
+
   it("has no peers, valuation or quality-score text", () => {
     const { container } = render(<EtfOverview idea={idea()} withSide />);
 

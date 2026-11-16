@@ -123,7 +123,8 @@ describe("RecommendationDetailPage", () => {
     expect(facts).toHaveTextContent("EUR 9.8B");
     expect(facts).toHaveTextContent("Global Large-Cap Blend Equity");
     expect(screen.queryByRole("heading", { name: /peers/i })).not.toBeInTheDocument();
-    expect(screen.getAllByText("Gap score").length).toBeGreaterThan(0);
+    // The score row of the rail or summary, not the hero's: its label is followed by the saved value.
+    expect(screen.getAllByText("Gap score").some((el) => el.parentElement?.textContent === "Gap score72 of 100")).toBe(true);
   });
 
   it("never calls the API for a non-numeric id", () => {
