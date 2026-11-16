@@ -16,6 +16,7 @@ A folder may also have a `SPEC.md` (or `README.md`) with the element-to-backend 
 
 | Folder | Feature | Chosen | Date | Status |
 |---|---|---|---|---|
+| [etf-ideas](etf-ideas/SPEC.md) | ETF ideas: the Today card and the recommendation page for a UCITS ETF idea ([#296](https://github.com/Frigomia/trade-agent/issues/296), task 11) | Today card from option A, Overview from option C, merged into `etf-idea.html` | 2026-11-16 | Approved; build plan next |
 | [reopen-saved-company](reopen-saved-company/SPEC.md) | Reopen a saved company from Discover: status strip, decision rail and chips ([#283](https://github.com/Frigomia/trade-agent/issues/283)) | Option C plus D, chosen in chat; mock approved | 2026-11-09 | Built (#283) |
 | [scan-results](scan-results/SPEC.md) | Scan results: what a scan set aside and why ([#196](https://github.com/Frigomia/trade-agent/issues/196)) | Approved as proposed | 2026-10-28 | Built (#196) |
 | [signin](signin/SPEC.md) | Soft restyle of the sign-in screens: Sign in, Set your password, Reset your password ([#195](https://github.com/Frigomia/trade-agent/issues/195), last screens) | Approved as proposed | 2026-10-28 | Built (#195: sign-in screens) |
