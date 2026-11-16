@@ -510,7 +510,7 @@ but not failed research or screening rejections. Reviewing/superseding a recomme
 changes these counts. Legacy scans without a valid saved count expose null for both; the API
 does not guess from summary prose or current pending rows. Empty-opportunity scans also save
 company names alongside ticker, overall and confidence in `nearest_misses`. Every scan also saves
-the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE`, as
+the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE + ETF_SLOTS` (eleven), as
 `coverage_summary.set_aside_ideas` (ticker, name, overall, confidence); `nearest_misses` is the first
 three of them and is still written only when nothing qualifies. Scans saved before this have no
 `set_aside_ideas`. Existing JSON columns hold these additions, so no database migration is required.
@@ -1429,8 +1429,8 @@ default — same dialect and models as production, started with
   `pause_state`, the caller's saved Claude key (explicit server fallback
   only for admins without a saved key), the monthly `analysis_run` allowance and discovery's
   single-flight job. It skips users with a completed scan on that UTC day and users whose owner
-  search budget has fewer than 40 searches left (eight candidates times four queries plus one
-  follow-up), without charging or making a day claim. There is no
+  search budget has fewer than 55 searches left (eleven candidates, eight stocks and three ETFs, times four
+  queries plus one follow-up), without charging or making a day claim. There is no
   holdings requirement. `discovery:ran:<user_id>:<YYYY-MM-DD>` (25-hour TTL) permits at most one
   automatic attempt per UTC day. Quota rejection clears it; refused job creation refunds before
   clearing it, including overlap with a manual discovery run. Accepted failed attempts retain it,
