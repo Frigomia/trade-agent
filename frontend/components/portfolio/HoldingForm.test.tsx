@@ -194,6 +194,57 @@ describe("HoldingForm", () => {
     expect(sentBody()).not.toHaveProperty("sector");
   });
 
+  describe("ETF category", () => {
+    const ETF: HoldingSummary = { ...HELD, ticker: "VWCE.DE", name: "Vanguard FTSE All-World", asset_type: "ETF", sector: "Global Equity" };
+    const saveButton = () => fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+
+    it("shows the Category field only when the type is ETF", () => {
+      setup({ holding: { ...HELD, sector: null } });
+      expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+
+      type("Type", "");
+      expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+      expect(screen.getByText("Used to group this fund on the Portfolio page")).toBeInTheDocument();
+      expect(screen.getByLabelText("Category")).toHaveAttribute("maxlength", "100");
+    });
+
+    it("prefills the category when editing an ETF", () => {
+      setup({ holding: ETF });
+      expect(screen.getByLabelText("Type")).toHaveValue("ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("Global Equity");
+    });
+
+    it("sends the trimmed category", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Category", "  Emerging Markets  ");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody().sector).toBe("Emerging Markets");
+    });
+
+    it("sends no sector when the category is empty", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Category", "   ");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).not.toHaveProperty("sector");
+    });
+
+    it("does not send the old category after the type is switched away from ETF", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Type", "STOCK");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).not.toHaveProperty("sector");
+    });
+  });
+
   it("does not send a request when a required field is missing", () => {
     setup();
 

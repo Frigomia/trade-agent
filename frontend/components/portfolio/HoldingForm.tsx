@@ -59,6 +59,7 @@ function HoldingFormBody({
   const [shares, setShares] = useState(holding ? String(holding.shares) : "");
   const [costBasis, setCostBasis] = useState(holding?.cost_basis == null ? "" : String(holding.cost_basis));
   const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? "");
+  const [category, setCategory] = useState(holding?.sector ?? "");
   const [showMore, setShowMore] = useState(editing);
   const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
   const { run, submitting, error, setError } = useAction(onBusyChange);
@@ -109,6 +110,8 @@ function HoldingFormBody({
       ...(firstPurchase ? { first_purchase_date: firstPurchase } : {}),
       ...(target.trim() ? { target_weight: targetWeight } : {}),
     };
+    // An empty category sends no key, so the stored sector stays and the backend can still fill a missing one.
+    const sector = assetType === "ETF" ? category.trim() : "";
     await run(async () => {
       try {
         await apiFetch("/portfolio/holdings", {
@@ -117,6 +120,7 @@ function HoldingFormBody({
             ticker: normalizedTicker,
             ...(name.trim() ? { name: name.trim() } : {}),
             ...(assetType ? { asset_type: assetType } : {}),
+            ...(sector ? { sector } : {}),
             shares: sharesNum,
             ...purchaseDetails,
           }),
@@ -189,6 +193,17 @@ function HoldingFormBody({
         <option value="STOCK">Stock</option>
         <option value="ETF">ETF</option>
       </TextField>
+      {assetType === "ETF" && (
+        <TextField
+          label="Category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          fullWidth
+          margin="normal"
+          helperText="Used to group this fund on the Portfolio page"
+          slotProps={{ htmlInput: { maxLength: 100 } }}
+        />
+      )}
       <Box sx={{ display: "flex", gap: 1.5 }}>
         <TextField
           label="Average cost"
