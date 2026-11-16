@@ -537,7 +537,8 @@ differences, enforced by the `IdeaOut` validator and the ETF scorer:
 lane: `not_ucits` (the fund is not marked UCITS in the universe file), `fails_quality_filter`
 (expense ratio above 0.50%, fund size under EUR 100 million, a leveraged or inverse fund, or a
 near-copy of a cheaper or larger candidate) and `overlaps_holding` (a return correlation of 0.95 or
-more with a held ETF of the same category or of an unknown category). A fund with too little
+more with a held ETF, whatever the categories: a held fund's category is Yahoo's and a candidate's is
+the file's, so only the correlation is compared). A fund with too little
 history or no expense ratio is `insufficient_data`, and the existing price and currency reasons
 apply to funds too.
 `coverage_summary.etf_lane` is
@@ -952,9 +953,10 @@ rows, same peer scoring, the same 60 gate and eight slots.
 - *Eligibility and quality filter.* The first failure wins, in this order: UCITS, supported
   currency, a reliable and fresh price, enough history (at least 200 closes and 60 return
   intervals shared with the holdings), a known expense ratio, not leveraged or inverse, the hard
-  overlap exclusion against held ETFs, then the pass or fail quality filter (expense ratio at most
-  0.50%, fund size at least EUR 100 million when it is known). Among near-copy candidates (same
-  category, correlation 0.95 or more) only the cheapest, then the largest, is kept, and at most one
+  overlap exclusion against held ETFs (a correlation of 0.95 or more alone, with no category test),
+  then the pass or fail quality filter (expense ratio at most 0.50%, fund size at least EUR 100
+  million when it is known). Among near-copy candidates (same category, or either unknown,
+  correlation 0.95 or more; candidates share one category vocabulary) only the cheapest, then the largest, is kept, and at most one
   fund per category is shortlisted. Every failure is an `Exclusion` shown on Scan results,
   except that held tickers and avoided sectors are left out without one, as for stocks. Yahoo's
   `netExpenseRatio` is read as a percent number; a result below 0.01% or above 5% a year as a

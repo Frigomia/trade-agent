@@ -28,7 +28,7 @@ Funds checked: 51 of 51 passed (24 UCITS and 27 US-listed). Date of the run: 202
 
 | Field | Funds that had it | Units seen | Decision (Yahoo, CSV, or drop) |
 |---|---:|---|---|
-| `category` | 26 of 51 overall, **0 of 24 UCITS** (only the US-listed funds have one) | text | **CSV.** Yahoo's category when present, else the universe row's `industry`; every `ucits=yes` row must have one. |
+| `category` | 26 of 51 overall, **0 of 24 UCITS** (26 of the 27 US-listed funds have one, one has none) | text | **CSV.** Yahoo's category when present, else the universe row's `industry`; every `ucits=yes` row must have one. |
 | `netExpenseRatio` | 49 of 51 (missing: `VWCE.DE`, `VWRL.L`) | **percent** (0.18 is 0.18%) | **Yahoo**, divisor 100 confirmed. CSV `ter` 0.0014 for the two Vanguard funds. |
 | `totalAssets` | 41 of 51 (missing for 10 of the 24 UCITS funds) | whole units, fund-wide total | **Yahoo when present**; an unknown size gives `medium` confidence at most (by design). |
 | `fundInceptionDate` | 51 of 51 | epoch seconds | **Yahoo.** |
@@ -44,16 +44,18 @@ Funds checked: 51 of 51 passed (24 UCITS and 27 US-listed). Date of the run: 202
 2. **`netExpenseRatio` is a percent.** IS3N.DE 0.18, SXR8.DE 0.07 and CBU0.L 0.07 match the issuers'
    TERs, so `YAHOO_EXPENSE_RATIO_DIVISOR = 100` is correct and unchanged. `VWCE.DE` and `VWRL.L`
    (Vanguard) have none, so they were excluded as insufficient data until the CSV `ter` was set:
-   **0.0014 (0.14%)** for both, which Vanguard cut from 0.19% on 28 July 2026 (justETF, and
-   Vanguard's own announcement as reported by Trustnet). Check it against the factsheet if the cut
-   is ever reversed. No other `ter` was filled: Yahoo supplies them.
+   **0.0014 (0.14%)** for both. **Unresolved:** 0.14% per justETF and secondary reports (a cut
+   effective 28 July 2026); the 31 May 2026 Vanguard factsheet says 0.19%. Owner to confirm against
+   the current Vanguard KIID or factsheet. Both values pass the 0.50% filter, so a wrong choice does
+   not change which funds qualify. No other `ter` was filled: Yahoo supplies them.
 3. **`totalAssets` is the fund-wide total, probably in the fund's base currency.** `VWCE.DE`
    (EUR line) and `VWRL.L` (GBP line) show the same 88,843,730,944, so it is neither the listing's
    quote currency nor a per-line figure. `etf.py` still converts it with the quote currency's rate;
    that is only right when the base currency and the quote currency agree, and is wrong by the
-   exchange rate otherwise (a EUR line of a USD fund). Left as is: the size test is a EUR 100
-   million floor, so a few percent of rate error rarely changes the result, and `size_eur_m` in
-   the CSV overrides it for any fund where it matters. It is missing for 10 of the 24 UCITS funds
+   exchange rate otherwise: a USD total read as EUR is about 15% off, read as GBP about 25% off. So
+   the fund-size figure for `VWCE.DE` and `VWRL.L` is approximate. Left as is: the size test is a
+   EUR 100 million floor and these funds are far above it, and `size_eur_m` in the CSV overrides
+   the figure for any fund where it matters. It is missing for 10 of the 24 UCITS funds
    (AMEA.DE, DBZB.DE, EUNA.DE, EUNN.DE, IUSQ.DE, IWDA.AS, SXR8.DE, SXRV.DE, XGLE.DE, ZPRR.DE), which
    then get at most `medium` confidence.
 4. **Yahoo has no ISIN** (`Ticker.isin` returns "-"), so ISINs cannot be checked through Yahoo. All
@@ -68,8 +70,8 @@ Funds checked: 51 of 51 passed (24 UCITS and 27 US-listed). Date of the run: 202
 ### Rows whose names differ from the live data
 
 The validator flags these four rows as differing in name from Yahoo (it does not record Yahoo's
-string). The ISINs were checked on justETF and match the traded share class; the differences are
-share-class wording. The rows are kept as they are.
+string). The ISINs were checked on justETF and match the traded share class. Yahoo's names were
+not captured; the justETF names are shown. The rows are kept as they are.
 
 | Ticker | CSV name | justETF name for the same ISIN |
 |---|---|---|

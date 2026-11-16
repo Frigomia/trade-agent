@@ -132,17 +132,20 @@ sector only when the universe file gives one, which it does for sector and theme
 A pass or fail test, not a score. An ETF passes when its expense ratio is at most 0.50% (proposed),
 its fund size is at least EUR 100 million (proposed; Yahoo reports size in the fund's own currency,
 so it is converted to EUR with the existing `fx` helpers first) and its history is at least one year. Among
-candidates that are near-copies (same Yahoo category and return correlation of 0.95 or more,
-proposed), only the cheapest is kept, ties broken by the largest. This is what stops VT, VWCE, VWRL
+candidates that are near-copies (same category and return correlation of 0.95 or more,
+proposed; a candidate with an unknown category is compared on correlation alone), only the
+cheapest is kept, ties broken by the largest. This is what stops VT, VWCE, VWRL
 and IWDA from all appearing.
 
 ### Gap score (the idea)
 
 The fund's 0 to 100 gap score reuses the existing fit calculation (`analysis/discovery_score.py`
 `fit` dimension, `marginal_effect`): low correlation to the person's holdings, lower portfolio
-volatility and lower concentration after a hypothetical 5% weight. A held ETF in the same Yahoo
-category with return correlation of 0.95 or more makes the candidate an overlap: it is excluded as
-"overlaps a holding", not scored low. The ETF's overall is its gap score. An ETF is an opportunity
+volatility and lower concentration after a hypothetical 5% weight. A held ETF with return
+correlation of 0.95 or more makes the candidate an overlap, whatever either fund's category: it is
+excluded as "overlaps a holding", not scored low. (A held fund's category is in Yahoo's words and a
+candidate's is the universe file's, so they cannot be compared, and a correlation that high leaves no
+portfolio gap anyway.) The ETF's overall is its gap score. An ETF is an opportunity
 when the gap score is at least 50 (`ETF_NO_OPPORTUNITY_MIN_OVERALL`; the stock gate stays at 60)
 and confidence is `medium` or `high`. Measured with the real formula at a 5% weight, realistic funds
 score 37 (world equity), 43 (emerging-market equity), 50 (gold), 54 (government bonds) and 61 (a
@@ -200,15 +203,17 @@ spec's out-of-scope note and fit rule, and `docs/design/README.md` for the mock.
 
 - **Order of the ETF lane:** eligibility, then the hard overlap exclusion against held ETFs, then the
   quality filter, then the near-copy dedupe among candidates, then the gap score, then the gate. The
-  overlap and dedupe tests need both the same Yahoo category and a return correlation of 0.95 or
-  more, since Yahoo categories alone are coarse.
+  overlap test against a held ETF uses a return correlation of 0.95 or more alone (the held fund's
+  category is Yahoo's and cannot be compared with the file's); the dedupe among candidates needs
+  the same category (or an unknown one) and that correlation, since categories alone are coarse.
 - **Gap score:** exactly the score of the existing `fit` dimension, so `overall` equals it and the
   ordering, ranking and gate code are shared, with an ETF-specific gate constant beside
   `NO_OPPORTUNITY_MIN_OVERALL`. The builder may refactor, not fork, that code.
 - **Missing fund size:** if Yahoo lacks it for UCITS funds, size comes from a hand-kept CSV column
   like `ter`; if even that is impractical the size test is dropped and the other filters stay. The
   lane is not dropped for it.
-- **Variety:** at most one ETF per Yahoo category per scan, so three slots cannot be three bond
+- **Variety:** at most one ETF per category (Yahoo's when present, else the universe row's
+  `industry`) per scan, so three slots cannot be three bond
   funds of one kind. There is no further asset-class cap.
 - **Failures are visible:** a fund that fails eligibility or the quality filter is an `Exclusion` with
   its reason on Scan results. Nearest misses and set-aside ETFs are the funds that passed both and

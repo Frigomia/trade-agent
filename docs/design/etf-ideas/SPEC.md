@@ -4,7 +4,7 @@ Approved mock: `etf-idea.html` (open with `?theme=dark` for dark). Decision reco
 
 ## What an ETF idea is on screen
 
-An `IdeaOut` with `asset_type == "ETF"`: `scores` is exactly `[fit]`, `overall` is that gap score, `peers` is empty, `snapshot.sector` is null, `snapshot.industry` is the Yahoo category, `snapshot.fundamentals` carries `expenseRatio` (a fraction: 0.0018 is 0.18%), `totalAssets` and `fundSizeEur`, `fit` carries the gap evidence. The branch is chosen by `idea.asset_type === "ETF"`; the stock layout stays byte-identical.
+An `IdeaOut` with `asset_type == "ETF"`: `scores` is exactly `[fit]`, `overall` is that gap score, `peers` is empty, `snapshot.sector` is null, `snapshot.industry` is the fund category (Yahoo's when present, else the universe row's `industry`), `snapshot.fundamentals` carries `expenseRatio` (a fraction: 0.0018 is 0.18%), `totalAssets` and `fundSizeEur`, `fit` carries the gap evidence. The branch is chosen by `idea.asset_type === "ETF"`; the stock layout stays byte-identical.
 
 ## Element to data mapping
 
@@ -58,7 +58,7 @@ What the build (#296) does differently from the approved mock `etf-idea.html`:
 - The page header has the mock's tag row (ETF, UCITS, Accumulating or Distributing, and the category chip) under a listing line of ticker, exchange and currency. It has no ISIN, as the saved idea carries none.
 - The decision rail (pending and decided) has the mock's Suggested position block, read from the saved `suggested_position_pct`. The frontend does not know the saved maximum, so the bar and the sentence appear only for 7.5% (half of 15%) and 15% (the full maximum); any other size shows the value alone. On a phone the rail is not shown, so the mock's "7.5% suggested" in the phone summary is not built.
 - A correlation below -0.1 reads "Tends to move against your holdings"; the strip scale and the "below the scale" wording are unchanged (see the open questions).
-- The overlap filter row says "Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)", matching the backend rule.
+- The overlap filter row says "Does not overlap an ETF you hold (correlation below 0.95)", matching the backend rule (a held fund's category is Yahoo's and cannot be compared with the file's, so correlation alone decides).
 - The tab list is named "Fund sections" for an ETF.
 
 ## Open questions
