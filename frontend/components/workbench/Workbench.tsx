@@ -7,22 +7,31 @@ import { Logo } from "@/components/ui/Logo";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { listingText, sectorText } from "@/lib/discovery";
+import { isEtf } from "@/lib/etfIdea";
 import { SectorIcon } from "@/components/ui/SectorIcon";
 import { DecidedPhoneBar, DecidedRail, RunAgainDisabled, WithdrawnPhoneBar, WithdrawnRail } from "./DecidedRail";
 import { DecisionRail, DecisionSummary, PhoneActions } from "./DecisionRail";
+import { EtfOverview } from "./EtfOverview";
+import { EtfSideColumn } from "./EtfSideColumn";
 import { Numbers } from "./Numbers";
-import { Overview } from "./Overview";
+import { ChartPanel, Overview } from "./Overview";
 import { RiskFit } from "./RiskFit";
 import { SourcesTab } from "./SourcesTab";
 import { StatusStrip, type StripKind } from "./StatusStrip";
 
-const TABS = [
+type TabKey = "overview" | "numbers" | "risk" | "sources" | "price";
+const TABS: readonly { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "numbers", label: "Numbers" },
   { key: "risk", label: "Risk and fit" },
   { key: "sources", label: "Sources" },
-] as const;
-type TabKey = (typeof TABS)[number]["key"];
+];
+// A fund has no peers, valuation or quality score to show: its fit and filter sit in the Overview.
+const ETF_TABS: readonly { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "price", label: "Price" },
+  { key: "sources", label: "Sources" },
+];
 
 /** What happened to the idea, from its status: null while it waits for a decision. */
 function reopenedAs(rec: DiscoveryRecommendation): Exclude<StripKind, "newer"> | null {
@@ -54,16 +63,19 @@ export function Workbench({
   const view = reopenedAs(recommendation);
   const strip = view ?? notice;
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
-  const [tab, setTab] = useState<TabKey>("overview");
+  const etf = isEtf(idea);
+  const tabs = etf ? ETF_TABS : TABS;
+  const [picked, setTab] = useState<TabKey>("overview");
+  const tab = tabs.some((t) => t.key === picked) ? picked : "overview"; // a key from the other list falls back
   const panelId = useId();
   const arrow = (e: KeyboardEvent) => {
     // The tab pattern: arrows (and Home/End) move between tabs, and only the selected one is a tab stop.
-    const at = TABS.findIndex((t) => t.key === tab);
-    const to = { ArrowRight: (at + 1) % TABS.length, ArrowLeft: (at + TABS.length - 1) % TABS.length, Home: 0, End: TABS.length - 1 }[e.key];
+    const at = tabs.findIndex((t) => t.key === tab);
+    const to = { ArrowRight: (at + 1) % tabs.length, ArrowLeft: (at + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
     if (to === undefined) return;
     e.preventDefault();
-    setTab(TABS[to].key);
-    document.getElementById(`${panelId}-${TABS[to].key}-tab`)?.focus();
+    setTab(tabs[to].key);
+    document.getElementById(`${panelId}-${tabs[to].key}-tab`)?.focus();
   };
   const country = idea.snapshot?.country;
   const sector = sectorText(idea);
@@ -98,7 +110,7 @@ export function Workbench({
         </Box>
       )}
       <Box role="tablist" aria-label="Company sections" sx={{ display: "flex", gap: "4px", p: "4px", borderRadius: 999, bgcolor: "var(--track)", width: { xs: "100%", md: "max-content" }, maxWidth: "100%" }}>
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Box
             key={t.key}
             component="button"
@@ -130,19 +142,24 @@ export function Workbench({
       </Box>
       <Box sx={{ display: "grid", gap: 3, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 300px" }, alignItems: "start" }}>
         <Box role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}-tab`} sx={{ minWidth: 0 }}>
-          {tab === "overview" && <Overview idea={idea} recommendationId={recommendation.id} />}
+          {tab === "overview" && (etf ? <EtfOverview idea={idea} withSide={!isDesktop} /> : <Overview idea={idea} recommendationId={recommendation.id} />)}
+          {tab === "price" && <ChartPanel recommendationId={recommendation.id} />}
           {tab === "numbers" && <Numbers idea={idea} />}
           {tab === "risk" && <RiskFit idea={idea} />}
           {tab === "sources" && <SourcesTab idea={idea} />}
         </Box>
-        {isDesktop &&
-          (view === "withdrawn" ? (
-            <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
-          ) : view ? (
-            <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
-          ) : (
-            <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
-          ))}
+        {isDesktop && (
+          <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
+            {view === "withdrawn" ? (
+              <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
+            ) : view ? (
+              <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
+            ) : (
+              <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
+            )}
+            {etf && <EtfSideColumn idea={idea} />}
+          </Box>
+        )}
       </Box>
       <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", maxWidth: "72ch", lineHeight: 1.5 }}>
         Advisory research for human review, not investment advice. Saving or approving only records your decision; nothing is sent to a broker.

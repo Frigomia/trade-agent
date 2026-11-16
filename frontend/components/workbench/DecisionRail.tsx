@@ -12,6 +12,7 @@ import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { moveSinceRecommended } from "@/lib/decisionView";
+import { isEtf } from "@/lib/etfIdea";
 import { confidenceLabel, dateTimeText, dayText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
 import { formatAmount } from "@/lib/format";
 import { useDecision } from "@/lib/useDecision";
@@ -26,7 +27,7 @@ export function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & obje
   const fit = fitScore(idea);
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "0.8125rem", color: "var(--text2)" }}>
-      <span>Portfolio fit</span>
+      <span>{isEtf(idea) ? "Gap score" : "Portfolio fit"}</span>
       {fit === null ? (
         <Box component="span" sx={{ fontWeight: 650, color: "var(--text)" }}>Not applicable</Box>
       ) : (

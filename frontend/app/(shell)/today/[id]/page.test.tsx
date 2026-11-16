@@ -108,7 +108,7 @@ describe("RecommendationDetailPage", () => {
     expect(screen.queryByText(/web second opinion/i)).not.toBeInTheDocument();
   });
 
-  it("opens an ETF idea without throwing and shows the fund facts instead of the stock fundamentals", async () => {
+  it("opens an ETF idea without throwing and shows the fund facts and the gap score instead of the stock tabs", async () => {
     apiFetch.mockImplementation((path: string) =>
       path.startsWith("/discovery/ideas/")
         ? Promise.reject(new Error("no history in this test"))
@@ -117,14 +117,13 @@ describe("RecommendationDetailPage", () => {
     renderFresh(<RecommendationDetailPage />);
 
     expect(await screen.findByRole("heading", { level: 1, name: "Global All-Cap UCITS ETF" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Numbers" }));
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Price", "Sources"]);
     const facts = screen.getByRole("heading", { name: "Fund facts" }).closest("section")!;
     expect(facts).toHaveTextContent("0.22%");
     expect(facts).toHaveTextContent("EUR 9.8B");
     expect(facts).toHaveTextContent("Global Large-Cap Blend Equity");
     expect(screen.queryByRole("heading", { name: /peers/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Risk and fit" }));
-    expect(screen.getByText(/fit, of 100/)).toHaveTextContent("72");
+    expect(screen.getAllByText("Gap score").length).toBeGreaterThan(0);
   });
 
   it("never calls the API for a non-numeric id", () => {

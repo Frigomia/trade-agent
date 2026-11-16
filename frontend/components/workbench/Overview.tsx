@@ -52,7 +52,7 @@ function Thesis({ idea }: { idea: IdeaOut }) {
 }
 
 /** The price chart with its range control; says so plainly when the history is not available. */
-function ChartPanel({ recommendationId }: { recommendationId: number }) {
+export function ChartPanel({ recommendationId }: { recommendationId: number }) {
   const { range, setRange, history, unavailable, loading } = useIdeaHistory(recommendationId);
   return (
     <Panel component="section" sx={{ p: "20px", display: "grid", gap: 1.5 }}>

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
-import { claim, testHistory, testIdea, testRec } from "./testData";
+import { claim, etfRec, testHistory, testIdea, testRec } from "./testData";
 
 const apiFetch = vi.fn();
 const { FakeApiError } = vi.hoisted(() => {
@@ -433,5 +433,104 @@ describe("Workbench with a legacy idea", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Halden Systems" })).toBeInTheDocument();
     expect(screen.getByText("HLDN")).toBeInTheDocument();
     expect(testIdea().snapshot).not.toBeNull(); // the fixture itself is unchanged
+  });
+});
+
+describe("Workbench for an ETF idea", () => {
+  it("has the tabs Overview, Price and Sources, and no Numbers or Risk tab", async () => {
+    show(etfRec());
+
+    await screen.findByRole("tab", { name: "Overview" });
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Price", "Sources"]);
+    expect(screen.queryByRole("tab", { name: "Numbers" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Risk and fit" })).toBeNull();
+  });
+
+  it("labels the rail score Gap score, not Portfolio fit", async () => {
+    show(etfRec());
+
+    const rail = await screen.findByRole("complementary", { name: "Decision" });
+    expect(within(rail).getByText("Gap score")).toBeInTheDocument();
+    expect(within(rail).getByText("54")).toBeInTheDocument();
+    expect(within(rail).queryByText("Portfolio fit")).toBeNull();
+  });
+
+  it("shows the hero, the AI panels and the sources in the Overview and the fund panels under the rail", async () => {
+    show(etfRec());
+
+    const panel = await screen.findByRole("tabpanel");
+    for (const name of ["If you add 5% of this fund", "The role it plays", "Catalysts", "Bear case", "Conclusion", "Sources and research transparency"]) {
+      expect(within(panel).getByRole("heading", { name })).toBeInTheDocument();
+    }
+    expect(within(panel).getByText("Written by AI · 3 cited sources")).toBeInTheDocument();
+    expect(within(panel).queryByRole("heading", { name: "Fund facts" })).toBeNull(); // desktop: beside the page, not in it
+    const rail = screen.getByRole("complementary", { name: "Decision" });
+    const facts = screen.getByRole("heading", { name: "Fund facts" });
+    expect(rail.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Quality filter/ })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/peers|valuation/i);
+  });
+
+  it("shows the price chart on the Price tab", async () => {
+    show(etfRec());
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Price" }));
+    expect(screen.getByRole("heading", { name: "Share price" })).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: /price chart/i })).toBeInTheDocument();
+  });
+
+  it("moves between the three tabs with the arrow keys, wrapping round", async () => {
+    show(etfRec());
+
+    const overview = await screen.findByRole("tab", { name: "Overview" });
+    const price = screen.getByRole("tab", { name: "Price" });
+    const sources = screen.getByRole("tab", { name: "Sources" });
+    fireEvent.keyDown(overview, { key: "ArrowRight" });
+    expect(price).toHaveAttribute("aria-selected", "true");
+    expect(price).toHaveFocus();
+    fireEvent.keyDown(price, { key: "End" });
+    expect(sources).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(sources, { key: "ArrowRight" });
+    expect(overview).toHaveAttribute("aria-selected", "true");
+    fireEvent.keyDown(overview, { key: "ArrowLeft" });
+    expect(sources).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("opens Sources from the rail's See sources link", async () => {
+    show(etfRec());
+
+    fireEvent.click(await screen.findByRole("button", { name: "See sources" }));
+    expect(screen.getByRole("tab", { name: "Sources" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows an approved idea with the strip and the decided rail saying Gap score, and the fund panels", async () => {
+    show({ ...etfRec(), status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" });
+
+    expect(await screen.findByRole("status")).toHaveTextContent("You approved this idea.");
+    const rail = screen.getByRole("complementary", { name: "Your decision" });
+    expect(within(rail).getByText("Gap score")).toBeInTheDocument();
+    expect(within(rail).queryByText("Portfolio fit")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Fund facts" })).toBeInTheDocument();
+  });
+
+  it("shows the fund panels after the conclusion on a phone, with the rail summary saying Gap score", async () => {
+    desktop = false;
+    show(etfRec());
+
+    expect(screen.queryByRole("complementary", { name: "Decision" })).toBeNull();
+    expect(await screen.findByText("Gap score", { selector: "span" })).toBeInTheDocument();
+    const panel = screen.getByRole("tabpanel");
+    const facts = within(panel).getByRole("heading", { name: "Fund facts" });
+    expect(within(panel).getByRole("heading", { name: "Conclusion" }).compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+  });
+
+  it("keeps a stock idea on its four tabs and Portfolio fit", async () => {
+    show();
+
+    await screen.findByRole("tab", { name: "Overview" });
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Overview", "Numbers", "Risk and fit", "Sources"]);
+    expect(screen.getByText("Portfolio fit")).toBeInTheDocument();
+    expect(screen.queryByText("Gap score")).toBeNull();
   });
 });
