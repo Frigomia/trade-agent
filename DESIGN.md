@@ -540,6 +540,22 @@ Open items:
   are made up and say so. The headline is a display size (up to 3.375rem) used only here. The Scan results page
   (a link from the scan bar) lists what a scan left out as one ledger: a pill filter with counts, rows of company,
   where it fell out and why, each opening to the scan's explanation in the dashed box and its sources.
+  An ETF idea has its own layout (#296, `docs/design/etf-ideas/`), chosen by `asset_type == "ETF"`; the stock layout
+  is unchanged. Its Overview opens with a before-and-after hero, "If you add 5% of this fund", and the gap score
+  is drawn as the result of it: the number at 2rem, then "Qualifies" with a tick when it is at least 50 (the ETF
+  gate; stocks stay at 60) and confidence is medium or high. Three rows, volatility, spread of money and
+  correlation, each draw one strip with a paired dot, a ring for now and a filled dot with 5% in this fund, and
+  the change in words ("0.9 points lower", "0.5 more effective positions") beside a part score. The part scores
+  are shown only when they agree with the saved gap score. The correlation strip is on a fixed 0 to 1 scale with a
+  tick and the words "Moves exactly with you 1.00"; a negative value is pinned at the left end and the value
+  reads "-0.10, below the scale". The label is "Gap score" everywhere, never quality or overall; the rail says it
+  too. The quality filter lists six rows, each a filled tick and "Pass" or a dashed circle and "Unknown" (shape plus
+  word, no green or red), with "5 pass · 1 unknown" in its heading. Fund facts and the quality filter sit in a
+  column beside the rail on a desktop and after the conclusion on a phone. The role, the bear case, the catalysts
+  and the conclusion are dashed boxes marked "Written by AI". The Today card for an ETF shows the shortened
+  fund name, the ticker line, a gap chip with a small track, the confidence meter, the category, the AI headline in
+  a dashed box and one filter line ("Quality filter: 5 passed, size unknown" uses a question-mark circle, not a
+  tick). Only the move since the recommendation is green or red.
   The invitation and reset-password emails (`docs/email-templates/`) follow the same Soft look: a pale blue field,
   one white card with a 24px radius, the app icon beside the wordmark, a navy headline, a 14px-radius cobalt button
   (full width on a phone) and the fallback link in a soft box. They are light only, with no dark version. Inline

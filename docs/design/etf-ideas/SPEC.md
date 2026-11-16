@@ -42,6 +42,24 @@ States (in the mock): medium confidence with unknown fund size; the decided read
 
 Rem sizes (the mock uses 0.875rem body, 0.75rem labels), green and red only for price moves, shape plus word for pass or unknown, AI text in dashed boxes, no peers table or quality and valuation scores for ETFs, advisory wording ("for human review, not a licensed advisor"), light and dark.
 
+## Changed during the build
+
+What the build (#296) does differently from the approved mock `etf-idea.html`:
+
+- The ETF qualifying gate is 50 (stocks stay at 60), so the mock's sample gap score of 72 and its part scores were illustrative. The part scores shown are recomputed from the saved fit with the backend formula and appear only when they agree with the saved gap score (the backend does not save them).
+- Fund facts has no ISIN row: the saved idea carries no ISIN. Listing shows exchange and currency only.
+- The Overview ends with the full sources list (the same one as the Sources tab), not the mock's compact cited list. On a phone, fund facts and the quality filter come after the conclusion and before the sources, as in the mock.
+- The Today card keeps the round logo (the mock draws none). Below the `xl` breakpoint the quote sits on its own row under the name instead of at the right of the header, because the real three-column Today grid makes the card about 285px wide.
+- The top-opportunity card for an ETF reuses the same body, so it shows two dashed boxes: the AI headline, then Why now, Risk to the thesis and sources. The mock shows only the list card.
+- The unknown-size filter line on the card uses a question-mark circle instead of the filled tick, so it does not claim that every check passed.
+- A negative correlation is drawn pinned at the left end of the fixed 0 to 1 scale, with the words "below the scale" in its value and label. The left "0" end label is hidden there so it does not collide with "This fund".
+- The right column wrapper (rail plus fund panels) exists only for ETFs; the stock rail stays a bare grid item, so it still sticks.
+- The quality filter shows values only where the idea holds them (cost, size); the other rows show their rule text, and no correlation number is printed.
+
 ## Open questions
 
-None blocking; the defaults taken are listed in `direction-approved.md`.
+None blocking; the defaults taken are listed in `direction-approved.md`. Still open for the owner:
+
+- Optional backend fields to show the quality-filter values: the length of price history, the near-copy list (the cheaper funds of the same kind) and the highest correlation to a held ETF. Without them those rows show the rule only.
+- An ISIN on the saved idea, so Fund facts can show the row the mock has.
+- The mock's sample scores (gap 72 and its parts) are invented; the real ones for typical funds are lower (about 37 for world equity, 54 for government bonds). Say if a sample note should appear anywhere, or if the 50 gate (against 45) should change; it is one backend constant plus the frontend `ETF_GATE`.
