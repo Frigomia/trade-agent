@@ -56,3 +56,13 @@ def test_a_sector_fund_carries_a_sector_the_stock_rows_use_and_a_broad_fund_none
     assert fund_sectors <= stock_sectors
     assert rows["QDVE.DE"].sector == "Technology" and rows["ISOE.AS"].sector == "Basic Materials"
     assert rows["IWDA.AS"].sector == "" and rows["SXR8.DE"].sector == ""
+
+
+def test_every_ucits_sector_fund_has_a_stock_sector_so_avoided_sectors_apply() -> None:
+    # Yahoo gives these funds no sector, so the row's is the only way an avoided sector skips one.
+    rows = load_universe()
+    stock_sectors = {row.sector for row in rows if row.asset_type == "STOCK" and row.sector}
+    sector_funds = [row for row in rows if row.ucits and row.industry.startswith("Sector Equity")]
+
+    assert sector_funds
+    assert [row.ticker for row in sector_funds if row.sector not in stock_sectors] == []

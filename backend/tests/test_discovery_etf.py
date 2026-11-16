@@ -18,7 +18,7 @@ from app.discovery.etf import (
 )
 from app.discovery.fetching import RawSymbolData
 from app.discovery.snapshot import Freshness, SymbolSnapshot, to_snapshot
-from app.discovery.universe import UniverseRow
+from app.discovery.universe import UniverseRow, load_universe
 from tests.discovery_fixtures import sample_exposure
 from tests.test_discovery_score import etf_fit, evidence
 
@@ -575,3 +575,21 @@ def test_a_ucits_fund_with_no_yahoo_category_takes_the_rows_and_is_not_low_confi
     # Control: the same fund without a category is low, so the row's industry is what lifts it.
     bare = candidate.model_copy(update={"industry": ""})
     assert evaluate(bare, evidence(ticker="SXR8.DE"), fit).confidence == "low"
+
+
+def test_the_real_robotics_row_is_skipped_when_industrials_are_avoided() -> None:
+    # Yahoo gives a UCITS fund no sector and no category: only the universe row can carry them.
+    closes = walk(1)
+    raw = RawSymbolData(
+        {"quoteType": "ETF", "currency": "EUR", "netExpenseRatio": 0.4, "totalAssets": 5e9},
+        len(closes),
+        date.fromisoformat(day(len(closes) - 1)),
+        closes,
+        [day(i) for i in range(len(closes))],
+    )
+    row = next(r for r in load_universe() if r.ticker == "RBOE.AS")
+    robotics = to_snapshot("RBOE.AS", raw, row=row)
+
+    assert tickers(run([robotics])) == ["RBOE.AS"]  # control
+    avoided = run([robotics], avoid_sectors=["Industrials"])
+    assert tickers(avoided) == [] and avoided.excluded == []
