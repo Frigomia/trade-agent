@@ -46,6 +46,7 @@ class PositionInput:
     shares: float
     asset_type: str
     sector: str | None = None
+    isin: str | None = None
 
 
 def clean_history(closes: Mapping[str, float], today: date | None = None) -> dict[str, float]:
@@ -257,7 +258,9 @@ def analyze_portfolio(
         etf_label: str | None = None
         if holding.asset_type == "ETF":
             country[ticker] = FUNDS
-            etf_label = etf_sector_label(holding.sector, profile.get("category"), ticker)
+            etf_label = etf_sector_label(
+                holding.sector, profile.get("category"), ticker, holding.isin
+            )
             if etf_label:
                 sector[ticker] = industry[ticker] = etf_label
                 notes.append(

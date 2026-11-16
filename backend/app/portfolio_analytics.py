@@ -20,7 +20,7 @@ LOOKUP_CONCURRENCY = 8
 
 async def load_analytics(db: Session, user_id: uuid.UUID) -> PortfolioExposure:
     holdings = [
-        PositionInput(row.ticker, row.name, float(row.shares), row.asset_type, row.sector)
+        PositionInput(row.ticker, row.name, float(row.shares), row.asset_type, row.sector, row.isin)
         for row in db.query(Holding).filter(Holding.user_id == user_id, Holding.shares > 0).all()
     ]
     # This service only reads. Release its connection before waiting on external providers.

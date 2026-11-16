@@ -17,9 +17,9 @@ UNIVERSE_ETF = "IS3N.DE"
 UNIVERSE_CATEGORY = "Global Emerging Markets Equity"
 
 
-def _row(ticker, asset_type="ETF", sector=None):
+def _row(ticker, asset_type="ETF", sector=None, isin=None):
     return HoldingSummaryOut(
-        ticker=ticker, name=ticker, asset_type=asset_type, shares=1, sector=sector
+        ticker=ticker, name=ticker, asset_type=asset_type, shares=1, sector=sector, isin=isin
     )
 
 
@@ -51,6 +51,26 @@ def test_unresolved_etf_has_no_group_sector_but_is_still_funds():
     row = _enrich(_row("NOSUCHETF"), {})
     assert row.group_sector is None
     assert row.country == "Funds"
+
+
+def test_other_listing_of_a_universe_fund_is_labelled_through_its_isin():
+    row = _enrich(_row("EIMI.L", isin="IE00BKM4GZ66"), {"country": "Ireland"})
+    assert row.group_sector == f"ETF: {UNIVERSE_CATEGORY}"
+    assert etf_sector_label(None, None, "EIMI.L", "IE00BKM4GZ66") == f"ETF: {UNIVERSE_CATEGORY}"
+    assert etf_sector_label(None, None, "EIMI.L") is None
+
+
+def test_analysis_labels_an_other_listing_through_its_isin():
+    exposure = analyze_portfolio(
+        [PositionInput("EIMI.L", "EM IMI", 1, "ETF", None, "IE00BKM4GZ66")],
+        {"EIMI.L": EurPrice(Decimal(100), "EUR", Decimal(1))},
+        {},
+        {"EIMI.L": {}},
+        datetime(2026, 10, 15, 12, tzinfo=UTC),
+    )
+    assert exposure.by_sector[0].label == f"ETF: {UNIVERSE_CATEGORY}"
+    assert exposure.by_industry[0].label == f"ETF: {UNIVERSE_CATEGORY}"
+    assert exposure.by_country[0].label == "Funds"
 
 
 def test_stock_row_is_unchanged():
@@ -112,3 +132,20 @@ def test_changing_an_etf_to_stock_with_a_null_sector_clears_it_and_skips_the_yah
 
     assert body["asset_type"] == "STOCK"
     assert body["sector"] is None
+
+
+def test_summary_endpoint_labels_an_other_listing_through_the_stored_isin(client):
+    client.post(
+        "/portfolio/holdings",
+        json={"ticker": "EIMI.L", "name": "EM IMI", "asset_type": "ETF", "shares": 2},
+    )
+    response = client.put("/portfolio/instruments/EIMI.L/isin", json={"isin": "IE00BKM4GZ66"})
+    assert response.status_code == 200
+    with patch(
+        "app.routers.portfolio.fetch_quote_and_history",
+        AsyncMock(return_value={"price": 10.0, "closes": [10.0]}),
+    ):
+        body = client.get("/portfolio/summary").json()
+    [holding] = body["holdings"]
+    assert holding["group_sector"] == f"ETF: {UNIVERSE_CATEGORY}"
+    assert holding["isin"] == "IE00BKM4GZ66"

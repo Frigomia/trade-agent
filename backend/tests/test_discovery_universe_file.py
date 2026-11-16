@@ -76,3 +76,30 @@ def test_etf_category_for_reads_the_etf_row_industry_case_insensitively() -> Non
 def test_etf_category_for_is_none_for_a_stock_or_an_unknown_ticker() -> None:
     assert etf_category_for("AAON") is None
     assert etf_category_for("NOPE.XX") is None
+
+
+def test_etf_category_for_falls_back_to_the_isin_for_another_listing_of_a_universe_fund() -> None:
+    # The owner's holdings are other listings (.SW, .L) of funds the file lists on XETRA/Amsterdam.
+    assert etf_category_for("CSNDX.SW", "IE00B53SZB19") == "US Large-Cap Growth Equity"
+    assert etf_category_for("EIMI.L", "IE00BKM4GZ66") == "Global Emerging Markets Equity"
+    assert etf_category_for("IWDA.L", "IE00B4L5Y983") == "Global Large-Cap Blend Equity"
+
+
+def test_etf_category_for_isin_match_ignores_case_and_whitespace() -> None:
+    assert etf_category_for("EIMI.L", "  ie00bkm4gz66 ") == "Global Emerging Markets Equity"
+
+
+def test_etf_category_for_ticker_match_wins_over_a_different_isin() -> None:
+    assert etf_category_for("IS3N.DE", "IE00B53SZB19") == "Global Emerging Markets Equity"
+
+
+def test_etf_category_for_is_none_for_an_unknown_ticker_with_an_unknown_or_missing_isin() -> None:
+    assert etf_category_for("NOPE.XX", "IE0000000000") is None
+    assert etf_category_for("NOPE.XX", None) is None
+    assert etf_category_for("NOPE.XX", "") is None
+
+
+def test_etf_category_for_never_matches_a_stock_rows_isin() -> None:
+    stock_isins = [row.isin for row in load_universe() if row.asset_type == "STOCK" and row.isin]
+    for isin in stock_isins[:5]:
+        assert etf_category_for("NOPE.XX", isin) is None

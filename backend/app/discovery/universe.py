@@ -190,26 +190,32 @@ def load_universe(path: Path = UNIVERSE_PATH) -> list[UniverseRow]:
 
 
 @lru_cache(maxsize=1)
-def _etf_categories() -> dict[str, str]:
-    """Upper-cased ticker to industry for every ETF row that has one, read once per process."""
-    return {
-        row.ticker.upper(): row.industry
-        for row in load_universe()
-        if row.asset_type == "ETF" and row.industry
-    }
+def _etf_categories() -> tuple[dict[str, str], dict[str, str]]:
+    """Industry of every ETF row that has one, by upper-cased ticker and by ISIN; read once."""
+    etfs = [row for row in load_universe() if row.asset_type == "ETF" and row.industry]
+    by_ticker = {row.ticker.upper(): row.industry for row in etfs}
+    by_isin = {row.isin.upper(): row.industry for row in etfs if row.isin}
+    return by_ticker, by_isin
 
 
-def etf_category_for(ticker: str) -> str | None:
-    """The universe file's category for an ETF ticker, or None (stock, unknown, no category)."""
-    return _etf_categories().get(ticker.upper())
+def etf_category_for(ticker: str, isin: str | None = None) -> str | None:
+    """The universe file's category for an ETF, or None (stock, unknown, no category).
+
+    By ticker first. A fund held on another exchange than the file lists has another ticker but
+    the same ISIN, so the holding's ISIN is the fallback."""
+    by_ticker, by_isin = _etf_categories()
+    category = by_ticker.get(ticker.upper())
+    if category is None and isin and isin.strip():
+        category = by_isin.get(isin.strip().upper())
+    return category
 
 
 def etf_sector_label(
-    own_sector: str | None, profile_category: str | None, ticker: str
+    own_sector: str | None, profile_category: str | None, ticker: str, isin: str | None = None
 ) -> str | None:
     """The `ETF: <category>` label of a fund, or None when no source has a category.
 
-    First non-empty wins: the person's own sector, Yahoo's category, the universe file's. The
-    Risk panel and the allocation donut both use this, so they always agree."""
-    category = (own_sector or "").strip() or profile_category or etf_category_for(ticker)
+    First non-empty wins: the person's own sector, Yahoo's category, the universe file's (by
+    ticker, then ISIN). The Risk panel and the allocation donut both use this, so they agree."""
+    category = (own_sector or "").strip() or profile_category or etf_category_for(ticker, isin)
     return f"ETF: {clean_label(category)}" if category else None

@@ -311,6 +311,7 @@ class PortfolioSnapshotOut(BaseModel):
 class HoldingSummaryOut(HoldingIn):
     name: str
     asset_type: AssetType
+    isin: str | None = None
     industry: str | None = None
     country: str | None = None
     currency: str | None = None

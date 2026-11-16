@@ -15,7 +15,7 @@ Of three options (the fund's category as its own slice; look-through to what the
 ## Goals
 
 - An ETF holding shows its category (for example `ETF: Global Large-Cap Blend Equity`) as its sector and industry slice instead of `Unclassified`.
-- The category comes from, first non-empty wins: the holding's own `sector` field (a value the person set), Yahoo's category, the universe file's `industry` for that ticker, otherwise unresolved.
+- The category comes from, first non-empty wins: the holding's own `sector` field (a value the person set), Yahoo's category, the universe file's `industry` for that ticker or ISIN, otherwise unresolved.
 - A person can set the category of an ETF holding in the holding form when no source has one.
 - Funds stop being counted as an unknown country: an ETF has no country exposure without look-through, so its country slice is labelled `Funds` and is not counted as a country.
 
@@ -47,7 +47,7 @@ Of three options (the fund's category as its own slice; look-through to what the
 ## Design
 
 **Backend.**
-- A helper in `backend/app/discovery/universe.py`, `etf_category_for(ticker: str) -> str | None`, returns the universe row's `industry` for an ETF ticker (read once, cached with `functools.lru_cache`, case-insensitive on the ticker).
+- A helper in `backend/app/discovery/universe.py`, `etf_category_for(ticker: str, isin: str | None = None) -> str | None`, returns the universe row's `industry` for an ETF ticker, else for the holding's ISIN (read once, cached with `functools.lru_cache`, case-insensitive).
 - In `analyze_portfolio`, for `holding.asset_type == "ETF"`: `category = holding.sector (stripped) or profile["category"] or etf_category_for(ticker)`. If there is one, `sector[ticker] = industry[ticker] = f"ETF: {_label(category)}"` (the existing `ETF: ` prefix stays so a fund is told apart from a stock in the donut) and the existing note stays. If there is none, sector and industry are `Unclassified` (not the odd `ETF: Unclassified`) and the note becomes "{ticker}: ETF category not set; add one in the holding." Country for an ETF is `Funds`.
 - The "unknown exposures are Unclassified" note is not repeated for an ETF whose category was resolved.
 
@@ -63,7 +63,7 @@ Of three options (the fund's category as its own slice; look-through to what the
 - Country for funds is `Funds`, not the domicile (a domicile is not exposure).
 - A person's own category beats Yahoo's, so they can correct a wrong one.
 - The form field is free text, with no list to pick from (a list can come later).
-- The universe lookup is by ticker only; holdings matched by ISIN are not added now.
+- The universe lookup is by ticker, then by the holding's ISIN. Ticker only was the first call, but the owner's holdings (`CSNDX.SW`, `EIMI.L`, `IWDA.L`) are other listings of funds the file lists under other tickers, so only the ISIN finds them.
 
 ## Left to the builder
 

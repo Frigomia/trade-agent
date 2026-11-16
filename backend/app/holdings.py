@@ -112,7 +112,9 @@ async def enrich_holdings(
             setattr(row, field, profile.get(field))
         if isinstance(row, HoldingSummaryOut) and row.asset_type == "ETF":
             # Same label as the Risk panel; the stored sector stays the person's own category.
-            row.group_sector = etf_sector_label(row.sector, profile.get("category"), row.ticker)
+            row.group_sector = etf_sector_label(
+                row.sector, profile.get("category"), row.ticker, row.isin
+            )
             row.country = FUNDS  # a fund has no country exposure without look-through
 
     await asyncio.gather(*(enrich(row) for row in rows))
