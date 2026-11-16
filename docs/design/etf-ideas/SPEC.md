@@ -25,7 +25,7 @@ Recommendation page Overview (direction C):
 
 | Element | Source |
 |---|---|
-| Hero "If you add 5% of this fund" and the gap score as the result | `fit.hypothetical_weight` (0.05), the `fit` score and its `reasons`; "Qualifies" when the gap score is at least 60 and confidence is medium or high |
+| Hero "If you add 5% of this fund" and the gap score as the result | `fit.hypothetical_weight` (0.05), the `fit` score and its `reasons`; "Qualifies" when the gap score is at least 50 (the ETF gate; stocks stay at 60) and confidence is medium or high |
 | Volatility strip, now and with 5% | `fit.portfolio_vol_before`, `fit.portfolio_vol_after` (annualised fractions); part score from the fit reasons |
 | Spread-of-money strip | effective positions = 1 / `fit.hhi_before` and 1 / `fit.hhi_after`; show "HHI 0.21 to 0.19" beside it |
 | Correlation strip | `fit.avg_correlation_to_portfolio` against a 1.00 reference |

@@ -309,7 +309,7 @@ const story = (phone = false) => `<section class="panel story" aria-labelledby="
     <div class="res"><small>Gap score</small><b class="num">${F.gap}<span>of 100</span></b>${pass().replace('Pass', 'Qualifies')}</div></div>
   <div class="key" aria-hidden="true"><span><i class="mk n"></i>Now</span><span><i class="mk w"></i>With 5% of ${F.ticker}</span><span><i class="mk r"></i>Reference</span></div>
   ${ROWS.map(baRow).join('')}
-  <div class="sum"><p>The gap score is the mean of the three part scores (${F.parts.vol}, ${F.parts.conc} and ${F.parts.corr}). A fund qualifies at 60 or more with medium or high confidence. Computed from prices; no AI text goes into it.</p></div></section>`;
+  <div class="sum"><p>The gap score is the mean of the three part scores (${F.parts.vol}, ${F.parts.conc} and ${F.parts.corr}). An ETF qualifies at 50 or more with medium or high confidence. Computed from prices; no AI text goes into it.</p></div></section>`;
 
 /* ---- AI parts ---- */
 const etfThesis = () => `<section class="panel">${secHead('The role it plays')}<div class="ai"><p class="lead">${F.thesis[0]}</p><p>${F.thesis[1]}</p>${aiLbl('Written by AI · 2 cited sources')}</div></section>`;
