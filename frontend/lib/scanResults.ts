@@ -178,5 +178,6 @@ export function coverageNotes(scan: ScanRun): string[] {
   if (failed) notes.push(`${plural(failed, "candidate", "candidates")} could not be evaluated and ${failed === 1 ? "is" : "are"} not in the counts above.`);
   if (c.mentions_available === true) notes.push("Research mentions were available for this scan.");
   if (c.mentions_available === false) notes.push("Research mentions were not available for this scan.");
+  notes.push(...(c.research_warnings ?? []));
   return notes;
 }

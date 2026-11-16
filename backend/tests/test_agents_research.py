@@ -64,9 +64,43 @@ def candidate(client):
 def test_missing_tavily_is_a_domain_error_before_paid_work(monkeypatch, providers, key):
     client, requests = providers
     monkeypatch.setattr(settings, "tavily_api_key", key)
-    with pytest.raises(research.ResearchUnavailable):
+    with pytest.raises(research.ResearchUnavailable, match="TAVILY_API_KEY"):
         asyncio.run(candidate(client))
     assert requests == []
+    client.messages.create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected"),
+    [
+        (401, "Tavily rejected the API key during news search (HTTP 401). Check TAVILY_API_KEY."),
+        (403, "Tavily rejected the API key during news search (HTTP 403). Check TAVILY_API_KEY."),
+        (
+            429,
+            "Tavily news search hit the rate limit (HTTP 429). "
+            "Check your Tavily quota or retry later.",
+        ),
+        (503, "Tavily news search returned HTTP 503."),
+        ("network", "Tavily news search could not be reached."),
+    ],
+)
+def test_tavily_failures_are_actionable_without_provider_details(
+    monkeypatch, providers, failure, expected
+):
+    client, _ = providers
+    request = httpx.Request("POST", "https://api.tavily.com/search")
+    if failure == "network":
+        error = httpx.ConnectError("private-token", request=request)
+    else:
+        response = httpx.Response(failure, request=request, text="private-token")
+        error = httpx.HTTPStatusError("private-token", request=request, response=response)
+    monkeypatch.setattr(research, "_claim_search_budget", AsyncMock(return_value=True))
+    monkeypatch.setattr(research, "_search", AsyncMock(side_effect=error))
+
+    result = asyncio.run(candidate(client))
+
+    assert any(expected in gap for gap in result.gaps)
+    assert "private-token" not in " ".join(result.gaps)
     client.messages.create.assert_not_called()
 
 

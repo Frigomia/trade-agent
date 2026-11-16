@@ -205,7 +205,8 @@ ScanRun
   outcome ("ideas"|"none"), summary (text),
   excluded (JSON list of Exclusion), rejected_mentions (JSON list of RejectedMention),
   coverage_summary (JSON object -- includes up to three ranked nearest misses when outcome is
-      "none", each with ticker, overall and confidence)
+      "none", each with ticker, overall and confidence; bounded Tavily failure messages when
+      source research could not complete)
   -- Forced owner-only RLS, runtime table/sequence grants, USER_TABLES registration, export,
   -- deletion coverage and its import classification (see "Importing your data") ship together. An empty shortlist still produces a completed scan row.
 

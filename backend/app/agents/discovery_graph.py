@@ -186,7 +186,12 @@ async def research_node(state: DiscoveryState) -> dict[str, Any]:
     except Exception as exc:
         research._raise_if_key_problem(exc)
         logger.warning("Discovery research unavailable: %s", type(exc).__name__)
-        evidence = _empty_evidence(candidate, f"Research unavailable ({type(exc).__name__}).")
+        note = (
+            str(exc)
+            if isinstance(exc, research.ResearchUnavailable)
+            else f"Research unavailable ({type(exc).__name__})."
+        )
+        evidence = _empty_evidence(candidate, note)
     return {"evidence": evidence}
 
 

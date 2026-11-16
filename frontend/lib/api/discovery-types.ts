@@ -199,6 +199,7 @@ export interface ScanRun {
     uncertain_price_symbols?: string[];
     candidate_failures?: string[];
     mentions_available?: boolean;
+    research_warnings?: string[];
   } & Record<string, unknown>;
   opportunities: number | null; // null on scans saved before the count was stored
   set_aside: number | null;

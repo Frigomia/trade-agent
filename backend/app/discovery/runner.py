@@ -196,6 +196,14 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
             raise CandidateEvaluationUnavailable
     await progress("evaluating", len(candidates), done)
     loaded = {snapshot.ticker for snapshot in snapshots}
+    research_warnings = sorted(
+        {
+            note
+            for idea in ideas
+            for note in idea.data_notes
+            if note.startswith("Tavily ")
+        }
+    )
     return ScanEvaluation(
         ideas=rank_ideas(ideas),
         excluded=sorted(excluded, key=lambda item: item.ticker),
@@ -213,5 +221,6 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
             "uncertain_price_symbols": sorted(freshness.uncertain),
             "mentions_available": mentions is not None,
             "candidate_failures": sorted(failures),
+            "research_warnings": research_warnings,
         },
     )

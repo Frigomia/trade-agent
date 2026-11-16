@@ -121,4 +121,9 @@ describe("coverageNotes", () => {
       "Research mentions were not available for this scan.",
     ]);
   });
+
+  it("includes Tavily failures in the scan coverage notes", () => {
+    const warning = "Tavily rejected the API key (HTTP 401). Check TAVILY_API_KEY.";
+    expect(coverageNotes({ ...SCAN, coverage_summary: { research_warnings: [warning] } })).toEqual([warning]);
+  });
 });

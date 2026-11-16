@@ -332,6 +332,15 @@ describe("DiscoveryFeed", () => {
     expect(chip).toHaveTextContent("Norsk Verk NRSK · 58 · medium confidence");
   });
 
+  it("clearly warns when Tavily search failed and the scan is quantitative-only", () => {
+    const warning = "Tavily API key is missing. Set TAVILY_API_KEY in backend/.env and restart the backend.";
+    const scan = { ...SCAN, coverage_summary: { research_warnings: [warning] } };
+    renderFeed({ latest_scan: scan, recommendations: [] });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(warning);
+    expect(screen.getByRole("alert")).toHaveTextContent("quantitative-only");
+  });
+
   it("shows a quiet latest scan and its nearest misses even while an older idea is still pending, and labels that idea", () => {
     const quiet: ScanRun = { ...SCAN, outcome: "none", opportunities: 0, set_aside: 8, created_at: "2026-10-21T06:12:00", coverage_summary: { nearest_misses: [{ ticker: "NRSK", name: "Norsk Verk", overall: 58, confidence: "medium" }] } };
     renderFeed({ latest_scan: quiet, recommendations: [rec(1, "Halden Systems")] });
