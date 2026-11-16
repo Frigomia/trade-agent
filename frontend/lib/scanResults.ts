@@ -14,6 +14,9 @@ export const EXCLUSION_WORDS: Record<ExclusionReason, string> = {
   ambiguous_identity: "Company not clearly identified",
   currency_unsupported: "Currency not supported",
   insufficient_data: "Not enough data",
+  not_ucits: "Not available to EU retail investors",
+  fails_quality_filter: "Failed the cost or size filter",
+  overlaps_holding: "Overlaps a fund you hold",
 };
 
 export const REJECTION_WORDS: Record<MentionRejection, string> = {
@@ -176,6 +179,7 @@ export function coverageNotes(scan: ScanRun): string[] {
   if (uncertain) notes.push(`${plural(uncertain, "price", "prices")} could not be confirmed and ${uncertain === 1 ? "is" : "are"} shown as saved.`);
   const failed = c.candidate_failures?.length ?? 0;
   if (failed) notes.push(`${plural(failed, "candidate", "candidates")} could not be evaluated and ${failed === 1 ? "is" : "are"} not in the counts above.`);
+  if (c.etf_lane?.skipped_reason) notes.push(sentence(c.etf_lane.skipped_reason));
   if (c.mentions_available === true) notes.push("Research mentions were available for this scan.");
   if (c.mentions_available === false) notes.push("Research mentions were not available for this scan.");
   return notes;

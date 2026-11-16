@@ -101,6 +101,31 @@ export function testIdea(over: Partial<IdeaOut> = {}): IdeaOut {
   };
 }
 
+/** An ETF idea as the backend saves it: only a fit score, no peers, and the fund facts in the snapshot. */
+export function etfIdea(over: Partial<IdeaOut> = {}): IdeaOut {
+  return testIdea({
+    ticker: "VWCE",
+    name: "Global All-Cap UCITS ETF",
+    asset_type: "ETF",
+    scores: [{ name: "fit", score: 72, reasons: [] }],
+    overall: 72,
+    peers: [],
+    competitors: [],
+    fit: null,
+    snapshot: {
+      exchange: "XETRA",
+      country: null,
+      sector: null,
+      industry: "Global Large-Cap Blend Equity",
+      currency: "EUR",
+      price: 112.4,
+      price_as_of: "2026-10-19T20:00:00",
+      fundamentals: { expenseRatio: 0.0022, totalAssets: 9_800_000_000, fundSizeEur: 9_800_000_000 },
+    },
+    ...over,
+  });
+}
+
 export function testRec(over: Partial<IdeaOut> = {}, id = 1): DiscoveryRecommendation {
   return {
     id,

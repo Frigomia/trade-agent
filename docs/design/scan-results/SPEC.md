@@ -37,13 +37,13 @@ So Today's "3 set aside" (researched minus opportunities) is a thesis-removed co
    - not researched: the stored explanation, with the first letter capitalised and a full stop;
    - a mention: the sentence that raised it in the dashed box ("From web search, not checked by us."), then the source link (none when the mention had no link).
    The first rows are listed (all of Set aside and Mentions; the first few of each Not researched group) and a "Show N more" button reveals the rest.
-4. **Coverage notes:** only what the scan recorded: companies with no market data, old prices, unconfirmed prices, candidates that could not be evaluated, and whether research mentions were available. "Nothing to report" when empty.
+4. **Coverage notes:** only what the scan recorded: companies with no market data, old prices, unconfirmed prices, candidates that could not be evaluated, and whether research mentions were available, and, when the ETF lane did not run, why ("ETF ideas need at least two holdings with price history", from `coverage_summary.etf_lane.skipped_reason`). "Nothing to report" when empty.
 
 **Words for the stored reasons** (new copy, one place in the build):
 
 | Stored | Shown |
 |---|---|
-| thesis_invalidated / unreliable_price / ambiguous_identity / currency_unsupported / insufficient_data | Thesis no longer holds / Price not reliable / Company not clearly identified / Currency not supported / Not enough data |
+| thesis_invalidated / unreliable_price / ambiguous_identity / currency_unsupported / insufficient_data / not_ucits / fails_quality_filter / overlaps_holding | Thesis no longer holds / Price not reliable / Company not clearly identified / Currency not supported / Not enough data / Not available to EU retail investors / Failed the cost or size filter / Overlaps a fund you hold |
 | ambiguous / unresolved / no_price / currency_unsupported / insufficient_data / cap_reached / duplicate | Name matches several companies / No listed company found / No price available / Currency not supported / Not enough data / Over this scan's limit / Already in the scan or your holdings |
 
 **Untrusted text.** The scan's explanation, the sentence behind a mention, names, tickers and urls come from providers or the web. They render as plain text (React text nodes, never HTML; the mock escapes them only because it builds strings), the web-derived ones in the dashed box, and a link is drawn only when `safeHref` accepts it (http or https), shown by host name with an external-link icon. Anything else is plain text. The "A link that is not safe" state is defence in depth: the backend already refuses non-http(s) urls, so it should not occur, and the build covers it with one unit test rather than a screen.

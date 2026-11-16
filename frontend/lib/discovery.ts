@@ -7,6 +7,7 @@ import type {
 } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { formatAmount, toTime } from "@/lib/format";
+import { eurCompact, formatMetric } from "@/lib/metrics";
 
 /** Discovery ideas and holdings recommendations share one table; only the source tells them apart. */
 export function isDiscovery(rec: Pick<RecommendationOut, "source">): boolean {
@@ -173,6 +174,17 @@ export function quoteLabel(idea: IdeaOut): string {
  */
 export function isEarlier(rec: Pick<DiscoveryRecommendation, "created_at">, scan: Pick<ScanRun, "created_at"> | null): boolean {
   return scan !== null && toTime(rec.created_at) < toTime(scan.created_at);
+}
+
+/** An ETF's three facts from the saved snapshot; a value is null when the scan did not save it. */
+export function etfFacts(idea: IdeaOut): { label: string; value: string | null }[] {
+  const f = idea.snapshot?.fundamentals;
+  const size = f?.fundSizeEur;
+  return [
+    { label: "Expense ratio", value: formatMetric("expenseRatio", f?.expenseRatio) },
+    { label: "Fund size", value: typeof size === "number" ? eurCompact(size) : null },
+    { label: "Category", value: idea.snapshot?.industry ?? null },
+  ];
 }
 
 /** The portfolio-fit score (0 to 100), or null when fit does not apply (no holdings to compare). */

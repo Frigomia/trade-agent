@@ -3,7 +3,7 @@ import { Box } from "@mui/material";
 import { Globe } from "lucide-react";
 import { Meter } from "@/components/ui/Meter";
 import type { IdeaOut } from "@/lib/api/discovery-types";
-import { confidenceLabel, meterFill, riskLabel, sectorText } from "@/lib/discovery";
+import { confidenceLabel, etfFacts, meterFill, riskLabel, sectorText } from "@/lib/discovery";
 import { SectorIcon } from "@/components/ui/SectorIcon";
 
 function Chip({ children }: { children: ReactNode }) {
@@ -35,6 +35,8 @@ const fact = { display: "inline-flex", alignItems: "flex-start", gap: 0.75, minW
 export function IdeaChips({ idea }: { idea: IdeaOut }) {
   const country = idea.snapshot?.country;
   const sector = sectorText(idea);
+  // A fund has no company sector: its cost, size and category take that line.
+  const etf = idea.asset_type === "ETF" ? etfFacts(idea).filter((f) => f.value) : [];
   return (
     <Box sx={{ display: "grid", gap: 1, minWidth: 0 }}>
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
@@ -45,6 +47,15 @@ export function IdeaChips({ idea }: { idea: IdeaOut }) {
           <Meter fill={meterFill(idea.risk.risk_level)} label={riskLabel(idea.risk.risk_level)} />
         </Chip>
       </Box>
+      {etf.length > 0 && (
+        <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5 }}>
+          {etf.map((f) => (
+            <Box component="span" key={f.label} sx={fact}>
+              {f.label === "Category" ? f.value : `${f.label} ${f.value}`}
+            </Box>
+          ))}
+        </Box>
+      )}
       {(country || sector) && (
         <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5 }}>
           {country && (

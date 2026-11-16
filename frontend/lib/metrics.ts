@@ -24,6 +24,7 @@ const METRICS: Record<string, { label: string; unit: Unit }> = {
   priceToBook: { label: "Price to book", unit: "multiple" },
   interestCoverage: { label: "Interest cover", unit: "multiple" },
   priceToFfo: { label: "Price to FFO", unit: "multiple" },
+  expenseRatio: { label: "Expense ratio", unit: "fraction" }, // an ETF's yearly cost
 };
 
 /** A readable name for a metric key; an unknown key is shown as its own name rather than hidden. */

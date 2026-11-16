@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/components/portfolio/LogTradeCta", () => ({ LogTradeCta: () => null }));
 
 import RecommendationDetailPage from "./page";
-import { testIdea } from "@/components/workbench/testData";
+import { etfIdea, testIdea } from "@/components/workbench/testData";
 
 // A discovery idea: the saved research, so the page opens as the company page.
 const idea = (overrides: Partial<RecommendationOut> = {}) =>
@@ -106,6 +106,25 @@ describe("RecommendationDetailPage", () => {
     expect(screen.getByRole("heading", { name: "Bear case" }).closest("section")).toHaveTextContent("The final sentence of the risk.");
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
     expect(screen.queryByText(/web second opinion/i)).not.toBeInTheDocument();
+  });
+
+  it("opens an ETF idea without throwing and shows the fund facts instead of the stock fundamentals", async () => {
+    apiFetch.mockImplementation((path: string) =>
+      path.startsWith("/discovery/ideas/")
+        ? Promise.reject(new Error("no history in this test"))
+        : Promise.resolve(rec({ source: "discovery", asset_type: "ETF", ticker: "VWCE", idea: etfIdea() } as unknown as Partial<RecommendationOut>)),
+    );
+    renderFresh(<RecommendationDetailPage />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Global All-Cap UCITS ETF" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Numbers" }));
+    const facts = screen.getByRole("heading", { name: "Fund facts" }).closest("section")!;
+    expect(facts).toHaveTextContent("0.22%");
+    expect(facts).toHaveTextContent("EUR 9.8B");
+    expect(facts).toHaveTextContent("Global Large-Cap Blend Equity");
+    expect(screen.queryByRole("heading", { name: /peers/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Risk and fit" }));
+    expect(screen.getByText(/fit, of 100/)).toHaveTextContent("72");
   });
 
   it("never calls the API for a non-numeric id", () => {
