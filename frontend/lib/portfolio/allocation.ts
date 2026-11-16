@@ -44,7 +44,9 @@ const priced = (h: HoldingSummary) => h.shares > 0 && h.market_value !== null &&
 export function allocate(holdings: HoldingSummary[], dim: AllocationDim): Allocation {
   const open = holdings.filter((h) => h.shares > 0);
   const counted = open.filter(priced);
-  const nameOf = (h: HoldingSummary) => (h[dim] ?? "").trim() || UNKNOWN;
+  // A fund's sector is its "ETF: <category>" label (same as the Risk panel), not the stored sector.
+  const valueOf = (h: HoldingSummary) => (dim === "sector" && h.group_sector?.trim() ? h.group_sector : h[dim]);
+  const nameOf = (h: HoldingSummary) => (valueOf(h) ?? "").trim() || UNKNOWN;
   const byName = new Map<string, AllocationGroup>();
   for (const h of counted) {
     const name = nameOf(h);

@@ -112,6 +112,9 @@ function HoldingFormBody({
     };
     // An empty category sends no key, so the stored sector stays and the backend can still fill a missing one.
     const sector = assetType === "ETF" ? category.trim() : "";
+    // An ETF changed to Stock must not keep its fund category as the stock's sector: null clears it
+    // (and the backend then leaves the sector empty instead of filling it from Yahoo).
+    const clearsFundCategory = editing && holding.asset_type === "ETF" && assetType === "STOCK" && !!holding.sector?.trim();
     await run(async () => {
       try {
         await apiFetch("/portfolio/holdings", {
@@ -120,7 +123,7 @@ function HoldingFormBody({
             ticker: normalizedTicker,
             ...(name.trim() ? { name: name.trim() } : {}),
             ...(assetType ? { asset_type: assetType } : {}),
-            ...(sector ? { sector } : {}),
+            ...(sector ? { sector } : clearsFundCategory ? { sector: null } : {}),
             shares: sharesNum,
             ...purchaseDetails,
           }),

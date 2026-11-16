@@ -91,6 +91,28 @@ describe("allocate", () => {
     expect(new Set(groups.map((g) => g.id)).size).toBe(groups.length);
   });
 
+  it("groups a fund by its group_sector label, not by the stored sector", () => {
+    const fund = holding("F", 100, { asset_type: "ETF", sector: "Technology", group_sector: "ETF: Global Large-Cap Blend Equity", country: "Funds" });
+    const list = [fund, holding("A", 300)];
+
+    expect(allocate(list, "sector").groups.map((g) => [g.name, g.tickers])).toEqual([
+      ["Technology", ["A"]],
+      ["ETF: Global Large-Cap Blend Equity", ["F"]],
+    ]);
+  });
+
+  it("falls back to the stored sector when group_sector is missing or blank", () => {
+    const list = [holding("F", 100, { asset_type: "ETF", sector: "My Fund", group_sector: null }), holding("G", 50, { asset_type: "ETF", sector: "My Fund", group_sector: "  " })];
+
+    expect(allocate(list, "sector").groups.map((g) => [g.name, g.tickers])).toEqual([["My Fund", ["F", "G"]]]);
+  });
+
+  it("makes a Funds country slice of the funds", () => {
+    const list = [holding("F", 100, { asset_type: "ETF", country: "Funds" }), holding("A", 300)];
+
+    expect(allocate(list, "country").groups.map((g) => [g.name, g.tickers])).toEqual([["United States", ["A"]], ["Funds", ["F"]]]);
+  });
+
   it("is empty for no holdings", () => {
     expect(allocate([], "sector")).toEqual({ groups: [], total: 0, unpriced: 0 });
   });
