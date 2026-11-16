@@ -97,7 +97,7 @@ export function filterRows(idea: IdeaOut): FilterRow[] {
     { key: "history", label: "History", detail: "At least 200 daily closes", state: "pass" },
     { key: "plain", label: "Plain fund", detail: "Not leveraged, inverse or a trading fund", state: "pass" },
     { key: "near-copy", label: "Cheapest of its kind", detail: "Not a near-copy of a cheaper fund in its category", state: "pass" },
-    { key: "overlap", label: "No overlap with your ETFs", detail: "Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)", state: "pass" },
+    { key: "overlap", label: "No overlap with your ETFs", detail: "Does not overlap an ETF you hold (correlation below 0.95)", state: "pass" },
   ];
 }
 

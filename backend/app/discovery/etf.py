@@ -96,7 +96,7 @@ def _is_leveraged(snap: SymbolSnapshot) -> bool:
 def _is_near_copy(
     category_a: str | None, category_b: str | None, returns_a: ReturnSeries, returns_b: ReturnSeries
 ) -> bool:
-    """The one near-copy rule, for held ETFs and for rival candidates alike.
+    """The near-copy rule among candidates, which share one category vocabulary (the file's).
 
     The same category and a correlation at or above the limit make a copy. When either category is
     unknown the correlation alone decides: a missing category cannot prove two funds differ.
@@ -112,14 +112,19 @@ def _overlapping_holding(
     returns: ReturnSeries,
     holding_returns: Mapping[str, ReturnSeries],
     held_etfs: Collection[str],
-    held_categories: Mapping[str, str | None],
 ) -> str | None:
-    """The held ETF this fund is a near-copy of, if any."""
+    """The held ETF this fund moves almost exactly like, if any.
+
+    Correlation alone decides, with no category test: a held fund's category is in Yahoo's words
+    and a candidate's is the universe file's, so the two cannot be compared, and a correlation this
+    high leaves no portfolio gap whatever the label.
+    """
     for held in held_etfs:
         held_returns = holding_returns.get(held)
         if held_returns is None:
             continue
-        if _is_near_copy(snap.category, held_categories.get(held), returns, held_returns):
+        correlation = pairwise_correlation(returns, held_returns)
+        if correlation is not None and correlation >= ETF_NEAR_COPY_CORRELATION:
             return held
     return None
 
@@ -132,7 +137,6 @@ def etf_exclusion(
     returns: ReturnSeries,
     holding_returns: Mapping[str, ReturnSeries],
     held_etfs: Collection[str],
-    held_categories: Mapping[str, str | None],
 ) -> Exclusion | None:
     """Why this ETF is out, or None when it is eligible and passes the quality filter.
 
@@ -171,7 +175,7 @@ def etf_exclusion(
         return out("insufficient_data", "the fund's expense ratio is not known")
     if _is_leveraged(snap):
         return out("fails_quality_filter", "a leveraged or inverse fund")
-    held = _overlapping_holding(snap, returns, holding_returns, held_etfs, held_categories)
+    held = _overlapping_holding(snap, returns, holding_returns, held_etfs)
     if held is not None:
         return out(
             "overlaps_holding",
@@ -273,8 +277,6 @@ def shortlist_etfs(
     held = {t.casefold() for t in holdings}
     avoided = {s.casefold() for s in avoid_sectors}  # held and avoided funds are left out silently
     holding_returns = {ticker: log_returns(values) for ticker, values in histories.items()}
-    category_of = {s.ticker: s.category for s in snapshots}
-    held_categories = {ticker: category_of.get(ticker) for ticker in held_etfs}
 
     excluded: list[Exclusion] = []
     survivors: list[SymbolSnapshot] = []
@@ -294,7 +296,6 @@ def shortlist_etfs(
             returns=returns[snap.ticker],
             holding_returns=holding_returns,
             held_etfs=held_etfs,
-            held_categories=held_categories,
         )
         if why is None:
             survivors.append(snap)

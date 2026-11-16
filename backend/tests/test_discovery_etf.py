@@ -89,7 +89,6 @@ def check(snap: SymbolSnapshot, **over: object) -> str | None:
         "returns": returns_of(snap.closes, _start(snap)),
         "holding_returns": HOLDINGS,
         "held_etfs": [],
-        "held_categories": {},
     }
     result = etf_exclusion(snap, **(kwargs | over))  # type: ignore[arg-type]
     assert result is None or result.explanation  # every exclusion explains itself
@@ -218,47 +217,49 @@ def test_an_index_name_that_merely_contains_a_marker_is_not_leveraged(name: str)
     assert check(fund(name=name, category=None)) is None
 
 
-def overlap_case(category: str | None, held_category: str | None) -> str | None:
+def held_like(snap: SymbolSnapshot, correlation: float) -> ReturnSeries:
+    """Returns of a held fund whose sample correlation with `snap` is exactly `correlation`."""
+    mine = returns_of(snap.closes)
+    keys = list(mine)
+    x = [mine[k] for k in keys]
+    noise_series = returns_of(walk(77))
+    n = [noise_series[k] for k in keys]
+    mean_x, mean_n = sum(x) / len(x), sum(n) / len(n)
+    x = [v - mean_x for v in x]
+    n = [v - mean_n for v in n]
+    # Remove the part of the noise that moves with x, so only `correlation` is left in common.
+    slope = sum(a * b for a, b in zip(x, n, strict=True)) / sum(a * a for a in x)
+    n = [b - slope * a for a, b in zip(x, n, strict=True)]
+    scale = math.sqrt(sum(a * a for a in x) / sum(b * b for b in n))
+    return {
+        k: correlation * a + math.sqrt(1 - correlation**2) * scale * b
+        for k, a, b in zip(keys, x, n, strict=True)
+    }
+
+
+def overlap_case(correlation: float, category: str | None = "World") -> str | None:
     snap = fund(category=category)
-    copy = returns_of(snap.closes)  # a held fund that moves exactly like the candidate
     return check(
         snap,
-        holding_returns={**HOLDINGS, "VWCE.DE": copy},
-        held_etfs=["VWCE.DE"],
-        held_categories={"VWCE.DE": held_category},
+        holding_returns={**HOLDINGS, "VOO": held_like(snap, correlation)},
+        held_etfs=["VOO"],
     )
 
 
-def test_a_near_copy_in_the_same_category_overlaps_a_held_etf() -> None:
-    assert overlap_case("World", "World") == "overlaps_holding"
-    assert overlap_case("World", "world") == "overlaps_holding"
+def test_a_near_copy_of_a_held_etf_overlaps_whatever_the_categories() -> None:
+    # The held fund's category is in Yahoo's words, the candidate's in the file's: not comparable.
+    assert overlap_case(1.0) == "overlaps_holding"
+    assert overlap_case(0.97, "US Large-Cap Blend Equity") == "overlaps_holding"
+    assert overlap_case(0.97, None) == "overlaps_holding"
 
 
-def test_a_near_copy_in_another_category_does_not_overlap() -> None:
-    assert overlap_case("World", "Europe") is None
-
-
-def test_an_unknown_category_leaves_the_correlation_to_decide() -> None:
-    assert overlap_case("World", None) == "overlaps_holding"
-    assert overlap_case(None, "World") == "overlaps_holding"
-
-
-def test_a_low_correlation_in_the_same_category_does_not_overlap() -> None:
-    snap = fund(category="World")
-    other = returns_of(walk(77))
-    assert (
-        check(
-            snap,
-            holding_returns={**HOLDINGS, "VWCE.DE": other},
-            held_etfs=["VWCE.DE"],
-            held_categories={"VWCE.DE": "World"},
-        )
-        is None
-    )
+def test_a_correlation_below_the_limit_does_not_overlap_a_held_etf() -> None:
+    assert overlap_case(0.94) is None
+    assert overlap_case(0.95) == "overlaps_holding"
 
 
 def test_a_held_etf_without_returns_is_skipped() -> None:
-    assert check(fund(), held_etfs=["NOSERIES"], held_categories={"NOSERIES": "World"}) is None
+    assert check(fund(), held_etfs=["NOSERIES"]) is None
 
 
 def test_an_expense_ratio_of_exactly_half_a_percent_passes() -> None:
@@ -478,6 +479,18 @@ def test_a_copy_of_a_held_etf_overlaps_it() -> None:
     assert reasons(result) == {"COPY": "overlaps_holding"}
 
 
+def test_a_copy_of_a_held_us_etf_overlaps_it_despite_another_category_vocabulary() -> None:
+    held = etf("VOO", MARKET, category="Large Blend")  # Yahoo's words for a US-listed fund
+    result = run(
+        [held, etf("SXR8.DE", MARKET, category="US Large-Cap Blend Equity", scale=2.0)],
+        holdings=["SAP.DE", "AAPL", "VOO"],
+        held_etfs=["VOO"],
+        histories={**HIST, "VOO": dated(held.closes)},
+    )
+
+    assert reasons(result) == {"SXR8.DE": "overlaps_holding"}
+
+
 def test_fewer_than_two_positions_skips_the_lane() -> None:
     exposure = sample_exposure()
     one = exposure.model_copy(update={"positions": exposure.positions[:1]})
@@ -549,11 +562,16 @@ def test_a_ucits_fund_with_no_yahoo_category_takes_the_rows_and_is_not_low_confi
         [day(i) for i in range(len(closes))],
     )
     row = UniverseRow(
-        "NESN.SW", "iShares Core MSCI World", "ETF", "Amsterdam", "", "EUR", "",
+        "SXR8.DE", "iShares Core MSCI World", "ETF", "Amsterdam", "", "EUR", "",
         "Global Large-Cap Blend Equity", "unknown", "", "IE00B4L5Y983", True, None, None,
     )  # fmt: skip
 
-    candidate = build_etf_candidate(to_snapshot("NESN.SW", raw, row=row), RATES, None)
+    candidate = build_etf_candidate(to_snapshot("SXR8.DE", raw, row=row), RATES, None)
+
+    fit = etf_fit(72).model_copy(update={"ticker": "SXR8.DE"})  # the candidate's own fit
 
     assert candidate.industry == "Global Large-Cap Blend Equity"
-    assert evaluate(candidate, evidence(), etf_fit(72)).confidence != "low"
+    assert evaluate(candidate, evidence(ticker="SXR8.DE"), fit).confidence != "low"
+    # Control: the same fund without a category is low, so the row's industry is what lifts it.
+    bare = candidate.model_copy(update={"industry": ""})
+    assert evaluate(bare, evidence(ticker="SXR8.DE"), fit).confidence == "low"

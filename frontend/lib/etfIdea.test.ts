@@ -163,7 +163,7 @@ describe("quality filter", () => {
     expect(rows[2].detail).toBe("At least 200 daily closes");
     expect(rows[3].detail).toBe("Not leveraged, inverse or a trading fund");
     expect(rows[4].detail).toBe("Not a near-copy of a cheaper fund in its category");
-    expect(rows[5].detail).toBe("Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)");
+    expect(rows[5].detail).toBe("Does not overlap an ETF you hold (correlation below 0.95)");
     expect(filterSummary(rows)).toBe("6 of 6 pass");
   });
   it("marks an unknown fund size", () => {

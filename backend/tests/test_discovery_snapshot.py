@@ -486,6 +486,12 @@ def test_an_etf_category_is_yahoos_else_the_rows_industry() -> None:
         "Sector Equity Technology"
     )
     assert to_snapshot("X", fetched(no_category, [], []), row=ETF_ROW).category is None
+    assert (
+        to_snapshot("X", fetched(no_category, [], []), row=replace(row, industry="  ")).category
+        is None
+    )
+    empty = {**ETF_INFO, "category": ""}  # an empty Yahoo category is a gap too
+    assert to_snapshot("X", fetched(empty, [], []), row=row).category == "Sector Equity Technology"
     assert to_snapshot("X", fetched(no_category, [], [])).category is None
 
 

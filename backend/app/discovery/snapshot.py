@@ -276,10 +276,12 @@ def to_snapshot(
 ) -> SymbolSnapshot:
     info = raw.info
     is_etf = info.get("quoteType") == "ETF"
-    # Yahoo has a category only for US-listed funds, none for UCITS ones: the row's stands in.
-    category = _text(info.get("category")) or (row.industry or None if row else None)
-    if not is_etf:
-        category = None
+    category = None
+    if is_etf:
+        # Yahoo has a category only for US-listed funds, none for UCITS ones: the row's stands in.
+        category = _text(info.get("category"))
+        if category is None and row is not None:
+            category = row.industry.strip() or None
     return SymbolSnapshot(
         ticker=ticker,
         asset_type="ETF" if is_etf else "STOCK",
