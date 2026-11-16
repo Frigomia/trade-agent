@@ -313,6 +313,9 @@ class Exclusion(Contract):
         "ambiguous_identity",
         "currency_unsupported",
         "insufficient_data",
+        "not_ucits",
+        "fails_quality_filter",
+        "overlaps_holding",
     ]
     explanation: str
     evidence: list[Url]
