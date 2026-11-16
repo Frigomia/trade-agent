@@ -1171,9 +1171,20 @@ overrides the profile sector for stocks. Sector case/whitespace and common alias
 Financials/Finance, Health Care) normalize into Yahoo's canonical buckets; unknown free text is
 grouped case-insensitively while preserving its display spelling. A literal "unclassified"
 joins the canonical `Unclassified` bucket. Country is the
-profile's issuer domicile, not a verified listing-country map. ETFs use one category bucket for
-sector/industry and are explicitly flagged as having no constituent look-through; their country,
-if provided, is fund domicile. Their underlying country/sector mix is not inferred.
+profile's issuer domicile, not a verified listing-country map. An ETF is classified by its category,
+the first non-empty of: the holding's own `sector` (a value the person set), Yahoo's category, and
+the `industry` of its row in the universe file (`etf_category_for` in `discovery/universe.py`,
+matched by ticker only). Its sector and industry slice is labelled `ETF: <category>`, so a fund is
+told apart from a stock. When no source has a category, the slice is `Unclassified` and the note
+reads "{ticker}: ETF category not set; add one in the holding."; the generic unknown-exposure note
+is not repeated for a fund whose category was resolved. ETFs are explicitly flagged as having no
+constituent look-through, so their underlying country/sector mix is not inferred, and every ETF's
+country is the label `Funds` (`FUNDS` in `sectors.py`), not the fund's domicile. The frontend's
+risk summary (`lib/portfolio/risk.ts`) does not count `Funds` as a country and never reports it as
+the largest country, as with `Unclassified`; a fund category does count as a sector slice. The
+holding form shows an optional Category field for ETFs (up to 100 characters), prefilled from the
+holding's `sector`. It sends `sector` only when the field is not empty; an empty field sends no
+key, so the stored sector stays.
 
 Concentration is the top weight, `HHI=sum(w²)` and `effective_n=1/HHI`. Risk uses local-currency log
 returns and current EUR value weights, excluding historical FX moves. Return keys include both
