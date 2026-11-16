@@ -110,7 +110,7 @@ ETF_RESEARCH_SYSTEM_PROMPT = RESEARCH_SYSTEM_PROMPT.replace(
 ).replace(
     "Claims concern only the subject company. Other companies belong in mentions/competitors.",
     "Claims concern only the subject ETF. Other funds and companies belong in mentions/competitors."
-    "\nFund events (index change, merger, closure or fee change) are negative developments that"
+    "\nFund events (index change, merger, closure or fee increase) are negative developments that"
     " can invalidate a thesis.",
 )
 
@@ -549,7 +549,7 @@ def _etf_queries(subject: str, general: dict[str, str]) -> list[tuple[str, dict[
         ("bull", {"query": f"{subject} ETF index tracked fees replication domicile", **general}),
         (
             "bear",
-            {"query": f"{subject} ETF closure merger index change fee change risks", **general},
+            {"query": f"{subject} ETF closure merger index change fee increase risks", **general},
         ),
         (
             "forum",

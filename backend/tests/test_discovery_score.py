@@ -97,6 +97,9 @@ def idea(ticker: str = "NESN.SW", **updates: Any) -> IdeaOut:
     return IdeaOut.model_validate(base)
 
 
+ETF_SCORES = [{"name": "fit", "score": 70, "reasons": []}]  # an ETF is scored by fit alone
+
+
 def test_peer_scores_and_overall_match_the_existing_dimension_scale() -> None:
     result = evaluate(candidate(), evidence())
 
@@ -474,7 +477,7 @@ def test_etf_uncertain_price_date_caps_confidence_at_medium() -> None:
 )
 def test_etf_opportunity_gate(overall: int, confidence: str, expected: bool) -> None:
     assert ETF_NO_OPPORTUNITY_MIN_OVERALL == 60
-    etf = idea(asset_type="ETF", overall=overall, confidence=confidence)
+    etf = idea(asset_type="ETF", scores=ETF_SCORES, overall=overall, confidence=confidence)
     assert is_opportunity(etf) is expected
 
 
@@ -484,8 +487,8 @@ def test_stock_opportunity_gate_is_unchanged_next_to_the_etf_gate() -> None:
 
 
 def test_etf_ideas_rank_by_overall_then_ticker() -> None:
-    low = idea("AAA.L", asset_type="ETF", overall=65)
-    high = idea("ZZZ.L", asset_type="ETF", overall=80)
+    low = idea("AAA.L", asset_type="ETF", scores=ETF_SCORES, overall=65)
+    high = idea("ZZZ.L", asset_type="ETF", scores=ETF_SCORES, overall=80)
     assert [i.ticker for i in rank_ideas([low, high])] == ["ZZZ.L", "AAA.L"]
     fits = {"AAA.L": fit(ticker="AAA.L"), "ZZZ.L": fit(ticker="ZZZ.L")}
     assert [i.ticker for i in rank_ideas([low, high], fits)] == ["ZZZ.L", "AAA.L"]

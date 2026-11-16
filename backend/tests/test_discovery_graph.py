@@ -924,3 +924,9 @@ def test_etf_prompts_keep_every_stock_safety_clause():
             assert (clause.casefold() in stock.casefold()) <= (clause.casefold() in etf.casefold())
     assert "role" in discovery_graph.ETF_SYNTHESIS_SYSTEM_PROMPT
     assert "closure" in discovery_graph.ETF_THESIS_SYSTEM_PROMPT
+    for prompt in (
+        discovery_graph.ETF_THESIS_SYSTEM_PROMPT,
+        discovery_graph.ETF_SYNTHESIS_SYSTEM_PROMPT,
+    ):
+        assert "fee increase" in prompt and "fee change" not in prompt
+        assert "among the negative developments" in prompt

@@ -77,8 +77,8 @@ style tags are assigned by code and are never output fields for this tool.
 # ETF prompts are the stock prompts with the subject swapped, so every safety clause stays
 # identical. Tests fail if a swap stops matching after the stock wording changes.
 _FUND_EVENTS = (
-    "Fund events (index change, merger, closure or fee change) are the negative developments "
-    "that can invalidate an ETF thesis."
+    "Fund events (index change, merger, closure or fee increase) are among the negative "
+    "developments that can invalidate an ETF thesis."
 )
 ETF_THESIS_SYSTEM_PROMPT = THESIS_SYSTEM_PROMPT.replace(
     "Reassess one company's investment thesis", "Reassess one ETF's investment thesis"

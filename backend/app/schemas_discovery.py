@@ -386,9 +386,11 @@ class IdeaOut(Contract):
     def _scores_are_complete_and_back_the_overall(self) -> Self:
         names = sorted(score.name for score in self.scores)
         if self.asset_type == "ETF":
-            # An ETF is scored by its portfolio gap alone, and its overall is that fit score.
-            if names != ["fit"] and names != ["fit", "quality", "valuation"]:
-                raise ValueError("an ETF idea's scores must hold a fit score")
+            # An ETF is scored by its portfolio gap alone: one fit score backs the overall.
+            if names != ["fit"]:
+                raise ValueError("an ETF idea's scores must hold exactly one fit score")
+            if self.overall is not None and self.scores[0].score is None:
+                raise ValueError("an ETF idea's overall requires a fit score")
             return self
         # An unavailable dimension is an explicit entry with score None, never an absent one.
         if names != ["fit", "quality", "valuation"]:

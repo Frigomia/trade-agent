@@ -901,4 +901,5 @@ def test_etf_research_prompt_keeps_every_stock_safety_clause():
         "forum-only allegations are unverified and cannot invalidate a thesis",
     ):
         assert clause in stock and clause in etf
-    assert "index change, merger, closure or fee change" in etf
+    assert "index change, merger, closure or fee increase" in etf
+    assert "fee change" not in etf
