@@ -1,3 +1,4 @@
+import json
 from datetime import date, timedelta
 
 import pytest
@@ -9,9 +10,11 @@ from app.discovery.snapshot import (
     SymbolSnapshot,
     check_freshness,
     coverage_of,
+    etf_coverage_of,
     normalize_metrics,
     to_snapshot,
 )
+from app.discovery.universe import UniverseRow
 
 TODAY = date(2026, 10, 16)  # a Friday
 
@@ -396,3 +399,70 @@ def test_the_listing_country_is_kept_and_defaults_to_none() -> None:
 
     assert to_snapshot("SAP.DE", raw, country="Germany").country == "Germany"
     assert to_snapshot("SAP.DE", raw).country is None
+
+
+ETF_INFO = {
+    "quoteType": "ETF",
+    "category": "Global Large-Cap Blend Equity",
+    "netExpenseRatio": 0.2,  # percent: 0.2 means 0.2%
+    "totalAssets": 5.0e9,
+    "fundInceptionDate": 1_262_304_000,  # 2010-01-01
+}
+ETF_ROW = UniverseRow(
+    "VWCE.DE", "Vanguard FTSE All-World", "ETF", "XETRA", "Germany", "EUR", "", "", "large", "",
+    "IE00BK5BQT80", True, 0.0019, 12_000.0,
+)  # fmt: skip
+
+
+def test_an_etf_snapshot_carries_category_cost_and_size() -> None:
+    s = to_snapshot("VWCE.DE", fetched(ETF_INFO, [], []), row=ETF_ROW)
+
+    assert (s.category, s.isin, s.ucits, s.inception) == (
+        "Global Large-Cap Blend Equity",
+        "IE00BK5BQT80",
+        True,
+        "2010-01-01",
+    )
+    assert s.metrics["totalAssets"] == 5.0e9
+    assert s.metrics["fundSizeEur"] == 12_000.0 * 1e6
+
+
+def test_the_row_cost_wins_over_yahoo_and_yahoo_is_read_as_percent() -> None:
+    with_row = to_snapshot("VWCE.DE", fetched(ETF_INFO, [], []), row=ETF_ROW)
+    without_row = to_snapshot("VWCE.DE", fetched(ETF_INFO, [], []))
+
+    assert with_row.metrics["expenseRatio"] == 0.0019
+    assert without_row.metrics["expenseRatio"] == pytest.approx(0.002)
+    assert (without_row.isin, without_row.ucits) == (None, False)
+    assert without_row.metrics["fundSizeEur"] is None
+
+
+def test_etf_coverage_names_the_missing_fund_size() -> None:
+    nothing = etf_coverage_of({"expenseRatio": 0.002, "fundSizeEur": None, "totalAssets": None})
+    native = etf_coverage_of({"expenseRatio": None, "totalAssets": 5.0e9})
+
+    assert (nothing.core_metrics_present, nothing.core_metrics_total) == (1, 2)
+    assert nothing.missing == ["fundSize"]
+    assert native.missing == ["expenseRatio"]
+
+
+def test_a_snapshot_stored_before_the_etf_fields_still_loads() -> None:
+    old = snap("OLD", ["2026-10-15"])
+    stored = {k: v for k, v in old.__dict__.items() if k not in ("category", "isin", "inception")}
+    stored.pop("ucits")
+
+    loaded = SymbolSnapshot.from_json(json.dumps(stored))
+
+    assert (loaded.category, loaded.isin, loaded.ucits, loaded.inception) == (
+        None,
+        None,
+        False,
+        None,
+    )
+
+
+def test_a_stock_snapshot_ignores_the_row_and_has_no_etf_metrics() -> None:
+    s = to_snapshot("SAP.DE", fetched({"quoteType": "EQUITY"}, [], []), row=ETF_ROW)
+
+    assert (s.category, s.isin, s.ucits) == (None, None, False)
+    assert "expenseRatio" not in s.metrics

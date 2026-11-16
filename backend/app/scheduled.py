@@ -155,7 +155,9 @@ async def run_discovery_snapshot(summary: Summary) -> None:
     universe = load_universe()
     tickers = [row.ticker for row in universe]
     report = await refresh_snapshot(
-        tickers, countries={row.ticker: row.country for row in universe}
+        tickers,
+        countries={row.ticker: row.country for row in universe},
+        rows={row.ticker: row for row in universe},
     )
     logger.info(
         "Discovery snapshot: cached=%d fetched=%d failed=%d",

@@ -1417,6 +1417,7 @@ def test_discovery_snapshot_refreshes_every_universe_symbol_and_releases_the_loc
     assert code == 0
     assert refresh.await_args.args[0] == [f"T{i}" for i in range(10)]
     assert refresh.await_args.kwargs["countries"] == {f"T{i}": f"Country{i}" for i in range(10)}
+    assert list(refresh.await_args.kwargs["rows"]) == [f"T{i}" for i in range(10)]
     assert _arun(_lock_exists("scheduled:discovery_snapshot")) is False
 
 
