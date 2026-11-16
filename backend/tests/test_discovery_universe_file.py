@@ -19,8 +19,18 @@ def test_every_region_is_close_to_its_target() -> None:
 
     # Targets, not quotas: allow a tenth either way (plan section 6, Phase 3).
     for region, target in REGION_TARGETS.items():
+        if region == "global_etf":
+            continue  # about 100 to 150 UCITS funds, grown in batches: checked below
         assert abs(counts[region] - target) <= target * 0.1, (region, counts[region], target)
     assert counts["unknown"] == 0
+
+
+def test_the_etf_lane_has_a_first_batch_of_ucits_funds_with_unique_isins() -> None:
+    funds = [row for row in load_universe() if row.ucits]
+
+    assert len(funds) >= 20
+    assert len({row.isin for row in funds}) == len(funds)
+    assert all(row.asset_type == "ETF" and row.isin for row in funds)
 
 
 def test_every_currency_in_the_file_can_be_converted_to_eur() -> None:

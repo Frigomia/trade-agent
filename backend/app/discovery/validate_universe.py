@@ -44,7 +44,7 @@ REGION_TARGETS = {
     "europe": 180,
     "asia_pacific": 150,
     "other_emerging": 60,
-    "global_etf": 30,
+    "global_etf": 125,  # about 100 to 150 UCITS funds, grown in batches
 }
 
 # Corporate-form and filler words that carry no identity ("Toyota Motor Corp" is "Toyota Motor").
@@ -52,6 +52,9 @@ _NAME_NOISE = frozenset(
     "ab ag asa bv co company corp corporation group holding holdings inc incorporated limited "  # noqa: SIM905
     "ltd nv oyj plc sa se spa the".split()
 )
+
+# The fund fields the spike (docs/superpowers/specs/2026-11-16-etf-yahoo-fields.md) counts.
+ETF_FIELDS = ("category", "netExpenseRatio", "totalAssets", "fundInceptionDate")
 
 # yfinance quoteType -> the universe file's asset_type
 _QUOTE_TYPES = {"EQUITY": "STOCK", "ETF": "ETF"}
@@ -74,6 +77,9 @@ class SymbolResult:
     coverage: FieldCoverage
     market_cap_eur: float | None
     size_bucket: str
+    etf_fields: tuple[str, ...] = ()  # which ETF_FIELDS Yahoo returned; empty for a stock
+    expense_ratio_raw: float | None = None  # Yahoo's netExpenseRatio as sent, unit unconverted
+    total_assets: float | None = None  # Yahoo's totalAssets as sent, in an unconfirmed currency
 
     @property
     def ok(self) -> bool:
@@ -91,6 +97,16 @@ def core_coverage(info: dict[str, Any]) -> FieldCoverage:
     missing = tuple(field for field in CORE_FIELDS if not _is_number(info.get(field)))
     return FieldCoverage(
         present=len(CORE_FIELDS) - len(missing), total=len(CORE_FIELDS), missing=missing
+    )
+
+
+def etf_fields_present(info: dict[str, Any]) -> tuple[str, ...]:
+    """Which of ETF_FIELDS Yahoo returned: a finite number, or for text fields a non-empty value."""
+    numeric = {"netExpenseRatio", "totalAssets"}
+    return tuple(
+        field
+        for field in ETF_FIELDS
+        if (_is_number(info.get(field)) if field in numeric else info.get(field) not in (None, ""))
     )
 
 
@@ -178,6 +194,14 @@ def _region_differs(file_country: str, live_country: Any) -> bool:
     return "unknown" not in (file_region, live_region) and file_region != live_region
 
 
+def _etf_number(info: dict[str, Any], field: str, row: UniverseRow) -> float | None:
+    """A finite number from the live record, only for ETF rows (stocks never carry these)."""
+    value = info.get(field)
+    if row.asset_type == "ETF" and isinstance(value, int | float) and _is_number(value):
+        return float(value)
+    return None
+
+
 def check_symbol(
     row: UniverseRow, fetched: RawSymbolData | Exception, rates: dict[str, Decimal], today: date
 ) -> SymbolResult:
@@ -209,7 +233,9 @@ def check_symbol(
         mismatches.append("sector")
 
     failure: str | None = None
-    if raw.history_days < MIN_HISTORY_DAYS:
+    if row.asset_type == "ETF" and quote_type != "ETF":
+        failure = "not_an_etf"
+    elif raw.history_days < MIN_HISTORY_DAYS:
         failure = "history_too_short"
     elif raw.last_close_date is None or (today - raw.last_close_date).days > STALE_DAYS:
         failure = "stale_price"
@@ -227,6 +253,9 @@ def check_symbol(
         coverage=coverage,
         market_cap_eur=market_cap_eur,
         size_bucket=size_bucket_for(market_cap_eur),
+        etf_fields=etf_fields_present(info) if row.asset_type == "ETF" else (),
+        expense_ratio_raw=_etf_number(info, "netExpenseRatio", row),
+        total_assets=_etf_number(info, "totalAssets", row),
     )
 
 
@@ -263,6 +292,33 @@ def _region_table(results: list[SymbolResult]) -> str:
             f"| {not_checked[region]} |"
         )
     return "\n".join(lines) + "\n"
+
+
+def _etf_section(etfs: list[SymbolResult]) -> list[str]:
+    """Per-field counts, and the raw expense ratios beside the file's TER so the unit is visible."""
+    if not etfs:
+        return []
+    out = ["### ETF fields returned by Yahoo", "", "| Field | Funds with it | Funds checked |"]
+    out += ["|---|---:|---:|"]
+    for field in ETF_FIELDS:
+        out.append(f"| {field} | {sum(1 for r in etfs if field in r.etf_fields)} | {len(etfs)} |")
+    out += [
+        "",
+        "### ETF expense ratio evidence",
+        "",
+        "Yahoo's `netExpenseRatio` as sent, next to the file's own TER (a fraction: 0.002 is "
+        "0.20%). A raw 0.2 beside a TER of 0.002 means Yahoo reports percent.",
+        "",
+        "| Ticker | netExpenseRatio (raw) | CSV ter | Currency | totalAssets (raw) |",
+        "|---|---:|---:|---|---:|",
+    ]
+    for r in sorted(etfs, key=lambda r: r.row.ticker):
+        raw = "" if r.expense_ratio_raw is None else f"{r.expense_ratio_raw:g}"
+        ter = "" if r.row.ter is None else f"{r.row.ter:g}"
+        assets = "" if r.total_assets is None else f"{r.total_assets:.0f}"
+        out.append(f"| {r.row.ticker} | {raw} | {ter} | {r.row.currency} | {assets} |")
+    out.append("")
+    return out
 
 
 def build_report(
@@ -309,6 +365,8 @@ def build_report(
             cells.append(f"{100 * have / len(group):.0f}%" if group else "n/a")
         out.append(f"| {field} | " + " | ".join(cells) + " |")
     out.append("")
+
+    out += _etf_section([r for r in results if r.row.asset_type == "ETF" and r.actual_name])
 
     if rate_failures:
         out += ["### Market cap conversion unavailable", ""]
@@ -361,10 +419,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", type=Path, default=None, help="write the markdown report here")
     parser.add_argument("--min-ok-ratio", type=float, default=0.9)
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--etf-only", action="store_true", help="check only the ETF rows")
     parser.add_argument("--limit", type=int, default=None, help="check only the first N rows")
     args = parser.parse_args(argv)
 
-    rows = load_universe(args.universe)[: args.limit]
+    rows = load_universe(args.universe)
+    if args.etf_only:
+        rows = [r for r in rows if r.asset_type == "ETF"]
+    rows = rows[: args.limit]
     fetched = fetch_all([r.ticker for r in rows], fetch_yfinance, workers=args.workers)
 
     currencies = {
