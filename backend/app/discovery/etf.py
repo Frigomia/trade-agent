@@ -36,6 +36,7 @@ ETF_MIN_CLOSES = 250  # about one year of trading days
 ETF_MIN_SHARED_INTERVALS = 60
 ETF_NEAR_COPY_CORRELATION = 0.95
 ETF_MIN_HOLDINGS = 2
+ETF_LANE_SKIPPED = "ETF ideas need at least two holdings with price history"
 
 # Lowercase tokens tested against the fund's name and category (leveraged, inverse and other trading
 # funds are out). A bare "short" is deliberately not a marker: "Short Duration" and "Ultrashort
@@ -264,7 +265,7 @@ def shortlist_etfs(
     holding without a usable history would exclude every fund.
     """
     if len(exposure.positions) < ETF_MIN_HOLDINGS:
-        return EtfShortlist([], [], 0, "ETF ideas need at least two holdings with price history")
+        return EtfShortlist([], [], 0, ETF_LANE_SKIPPED)
     held = {t.casefold() for t in holdings}
     holding_returns = {ticker: log_returns(values) for ticker, values in histories.items()}
     category_of = {s.ticker: s.category for s in snapshots}
