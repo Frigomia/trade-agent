@@ -144,7 +144,8 @@ describe("gapParts and partsAgree", () => {
 describe("correlationWords", () => {
   it("uses the proposed bands", () => {
     expect(correlationWords(0.2)).toBe("Moves mostly on its own");
-    expect(correlationWords(-0.4)).toBe("Moves mostly on its own");
+    expect(correlationWords(-0.1)).toBe("Moves mostly on its own");
+    expect(correlationWords(-0.4)).toBe("Tends to move against your holdings");
     expect(correlationWords(0.3)).toBe("Moves about half in step");
     expect(correlationWords(0.7)).toBe("Moves about half in step");
     expect(correlationWords(0.71)).toBe("Moves mostly with your holdings");
@@ -162,7 +163,7 @@ describe("quality filter", () => {
     expect(rows[2].detail).toBe("At least 200 daily closes");
     expect(rows[3].detail).toBe("Not leveraged, inverse or a trading fund");
     expect(rows[4].detail).toBe("Not a near-copy of a cheaper fund in its category");
-    expect(rows[5].detail).toBe("Correlation to each ETF you hold · below 0.95");
+    expect(rows[5].detail).toBe("Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)");
     expect(filterSummary(rows)).toBe("6 of 6 pass");
   });
   it("marks an unknown fund size", () => {

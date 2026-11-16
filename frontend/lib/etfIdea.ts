@@ -69,9 +69,18 @@ export function partsAgree(parts: GapParts, saved: number | null): boolean {
 }
 
 export function correlationWords(c: number): string {
+  if (c < -0.1) return "Tends to move against your holdings";
   if (c < 0.3) return "Moves mostly on its own";
   if (c <= 0.7) return "Moves about half in step";
   return "Moves mostly with your holdings";
+}
+
+/** What a suggested position means: the backend suggests the saved maximum (15%) from a gap score of 80, else half of it. Null for any other size. */
+export function positionNote(pct: number): { fill: number; text: string; label: string } | null {
+  const tenths = Math.round(pct * 1000);
+  if (tenths === 75) return { fill: 0.5, label: "half of the 15% maximum", text: "Half of the 15% maximum; the full maximum is suggested at a gap score of 80 or more." };
+  if (tenths === 150) return { fill: 1, label: "the 15% maximum", text: "The full maximum, suggested at a gap score of 80 or more." };
+  return null;
 }
 
 export type FilterState = "pass" | "unknown";
@@ -88,7 +97,7 @@ export function filterRows(idea: IdeaOut): FilterRow[] {
     { key: "history", label: "History", detail: "At least 200 daily closes", state: "pass" },
     { key: "plain", label: "Plain fund", detail: "Not leveraged, inverse or a trading fund", state: "pass" },
     { key: "near-copy", label: "Cheapest of its kind", detail: "Not a near-copy of a cheaper fund in its category", state: "pass" },
-    { key: "overlap", label: "No overlap with your ETFs", detail: "Correlation to each ETF you hold · below 0.95", state: "pass" },
+    { key: "overlap", label: "No overlap with your ETFs", detail: "Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)", state: "pass" },
   ];
 }
 

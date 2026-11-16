@@ -56,6 +56,12 @@ describe("EtfHero", () => {
     expect(screen.getByText(/Your portfolio now against the same portfolio/)).toBeInTheDocument();
   });
 
+  it("says a negative correlation moves against the holdings", () => {
+    render(<EtfHero idea={idea({ fit: { ...FIT, avg_correlation_to_portfolio: -0.4 } })} />);
+    expect(screen.getByText("Tends to move against your holdings")).toBeInTheDocument();
+    expect(screen.queryByText("Moves mostly on its own")).toBeNull();
+  });
+
   it("with no saved fit shows the score and no strips, and never NaN", () => {
     const { container } = render(<EtfHero idea={idea({ fit: null })} />);
 

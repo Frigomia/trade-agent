@@ -64,6 +64,6 @@ describe("EtfSideColumn", () => {
 
     const panel = screen.getByRole("heading", { name: /Quality filter/ }).closest("section")!;
     expect(panel.textContent).not.toContain("0.52");
-    expect(within(panel).getByText("Correlation to each ETF you hold · below 0.95")).toBeInTheDocument();
+    expect(within(panel).getByText("Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)")).toBeInTheDocument();
   });
 });
