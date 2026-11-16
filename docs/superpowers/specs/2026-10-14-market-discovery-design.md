@@ -58,7 +58,7 @@ not new environment-variable settings or a new user configuration system.
 
 | Decision | Default and rule | Owner |
 | --- | --- | --- |
-| Universe | 600 securities; regional composition targets: 180 North America, 180 Europe, 150 Asia-Pacific, 60 other emerging markets, 30 global ETFs. Targets do not override validation. | Phase 3, implemented |
+| Universe | 600 securities; regional composition targets: 180 North America, 180 Europe, 150 Asia-Pacific, 60 other emerging markets; for ETFs, about 100 to 150 UCITS funds, grown in batches (the first batch is listed in `universe.csv`; see the [ETF ideas design](2026-11-16-etf-discovery-design.md)). Targets do not override validation. | Phase 3, implemented |
 | Suitable peers | `MIN_PEERS=8`, counted per metric, excluding the candidate. Same industry when sufficient, otherwise global sector, within the same financial metric group. | `discovery/peers.py`, implemented |
 | Core coverage | `MIN_CORE_METRICS=3` finite core fundamentals; missing stays `None`. A zero that is a valid measurement counts as present. | `discovery/eligibility.py`, implemented |
 | Dimension coverage | `MIN_SCORED=2` valid peer comparisons per dimension; otherwise that dimension is `None`. | `discovery/scoring.py`, implemented |
