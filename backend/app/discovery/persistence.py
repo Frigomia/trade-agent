@@ -8,6 +8,7 @@ from uuid import UUID
 from app.analysis.discovery_score import is_opportunity, rank_ideas
 from app.config import settings
 from app.db import lock_and_check_active, scoped_session
+from app.discovery.etf import ETF_SLOTS
 from app.discovery.screen import SHORTLIST_SIZE
 from app.models import Recommendation, ScanRun
 from app.schemas_discovery import Exclusion, IdeaOut, RejectedMention
@@ -55,7 +56,8 @@ def save_scan(
     coverage = dict(coverage_summary or {})
     coverage["opportunities"] = len(qualifying)
     # The researched ideas that missed the bar, best first. They are not saved as recommendations,
-    # so this is the only record the Scan results page has of them; bounded by the shortlist.
+    # so this is the only record the Scan results page has of them; bounded by the stock and ETF
+    # slots.
     qualifying_tickers = {idea.ticker for idea in qualifying}
     set_aside_ideas = [
         {
@@ -66,7 +68,7 @@ def save_scan(
         }
         for idea in ranked
         if idea.ticker not in qualifying_tickers
-    ][:SHORTLIST_SIZE]
+    ][: SHORTLIST_SIZE + ETF_SLOTS]
     coverage["set_aside_ideas"] = set_aside_ideas
     if not qualifying:
         coverage["nearest_misses"] = set_aside_ideas[:3]

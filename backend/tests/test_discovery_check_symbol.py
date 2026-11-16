@@ -31,6 +31,10 @@ SAP_ROW = UniverseRow(
     industry="Software - Application",
     size_bucket="large",
     notes="",
+    isin="",
+    ucits=False,
+    ter=None,
+    size_eur_m=None,
 )
 ETF_ROW = UniverseRow(
     ticker="VWCE.DE",
@@ -43,6 +47,10 @@ ETF_ROW = UniverseRow(
     industry="",
     size_bucket="unknown",
     notes="",
+    isin="IE00BK5BQT80",
+    ucits=True,
+    ter=None,
+    size_eur_m=None,
 )
 RATES = {"EUR": Decimal(1), "USD": Decimal("0.8")}
 

@@ -9,6 +9,7 @@ import {
   monogram,
   priceText,
   commonQuoteDay,
+  etfFacts,
   quoteLabel,
   riskLabel,
   scanCounts,
@@ -63,6 +64,20 @@ function rec(id: number, source: string, withIdea = true, asOf?: string | null):
   const withDate = asOf === undefined ? base : { ...base, snapshot: { ...base.snapshot!, price_as_of: asOf } };
   return { id, source, idea: withIdea ? withDate : null } as unknown as DiscoveryRecommendation;
 }
+
+describe("etfFacts", () => {
+  it("reads expense ratio, fund size and category from the saved snapshot", () => {
+    const fund = idea({ asset_type: "ETF", snapshot: { exchange: null, country: null, sector: null, industry: "Global Bond", currency: "EUR", price: 1, price_as_of: null, fundamentals: { expenseRatio: 0.0022, fundSizeEur: 9_800_000_000 } } });
+    expect(etfFacts(fund)).toEqual([
+      { label: "Expense ratio", value: "0.22%" },
+      { label: "Fund size", value: "EUR 9.8B" },
+      { label: "Category", value: "Global Bond" },
+    ]);
+  });
+  it("gives null for a fact the scan did not save", () => {
+    expect(etfFacts(idea({ asset_type: "ETF", snapshot: null })).map((f) => f.value)).toEqual([null, null, null]);
+  });
+});
 
 describe("holdingsOnly", () => {
   it("drops discovery rows and keeps manual, scheduled and untagged ones", () => {

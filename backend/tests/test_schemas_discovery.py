@@ -369,3 +369,37 @@ def test_the_origin_note_is_bounded_like_a_data_note(note: str) -> None:
 
     with pytest.raises(ValidationError):
         CandidateMetrics.model_validate({**data, "origin_note": note})
+
+
+def _idea_with(asset_type: str, names: list[str], fit_score: int | None, overall: int | None):
+    base = sample_idea().model_dump()
+    scores = [
+        DimensionScore(name=name, score=fit_score if name == "fit" else 50, reasons=[]).model_dump()
+        for name in names
+    ]
+    return IdeaOut.model_validate(
+        {**base, "asset_type": asset_type, "scores": scores, "overall": overall}
+    )
+
+
+def test_stock_with_fit_only_scores_still_fails() -> None:
+    with pytest.raises(ValidationError):
+        _idea_with("STOCK", ["fit"], 70, 70)
+
+
+@pytest.mark.parametrize(
+    "names", [["quality"], ["fit", "quality"], ["fit", "quality", "valuation"]]
+)
+def test_etf_scores_must_be_exactly_one_fit_score(names: list[str]) -> None:
+    with pytest.raises(ValidationError):
+        _idea_with("ETF", names, 70, 70)
+
+
+def test_etf_overall_requires_a_fit_score() -> None:
+    with pytest.raises(ValidationError, match="overall requires a fit score"):
+        _idea_with("ETF", ["fit"], None, 70)
+
+
+@pytest.mark.parametrize(("fit_score", "overall"), [(70, 70), (None, None)])
+def test_etf_with_a_fit_score_and_its_overall_is_valid(fit_score, overall) -> None:
+    assert _idea_with("ETF", ["fit"], fit_score, overall).overall == overall

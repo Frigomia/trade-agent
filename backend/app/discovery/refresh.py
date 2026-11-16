@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from app.discovery.fetching import Fetch, RawSymbolData, fetch_all, fetch_yfinance
 from app.discovery.snapshot import SymbolSnapshot, to_snapshot
+from app.discovery.universe import UniverseRow
 from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ async def refresh_snapshot(
     tickers: list[str],
     *,
     countries: Mapping[str, str | None] | None = None,
+    rows: Mapping[str, UniverseRow] | None = None,
     fetch: Fetch = fetch_yfinance,
     workers: int = WORKERS,
     batch_size: int = BATCH_SIZE,
@@ -76,7 +78,9 @@ async def refresh_snapshot(
             try:
                 if not isinstance(outcome, RawSymbolData):
                     raise outcome
-                snapshot = to_snapshot(ticker, outcome, (countries or {}).get(ticker))
+                snapshot = to_snapshot(
+                    ticker, outcome, (countries or {}).get(ticker), (rows or {}).get(ticker)
+                )
                 await redis.set(_key(ticker), snapshot.to_json(), ex=SNAPSHOT_TTL_SECONDS)
             except Exception as exc:  # one bad record must not lose the rest of the batch
                 failed[ticker] = type(exc).__name__

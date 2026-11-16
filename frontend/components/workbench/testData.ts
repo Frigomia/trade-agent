@@ -101,6 +101,69 @@ export function testIdea(over: Partial<IdeaOut> = {}): IdeaOut {
   };
 }
 
+/** An ETF idea as the backend saves it: only a fit score, no peers, and the fund facts in the snapshot. */
+export function etfIdea(over: Partial<IdeaOut> = {}): IdeaOut {
+  return testIdea({
+    ticker: "VWCE",
+    name: "Global All-Cap UCITS ETF",
+    asset_type: "ETF",
+    scores: [{ name: "fit", score: 72, reasons: [] }],
+    overall: 72,
+    peers: [],
+    competitors: [],
+    fit: null,
+    snapshot: {
+      exchange: "XETRA",
+      country: null,
+      sector: null,
+      industry: "Global Large-Cap Blend Equity",
+      currency: "EUR",
+      price: 112.4,
+      price_as_of: "2026-10-19T20:00:00",
+      fundamentals: { expenseRatio: 0.0022, totalAssets: 9_800_000_000, fundSizeEur: 9_800_000_000 },
+    },
+    ...over,
+  });
+}
+
+/** A pending ETF recommendation with the saved fit of a fund that adds 5%: gap score 54 from its three parts. */
+export function etfRec(over: Partial<IdeaOut> = {}, id = 1): DiscoveryRecommendation {
+  const idea = etfIdea({
+    scores: [{ name: "fit", score: 54, reasons: [] }],
+    overall: 54,
+    thesis: "Fills the emerging-markets gap at a low cost.",
+    outlook: "",
+    bear_case: "Emerging markets often fall further in sell-offs.",
+    conclusion: "A low-cost diversifier, not a short-term trade.",
+    catalysts: [{ text: "MSCI index review takes effect", occurs_on: "2026-11-30", event_id: null, evidence: [] }],
+    fit: {
+      ticker: "VWCE",
+      applicable: true,
+      avg_correlation_to_portfolio: -0.1,
+      portfolio_vol_before: 0.15,
+      portfolio_vol_after: 0.142,
+      hhi_before: 0.2,
+      hhi_after: 0.183,
+      sector_weight_before: null,
+      sector_weight_after: null,
+      hypothetical_weight: 0.05,
+      notes: [],
+    },
+    snapshot: {
+      exchange: "XETRA",
+      country: null,
+      sector: null,
+      industry: "Diversified Emerging Mkts",
+      currency: "EUR",
+      price: 31.42,
+      price_as_of: "2026-10-19T20:00:00",
+      fundamentals: { expenseRatio: 0.0018, fundSizeEur: 5.6e9 },
+    },
+    ...over,
+  });
+  return { ...testRec({}, id), ticker: "VWCE", asset_type: "ETF", idea };
+}
+
 export function testRec(over: Partial<IdeaOut> = {}, id = 1): DiscoveryRecommendation {
   return {
     id,

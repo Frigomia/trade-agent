@@ -4,6 +4,8 @@ import { ArrowRight, Sparkles } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import { clampLines, listingText } from "@/lib/discovery";
+import { etfListing, isEtf, shortFundName } from "@/lib/etfIdea";
+import { EtfCardBody } from "./EtfCardBody";
 import { IdeaChips } from "./IdeaChips";
 import { PriceBlock } from "./PriceBlock";
 import { SaveToDiscover } from "./SaveToDiscover";
@@ -17,6 +19,7 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
   const idea = rec.idea!;
   const why = idea.catalysts.map((c) => typeof c === "string" ? c : c.text).find((c) => c.trim());
   const headline = idea.headline?.trim() || idea.thesis;
+  const etf = isEtf(idea);
   return (
     <Box
       component="article"
@@ -46,14 +49,14 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
         <Logo ticker={idea.ticker} name={idea.name} size={56} />
         <Box sx={{ minWidth: 0 }}>
           <Typography component="h3" sx={{ fontSize: { xs: "1.125rem", md: "1.25rem" }, fontWeight: 650, letterSpacing: "-0.02em", lineHeight: 1.25, overflowWrap: "break-word" }}>
-            {idea.name}
+            {etf ? shortFundName(idea.name) : idea.name}
           </Typography>
-          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", overflowWrap: "break-word" }}>{listingText(idea)}</Typography>
+          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)", overflowWrap: "break-word" }}>{etf ? etfListing(idea) : listingText(idea)}</Typography>
           {earlier && <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", fontWeight: 500 }}>From an earlier scan</Typography>}
         </Box>
         <PriceBlock rec={rec} large sx={{ gridColumn: { xs: "1 / -1", sm: "auto" } }} />
       </Box>
-      <IdeaChips idea={idea} />
+      {etf ? <EtfCardBody idea={idea} /> : <IdeaChips idea={idea} />}
       <Box
         sx={{
           // A phone wraps: the dashed box, then the Go button and Save on one row, Save dropping under it when too narrow.
@@ -67,7 +70,8 @@ export function TopOpportunity({ rec, earlier = false }: { rec: DiscoveryRecomme
         }}
       >
         <Box sx={{ gridArea: "box", flex: { xs: "1 1 100%", md: "none" }, minWidth: 0, border: "1px dashed var(--line2)", borderRadius: "14px", p: { xs: "12px 14px", md: "14px 16px" } }}>
-          <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.55, overflowWrap: "break-word", ...clampLines(3) }}>{headline}</Typography>
+          {/* An ETF's headline already sits in its own dashed box in EtfCardBody. */}
+          {!etf && <Typography sx={{ fontSize: "0.9375rem", lineHeight: 1.55, overflowWrap: "break-word", ...clampLines(3) }}>{headline}</Typography>}
           {why && (
             <Box sx={{ display: "flex", gap: 1, mt: 1, fontSize: "0.8125rem", color: "var(--text2)" }}>
               <Sparkles size={15} color="var(--accent)" aria-hidden style={{ flex: "none", marginTop: 2 }} />

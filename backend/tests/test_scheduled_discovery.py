@@ -103,7 +103,8 @@ def test_last_monthly_unit_stays_available_and_quota_race_is_rejected(env):
     assert _usage(USER_ID) == "20"  # holdings/manual analysis can still use it
 
 
-@pytest.mark.parametrize("used, expected", [(160, 1), (161, 0), (199, 0)])
+# 200 searches a day; 11 candidate graphs (8 stocks, 3 ETFs) at 5 searches each need 55.
+@pytest.mark.parametrize("used, expected", [(145, 1), (146, 0), (199, 0)])
 def test_full_scan_search_headroom_is_required_before_charging(env, monkeypatch, used, expected):
     _opted_in(env, USER_ID)
     monkeypatch.setattr(settings, "tavily_api_key", "test-tavily-key")

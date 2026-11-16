@@ -313,6 +313,9 @@ class Exclusion(Contract):
         "ambiguous_identity",
         "currency_unsupported",
         "insufficient_data",
+        "not_ucits",
+        "fails_quality_filter",
+        "overlaps_holding",
     ]
     explanation: str
     evidence: list[Url]
@@ -381,8 +384,16 @@ class IdeaOut(Contract):
 
     @model_validator(mode="after")
     def _scores_are_complete_and_back_the_overall(self) -> Self:
+        names = sorted(score.name for score in self.scores)
+        if self.asset_type == "ETF":
+            # An ETF is scored by its portfolio gap alone: one fit score backs the overall.
+            if names != ["fit"]:
+                raise ValueError("an ETF idea's scores must hold exactly one fit score")
+            if self.overall is not None and self.scores[0].score is None:
+                raise ValueError("an ETF idea's overall requires a fit score")
+            return self
         # An unavailable dimension is an explicit entry with score None, never an absent one.
-        if sorted(score.name for score in self.scores) != ["fit", "quality", "valuation"]:
+        if names != ["fit", "quality", "valuation"]:
             raise ValueError("scores must hold exactly one each of quality, valuation and fit")
         # The overall is built from quality and valuation (plan 4.4); fit alone never produces it.
         built_from = [s.score for s in self.scores if s.name in ("quality", "valuation")]

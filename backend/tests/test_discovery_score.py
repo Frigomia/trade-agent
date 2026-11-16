@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from app.analysis.discovery_score import (
+    ETF_NO_OPPORTUNITY_MIN_OVERALL,
     NO_OPPORTUNITY_MIN_OVERALL,
     evaluate,
     is_opportunity,
@@ -94,6 +95,9 @@ def idea(ticker: str = "NESN.SW", **updates: Any) -> IdeaOut:
     base.update(ticker=ticker)
     base.update(updates)
     return IdeaOut.model_validate(base)
+
+
+ETF_SCORES = [{"name": "fit", "score": 70, "reasons": []}]  # an ETF is scored by fit alone
 
 
 def test_peer_scores_and_overall_match_the_existing_dimension_scale() -> None:
@@ -383,3 +387,112 @@ def test_evaluation_rejects_mixed_candidate_context(mismatch: str) -> None:
             evidence(ticker="OTHER" if mismatch == "evidence" else "NESN.SW"),
             fit(ticker="OTHER" if mismatch == "fit" else "NESN.SW"),
         )
+
+
+def etf_candidate(**updates: Any) -> CandidateMetrics:
+    base: dict[str, Any] = {
+        "asset_type": "ETF",
+        "sector": None,
+        "industry": "Foreign Large Blend",
+        "fundamentals": {"expenseRatio": 0.002, "totalAssets": 5e9, "fundSizeEur": 4.6e9},
+        "coverage": Coverage(core_metrics_present=2, core_metrics_total=2, missing=[]),
+        "peers": [],
+    }
+    base.update(updates)
+    return candidate(**base)
+
+
+def etf_fit(score: int) -> CandidateFit:
+    # Volatility 0.2 -> 0.1 gives 75 and an unchanged HHI gives 50, so the mean is
+    # (100*(1-c)/2 + 125) / 3 and the correlation c below hits the wanted score.
+    correlation = 1 - 2 * (3 * score - 125) / 100
+    return fit(
+        avg_correlation_to_portfolio=correlation,
+        portfolio_vol_after=0.1,
+        hhi_after=0.5,
+    )
+
+
+def test_etf_overall_is_its_fit_score_with_no_peer_dimensions() -> None:
+    result = evaluate(etf_candidate(), evidence(), etf_fit(72))
+    assert [dimension.name for dimension in result.scores] == ["fit"]
+    assert result.overall == 72
+    assert result.confidence == "high"
+    assert result.style_tags == []
+
+
+def test_etf_without_a_fit_score_has_no_overall_and_low_confidence() -> None:
+    result = evaluate(etf_candidate(), evidence(), None)
+    assert result.overall is None
+    assert result.confidence == "low"
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {
+            "coverage": Coverage(
+                core_metrics_present=1, core_metrics_total=2, missing=["expenseRatio"]
+            )
+        },
+        {"industry": None},
+        {"industry": ""},
+        {"price": None},
+        {"price_as_of": None},
+    ],
+)
+def test_etf_missing_core_data_is_low_confidence(updates: dict[str, Any]) -> None:
+    assert evaluate(etf_candidate(**updates), evidence(), etf_fit(72)).confidence == "low"
+
+
+def test_etf_without_non_forum_research_is_low_confidence() -> None:
+    forum = Claim.model_validate(
+        {**sample_claim().model_dump(), "kind": "forum", "source_tier": "forum"}
+    )
+    assert evaluate(etf_candidate(), evidence(claims=[forum]), etf_fit(72)).confidence == "low"
+
+
+def test_etf_unknown_fund_size_is_medium_never_low() -> None:
+    unknown_size = Coverage(core_metrics_present=1, core_metrics_total=2, missing=["fundSize"])
+    result = evaluate(etf_candidate(coverage=unknown_size), evidence(), etf_fit(72))
+    assert result.confidence == "medium"
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [{"gaps": ["issuer page not found"]}, {"conflicts": ["TER differs between sources"]}],
+)
+def test_etf_research_gaps_and_conflicts_cap_confidence_at_medium(updates: dict[str, Any]) -> None:
+    assert evaluate(etf_candidate(), evidence(**updates), etf_fit(72)).confidence == "medium"
+
+
+def test_etf_uncertain_price_date_caps_confidence_at_medium() -> None:
+    uncertain = etf_candidate(data_notes=[PRICE_DATE_UNCERTAIN_PREFIX + " exchange unknown"])
+    assert evaluate(uncertain, evidence(), etf_fit(72)).confidence == "medium"
+
+
+@pytest.mark.parametrize(
+    ("overall", "confidence", "expected"),
+    [(49, "high", False), (50, "low", False), (50, "medium", True), (50, "high", True)],
+)
+def test_etf_opportunity_gate(overall: int, confidence: str, expected: bool) -> None:
+    assert ETF_NO_OPPORTUNITY_MIN_OVERALL == 50
+    etf = idea(asset_type="ETF", scores=ETF_SCORES, overall=overall, confidence=confidence)
+    assert is_opportunity(etf) is expected
+
+
+def test_stock_opportunity_gate_is_unchanged_next_to_the_etf_gate() -> None:
+    assert is_opportunity(idea(overall=59, confidence="high")) is False
+    assert is_opportunity(idea(overall=60, confidence="medium")) is True
+
+
+def test_stock_and_etf_gates_are_separate_constants() -> None:
+    assert ETF_NO_OPPORTUNITY_MIN_OVERALL != NO_OPPORTUNITY_MIN_OVERALL
+
+
+def test_etf_ideas_rank_by_overall_then_ticker() -> None:
+    low = idea("AAA.L", asset_type="ETF", scores=ETF_SCORES, overall=65)
+    high = idea("ZZZ.L", asset_type="ETF", scores=ETF_SCORES, overall=80)
+    assert [i.ticker for i in rank_ideas([low, high])] == ["ZZZ.L", "AAA.L"]
+    fits = {"AAA.L": fit(ticker="AAA.L"), "ZZZ.L": fit(ticker="ZZZ.L")}
+    assert [i.ticker for i in rank_ideas([low, high], fits)] == ["ZZZ.L", "AAA.L"]

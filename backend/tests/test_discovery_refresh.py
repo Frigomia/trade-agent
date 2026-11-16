@@ -171,10 +171,10 @@ def test_an_unreadable_stored_entry_is_fetched_again() -> None:
 def test_a_symbol_that_cannot_be_stored_fails_alone() -> None:
     real = to_snapshot
 
-    def broken(ticker: str, raw: RawSymbolData, country: str | None = None):  # type: ignore[no-untyped-def]
+    def broken(ticker: str, raw: RawSymbolData, country: str | None = None, row=None):  # type: ignore[no-untyped-def]
         if ticker == "B":
             raise ValueError("bad record")
-        return real(ticker, raw, country)
+        return real(ticker, raw, country, row)
 
     with patch("app.discovery.refresh.to_snapshot", broken):
         report = refresh(["A", "B", "C"], Fetcher())
@@ -198,3 +198,24 @@ def test_an_entry_stored_before_the_country_field_is_fetched_again() -> None:
     report = refresh(["A"], Fetcher())
 
     assert (report.cached, report.fetched) == (0, 1)
+
+
+def test_the_universe_row_reaches_the_stored_etf_snapshot() -> None:
+    from app.discovery.universe import UniverseRow
+
+    row = UniverseRow(
+        "E", "Fund", "ETF", "XETRA", "Germany", "EUR", "", "", "large", "",
+        "IE00BK5BQT80", True, 0.002, 1000.0,
+    )  # fmt: skip
+
+    def etf(ticker: str) -> RawSymbolData:
+        return RawSymbolData({"quoteType": "ETF"}, 1, date(2026, 10, 15), [1.0], ["2026-10-15"])
+
+    refresh(["E"], etf, rows={"E": row})
+
+    stored = load(["E"])[0]
+    assert (stored.isin, stored.ucits, stored.metrics["expenseRatio"]) == (
+        "IE00BK5BQT80",
+        True,
+        0.002,
+    )
