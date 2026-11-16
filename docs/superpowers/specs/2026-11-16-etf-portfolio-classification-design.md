@@ -6,6 +6,8 @@ Date: 2026-11-16. Status: draft for the owner's approval. Size: a small change (
 
 On the Portfolio page an ETF holding shows up as "Unclassified" in the allocation donut (by sector and by country) and in the Risk panel's "Sector not known" row. `analyze_portfolio` (`backend/app/analysis/portfolio.py`) builds each holding's labels from Yahoo's profile (`fetch_profile`: sector, industry, country, category). UCITS funds have none of them, so an ETF becomes `ETF: Unclassified` for sector and industry and `Unclassified` for country. The portfolio also overwrites an ETF's own `holding.sector` with that label. The owner wants ETFs to read as something, not as unknown.
 
+Correction found in the final review: the allocation donut does not read `analyze_portfolio`; it groups the holdings summary (`GET /portfolio/summary`: the stored `sector` and Yahoo's `country`). The summary therefore also carries the `ETF: <category>` label (`group_sector`) and the `Funds` country, built by the same helper, so the donut and the Risk panel agree.
+
 ## What the owner decided
 
 Of three options (the fund's category as its own slice; look-through to what the fund holds; one plain "ETF" bucket) the owner chose "go with your recommendation": **the fund's category as its own slice** (option 1). Look-through is a possible later project.

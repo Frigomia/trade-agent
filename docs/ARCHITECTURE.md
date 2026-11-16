@@ -373,7 +373,7 @@ itself. The bootstrap command is unaffected: `app_users` has no RLS.
 | POST | `/portfolio/snapshot` | — | Captures current portfolio totals (market value and cost basis) in a snapshot for history tracking; fully sold (0-share) holdings are skipped and not priced. Returns created `PortfolioSnapshot`. Also run daily by the scheduled job |
 | GET | `/portfolio/snapshots` | — | Lists all portfolio snapshots, oldest first, for displaying portfolio value over time |
 | GET | `/portfolio/alerts` | — | What on the user's open holdings is worth a look today, owner-scoped: `{alerts, missing}`. Each alert has `ticker`, `name`, `kind`, `text`, `when` (the earnings date), `direction` (`up` or `down`, for a move) and `recommendation_id`. Kinds, in screen order: `new_recommendation` (a pending non-discovery call, listed once per ticker and including a ticker the user only watches, so a decision is never dropped), `earnings_upcoming` (next earnings 0 to 7 days away, from yfinance's calendar, cached 6 hours, or 1 hour when there is no date; ETFs are not looked up), `move_since_purchase` (the live price at least 5 points above or below the average purchase cost; only with a known cost). Text states a fact or a prior call and never an amount. Calls are not capped; earnings and moves are capped at ten each. A quote older than the provider's freshness window is not used for a move. The purchase cost and the quote are compared as they are, with no currency conversion (the same open gap as `/portfolio/summary`). `missing` lists `earnings` and `prices` when a lookup failed, so an absent alert is never silently "nothing to report"; no earnings date is not a failure. Rate limited like the quote routes |
-| GET | `/portfolio/summary` | — | Holdings and watchlist with live prices and totals. Holdings include computed `current_price`, `market_value`, `weight`, `as_of`, `stale`, and profile `industry`, `country` (issuer domicile), `currency`. Unknown cost basis leaves per-position P/L null; total P/L and cost basis cover priced open holdings with known basis only, while total value includes all priced open holdings. `unknown_basis_count`, `pl_covered_count`, `pl_complete` and `unpriced_count` expose coverage. Missing/non-finite quotes stay null. Reuses the 5-minute quote cache; no currency conversion |
+| GET | `/portfolio/summary` | — | Holdings and watchlist with live prices and totals. Holdings include computed `current_price`, `market_value`, `weight`, `as_of`, `stale`, and profile `industry`, `country` (issuer domicile; `Funds` for an ETF), `currency`, and a read-only `group_sector` (never stored: for an ETF the `ETF: <category>` label the Risk panel uses, else null). Unknown cost basis leaves per-position P/L null; total P/L and cost basis cover priced open holdings with known basis only, while total value includes all priced open holdings. `unknown_basis_count`, `pl_covered_count`, `pl_complete` and `unpriced_count` expose coverage. Missing/non-finite quotes stay null. Reuses the 5-minute quote cache; no currency conversion |
 | POST | `/analysis/run` | — | **Starts** the analysis as a background job and returns `{job_id}` immediately — does not block until finished (see performance note below). Rate limited: 5/min per user; also capped at a monthly total (default 100/month, admin-configurable). `tickers` holds at most 50 entries (`422` beyond that), duplicates are collapsed, and a run with no body uses at most 50 (holdings first). Returns `409` with code `claude_key_required` when the caller has no usable Claude key (admins fall back to the server key). One analysis job per user at a time: a second call while one is `RUNNING` returns `409` ("An analysis is already running...") and does not count against the monthly cap; a scheduled run skips that user meanwhile |
 | GET | `/analysis/run/{job_id}` | — | Job status: `RUNNING` \| `DONE` \| `FAILED`, plus the recommendations once done |
 | POST | `/discovery/run` | — | Starts a manual discovery scan (202, `{job_id}`), including for an empty portfolio. Requires a usable Claude key, 2 requests/minute and one shared monthly `analysis_run` unit. A second concurrent scan returns 409 and refunds that unit. Admins without a saved key use an explicit server client; regular users never do. Reads cached universe snapshots and daily mentions; never starts the owner-funded global theme batch. |
@@ -1181,10 +1181,20 @@ is not repeated for a fund whose category was resolved. ETFs are explicitly flag
 constituent look-through, so their underlying country/sector mix is not inferred, and every ETF's
 country is the label `Funds` (`FUNDS` in `sectors.py`), not the fund's domicile. The frontend's
 risk summary (`lib/portfolio/risk.ts`) does not count `Funds` as a country and never reports it as
-the largest country, as with `Unclassified`; a fund category does count as a sector slice. The
-holding form shows an optional Category field for ETFs (up to 100 characters), prefilled from the
-holding's `sector`. It sends `sector` only when the field is not empty; an empty field sends no
-key, so the stored sector stays.
+the largest country, as with `Unclassified`; a fund category does count as a sector slice.
+
+The allocation donut on the Portfolio page does not read these analytics labels: it groups the
+holdings summary (`GET /portfolio/summary`). To keep both views identical, the label is built once
+by `etf_sector_label` (`discovery/universe.py`), which both `analyze_portfolio` and
+`enrich_holdings` (`holdings.py`) call. For an ETF row the summary carries a read-only
+`group_sector` (the `ETF: <category>` label, null when no source has a category) and its `country`
+is `Funds`; the stored `sector` is left as the person's own category. The donut's sector view
+groups by `group_sector` when it is set, else by `sector`; country and currency views are
+unchanged. The holding form shows an optional Category field for ETFs (up to 100 characters),
+prefilled from the holding's `sector`. It sends `sector` only when the field is not empty; an
+empty field sends no key, so the stored sector stays. An existing ETF that is edited to Stock and
+has a stored sector sends `sector: null`, which clears it (and skips the Yahoo auto-fill), so a
+fund category never becomes a stock's sector.
 
 Concentration is the top weight, `HHI=sum(w²)` and `effective_n=1/HHI`. Risk uses local-currency log
 returns and current EUR value weights, excluding historical FX moves. Return keys include both
