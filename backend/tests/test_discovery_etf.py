@@ -160,17 +160,34 @@ def test_a_fund_with_no_expense_ratio_is_out() -> None:
         ("Xtrackers S&P 500 2x Leveraged Daily Swap UCITS ETF", "Trading--Leveraged Equity"),
         ("WisdomTree NASDAQ 100 3x Daily Short", None),
         ("Some Fund", "Equity Inverse"),
-        ("Lyxor DAX Ultrashort UCITS ETF", None),
-        ("Xtrackers Short DAX UCITS ETF", None),
+        ("Xtrackers ShortDAX x2 Daily Swap UCITS ETF", None),
+        ("Leverage Shares 3x Tesla ETP", None),
+        ("Leverage Shares Tesla ETP", None),
+        ("WisdomTree S&P 500 Daily Short UCITS ETF", None),
+        ("Lyxor Bund Daily -1x Inverse UCITS ETF", None),
         ("Some Fund", "Trading--Leveraged Equity"),
+        ("Some Fund", "TRADING--Inverse Equity"),
     ],
 )
 def test_a_leveraged_or_inverse_fund_is_out(name: str, category: str | None) -> None:
     assert check(fund(name=name, category=category)) == "fails_quality_filter"
 
 
-def test_a_short_duration_fund_is_not_mistaken_for_an_inverse_one() -> None:
-    assert check(fund(name="Short-Duration Bond UCITS ETF", category="Short-Term Bond")) is None
+@pytest.mark.parametrize(
+    ("name", "category"),
+    [
+        ("iShares $ Short Duration Corp Bond UCITS ETF", "USD Corporate Bond"),
+        ("Some Bond Fund", "EUR Corporate Bond - Short Term"),
+        ("Some Bond Fund", "Short Government"),
+        ("Some Bond Fund", "Ultrashort Bond"),
+        ("Xtrackers EUR Overnight Rate Swap Ultrashort UCITS ETF", "Ultrashort Bond"),
+        ("Short-Duration Bond UCITS ETF", "Short-Term Bond"),
+    ],
+)
+def test_a_short_duration_bond_fund_is_not_mistaken_for_an_inverse_one(
+    name: str, category: str
+) -> None:
+    assert check(fund(name=name, category=category)) is None
 
 
 def overlap_case(category: str | None, held_category: str | None) -> str | None:

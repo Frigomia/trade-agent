@@ -26,9 +26,25 @@ ETF_MIN_SHARED_INTERVALS = 60
 ETF_NEAR_COPY_CORRELATION = 0.95
 ETF_MIN_HOLDINGS = 2
 
-# Lowercase tokens tested against the fund's name and category. "short " keeps its trailing space
-# so that a word such as "shortlist" or "shorter" does not match.
-LEVERAGED_MARKERS = ("2x", "3x", "leveraged", "inverse", "ultrashort", "short ")
+# Lowercase tokens tested against the fund's name and category (leveraged, inverse and other trading
+# funds are out). A bare "short" is deliberately not a marker: "Short Duration" and "Ultrashort
+# Bond" are ordinary bond funds, exactly the low-correlation ideas the lane exists to find.
+LEVERAGED_MARKERS = (
+    "2x",
+    "3x",
+    "5x",
+    "x2",
+    "x3",
+    "x5",
+    "-1x",
+    "leveraged",
+    "leverage shares",
+    "inverse",
+    "short daily",
+    "daily short",
+    "shortdax",
+    "trading--",  # Morningstar's category prefix for leveraged and inverse funds
+)
 
 ExcludedFor = Literal[
     "not_ucits",
