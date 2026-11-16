@@ -523,7 +523,8 @@ differences, enforced by the `IdeaOut` validator and the ETF scorer:
   requires a fit score, and `overall` equals it: for the ETF lane the gap score is the score, an
   exception to "fit never changes overall" that applies only to ETFs.
 - `peers` is `[]` and `competitors` is empty, since there is no peer comparison for a fund.
-- `snapshot.industry` carries the Yahoo fund category and `snapshot.sector` is `null`.
+- `snapshot.industry` carries the fund category (Yahoo's when it has one, else the universe row's
+  `industry`) and `snapshot.sector` is `null`.
   `snapshot.fundamentals` carries `expenseRatio` (a fraction, so 0.0022 is 0.22% a year),
   `totalAssets` (in the fund's own currency) and `fundSizeEur`: the size converted to EUR (the
   universe file's figure, else Yahoo's total assets at the day's rate), or `null` when unknown.
@@ -536,7 +537,7 @@ differences, enforced by the `IdeaOut` validator and the ETF scorer:
 lane: `not_ucits` (the fund is not marked UCITS in the universe file), `fails_quality_filter`
 (expense ratio above 0.50%, fund size under EUR 100 million, a leveraged or inverse fund, or a
 near-copy of a cheaper or larger candidate) and `overlaps_holding` (a return correlation of 0.95 or
-more with a held ETF of the same Yahoo category or of an unknown category). A fund with too little
+more with a held ETF of the same category or of an unknown category). A fund with too little
 history or no expense ratio is `insufficient_data`, and the existing price and currency reasons
 apply to funds too.
 `coverage_summary.etf_lane` is
@@ -942,14 +943,19 @@ rows, same peer scoring, the same 60 gate and eight slots.
   batches. The existing `sector` column is filled for sector and theme funds only (for example
   Technology for an information technology fund), using the sector names the stocks use; broad
   funds leave it empty. It is copied into the fund's snapshot when Yahoo gives none, so a sector
-  the person avoids also skips that sector's funds.
+  the person avoids also skips that sector's funds. The `industry` column holds a fund's category
+  (a Morningstar-style label such as "Global Large-Cap Blend Equity"). The fund's category is
+  Yahoo's when Yahoo has one, else the row's `industry`: Yahoo gives none for UCITS funds (a live
+  run found 0 of 24), and the ETF lane cannot qualify a fund without one, so the file requires a
+  non-blank `industry` on every `ucits=yes` row. Funds with the same exposure share one label, so
+  the near-copy, overlap and one-per-category rules compare them; the stock lane never reads it.
 - *Eligibility and quality filter.* The first failure wins, in this order: UCITS, supported
   currency, a reliable and fresh price, enough history (at least 200 closes and 60 return
   intervals shared with the holdings), a known expense ratio, not leveraged or inverse, the hard
   overlap exclusion against held ETFs, then the pass or fail quality filter (expense ratio at most
   0.50%, fund size at least EUR 100 million when it is known). Among near-copy candidates (same
   category, correlation 0.95 or more) only the cheapest, then the largest, is kept, and at most one
-  fund per Yahoo category is shortlisted. Every failure is an `Exclusion` shown on Scan results,
+  fund per category is shortlisted. Every failure is an `Exclusion` shown on Scan results,
   except that held tickers and avoided sectors are left out without one, as for stocks. Yahoo's
   `netExpenseRatio` is read as a percent number; a result below 0.01% or above 5% a year as a
   fraction is treated as unknown (a wrong divisor would otherwise make every fund look free), so
