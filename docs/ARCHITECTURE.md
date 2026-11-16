@@ -525,8 +525,10 @@ differences, enforced by the `IdeaOut` validator and the ETF scorer:
 - `peers` is `[]` and `competitors` is empty, since there is no peer comparison for a fund.
 - `snapshot.industry` carries the Yahoo fund category and `snapshot.sector` is `null`.
   `snapshot.fundamentals` carries `expenseRatio` (a fraction, so 0.0022 is 0.22% a year),
-  `totalAssets` (in the fund's own currency) and `fundSizeEur`. These are the three facts the
-  minimal frontend card shows: expense ratio, fund size and category.
+  `totalAssets` (in the fund's own currency) and `fundSizeEur`: the size converted to EUR (the
+  universe file's figure, else Yahoo's total assets at the day's rate), or `null` when unknown.
+  These are the three facts the minimal frontend card shows: expense ratio, fund size and
+  category. A fact that was not saved reads "Not saved with this idea".
 - The API contract is otherwise unchanged. The frontend reads these through `IdeaOut` and
   `etfFacts`; a proper ETF layout is a separate, owner-approved design slice.
 
@@ -534,14 +536,18 @@ differences, enforced by the `IdeaOut` validator and the ETF scorer:
 lane: `not_ucits` (the fund is not marked UCITS in the universe file), `fails_quality_filter`
 (expense ratio above 0.50%, fund size under EUR 100 million, a leveraged or inverse fund, or a
 near-copy of a cheaper or larger candidate) and `overlaps_holding` (a return correlation of 0.95 or
-more with a held ETF of the same Yahoo category). A fund with too little history or no expense
-ratio is `insufficient_data`, and the existing price and currency reasons apply to funds too.
+more with a held ETF of the same Yahoo category or of an unknown category). A fund with too little
+history or no expense ratio is `insufficient_data`, and the existing price and currency reasons
+apply to funds too.
 `coverage_summary.etf_lane` is
 `{eligible, shortlisted, researched, skipped_reason}`; `skipped_reason` is a string, or `null`
-when the lane ran. When the person has fewer than two holdings with price history it reads "ETF
-ideas need at least two holdings with price history": the scan is still `completed`, the lane
-simply did not run, and Scan results shows the text as a coverage note. Scans saved before ETF
-ideas have no `etf_lane`.
+when the lane ran. It reads "ETF ideas need at least two holdings with price history" when fewer
+than two holdings have price history, "ETF ideas need price history for every holding" when two
+or more have but some valued holding has none (every fund would otherwise be excluded for lack of
+shared history), and "ETF ideas were unavailable in this scan" when the lane failed unexpectedly
+(the exception class is logged, never its message). In each case the scan is still `completed`,
+the lane simply did not run, the stock ideas are unchanged, and Scan results shows the text as a
+coverage note. Scans saved before ETF ideas have no `etf_lane`.
 
 ### Importing your data
 
@@ -932,22 +938,32 @@ rows, same peer scoring, the same 60 gate and eight slots.
   ratio as a fraction, above 0 and at most 0.05, a hand-kept fallback when Yahoo lacks it) and
   `size_eur_m` (fund size in millions of euros, the same kind of fallback). Both may be empty. The
   universe holds one listing per ISIN, and the ETF target is roughly 100 to 150 funds, grown in
-  batches.
+  batches. The existing `sector` column is filled for sector and theme funds only (for example
+  Technology for an information technology fund), using the sector names the stocks use; broad
+  funds leave it empty. It is copied into the fund's snapshot when Yahoo gives none, so a sector
+  the person avoids also skips that sector's funds.
 - *Eligibility and quality filter.* The first failure wins, in this order: UCITS, supported
-  currency, a reliable and fresh price, enough history (at least 250 closes and 60 return
+  currency, a reliable and fresh price, enough history (at least 200 closes and 60 return
   intervals shared with the holdings), a known expense ratio, not leveraged or inverse, the hard
   overlap exclusion against held ETFs, then the pass or fail quality filter (expense ratio at most
   0.50%, fund size at least EUR 100 million when it is known). Among near-copy candidates (same
   category, correlation 0.95 or more) only the cheapest, then the largest, is kept, and at most one
-  fund per Yahoo category is shortlisted. Every failure is an `Exclusion` shown on Scan results.
+  fund per Yahoo category is shortlisted. Every failure is an `Exclusion` shown on Scan results,
+  except that held tickers and avoided sectors are left out without one, as for stocks. Yahoo's
+  `netExpenseRatio` is read as a percent number; a result below 0.01% or above 5% a year as a
+  fraction is treated as unknown (a wrong divisor would otherwise make every fund look free), so
+  the fund is `insufficient_data`; the universe file's `ter` is not subject to this rule. A fund
+  is leveraged when its name or category holds 2x, 3x, 5x, x2, x3 or x5 as a whole token (so
+  "STOXX50" is not), or a word such as "leveraged", "inverse" or "daily short".
 - *Score and gate.* The gap score is the existing `fit` dimension (correlation, volatility and
   concentration change when the fund is added at a hypothetical 5% weight) and is also the
   `overall`. An ETF qualifies at `ETF_NO_OPPORTUNITY_MIN_OVERALL = 60` with `medium` or `high`
   confidence; a qualifying fund is saved as a pending BUY discovery recommendation by the same
   persistence code, and the usual superseding applies by ticker. Funds that passed both filters
   and scored under the gate are set aside, with the other researched ideas.
-- *Skipped lane.* With fewer than two holdings with price history, the lane is skipped and
-  `coverage_summary.etf_lane.skipped_reason` says so (see "ETF ideas in `IdeaOut`" above).
+- *Skipped lane.* With fewer than two holdings with price history, or with any valued holding
+  lacking it, or when the lane fails unexpectedly, the lane is skipped and
+  `coverage_summary.etf_lane.skipped_reason` says which (see "ETF ideas in `IdeaOut`" above).
 - *Cost.* The ETF lane raises the number of graphs per scan from at most eight to at most eleven.
   The scheduled `discovery` command therefore needs 55 searches left in the owner budget (see the
   scheduled-jobs section).

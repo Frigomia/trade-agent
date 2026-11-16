@@ -120,10 +120,12 @@ with the fields that survive the spike; stock rows are unchanged.
 
 An ETF is out, with a recorded `Exclusion` and a reason, when any of these holds: not UCITS, fewer
 than 60 matching return intervals with the person's holdings (checked per fund, so a young fund is a
-clean exclusion rather than an unscored candidate), price
-or history missing or stale, fewer than about 250 daily closes (proposed: one year, and the fit step
-needs 60), currency unsupported, name or category marks it leveraged or inverse, or the data the
-quality filter needs is absent. Held tickers and avoided sectors are skipped as for stocks.
+clean exclusion rather than an unscored candidate), price or history missing or stale, fewer than
+200 daily closes (proposed: most of one year; a one-year fetch gives about 251 to 253 sessions, so
+a few missing days leave a healthy fund in, and the fit step needs only 60), currency unsupported,
+name or category marks it leveraged or inverse, or the data the quality filter needs is absent.
+Held tickers and avoided sectors are skipped as for stocks, without an `Exclusion`. A fund has a
+sector only when the universe file gives one, which it does for sector and theme funds.
 
 ### Quality filter
 
@@ -210,7 +212,8 @@ spec's out-of-scope note and fit rule, and `docs/design/README.md` for the mock.
   its reason on Scan results. Nearest misses and set-aside ETFs are the funds that passed both and
   scored under the gate.
 - **Skipped lane:** the scan is still `completed`. The reason is a note in `coverage_summary` and the
-  Today empty state names it. No new status.
+  Today empty state names it. No new status. The lane is skipped for fewer than two holdings with
+  price history, for any valued holding without it, and when the lane fails unexpectedly.
 - **Backend-first card:** the API contract is not broken. `IdeaOut` is reused and the ETF facts
   (expense ratio, fund size, category) travel in the idea snapshot's `fundamentals` map; any new
   typed fields are added optionally. `ARCHITECTURE.md` is updated in the same change.
