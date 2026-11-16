@@ -17,6 +17,13 @@ function change(before: number, after: number, unit: (n: string, dir: "up" | "do
   return Math.abs(d) < 0.05 ? "Unchanged" : unit(Math.abs(d).toFixed(1), d > 0 ? "up" : "down");
 }
 
+// The strip's scale starts at 0, so a negative correlation is pinned at the left end and says so.
+function correlationText(corr: number): string {
+  const text = corr.toFixed(2);
+  if (text === "-0.00") return "0.00";
+  return text.startsWith("-") ? `${text}, below the scale` : text;
+}
+
 const key = (marker: ReactNode, text: string) => (
   <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1 }}>
     {marker}
@@ -127,7 +134,7 @@ export function EtfHero({ idea }: { idea: IdeaOut }) {
           now={1}
           withFive={corr}
           nowText="1.00"
-          withFiveText={corr.toFixed(2)}
+          withFiveText={correlationText(corr)}
           scale={{ min: 0, max: 1 }}
           axis={["0", "1"]}
           reference={{ value: 1, text: "1.00" }}

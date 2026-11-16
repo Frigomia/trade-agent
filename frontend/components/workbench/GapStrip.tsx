@@ -87,9 +87,10 @@ export function GapStrip({ label, caption, change, now, withFive, nowText, withF
           <Box component="i" sx={{ ...dot, left: `${xw}%`, bgcolor: "var(--accent)", border: "2.5px solid var(--panel)", boxShadow: "0 0 0 1px var(--accent)" }} />
         </Box>
         <Value x={xw} up={false} name={reference ? "This fund" : "With 5%"} text={withFiveText} />
-        <Box aria-hidden sx={{ position: "absolute", left: 0, right: 0, top: "50%", display: "flex", justifyContent: "space-between", pointerEvents: "none", fontSize: "0.75rem", color: "var(--muted)" }}>
-          <Box component="span" sx={{ transform: "translateY(10px)" }}>{ends[0]}</Box>
-          <Box component="span" sx={{ transform: "translateY(10px)" }}>{ends[1]}</Box>
+        <Box aria-hidden sx={{ position: "absolute", left: 0, right: 0, top: "50%", pointerEvents: "none", fontSize: "0.75rem", color: "var(--muted)" }}>
+          {/* An end is not printed where the value label under the dot is anchored to it; the reference variant leaves its right end to the tick, as the mock does. */}
+          {xw >= 8 && <Box component="span" sx={{ position: "absolute", left: 0, transform: "translateY(10px)" }}>{ends[0]}</Box>}
+          {xw <= 88 && !reference && <Box component="span" sx={{ position: "absolute", right: 0, transform: "translateY(10px)" }}>{ends[1]}</Box>}
         </Box>
       </Box>
       {score !== null && (

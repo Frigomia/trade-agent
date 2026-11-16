@@ -85,6 +85,29 @@ describe("EtfHero", () => {
     expect(screen.getByText(/qualifies at 50 or more/)).toBeInTheDocument();
   });
 
+  // The correlation strip has a fixed 0 to 1 scale: below 0 the dot is pinned at the left and the words say so,
+  // and an axis end is not printed where the label under the dot is anchored to it. The right end is never printed.
+  it.each([
+    { corr: -1, shown: "-1.00, below the scale", left: false },
+    { corr: -0.5, shown: "-0.50, below the scale", left: false },
+    { corr: -0.1, shown: "-0.10, below the scale", left: false },
+    { corr: 0, shown: "0.00", left: false },
+    { corr: 0.5, shown: "0.50", left: true },
+    { corr: 0.98, shown: "0.98", left: true },
+    { corr: 1, shown: "1.00", left: true },
+  ])("labels the correlation strip at $corr", ({ corr, shown, left }) => {
+    render(<EtfHero idea={idea({ fit: { ...FIT, avg_correlation_to_portfolio: corr } })} />);
+
+    const strip = screen.getByRole("img", { name: /^Moves with your holdings/ });
+    expect(strip).toHaveAttribute("aria-label", `Moves with your holdings: this fund ${shown}, where 1.00 would move exactly with your holdings`);
+    expect(within(strip).getByText("This fund")).toBeInTheDocument();
+    expect(within(strip).getAllByText(shown).length).toBeGreaterThan(0);
+    expect(within(strip).getByText("Moves exactly with you")).toBeInTheDocument();
+    expect(within(strip).queryByText("0") !== null).toBe(left);
+    expect(within(strip).queryByText("1")).not.toBeInTheDocument();
+    expect(shown.includes("below the scale")).toBe(corr < 0);
+  });
+
   it("does not say Qualifies at low confidence", () => {
     render(<EtfHero idea={idea({ confidence: "low" })} />);
     expect(screen.queryByText("Qualifies")).not.toBeInTheDocument();
