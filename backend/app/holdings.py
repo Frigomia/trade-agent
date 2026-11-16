@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.agents.market_data import fetch_profile
 from app.db import lock_and_check_active
+from app.discovery.universe import etf_sector_label
 from app.limits import MAX_HOLDINGS, cap_message
 from app.models import Holding
 from app.schemas import HoldingIn, HoldingOut, HoldingSummaryOut
+from app.sectors import FUNDS
 
 logger = logging.getLogger(__name__)
 
@@ -108,5 +110,9 @@ async def enrich_holdings(
             row.name = name
         for field in ("industry", "country", "currency"):
             setattr(row, field, profile.get(field))
+        if isinstance(row, HoldingSummaryOut) and row.asset_type == "ETF":
+            # Same label as the Risk panel; the stored sector stays the person's own category.
+            row.group_sector = etf_sector_label(row.sector, profile.get("category"), row.ticker)
+            row.country = FUNDS  # a fund has no country exposure without look-through
 
     await asyncio.gather(*(enrich(row) for row in rows))

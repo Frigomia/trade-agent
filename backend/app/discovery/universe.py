@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from app.sectors import clean_label
+
 UNIVERSE_PATH = Path(__file__).with_name("universe.csv")
 
 COLUMNS = (
@@ -200,3 +202,14 @@ def _etf_categories() -> dict[str, str]:
 def etf_category_for(ticker: str) -> str | None:
     """The universe file's category for an ETF ticker, or None (stock, unknown, no category)."""
     return _etf_categories().get(ticker.upper())
+
+
+def etf_sector_label(
+    own_sector: str | None, profile_category: str | None, ticker: str
+) -> str | None:
+    """The `ETF: <category>` label of a fund, or None when no source has a category.
+
+    First non-empty wins: the person's own sector, Yahoo's category, the universe file's. The
+    Risk panel and the allocation donut both use this, so they always agree."""
+    category = (own_sector or "").strip() or profile_category or etf_category_for(ticker)
+    return f"ETF: {clean_label(category)}" if category else None
