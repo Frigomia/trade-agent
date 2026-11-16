@@ -24,6 +24,9 @@ export function fundTags(idea: IdeaOut): string[] {
   return tags;
 }
 
+/** The line under the fund name on a Today card: "IS3N.DE · ETF · UCITS · Acc". */
+export const etfListing = (idea: IdeaOut): string => [idea.ticker, ...fundTags(idea)].join(" · ");
+
 /** How many equal holdings the portfolio behaves like: 1 / HHI. Null when HHI is unusable. */
 export function effectivePositions(hhi: number | null | undefined): number | null {
   return typeof hhi === "number" && Number.isFinite(hhi) && hhi > 0 ? 1 / hhi : null;

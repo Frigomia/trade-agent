@@ -129,13 +129,14 @@ function renderFeed(ideas: DiscoveryIdeas | undefined, over: Partial<Parameters<
 }
 
 describe("DiscoveryFeed", () => {
-  it("shows an ETF idea's expense ratio, fund size and category on its card", () => {
+  it("shows an ETF idea's cost, fund size and category on its card", () => {
     const snapshot = { ...idea("Halden").snapshot!, sector: null, country: null, industry: "Global Bond", fundamentals: { expenseRatio: 0.0022, fundSizeEur: 9_800_000_000 } };
     renderFeed({ latest_scan: SCAN, recommendations: [rec(1, "Bond Tracker UCITS ETF", { asset_type: "ETF", scores: [{ name: "fit", score: 72, reasons: [] }], overall: 72, peers: [], snapshot })] });
     const card = screen.getByRole("article", { name: /Top opportunity/ });
-    expect(card).toHaveTextContent("Expense ratio 0.22%");
-    expect(card).toHaveTextContent("Fund size EUR 9.8B");
+    // The cost and size now read inside the quality filter line; the category is a chip.
+    expect(card).toHaveTextContent("cost 0.22%, size EUR 9.8B");
     expect(card).toHaveTextContent("Global Bond");
+    expect(card).toHaveTextContent("Gap score 72");
   });
 
   it("uses the sector icon even when the label includes an industry", () => {

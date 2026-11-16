@@ -6,7 +6,7 @@ import type { IdeaOut } from "@/lib/api/discovery-types";
 import { confidenceLabel, etfFacts, meterFill, riskLabel, sectorText } from "@/lib/discovery";
 import { SectorIcon } from "@/components/ui/SectorIcon";
 
-function Chip({ children }: { children: ReactNode }) {
+export function Chip({ children }: { children: ReactNode }) {
   return (
     <Box
       component="span"
