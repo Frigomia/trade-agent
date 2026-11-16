@@ -276,6 +276,10 @@ def to_snapshot(
 ) -> SymbolSnapshot:
     info = raw.info
     is_etf = info.get("quoteType") == "ETF"
+    # Yahoo has a category only for US-listed funds, none for UCITS ones: the row's stands in.
+    category = _text(info.get("category")) or (row.industry or None if row else None)
+    if not is_etf:
+        category = None
     return SymbolSnapshot(
         ticker=ticker,
         asset_type="ETF" if is_etf else "STOCK",
@@ -293,7 +297,7 @@ def to_snapshot(
         metrics=normalize_etf_metrics(info, row) if is_etf else normalize_metrics(info),
         closes=raw.closes,
         dates=raw.dates,
-        category=_text(info.get("category")) if is_etf else None,
+        category=category,
         isin=(row.isin or None) if is_etf and row is not None else None,
         ucits=row.ucits if is_etf and row is not None else False,
         inception=_inception(info.get("fundInceptionDate")) if is_etf else None,

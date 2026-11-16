@@ -475,6 +475,28 @@ def test_an_etf_takes_its_sector_from_the_row_when_yahoo_has_none() -> None:
     assert to_snapshot("QDVE.DE", fetched(yahoo, [], []), row=row).sector == "Healthcare"
 
 
+def test_an_etf_category_is_yahoos_else_the_rows_industry() -> None:
+    row = replace(ETF_ROW, industry="Sector Equity Technology")
+    no_category = {k: v for k, v in ETF_INFO.items() if k != "category"}
+
+    assert to_snapshot("X", fetched(ETF_INFO, [], []), row=row).category == (
+        "Global Large-Cap Blend Equity"  # Yahoo wins
+    )
+    assert to_snapshot("X", fetched(no_category, [], []), row=row).category == (
+        "Sector Equity Technology"
+    )
+    assert to_snapshot("X", fetched(no_category, [], []), row=ETF_ROW).category is None
+    assert to_snapshot("X", fetched(no_category, [], [])).category is None
+
+
+def test_a_stock_ignores_the_rows_industry_as_a_category() -> None:
+    row = replace(ETF_ROW, industry="Sector Equity Technology")
+
+    s = to_snapshot("SAP.DE", fetched({"quoteType": "EQUITY"}, [], []), row=row)
+
+    assert (s.category, s.industry) == (None, None)
+
+
 def test_etf_coverage_names_the_missing_fund_size() -> None:
     nothing = etf_coverage_of({"expenseRatio": 0.002, "fundSizeEur": None, "totalAssets": None})
     native = etf_coverage_of({"expenseRatio": None, "totalAssets": 5.0e9})

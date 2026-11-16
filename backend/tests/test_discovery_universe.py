@@ -48,7 +48,8 @@ def test_load_universe_reads_every_column(tmp_path: Path) -> None:
     ]
 
 
-ETF_PREFIX = "IWDA.AS,iShares Core MSCI World,ETF,Amsterdam,,EUR,,,unknown,"
+ETF_PREFIX = "IWDA.AS,iShares Core MSCI World,ETF,Amsterdam,,EUR,,World Equity,unknown,"
+BLANK_INDUSTRY = "IWDA.AS,iShares Core MSCI World,ETF,Amsterdam,,EUR,,,unknown,"
 STOCK = "SAP.DE,SAP SE,STOCK,XETRA,Germany,EUR,Technology,Software,large,"
 
 
@@ -79,6 +80,7 @@ def test_load_universe_reads_an_ucits_etf_with_ter_and_size(tmp_path: Path) -> N
         (f"{ETF_PREFIX},,yes,,", "line 2"),  # blank ISIN
         (f"{ETF_PREFIX},IE00B4L5Y984,yes,,", "line 2"),  # bad check digit
         (f"{STOCK},IE00B4L5Y983,yes,,", "line 2"),  # a stock cannot be UCITS
+        (f"{BLANK_INDUSTRY},IE00B4L5Y983,yes,,", "industry"),  # a UCITS fund needs a category
         (f"{ETF_PREFIX},,,,", "ucits"),  # blank ucits is an error
         (f"{ETF_PREFIX},,maybe,,", "ucits"),
         (f"{ETF_PREFIX},,no,0,", "ter"),

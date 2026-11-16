@@ -177,6 +177,10 @@ def load_universe(path: Path = UNIVERSE_PATH) -> list[UniverseRow]:
                     f"line {line_number}: ucits=yes needs an ETF with a valid ISIN whose prefix "
                     f"is one of {sorted(UCITS_ISIN_PREFIXES)}"
                 )
+            if row.ucits and not row.industry:
+                # Yahoo gives UCITS funds no category and the ETF lane cannot qualify a fund
+                # without one, so the row must carry it.
+                raise UniverseFileError(f"line {line_number}: ucits=yes needs an industry")
             seen.add(row.ticker)
             rows.append(row)
     return rows

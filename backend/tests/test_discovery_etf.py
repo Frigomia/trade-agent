@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.analysis.discovery_score import evaluate
 from app.analysis.portfolio import MIN_RETURNS, ReturnSeries, log_returns
 from app.discovery.etf import (
     ETF_MIN_SHARED_INTERVALS,
@@ -15,8 +16,11 @@ from app.discovery.etf import (
     fund_size_eur,
     shortlist_etfs,
 )
-from app.discovery.snapshot import Freshness, SymbolSnapshot
+from app.discovery.fetching import RawSymbolData
+from app.discovery.snapshot import Freshness, SymbolSnapshot, to_snapshot
+from app.discovery.universe import UniverseRow
 from tests.discovery_fixtures import sample_exposure
+from tests.test_discovery_score import etf_fit, evidence
 
 RATES = {
     "USD": Decimal("0.9"),
@@ -532,3 +536,24 @@ def test_the_candidate_keeps_an_unknown_fund_size_unknown() -> None:
     snap = with_metrics(base, fundSizeEur=None, totalAssets=None)
 
     assert build_etf_candidate(snap, RATES, None).fundamentals["fundSizeEur"] is None
+
+
+def test_a_ucits_fund_with_no_yahoo_category_takes_the_rows_and_is_not_low_confidence() -> None:
+    # Yahoo gives no category for a UCITS fund; the universe row's industry stands in for it.
+    closes = walk(1)
+    raw = RawSymbolData(
+        {"quoteType": "ETF", "currency": "EUR", "netExpenseRatio": 0.2, "totalAssets": 5e9},
+        len(closes),
+        date.fromisoformat(day(len(closes) - 1)),
+        closes,
+        [day(i) for i in range(len(closes))],
+    )
+    row = UniverseRow(
+        "NESN.SW", "iShares Core MSCI World", "ETF", "Amsterdam", "", "EUR", "",
+        "Global Large-Cap Blend Equity", "unknown", "", "IE00B4L5Y983", True, None, None,
+    )  # fmt: skip
+
+    candidate = build_etf_candidate(to_snapshot("NESN.SW", raw, row=row), RATES, None)
+
+    assert candidate.industry == "Global Large-Cap Blend Equity"
+    assert evaluate(candidate, evidence(), etf_fit(72)).confidence != "low"
