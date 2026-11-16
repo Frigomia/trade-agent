@@ -46,3 +46,13 @@ def test_the_universe_is_not_only_large_caps() -> None:
     small_or_less = sizes["micro"] + sizes["small"]
     assert small_or_less / len(stocks) >= 0.15
     assert sizes["large"] / len(stocks) <= 0.55
+
+
+def test_a_sector_fund_carries_a_sector_the_stock_rows_use_and_a_broad_fund_none() -> None:
+    rows = {row.ticker: row for row in load_universe()}
+    stock_sectors = {row.sector for row in rows.values() if row.asset_type == "STOCK"}
+    fund_sectors = {row.sector for row in rows.values() if row.asset_type == "ETF" and row.sector}
+
+    assert fund_sectors <= stock_sectors
+    assert rows["QDVE.DE"].sector == "Technology" and rows["ISOE.AS"].sector == "Basic Materials"
+    assert rows["IWDA.AS"].sector == "" and rows["SXR8.DE"].sector == ""

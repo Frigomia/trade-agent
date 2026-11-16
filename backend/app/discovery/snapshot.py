@@ -14,7 +14,7 @@ from typing import Any
 
 from app.discovery.fetching import RawSymbolData
 from app.discovery.peers import finite_number
-from app.discovery.universe import UniverseRow
+from app.discovery.universe import MAX_TER, UniverseRow
 from app.schemas_discovery import Coverage
 
 # Core fundamentals counted for coverage (plan section 4.3). A field counts as present when it is
@@ -58,6 +58,9 @@ ETF_CORE_FIELDS = ("expenseRatio", "fundSize")
 # Yahoo's `netExpenseRatio` is assumed to be a percent number (0.2 means 0.2%), so it is divided by
 # this to get a fraction. Unverified: the live spike decides, and this is the one place to change.
 YAHOO_EXPENSE_RATIO_DIVISOR = 100
+# A Yahoo cost outside this range as a fraction is more likely a wrong divisor than a real fund
+# (a fraction divided again looks free), so it is dropped and the fund is excluded as unknown.
+MIN_YAHOO_EXPENSE_RATIO = 0.0001
 
 SESSIONS_FRESH = 3  # a close within the latest three weekdays is current; missing fewer is fine
 MIN_SYMBOLS = 5  # fewer usable histories on an exchange cannot tell its sessions apart
@@ -128,9 +131,9 @@ def normalize_etf_metrics(info: dict[str, Any], row: UniverseRow | None) -> dict
     if row is not None and row.ter is not None:
         metrics["expenseRatio"] = row.ter  # already a fraction
     else:
-        metrics["expenseRatio"] = (
-            None if yahoo_cost is None else yahoo_cost / YAHOO_EXPENSE_RATIO_DIVISOR
-        )
+        cost = None if yahoo_cost is None else yahoo_cost / YAHOO_EXPENSE_RATIO_DIVISOR
+        plausible = cost is not None and MIN_YAHOO_EXPENSE_RATIO <= cost <= MAX_TER
+        metrics["expenseRatio"] = cost if plausible else None
     metrics["totalAssets"] = finite_number(info.get("totalAssets"))  # native currency
     size_m = row.size_eur_m if row is not None else None
     metrics["fundSizeEur"] = None if size_m is None else size_m * 1e6
@@ -279,7 +282,9 @@ def to_snapshot(
         name=_text(info.get("longName")) or _text(info.get("shortName")) or ticker,
         exchange=_text(info.get("exchange")),
         country=country,
-        sector=_text(info.get("sector")),
+        # Yahoo gives a fund no sector; a sector or theme fund gets its row's, so avoiding a sector
+        # also skips its funds.
+        sector=_text(info.get("sector")) or (row.sector or None if is_etf and row else None),
         industry=_text(info.get("industry")),
         currency=_text(info.get("currency")),
         price=raw.closes[-1] if raw.closes else None,

@@ -8,7 +8,7 @@ import pytest
 
 from app.analysis.portfolio import PositionInput
 from app.discovery import runner
-from app.discovery.etf import ETF_LANE_SKIPPED
+from app.discovery.etf import ETF_LANE_NEEDS_HISTORY, ETF_LANE_SKIPPED, ETF_LANE_UNAVAILABLE
 from app.discovery.peers import PeerRecord
 from app.discovery.screen import SHORTLIST_SIZE, build_candidate
 from app.discovery.snapshot import Freshness
@@ -292,6 +292,44 @@ def test_holdings_without_usable_history_skip_the_lane_not_blame_every_fund(etf_
     assert graph.await_count == SHORTLIST_SIZE
     assert result.coverage_summary["etf_lane"] == {**ZEROS, "skipped_reason": ETF_LANE_SKIPPED}
     assert all(item.ticker != "BOND" for item in result.excluded)
+
+
+def test_one_of_three_holdings_without_history_skips_the_lane_with_its_own_reason(
+    etf_scan, monkeypatch
+):
+    _, client, graph = etf_scan
+    exposure = sample_exposure()
+    msft = exposure.positions[0].model_copy(update={"ticker": "MSFT"})
+    three = exposure.model_copy(update={"positions": [*exposure.positions, msft]})
+    histories = {**HIST, "MSFT": {}}  # MSFT is valued but its fetch failed: two usable of three
+    monkeypatch.setattr(runner, "load_fit_context", AsyncMock(return_value=(three, histories)))
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.eligible == 12 and result.shortlisted == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {
+        **ZEROS,
+        "skipped_reason": ETF_LANE_NEEDS_HISTORY,
+    }
+    assert all(item.ticker != "BOND" for item in result.excluded)
+
+
+def test_a_crash_in_the_etf_lane_skips_the_lane_and_leaves_the_stock_result_alone(
+    etf_scan, monkeypatch, caplog
+):
+    _, client, graph = etf_scan
+
+    def broken(*args, **kwargs):
+        raise ValueError("secret")
+
+    monkeypatch.setattr(runner, "_etf_lane", broken)
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.eligible == 12 and result.shortlisted == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {
+        **ZEROS,
+        "skipped_reason": ETF_LANE_UNAVAILABLE,
+    }
+    assert "ValueError" in caplog.text and "secret" not in caplog.text
 
 
 def test_a_held_etf_is_not_recommended_again(etf_scan, monkeypatch):

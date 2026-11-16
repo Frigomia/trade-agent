@@ -137,11 +137,11 @@ def test_a_stale_price_is_out() -> None:
     assert check(fund(), stale="last close is old") == "unreliable_price"
 
 
-def test_fewer_than_250_closes_is_out_and_250_passes() -> None:
-    assert check(fund(closes=walk(1, 249), dates=[day(i) for i in range(249)])) == (
+def test_fewer_than_200_closes_is_out_and_200_passes() -> None:
+    assert check(fund(closes=walk(1, 199), dates=[day(i) for i in range(199)])) == (
         "insufficient_data"
     )
-    assert check(fund(closes=walk(1, 250), dates=[day(i) for i in range(250)])) is None
+    assert check(fund(closes=walk(1, 200), dates=[day(i) for i in range(200)])) is None
 
 
 def test_fewer_than_60_matching_intervals_with_the_holdings_is_out() -> None:
@@ -172,6 +172,9 @@ def test_a_fund_with_no_expense_ratio_is_out() -> None:
         ("Lyxor Bund Daily -1x Inverse UCITS ETF", None),
         ("Some Fund", "Trading--Leveraged Equity"),
         ("Some Fund", "TRADING--Inverse Equity"),
+        ("WisdomTree Nasdaq 100 3x Daily", None),
+        ("Some Fund x5 Daily", None),
+        ("Some Fund 5x", None),
     ],
 )
 def test_a_leveraged_or_inverse_fund_is_out(name: str, category: str | None) -> None:
@@ -193,6 +196,22 @@ def test_a_short_duration_bond_fund_is_not_mistaken_for_an_inverse_one(
     name: str, category: str
 ) -> None:
     assert check(fund(name=name, category=category)) is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Amundi Euro Stoxx 50 UCITS ETF",
+        "iShares EURO STOXX50 UCITS ETF",
+        "ESTX50 Acc",
+        "Lyxor EUROSTOXX50 UCITS ETF",
+        "iShares MSCI EM IMI UCITS ETF",
+        "SPDR S&P 500 x UCITS ETF",
+        "Xtrackers MSCI World ex USA 2025 UCITS ETF",
+    ],
+)
+def test_an_index_name_that_merely_contains_a_marker_is_not_leveraged(name: str) -> None:
+    assert check(fund(name=name, category=None)) is None
 
 
 def overlap_case(category: str | None, held_category: str | None) -> str | None:
@@ -420,6 +439,17 @@ def test_at_most_one_fund_per_category_and_the_cut_to_size() -> None:
     assert len(run(snaps, size=2).candidates) == 2
 
 
+def test_an_avoided_sector_is_skipped_silently_whatever_its_case() -> None:
+    tech = replace(etf("TECH", noise(200), category="Tech"), sector="Technology")
+    health = replace(etf("HEAL", noise(201), category="Health"), sector="Healthcare")
+    broad = etf("BROAD", noise(202), category="Broad")  # a fund with no sector is never avoided
+
+    result = run([tech, health, broad], avoid_sectors=["technology"])
+
+    assert sorted(tickers(result)) == ["BROAD", "HEAL"]
+    assert result.excluded == []
+
+
 def test_a_held_etf_is_not_recommended_and_leaves_no_exclusion() -> None:
     held = etf("HELD", MARKET, category="World")
 
@@ -485,3 +515,20 @@ def test_an_etf_candidate_carries_the_fund_facts_and_a_real_risk_level() -> None
     assert candidate.risk.risk_level != "unknown"
     assert candidate.risk.volatility_annualized is not None
     assert candidate.data_notes == ["price date uncertain: last close is one day old"]
+
+
+def test_the_candidate_carries_the_converted_fund_size_when_only_yahoos_is_known() -> None:
+    base = etf("BOND", noise(200), category="Bond")
+    snap = replace(with_metrics(base, fundSizeEur=None, totalAssets=1e9), currency="USD")
+
+    candidate = build_etf_candidate(snap, RATES, None)
+
+    assert candidate.fundamentals["fundSizeEur"] == pytest.approx(0.9e9)  # USD at 0.9
+    assert candidate.fundamentals["totalAssets"] == 1e9
+
+
+def test_the_candidate_keeps_an_unknown_fund_size_unknown() -> None:
+    base = etf("BOND", noise(200), category="Bond")
+    snap = with_metrics(base, fundSizeEur=None, totalAssets=None)
+
+    assert build_etf_candidate(snap, RATES, None).fundamentals["fundSizeEur"] is None

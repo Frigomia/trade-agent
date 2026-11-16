@@ -6,6 +6,7 @@ explanation. Keeping only the cheapest of several near-copy candidates is the sh
 """
 
 import math
+import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -30,24 +31,22 @@ from app.schemas_discovery import CandidateMetrics, Exclusion, PortfolioExposure
 ETF_SLOTS = 3
 ETF_MAX_EXPENSE_RATIO = 0.005  # a fraction: 0.50% a year, proposed
 ETF_MIN_SIZE_EUR = 100_000_000.0  # proposed
-ETF_MIN_CLOSES = 250  # about one year of trading days
+# A one-year fetch returns about 251 to 253 sessions; the margin keeps a few missing days from
+# excluding a healthy fund, and the fit step only needs 60 of them.
+ETF_MIN_CLOSES = 200
 # Must equal `analysis.portfolio.MIN_RETURNS`: the fit step needs this many intervals shared by
 # the candidate and every holding, and a fund below it could never be scored (a test checks it).
 ETF_MIN_SHARED_INTERVALS = 60
 ETF_NEAR_COPY_CORRELATION = 0.95
 ETF_MIN_HOLDINGS = 2
 ETF_LANE_SKIPPED = "ETF ideas need at least two holdings with price history"
+ETF_LANE_NEEDS_HISTORY = "ETF ideas need price history for every holding"
+ETF_LANE_UNAVAILABLE = "ETF ideas were unavailable in this scan"
 
 # Lowercase tokens tested against the fund's name and category (leveraged, inverse and other trading
 # funds are out). A bare "short" is deliberately not a marker: "Short Duration" and "Ultrashort
 # Bond" are ordinary bond funds, exactly the low-correlation ideas the lane exists to find.
 LEVERAGED_MARKERS = (
-    "2x",
-    "3x",
-    "5x",
-    "x2",
-    "x3",
-    "x5",
     "-1x",
     "leveraged",
     "leverage shares",
@@ -57,6 +56,9 @@ LEVERAGED_MARKERS = (
     "shortdax",
     "trading--",  # Morningstar's category prefix for leveraged and inverse funds
 )
+
+# 2x, 3x, 5x, x2, x3 and x5 as whole tokens: "STOXX50" and "ESTX50" hold "x5" but are index names.
+LEVERAGE_FACTOR = re.compile(r"(?<![a-z])x[235](?!\d)|[235]x(?![a-z0-9])")
 
 ExcludedFor = Literal[
     "not_ucits",
@@ -88,7 +90,7 @@ def _shared_intervals(series: list[ReturnSeries]) -> int:
 
 def _is_leveraged(snap: SymbolSnapshot) -> bool:
     text = f"{snap.name} {snap.category or ''}".lower()
-    return any(marker in text for marker in LEVERAGED_MARKERS)
+    return bool(LEVERAGE_FACTOR.search(text)) or any(m in text for m in LEVERAGED_MARKERS)
 
 
 def _is_near_copy(
@@ -222,7 +224,8 @@ def build_etf_candidate(
         price_as_of=datetime.fromisoformat(snap.dates[-1]).replace(tzinfo=UTC)
         if snap.dates
         else None,
-        fundamentals=snap.metrics,
+        # The converted size, so a fund whose size is only Yahoo's native-currency figure shows it.
+        fundamentals={**snap.metrics, "fundSizeEur": fund_size_eur(snap, rates)},
         coverage=etf_coverage_of(snap.metrics),
         peers=[],
         risk=risk,
@@ -256,6 +259,7 @@ def shortlist_etfs(
     exposure: PortfolioExposure,
     histories: Histories,
     today: date,
+    avoid_sectors: Collection[str] = (),
     size: int = ETF_SLOTS,
 ) -> EtfShortlist:
     """The ETFs that fill the biggest gaps in the portfolio, best first.
@@ -267,6 +271,7 @@ def shortlist_etfs(
     if len(exposure.positions) < ETF_MIN_HOLDINGS:
         return EtfShortlist([], [], 0, ETF_LANE_SKIPPED)
     held = {t.casefold() for t in holdings}
+    avoided = {s.casefold() for s in avoid_sectors}  # held and avoided funds are left out silently
     holding_returns = {ticker: log_returns(values) for ticker, values in histories.items()}
     category_of = {s.ticker: s.category for s in snapshots}
     held_categories = {ticker: category_of.get(ticker) for ticker in held_etfs}
@@ -276,6 +281,8 @@ def shortlist_etfs(
     returns: dict[str, ReturnSeries] = {}
     for snap in snapshots:
         if snap.asset_type != "ETF" or snap.ticker.casefold() in held:
+            continue
+        if (snap.sector or "").casefold() in avoided:
             continue
         returns[snap.ticker] = log_returns(
             clean_history(dict(zip(snap.dates, snap.closes, strict=True)), today)

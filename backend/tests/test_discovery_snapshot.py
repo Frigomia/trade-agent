@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
@@ -435,6 +436,43 @@ def test_the_row_cost_wins_over_yahoo_and_yahoo_is_read_as_percent() -> None:
     assert without_row.metrics["expenseRatio"] == pytest.approx(0.002)
     assert (without_row.isin, without_row.ucits) == (None, False)
     assert without_row.metrics["fundSizeEur"] is None
+
+
+@pytest.mark.parametrize(
+    ("yahoo", "expected"),
+    [
+        (0.07, 0.0007),  # a percent number: kept
+        (5, 0.05),  # exactly the 5% bound: kept
+        (0.0007, None),  # really a fraction: dividing again would make the fund look free
+        (7, None),  # above 5% a year is a typo
+    ],
+)
+def test_an_implausible_yahoo_expense_ratio_is_unknown(
+    yahoo: float, expected: float | None
+) -> None:
+    s = to_snapshot("VWCE.DE", fetched({**ETF_INFO, "netExpenseRatio": yahoo}, [], []))
+
+    if expected is None:
+        assert s.metrics["expenseRatio"] is None
+    else:
+        assert s.metrics["expenseRatio"] == pytest.approx(expected)
+
+
+def test_the_row_cost_is_not_bounded_by_the_yahoo_rule() -> None:
+    row = replace(ETF_ROW, ter=0.00005)  # the universe file has its own range check
+
+    s = to_snapshot("VWCE.DE", fetched(ETF_INFO, [], []), row=row)
+
+    assert s.metrics["expenseRatio"] == 0.00005
+
+
+def test_an_etf_takes_its_sector_from_the_row_when_yahoo_has_none() -> None:
+    row = replace(ETF_ROW, sector="Technology")
+
+    assert to_snapshot("QDVE.DE", fetched(ETF_INFO, [], []), row=row).sector == "Technology"
+    assert to_snapshot("QDVE.DE", fetched(ETF_INFO, [], []), row=ETF_ROW).sector is None
+    yahoo = {**ETF_INFO, "sector": "Healthcare"}
+    assert to_snapshot("QDVE.DE", fetched(yahoo, [], []), row=row).sector == "Healthcare"
 
 
 def test_etf_coverage_names_the_missing_fund_size() -> None:
