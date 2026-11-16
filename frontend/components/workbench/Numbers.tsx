@@ -35,7 +35,7 @@ function figures(idea: IdeaOut): Figure[] {
   return raw.map(({ metric, value }) => ({ key: metric, label: metricLabel(metric), text: formatMetric(metric, value) }));
 }
 
-function Tiles({ items }: { items: Figure[] }) {
+function Tiles({ items, fund }: { items: Figure[]; fund: boolean }) {
   return (
     <Box sx={{ display: "grid", gap: 1.25, gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" } }}>
       {items.map(({ key, label, text }) => {
@@ -57,7 +57,7 @@ function Tiles({ items }: { items: Figure[] }) {
             <Typography component="b" sx={{ fontSize: text ? "1.25rem" : "0.8125rem", fontWeight: text ? 650 : 500, letterSpacing: "-0.02em", color: text ? "var(--text)" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
               {text ?? "Not available"}
             </Typography>
-            {!text && <Typography component="span" sx={muted}>No source for this company</Typography>}
+            {!text && <Typography component="span" sx={muted}>{fund ? "Not saved with this idea" : "No source for this company"}</Typography>}
           </Box>
         );
       })}
@@ -245,7 +245,7 @@ export function Numbers({ idea }: { idea: IdeaOut }) {
   return (
     <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
       <Section title={fund ? "Fund facts" : "Fundamentals"}>
-        {items.length === 0 ? <Typography sx={{ ...BODY, color: "var(--muted)" }}>No fundamentals were saved with this idea.</Typography> : <Tiles items={items} />}
+        {items.length === 0 ? <Typography sx={{ ...BODY, color: "var(--muted)" }}>No fundamentals were saved with this idea.</Typography> : <Tiles items={items} fund={fund} />}
       </Section>
       {!fund && <Peers idea={idea} />}
       {!fund && <NamedPeers idea={idea} />}
