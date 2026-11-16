@@ -55,6 +55,11 @@ What the build (#296) does differently from the approved mock `etf-idea.html`:
 - A negative correlation is drawn pinned at the left end of the fixed 0 to 1 scale, with the words "below the scale" in its value and label. The left "0" end label is hidden there so it does not collide with "This fund".
 - The right column wrapper (rail plus fund panels) exists only for ETFs; the stock rail stays a bare grid item, so it still sticks.
 - The quality filter shows values only where the idea holds them (cost, size); the other rows show their rule text, and no correlation number is printed.
+- The page header has the mock's tag row (ETF, UCITS, Accumulating or Distributing, and the category chip) under a listing line of ticker, exchange and currency. It has no ISIN, as the saved idea carries none.
+- The decision rail (pending and decided) has the mock's Suggested position block, read from the saved `suggested_position_pct`. The frontend does not know the saved maximum, so the bar and the sentence appear only for 7.5% (half of 15%) and 15% (the full maximum); any other size shows the value alone. On a phone the rail is not shown, so the mock's "7.5% suggested" in the phone summary is not built.
+- A correlation below -0.1 reads "Tends to move against your holdings"; the strip scale and the "below the scale" wording are unchanged (see the open questions).
+- The overlap filter row says "Not a near-copy of an ETF you hold (same category, correlation 0.95 or more)", matching the backend rule.
+- The tab list is named "Fund sections" for an ETF.
 
 ## Open questions
 
@@ -63,3 +68,6 @@ None blocking; the defaults taken are listed in `direction-approved.md`. Still o
 - Optional backend fields to show the quality-filter values: the length of price history, the near-copy list (the cheaper funds of the same kind) and the highest correlation to a held ETF. Without them those rows show the rule only.
 - An ISIN on the saved idea, so Fund facts can show the row the mock has.
 - The mock's sample scores (gap 72 and its parts) are invented; the real ones for typical funds are lower (about 37 for world equity, 54 for government bonds). Say if a sample note should appear anywhere, or if the 50 gate (against 45) should change; it is one backend constant plus the frontend `ETF_GATE`.
+- The correlation strip is a fixed 0 to 1 scale, so a hedge or bond ETF with a negative correlation is pinned at the left end ("below the scale"). Say if the scale should extend below 0.
+- Today ranking: the feed sorts by overall, so ETF gap scores of 50 to 56 sort below stock overalls of 60 or more (backend/app/discovery/feed.py). Say if ETF ideas should rank separately.
+- The hero says "If you add 5% of this fund", while the suggested position for a qualifying ETF is 7.5% (half the 15% maximum) or 15%. Say if the hero should use the suggested size.
