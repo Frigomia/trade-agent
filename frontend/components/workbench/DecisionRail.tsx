@@ -12,9 +12,9 @@ import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { moveSinceRecommended } from "@/lib/decisionView";
-import { isEtf } from "@/lib/etfIdea";
+import { isEtf, positionNote } from "@/lib/etfIdea";
 import { confidenceLabel, dateTimeText, dayText, fitScore, meterFill, riskLabel } from "@/lib/discovery";
-import { formatAmount } from "@/lib/format";
+import { formatAmount, formatShare } from "@/lib/format";
 import { useDecision } from "@/lib/useDecision";
 import { useSaveToDiscover } from "@/lib/useSaveToDiscover";
 
@@ -36,6 +36,32 @@ export function FitLine({ idea }: { idea: DiscoveryRecommendation["idea"] & obje
         </span>
       )}
     </Box>
+  );
+}
+
+/** The ETF rail's suggested position: the share of the portfolio, and what it is a share of. Nothing for a stock or an unsaved size. */
+export function SuggestedPosition({ rec }: { rec: DiscoveryRecommendation }) {
+  const pct = rec.suggested_position_pct;
+  if (!isEtf(rec.idea!) || pct === null) return null;
+  const note = positionNote(pct);
+  const value = formatShare(pct);
+  return (
+    <>
+      <Box sx={{ display: "grid", gap: 0.75 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "0.8125rem", color: "var(--text2)" }}>
+          <span>Suggested position</span>
+          <Box component="b" sx={{ fontSize: "1.25rem", fontWeight: 650, color: "var(--text)", letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{value}</Box>
+        </Box>
+        {note && (
+          <Box role="img" aria-label={`Suggested ${value} of the portfolio, ${note.label}`} sx={{ position: "relative", height: "0.5rem", borderRadius: 999, bgcolor: "var(--track)" }}>
+            <Box component="i" sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${note.fill * 100}%`, borderRadius: 999, bgcolor: "var(--accent)" }} />
+            <Box component="u" sx={{ position: "absolute", top: "-0.1875rem", left: "calc(100% - 2px)", width: "2px", height: "0.875rem", borderRadius: "1px", bgcolor: "var(--text2)" }} />
+          </Box>
+        )}
+        <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.45 }}>Of your portfolio.{note ? ` ${note.text}` : ""}</Typography>
+      </Box>
+      <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />
+    </>
   );
 }
 
@@ -163,6 +189,7 @@ export function DecisionRail({
     <Panel component="aside" aria-label="Decision" sx={{ p: "20px", display: "grid", gap: 2, position: { md: "sticky" }, top: 16 }}>
       <DecisionSummary rec={rec} />
       <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />
+      <SuggestedPosition rec={rec} />
       <FitLine idea={idea} />
       <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />
       {error && <Alert severity="error">{error}</Alert>}

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { SWRConfig } from "swr";
 import { claim, etfRec, testHistory, testIdea, testRec } from "./testData";
 
@@ -469,6 +469,68 @@ describe("Workbench for an ETF idea", () => {
     expect(rail.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByRole("heading", { name: /Quality filter/ })).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/peers|valuation/i);
+  });
+
+  it("shows the listing line and the tag row under the fund name", async () => {
+    show(etfRec({ name: "iShares Core MSCI EM IMI UCITS ETF (Acc)", ticker: "IS3N.DE" }));
+
+    await screen.findByRole("heading", { level: 1, name: "iShares Core MSCI EM IMI UCITS ETF (Acc)" });
+    expect(screen.getByText("IS3N.DE · XETRA · EUR")).toBeInTheDocument();
+    const tags = within(screen.getByRole("list", { name: "Fund tags" }));
+    expect(tags.getAllByRole("listitem").map((t) => t.textContent)).toEqual(["ETF", "UCITS", "Accumulating", "Diversified Emerging Mkts"]);
+  });
+
+  it("writes Distributing for a distributing fund", async () => {
+    show(etfRec({ name: "Global Dividend UCITS ETF (Dist)" }));
+    const tags = within(await screen.findByRole("list", { name: "Fund tags" }));
+    expect(tags.getByText("Distributing")).toBeInTheDocument();
+    expect(tags.queryByText("Accumulating")).toBeNull();
+  });
+
+  it("names the tab list Fund sections for a fund", async () => {
+    show(etfRec());
+
+    expect(await screen.findByRole("tablist", { name: "Fund sections" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Company sections" })).toBeNull();
+  });
+
+  it("shows the suggested position in the pending and the decided rail", async () => {
+    show({ ...etfRec(), suggested_position_pct: 0.075 });
+    let rail = await screen.findByRole("complementary", { name: "Decision" });
+    expect(within(rail).getByText("Suggested position")).toBeInTheDocument();
+    expect(within(rail).getByText("7.5%")).toBeInTheDocument();
+    expect(within(rail).getByRole("img", { name: "Suggested 7.5% of the portfolio, half of the 15% maximum" })).toBeInTheDocument();
+    expect(within(rail).getByText(/Half of the 15% maximum; the full maximum is suggested at a gap score of 80 or more\./)).toBeInTheDocument();
+    cleanup();
+
+    show({ ...etfRec(), suggested_position_pct: 0.075, status: "APPROVED", reviewed_at: "2026-10-21T09:00:00Z" });
+    rail = await screen.findByRole("complementary", { name: "Your decision" });
+    expect(within(rail).getByText("Suggested position")).toBeInTheDocument();
+    expect(within(rail).getByText("7.5%")).toBeInTheDocument();
+  });
+
+  it("states the full maximum at 15%, and shows only the value for any other size", async () => {
+    show({ ...etfRec(), suggested_position_pct: 0.15 });
+    let rail = await screen.findByRole("complementary", { name: "Decision" });
+    expect(within(rail).getByText(/The full maximum, suggested at a gap score of 80 or more\./)).toBeInTheDocument();
+    cleanup();
+
+    show({ ...etfRec(), suggested_position_pct: 0.1 });
+    rail = await screen.findByRole("complementary", { name: "Decision" });
+    expect(within(rail).getByText("10.0%")).toBeInTheDocument();
+    expect(within(rail).queryByRole("img")).toBeNull();
+    expect(within(rail).queryByText(/maximum/)).toBeNull();
+  });
+
+  it("shows no suggested position when none is saved, and none on a stock rail", async () => {
+    show(etfRec());
+    expect(await screen.findByRole("complementary", { name: "Decision" })).toBeInTheDocument();
+    expect(screen.queryByText("Suggested position")).toBeNull();
+    cleanup();
+
+    show({ ...testRec(), suggested_position_pct: 0.075 });
+    expect(await screen.findByRole("complementary", { name: "Decision" })).toBeInTheDocument();
+    expect(screen.queryByText("Suggested position")).toBeNull();
   });
 
   it("shows the price chart on the Price tab", async () => {
