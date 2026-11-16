@@ -14,6 +14,7 @@ from decimal import Decimal
 from statistics import StatisticsError, correlation, stdev
 
 from app.discovery.snapshot import SymbolSnapshot, check_freshness
+from app.discovery.universe import etf_category_for
 from app.fx import MAX_PRICE_EUR, MIN_PRICE_EUR, SUPPORTED, EurPrice
 from app.schemas_discovery import (
     CandidateFit,
@@ -22,7 +23,7 @@ from app.schemas_discovery import (
     PositionValue,
     ReturnWindow,
 )
-from app.sectors import SECTOR_ALIASES, UNCLASSIFIED
+from app.sectors import FUNDS, SECTOR_ALIASES, UNCLASSIFIED
 
 MIN_RETURNS = 60
 TRADING_DAYS = 252
@@ -257,10 +258,24 @@ def analyze_portfolio(
         industry[ticker] = _label(profile.get("industry"))
         country[ticker] = _label(profile.get("country"))
         currency[ticker] = quote.currency
+        category: str | None = None
         if holding.asset_type == "ETF":
-            sector[ticker] = industry[ticker] = f"ETF: {_label(profile.get('category'))}"
-            notes.append(f"{ticker}: ETF category is a single bucket; no constituent look-through.")
-        if not any(profile.values()):
+            country[ticker] = FUNDS
+            # The person's own category wins, then Yahoo's, then the universe file's.
+            category = (
+                (holding.sector or "").strip()
+                or profile.get("category")
+                or etf_category_for(ticker)
+            )
+            if category:
+                sector[ticker] = industry[ticker] = f"ETF: {_label(category)}"
+                notes.append(
+                    f"{ticker}: ETF category is a single bucket; no constituent look-through."
+                )
+            else:
+                sector[ticker] = industry[ticker] = UNCLASSIFIED
+                notes.append(f"{ticker}: ETF category not set; add one in the holding.")
+        if not category and not any(profile.values()):
             notes.append(f"{ticker}: profile unavailable; unknown exposures are Unclassified.")
         values[ticker] = value
         positions.append(

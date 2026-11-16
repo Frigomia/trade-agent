@@ -19,6 +19,7 @@ type Sector = Literal[
 ]
 
 UNCLASSIFIED = "Unclassified"
+FUNDS = "Funds"  # country label of an ETF: no look-through, so no country exposure
 
 SECTOR_NAMES: tuple[str, ...] = get_args(Sector.__value__)
 with Path(__file__).with_suffix(".json").open(encoding="utf-8") as _catalog_file:

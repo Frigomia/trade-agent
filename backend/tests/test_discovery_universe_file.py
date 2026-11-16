@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from app.discovery.universe import load_universe, region_of
+from app.discovery.universe import etf_category_for, load_universe, region_of
 from app.discovery.validate_universe import REGION_TARGETS
 from app.fx import SUPPORTED
 
@@ -66,3 +66,13 @@ def test_every_ucits_sector_fund_has_a_stock_sector_so_avoided_sectors_apply() -
 
     assert sector_funds
     assert [row.ticker for row in sector_funds if row.sector not in stock_sectors] == []
+
+
+def test_etf_category_for_reads_the_etf_row_industry_case_insensitively() -> None:
+    assert etf_category_for("IS3N.DE") == "Global Emerging Markets Equity"
+    assert etf_category_for("is3n.de") == "Global Emerging Markets Equity"
+
+
+def test_etf_category_for_is_none_for_a_stock_or_an_unknown_ticker() -> None:
+    assert etf_category_for("AAON") is None
+    assert etf_category_for("NOPE.XX") is None

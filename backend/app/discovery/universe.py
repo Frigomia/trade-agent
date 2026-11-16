@@ -7,6 +7,7 @@ too (Phase 5); this file just makes routine screening affordable.
 import csv
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 UNIVERSE_PATH = Path(__file__).with_name("universe.csv")
@@ -184,3 +185,18 @@ def load_universe(path: Path = UNIVERSE_PATH) -> list[UniverseRow]:
             seen.add(row.ticker)
             rows.append(row)
     return rows
+
+
+@lru_cache(maxsize=1)
+def _etf_categories() -> dict[str, str]:
+    """Upper-cased ticker to industry for every ETF row that has one, read once per process."""
+    return {
+        row.ticker.upper(): row.industry
+        for row in load_universe()
+        if row.asset_type == "ETF" and row.industry
+    }
+
+
+def etf_category_for(ticker: str) -> str | None:
+    """The universe file's category for an ETF ticker, or None (stock, unknown, no category)."""
+    return _etf_categories().get(ticker.upper())
