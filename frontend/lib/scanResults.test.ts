@@ -108,7 +108,22 @@ describe("emptyText", () => {
   });
 });
 
+describe("ETF exclusion reasons", () => {
+  it("shows the three ETF reasons in plain words", () => {
+    const etf = (reason: "not_ucits" | "fails_quality_filter" | "overlaps_holding") => ({ ticker: "ETFX", name: "Some ETF", reason, explanation: "x", evidence: [] });
+    const rows = ledgerRows({ ...SCAN, excluded: [etf("not_ucits"), etf("fails_quality_filter"), etf("overlaps_holding")], coverage_summary: {}, rejected_mentions: [] });
+    expect(rows.map((r) => r.reason)).toEqual(["Not available to EU retail investors", "Failed the cost or size filter", "Overlaps a fund you hold"]);
+  });
+});
+
 describe("coverageNotes", () => {
+  it("notes why the ETF lane was skipped, and says nothing when it ran", () => {
+    const reason = "ETF ideas need at least two holdings with price history";
+    const lane = (skipped_reason: string | null) => ({ ...SCAN, coverage_summary: { etf_lane: { eligible: 4, shortlisted: 0, researched: 0, skipped_reason } } });
+    expect(coverageNotes(lane(reason))).toEqual([`${reason}.`]);
+    expect(coverageNotes(lane(null))).toEqual([]);
+  });
+
   it("says only what the scan recorded, with singular and plural words", () => {
     expect(coverageNotes(SCAN)).toEqual([]);
     expect(

@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ETF idea · merged mock</title>
+<link rel="stylesheet" href="../today-discovery/lib.css">
+<link rel="stylesheet" href="../company-overview/soft.css">
+<link rel="stylesheet" href="../company-overview/co.css">
+<style>
+/* ETF idea, merged mock: the Today card from direction A (Gap first), the recommendation page from direction C (Before and after). An ETF idea is not a company: its case is what it does to the portfolio. So the hero is
+   the portfolio now against the same portfolio with 5% of the fund, one strip per measured part, and the gap score is
+   read as the result of that picture. Fund facts and the quality filter shrink into a narrow column under the decision
+   rail; the AI text follows the computed story, in dashed boxes. Extends the approved Workbench; nothing in it restyled. */
+
+/* type ramp in rem with the brief's floor (body 0.875rem, labels 0.75rem); overrides the px values of the shared files */
+:root{--fs-body:.875rem;--fs-label:.75rem;--fs-cap:.75rem;--fs-lead:.9375rem;--fs-title:1.25rem;--fs-head:1.625rem;--fs-metric:1.625rem}
+body{font-size:.875rem}
+.tag{font-size:.75rem}.cap{font-size:.75rem}.sample{font-size:.75rem}
+.nav{font-size:.875rem}.brand{font-size:.875rem}.nav em{font-size:.75rem}
+.tabbar div{font-size:.75rem}
+::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+
+.co{display:grid;gap:16px;align-content:start}
+.wb{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+.tabs3{display:flex;gap:4px;padding:4px;border-radius:999px;background:var(--track);width:max-content;max-width:100%}
+.tabs3 a{display:grid;place-items:center;min-height:36px;padding:0 18px;border-radius:999px;font-size:var(--fs-body);color:var(--text2);font-weight:500;white-space:nowrap}
+.tabs3 a.on{background:var(--panel);color:var(--text);box-shadow:var(--shadow)}
+.pane,.col{display:grid;gap:16px;min-width:0;align-content:start}
+.pane>*,.col>*{min-width:0}
+.r2c{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.r2c>*{min-width:0}
+.phone .r2c,.region .r2c{grid-template-columns:1fr}
+
+/* ---- identity: the fund name is text, no logo ---- */
+.fname{font-size:var(--fs-head);font-weight:650;letter-spacing:-.025em;line-height:1.15;text-wrap:balance;max-width:40ch}
+.ftk{font-size:var(--fs-body);color:var(--muted);margin-top:4px}
+.ftk b{color:var(--text2);font-weight:500}
+.ftags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tg{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--track);font-size:var(--fs-label);color:var(--text2);white-space:nowrap}
+.tg svg{color:var(--muted)}
+
+/* ---- the hero: before and after ---- */
+.story{padding:24px 24px 20px}
+.story .top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:start}
+.story h2{font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em;line-height:1.25}
+.story .lede{margin:6px 0 0;font-size:var(--fs-body);color:var(--text2);line-height:1.5;max-width:58ch}
+.res{display:grid;justify-items:end;text-align:right;gap:2px}
+.res small{font-size:var(--fs-label);color:var(--muted)}
+.res b{font-size:2.5rem;font-weight:650;letter-spacing:-.04em;line-height:1}
+.res b span{font-size:var(--fs-body);font-weight:400;color:var(--muted);letter-spacing:0;margin-left:4px}
+.key{display:flex;gap:18px;flex-wrap:wrap;margin:16px 0 4px;font-size:var(--fs-label);color:var(--text2)}
+.key span{display:inline-flex;align-items:center;gap:8px}
+.mk{width:12px;height:12px;border-radius:50%;flex:none;display:inline-block}
+.mk.n{border:2px solid var(--muted);background:var(--panel)}
+.mk.w{background:var(--accent)}
+.mk.r{width:2px;height:12px;border-radius:1px;background:var(--text2)}
+.ba{display:grid;grid-template-columns:200px minmax(0,1fr) 76px;gap:24px;align-items:center;padding:18px 0;border-top:1px solid var(--line)}
+.key+.ba{border-top:0}
+.bl{display:grid;gap:2px;min-width:0}
+.bl b{font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}
+.bl small{font-size:var(--fs-label);color:var(--muted)}
+.bl .dl{font-size:var(--fs-body);color:var(--text);margin-top:4px}
+.bs{position:relative;padding:26px 0 26px;min-width:0}
+.trk{position:relative;height:6px;border-radius:999px;background:var(--track)}
+.trk i{position:absolute;top:50%;transform:translate(-50%,-50%)}
+.trk .seg{transform:translateY(-50%);height:4px;background:color-mix(in srgb,var(--accent) 45%,transparent);border-radius:999px}
+.trk .n{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--muted);background:var(--panel)}
+.trk .w{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2.5px solid var(--panel);box-shadow:0 0 0 1px var(--accent)}
+.trk .r{width:2px;height:18px;border-radius:1px;background:var(--text2)}
+.vl{position:absolute;transform:translateX(-50%);white-space:nowrap;font-size:var(--fs-label);color:var(--muted);line-height:1.2}
+.vl b{font-size:var(--fs-body);font-weight:650;color:var(--text);margin-left:4px}
+.vl.up{top:0}.vl.dn{bottom:0}
+.vl.dn{color:var(--text2)}
+.vl.end{transform:translateX(-100%)}
+.vl.st{transform:none}
+.ax{position:absolute;left:0;right:0;top:50%;display:flex;justify-content:space-between;pointer-events:none}
+.ax span{font-size:var(--fs-label);color:var(--muted);transform:translateY(10px)}
+.ax span:first-child{transform:translate(-2px,10px)}
+.bp{display:grid;justify-items:end;text-align:right}
+.bp b{font-size:var(--fs-title);font-weight:650;letter-spacing:-.02em}
+.bp small{font-size:var(--fs-label);color:var(--muted);white-space:nowrap}
+.sum{display:flex;gap:12px;align-items:flex-start;padding-top:16px;border-top:1px solid var(--line);font-size:var(--fs-body);color:var(--text2);line-height:1.5}
+.sum p{margin:0;max-width:70ch}
+
+/* pass, fail and unknown: a shape and a word, never colour */
+.pm{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-label);font-weight:650;color:var(--text);white-space:nowrap}
+.pm i{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:var(--text2);color:var(--panel);flex:none}
+.pm i svg{width:10px;height:10px;stroke-width:3}
+.pm.unk i{background:none;border:1.5px dashed var(--text2)}
+.pm.unk{color:var(--text2)}
+
+/* ---- AI parts ---- */
+.ai{border:1px dashed var(--line2);border-radius:14px;padding:16px 18px;min-width:0}
+.ai .al{display:flex;align-items:center;gap:6px;margin:12px 0 0;font-size:var(--fs-label);color:var(--muted)}
+.ai .al svg{color:var(--accent)}
+.ai p{margin:0;font-size:var(--fs-body);line-height:1.55;color:var(--text);text-wrap:pretty;max-width:72ch}
+.ai p.lead{font-size:var(--fs-lead);line-height:1.55}
+.ai p+p{margin-top:8px}
+.cats{list-style:none;margin:0;padding:0;display:grid}
+.cats li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:var(--fs-body);line-height:1.45}
+.cats li:first-child{border-top:0;padding-top:0}
+.cats time{white-space:nowrap;font-weight:650;color:var(--text);font-variant-numeric:tabular-nums}
+.concl p{font-size:var(--fs-lead)}
+
+/* ---- the narrow column: decision, fund facts, quality filter ---- */
+.decide{padding:20px;display:grid;gap:14px}
+.decide hr,.pnl hr{border:0;border-top:1px solid var(--line);margin:0}
+.px{display:grid;gap:2px}
+.px b{font-size:1.75rem;font-weight:650;letter-spacing:-.035em;line-height:1.1}
+.px small{font-size:var(--fs-label);color:var(--muted)}
+.px .sc{display:flex;gap:8px;align-items:baseline;font-size:var(--fs-label);color:var(--text2)}
+.cf{font-size:var(--fs-body);color:var(--text2);display:flex;flex-wrap:wrap;align-items:center}
+.cf em{font-style:normal;color:var(--muted);font-size:var(--fs-label);flex-basis:100%;margin-top:2px}
+.pos{display:grid;gap:6px}
+.pos .pl{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-body);color:var(--text2)}
+.pos .pl b{font-size:var(--fs-title);font-weight:650;color:var(--text);letter-spacing:-.02em}
+.pbar{position:relative;height:8px;border-radius:999px;background:var(--track)}
+.pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--accent)}
+.pbar u{position:absolute;top:-3px;width:2px;height:14px;background:var(--text2);border-radius:1px}
+.pos small{font-size:var(--fs-label);color:var(--muted);line-height:1.45}
+.acts{display:grid;gap:8px}
+.acts2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.acts2 .btn{padding:0 10px}
+.note2{margin:0;font-size:var(--fs-label);color:var(--muted);line-height:1.45}
+.pnl{padding:18px 20px}
+.pnl h2{font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px}
+.pnl h2 small{margin-left:auto;font-size:var(--fs-label);font-weight:400;color:var(--muted)}
+.kv{margin:10px 0 0;display:grid}
+.kv>div{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:var(--fs-body)}
+.kv>div:first-child{border-top:0}
+.kv dt{color:var(--text2)}.kv dd{margin:0;font-weight:650;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.qf{list-style:none;margin:10px 0 0;padding:0;display:grid}
+.qf li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;padding:9px 0;border-top:1px solid var(--line)}
+.qf li:first-child{border-top:0}
+.qf b{font-size:var(--fs-body);font-weight:500;color:var(--text)}
+.qf small{grid-column:1;font-size:var(--fs-label);color:var(--muted);line-height:1.4}
+.qf .pm{grid-row:1/3;grid-column:2;align-self:center}
+.srcl{list-style:none;margin:10px 0 0;padding:0;display:grid}
+.srcl li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:var(--fs-body)}
+.srcl li:first-child{border-top:0}
+.srcl a{color:var(--accent);display:inline-flex;gap:6px;align-items:center;min-width:0}
+.srcl .tier{border:1px solid var(--line2);border-radius:999px;padding:1px 9px;color:var(--text2);font-size:var(--fs-label);white-space:nowrap}
+.srcl .tier.unv{border-style:dotted}
+.srcl time{color:var(--muted);font-size:var(--fs-label);white-space:nowrap}
+
+/* ---- Today cards ---- */
+.today h1{font-size:1.875rem;letter-spacing:-.025em;line-height:1.15;font-weight:650}
+.today .sub{font-size:var(--fs-body);color:var(--muted);margin-top:4px}
+.sec{display:flex;align-items:baseline;gap:8px;margin:8px 0 -4px}
+.sec h2{font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em}
+.sec small{font-size:var(--fs-label);color:var(--muted)}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+/* the ETF Today card (direction A in the decision record), as designed */
+.card{padding:16px;display:grid;gap:12px;align-content:start;min-width:0;border-radius:var(--rp)}
+.card .hd{display:flex;gap:12px;align-items:flex-start}
+.card .nm{font-size:var(--fs-lead);font-weight:650;letter-spacing:-.01em;line-height:1.3}
+.card .tk{font-size:var(--fs-label);color:var(--muted)}
+.card .pr{margin-left:auto;display:grid;justify-items:end;text-align:right;gap:0;white-space:nowrap}
+.card .pr b{font-size:var(--fs-body);font-weight:650}
+.card .pr small{font-size:var(--fs-label);color:var(--muted)}
+.card .kv{display:flex;gap:8px;flex-wrap:wrap}
+.chipx{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px;border-radius:999px;background:var(--track);font-size:var(--fs-label);color:var(--text2)}
+.chipx b{color:var(--text);font-weight:650}
+.chipx .mini{width:40px;height:6px;border-radius:999px;background:var(--line2);position:relative;overflow:hidden}
+.chipx .mini i{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.card .ai{padding:10px 12px}
+.card .ai .al{margin-top:6px}
+.card .qline{display:flex;align-items:center;gap:6px;font-size:var(--fs-label);color:var(--text2)}
+.card .qline svg{color:var(--text2)}
+.card .ft{border-top:1px solid var(--line);padding-top:10px}
+.card .lk{gap:6px;font-size:var(--fs-body);font-weight:650;padding:0}
+.card .lk.m{color:var(--text2);font-weight:500}
+.ft{display:flex;align-items:center;gap:8px}.ft .sp{flex:1}
+.lk{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-label);color:var(--accent);font-weight:500;min-height:36px;padding:0 6px}
+.lk.m{color:var(--muted)}
+.ph0{border:1px dashed var(--line2);border-radius:var(--rp);min-height:250px;display:grid;place-items:center;text-align:center;padding:20px;color:var(--muted);font-size:var(--fs-body)}
+.ph0 b{display:block;color:var(--text2);font-weight:650;margin-bottom:4px}
+
+/* ---- read-only decision strip (from reopen-saved-company) ---- */
+.sbn{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;align-items:start;padding:14px 18px;border-radius:var(--rp);background:var(--panel);border:1px solid var(--line2);box-shadow:var(--shadow)}
+.sbn .si{grid-row:1/3;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--up-bg);color:var(--accent)}
+.sbn .st{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:650;min-height:36px}
+.sbn .st em{font-style:normal;font-size:var(--fs-label);font-weight:400;color:var(--muted)}
+.sbn p{margin:0;font-size:var(--fs-body);line-height:1.5;color:var(--text2);max-width:68ch}
+.stp{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-label);font-weight:500;border-radius:999px;padding:2px 10px;white-space:nowrap;background:var(--up-bg);color:var(--accent)}
+.medn{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;border:1px dashed var(--line2);font-size:var(--fs-label);color:var(--text2);line-height:1.45}
+.medn svg{margin-top:1px;color:var(--warn);flex:none}
+.medn b{color:var(--text);font-weight:650}
+
+/* ---- phone ---- */
+.phone .scr{padding:14px 16px 20px}
+.phone .fname{font-size:1.25rem;max-width:none}
+.phone .tabs3{display:grid;grid-template-columns:repeat(3,1fr);width:100%}
+.phone .tabs3 a{min-height:44px;padding:0 4px}
+.phone .story{padding:18px 16px 16px}
+.phone .story .top{grid-template-columns:1fr auto;gap:12px}
+.phone .story h2{font-size:var(--fs-lead)}
+.phone .res b{font-size:2rem}
+.phone .ba{grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:14px 0 6px}
+.phone .ba .bs{grid-column:1/-1;grid-row:2}
+.phone .ba .bl .dl{display:none}
+.phone .key{gap:12px}
+.phone .cats li{grid-template-columns:1fr;gap:2px}
+.phone .srcl li{grid-template-columns:minmax(0,1fr) auto}
+.phone .srcl time{grid-column:1}
+.phone .srcl .tier{grid-row:1/3;grid-column:2}
+.phone .grid3{grid-template-columns:1fr}
+.phone .lk{min-height:44px}
+.phone .pnl{padding:16px}
+.glance{display:grid;gap:12px}
+.glance .gr{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.abar{display:grid;grid-template-columns:1fr 44px 44px 44px;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--panel)}
+.abar .btn{min-height:44px;padding:0}
+.abar .btn svg{margin:0}
+.region .wb{grid-template-columns:minmax(0,1fr) 280px}
+.foot{width:1280px;max-width:100%;font-size:.75rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="tag"><b>ETF idea · merged mock.</b> The Today card is direction A's (gap score chip, confidence, category, AI headline, one quality-filter line); the recommendation page is direction C's. On the page the ETF idea is told as what it does to your portfolio: now against the same portfolio with 5% of this fund, one strip per measured part, with the gap score as the result of that picture. Fund facts and the quality filter sit in the narrow column under the decision rail. First the Today card beside an unchanged stock card, then the recommendation page. Toggle <code>?theme=dark</code>.</div>
+<div id="desk"></div>
+<div class="tag"><b>Phone, 390 wide.</b> Today first, then the page: the result and the three strips come before any prose, so the case reads at a glance; facts and filter follow as two short panels.</div>
+<div class="row" id="phones"></div>
+<div class="tag"><b>States.</b> Confidence medium because the fund size is unknown; and the idea after you approved it (read-only strip, as in reopen-saved-company).</div>
+<div class="grid2" id="states" style="grid-template-columns:1fr"></div>
+<p class="foot">Sample data for this mock: the fund is named as the brief gives it, and every figure, date, source and text is illustrative, not research on the real fund.</p>
+<script src="../today-discovery/lib.js"></script>
+<script src="../company-overview/co.js"></script>
+<script>
+document.querySelector('.sample').textContent = 'Sample data · illustrative figures';
+Object.assign(I, { checkc: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>',
+  pass: '<circle cx="12" cy="12" r="9" fill="currentColor" stroke="currentColor"/><path d="M8 12.4l2.7 2.7L16 9.6" stroke="var(--panel)" stroke-width="2.2"/>' });
+
+/* ---- the sample ETF idea: field names follow the brief (identity, gap score and evidence, filter, confidence, position) ---- */
+const F = {
+  name: 'iShares Core MSCI EM IMI UCITS ETF (Acc)', short: 'iShares Core MSCI EM IMI', ticker: 'IS3N.DE', listing: 'Xetra', cur: 'EUR', isin: 'IE00BKM4GZ66',
+  category: 'Diversified Emerging Mkts', price: '31.42', asOf: '14 Nov 2026', analysed: '14 Nov 2026, 06:12',
+  ter: '0.18%', size: 'EUR 5.6B', gap: 72, parts: { corr: 78, vol: 66, conc: 72 }, confidence: 'high', position: 7.5, maxPos: 15,
+  corr: 0.52, vol: [15.1, 14.2], hhi: [0.21, 0.19], eff: [4.8, 5.3], weight: 5,
+  headline: 'Adds emerging markets your portfolio barely holds, at 0.18% a year, and lowers its volatility from 15.1% to 14.2%.',
+  thesis: [
+    'The fund tracks the MSCI Emerging Markets IMI index: large, mid and small companies across emerging countries, led by China, Taiwan and India. Your six positions are mostly US and European, so it would fill a region the portfolio barely holds today.',
+    'It costs 0.18% a year, is domiciled in Ireland, holds the index shares physically through optimised sampling and reinvests dividends.',
+  ],
+  catalysts: [['30 Nov 2026', 'MSCI semi-annual index review takes effect; country and company weights in the index are rebalanced.'], ['9 Dec 2026', 'US Federal Reserve rate decision; emerging-market currencies have tended to react to US rate moves.'], ['18 Dec 2026', 'China central economic work conference sets next year\'s policy priorities; China is the largest country in the index.']],
+  bear: [
+    'Emerging markets have often fallen further than developed markets in broad sell-offs, and currency moves against the euro can deepen a loss.',
+    'A few countries make up most of the index, so policy or trade tension in one of them weighs on the whole fund. A correlation of 0.52 lowers the overlap with your holdings but does not remove it: in a broad fall it would likely fall too.',
+  ],
+  conclusion: 'A low-cost way to fill the emerging-markets gap. The suggested 7.5% is half the maximum because the gap score of 72 qualifies but is below the 80 that suggests the full 15%. It reads as a long-term diversifier, not a short-term trade.',
+  filter: [
+    ['Cost', 'Expense ratio 0.18% · at most 0.50%'],
+    ['Size', 'Fund size EUR 5.6B · at least EUR 100M'],
+    ['History', 'About 3 years of daily closes · at least 200'],
+    ['Plain fund', 'Not leveraged, not inverse'],
+    ['Cheapest of its kind', 'Cheapest of 2 similar funds in its category'],
+    ['No overlap with your ETFs', 'Correlation to each ETF you hold · below 0.95'],
+  ],
+  src: [
+    ['Official', 'Fund factsheet and key information document', '31 Oct 2026'],
+    ['Official', 'MSCI Emerging Markets IMI index methodology', '2 Sep 2026'],
+    ['Reliable reporting', 'Emerging-market fund flows in the third quarter', '12 Oct 2026'],
+    ['Other', 'Forum thread comparing EM IMI funds · unverified', '3 Nov 2026'],
+  ],
+};
+const recNow = { approvedOn: '15 Nov 2026', price: '31.98', asOf: '16 Nov 2026', since: 1.8 };
+
+const pass = () => `<span class="pm"><i>${ic('check')}</i>Pass</span>`;
+const unknownMk = () => `<span class="pm unk"><i></i>Unknown</span>`;
+const aiLbl = (t) => `<span class="al">${ic('spark', 'xs')}${t}</span>`;
+const nf = (v, d = 1) => v.toFixed(d);
+
+/* ---- identity ---- */
+const back = () => `<a href="#" class="back">${ic('chev', 'xs')}Back to opportunities</a>`;
+const ident = () => `<div><h1 class="fname">${F.name}</h1><div class="ftk"><b>${F.ticker}</b> · ${F.listing} · ${F.cur} · ISIN ${F.isin}</div>
+  <div class="ftags"><span class="tg">ETF</span><span class="tg">UCITS</span><span class="tg">Accumulating</span><span class="tg">${ic('layers', 'xs')}${F.category}</span></div></div>`;
+const TABS = ['Overview', 'Price', 'Sources'];
+const tabs = (on = 0) => `<nav class="tabs3" aria-label="Fund sections">${TABS.map((t, i) => `<a href="#" class="${i === on ? 'on' : ''}" ${i === on ? 'aria-current="page"' : ''}>${t}</a>`).join('')}</nav>`;
+
+/* ---- the hero: one strip per part. Ring = now, filled dot = with 5%. Position on a labelled range, not length from zero,
+   so a narrow range is honest: the axis ends are printed on every strip. ---- */
+const pct = (v, lo, hi) => (((v - lo) / (hi - lo)) * 100).toFixed(1);
+const strip = ({ lo, hi, axis, now, wth, fmt, ref, aria }) => {
+  const xn = pct(now, lo, hi), xw = pct(wth, lo, hi);
+  const align = (x) => (x > 88 ? 'end' : x < 8 ? 'st' : '');
+  if (ref != null) { // correlation: one value against the reference of a fund that moves exactly with you
+    const xr = pct(ref, lo, hi);
+    return `<div class="bs" role="img" aria-label="${aria}"><span class="vl up ${align(xr)}" style="left:${xr}%">Moves exactly with you<b>${fmt(ref)}</b></span>
+      <div class="trk"><i class="r" style="left:${xr}%"></i><i class="w" style="left:${xw}%"></i></div>
+      <span class="vl dn ${align(xw)}" style="left:${xw}%">This fund<b>${fmt(wth)}</b></span><div class="ax" aria-hidden="true"><span>${axis[0]}</span><span></span></div></div>`;
+  }
+  const a = Math.min(xn, xw), w = Math.abs(xn - xw);
+  return `<div class="bs" role="img" aria-label="${aria}"><span class="vl up ${align(xn)}" style="left:${xn}%">Now<b>${fmt(now)}</b></span>
+    <div class="trk"><i class="seg" style="left:${a}%;width:${w}%"></i><i class="n" style="left:${xn}%"></i><i class="w" style="left:${xw}%"></i></div>
+    <span class="vl dn ${align(xw)}" style="left:${xw}%">With 5%<b>${fmt(wth)}</b></span><div class="ax" aria-hidden="true"><span>${axis[0]}</span><span>${axis[1]}</span></div></div>`;
+};
+const ROWS = [
+  { t: 'Portfolio volatility', s: 'A year · lower is calmer', d: '0.9 points lower', part: F.parts.vol,
+    st: { lo: 13, hi: 16, axis: ['13%', '16%'], now: F.vol[0], wth: F.vol[1], fmt: (v) => nf(v) + '%', aria: 'Portfolio volatility: 15.1% a year now, 14.2% with 5% of this fund.' } },
+  { t: 'Spread of your money', s: `Effective positions · HHI ${nf(F.hhi[0], 2)} to ${nf(F.hhi[1], 2)}`, d: '0.5 more effective positions', part: F.parts.conc,
+    st: { lo: 4, hi: 6, axis: ['4', '6'], now: F.eff[0], wth: F.eff[1], fmt: (v) => nf(v), aria: 'Effective number of positions: 4.8 now, 5.3 with 5% of this fund. Concentration HHI 0.21 now, 0.19 with it.' } },
+  { t: 'Moves with your holdings', s: 'Average correlation · lower is better', d: 'Moves about half in step', part: F.parts.corr,
+    st: { lo: 0, hi: 1, axis: ['0', '1'], now: 1, wth: F.corr, ref: 1, fmt: (v) => nf(v, 2), aria: 'Average correlation of this fund to your portfolio: 0.52, where 1.00 would move exactly with it.' } },
+];
+const baRow = (r) => `<div class="ba"><div class="bl"><b>${r.t}</b><small>${r.s}</small><span class="dl">${r.d}</span></div>${strip(r.st)}<div class="bp"><b class="num">${r.part}</b><small>of 100</small></div></div>`;
+const story = (phone = false) => `<section class="panel story" aria-labelledby="st-h"><div class="top"><div><h2 id="st-h">If you add 5% of this fund</h2>
+    <p class="lede">${phone ? 'Your 6 positions now, and the same portfolio with 5% in this fund.' : 'Your portfolio now (6 positions, mostly US and European stocks, one world ETF) against the same portfolio with 5% in this fund and the other weights scaled down.'}</p></div>
+    <div class="res"><small>Gap score</small><b class="num">${F.gap}<span>of 100</span></b>${pass().replace('Pass', 'Qualifies')}</div></div>
+  <div class="key" aria-hidden="true"><span><i class="mk n"></i>Now</span><span><i class="mk w"></i>With 5% of ${F.ticker}</span><span><i class="mk r"></i>Reference</span></div>
+  ${ROWS.map(baRow).join('')}
+  <div class="sum"><p>The gap score is the mean of the three part scores (${F.parts.vol}, ${F.parts.conc} and ${F.parts.corr}). An ETF qualifies at 50 or more with medium or high confidence. Computed from prices; no AI text goes into it.</p></div></section>`;
+
+/* ---- AI parts ---- */
+const etfThesis = () => `<section class="panel">${secHead('The role it plays')}<div class="ai"><p class="lead">${F.thesis[0]}</p><p>${F.thesis[1]}</p>${aiLbl('Written by AI · 2 cited sources')}</div></section>`;
+const etfCats = () => `<section class="panel">${secHead('Catalysts', '<span class="gp">Dated events only</span>')}<div class="ai"><ul class="cats">${F.catalysts.map(([d, t]) => `<li><time>${d}</time><span>${t}</span></li>`).join('')}</ul>${aiLbl('Written by AI')}</div></section>`;
+const etfBear = () => `<section class="panel">${secHead('Bear case', '<span class="gp">What could go wrong</span>')}<div class="ai">${F.bear.map((p) => `<p>${p}</p>`).join('')}${aiLbl('Written by AI · 3 cited sources')}</div></section>`;
+const etfConcl = () => `<section class="panel">${secHead('Conclusion')}<div class="ai concl"><p>${F.conclusion}</p>${aiLbl('Written by AI')}</div></section>`;
+const etfSrc = () => `<section class="panel">${secHead('Sources', `<span class="gp">${F.src.length} cited</span>`)}<ul class="srcl">${F.src.map(([t, n, d]) => `<li><a href="#">${ic('link', 'xs')}<span>${n}</span></a><span class="tier ${t === 'Other' ? 'unv' : ''}">${t}</span><time>${d}</time></li>`).join('')}</ul></section>`;
+
+/* ---- the narrow column ---- */
+const priceBlk = (dec) => dec
+  ? `<div class="px"><b class="num">${F.cur} ${recNow.price}</b><small>${recNow.asOf}</small><span class="sc">${chg(recNow.since)}<span>since ${F.cur} ${F.price} on 14 Nov</span></span></div>`
+  : `<div class="px"><b class="num">${F.cur} ${F.price}</b><small>Price on ${F.asOf}</small></div>`;
+const conf = (c, why) => `<div class="cf">${confW(c)}${why ? `<em>${why}</em>` : ''}</div>`;
+const posBlk = () => `<div class="pos"><div class="pl"><span>Suggested position</span><b class="num">${F.position}%</b></div>
+  <div class="pbar" role="img" aria-label="Suggested 7.5% of the portfolio, half of the 15% maximum"><i style="width:50%"></i><u style="left:calc(100% - 2px)"></u></div>
+  <small>Of your portfolio. Half of the ${F.maxPos}% maximum; the full maximum is suggested at a gap score of 80 or more.</small></div>`;
+const rail = ({ c = 'high', why = '', dec = false } = {}) => `<aside class="panel decide" aria-label="${dec ? 'Your decision' : 'Decision'}">${priceBlk(dec)}${conf(c, why)}<span class="lastan" style="font-size:var(--fs-label);color:var(--muted);display:flex;gap:6px;align-items:center">${ic('history', 'xs')}Last analysis ${F.analysed}</span><hr>${posBlk()}<hr>
+  ${dec ? `<div class="acts"><button class="btn">${ic('check', 's')}Log the trade I placed</button><button class="btn ghost">${ic('x', 's')}Change my decision</button></div><p class="note2">Recorded only. No order was placed.</p>`
+    : `<div class="acts"><button class="btn">${ic('check', 's')}Approve</button><div class="acts2"><button class="btn ghost">${ic('x', 's')}Dismiss</button><button class="btn ghost">${ic('bookmark', 's')}Save</button></div><a href="#" class="btn ghost">${ic('ask', 's')}Ask AI</a></div>
+  <p class="note2">For human review, not a licensed advisor. Approve and Dismiss record your decision; no order is placed.</p>`}</aside>`;
+const facts = () => `<section class="panel pnl"><h2>Fund facts</h2><dl class="kv"><div><dt>Expense ratio</dt><dd>${F.ter} a year</dd></div><div><dt>Fund size</dt><dd>${F.size}</dd></div><div><dt>Category</dt><dd>${F.category}</dd></div><div><dt>Structure</dt><dd>UCITS · Acc</dd></div><div><dt>Listing</dt><dd>${F.listing} · ${F.cur}</dd></div><div><dt>ISIN</dt><dd>${F.isin}</dd></div></dl></section>`;
+const filterRows = (sizeUnknown) => F.filter.map(([n, v]) => sizeUnknown && n === 'Size'
+  ? `<li><b>${n}</b><small>Fund size not reported · at least EUR 100M</small>${unknownMk()}</li>`
+  : `<li><b>${n}</b><small>${v}</small>${pass()}</li>`).join('');
+const filter = (sizeUnknown = false) => `<section class="panel pnl"><h2>Quality filter<small>${sizeUnknown ? '5 pass · 1 unknown' : '6 of 6 pass'}</small></h2><ul class="qf">${filterRows(sizeUnknown)}</ul></section>`;
+
+/* ---- pages ---- */
+const decidedStrip = () => `<div class="sbn" role="status"><span class="si">${ic('checkc')}</span><div class="st"><span class="stp">${ic('checkc', 'xs')}Approved</span><em>${recNow.approvedOn}</em></div><p>You approved this idea. No order was placed; trade-agent never trades. If you bought the fund in your broker app, log the trade you placed. The analysis below is what you decided on.</p></div>`;
+const overview = () => `${story()}${etfThesis()}<div class="r2c">${etfCats()}${etfBear()}</div>${etfConcl()}${etfSrc()}`;
+const page = (o = {}) => `${back()}${ident()}${o.dec ? decidedStrip() : ''}${tabs()}<div class="wb"><div class="pane">${overview()}</div><div class="col">${rail(o)}${facts()}${filter(o.sizeUnknown)}</div></div>${adv()}`;
+const frame = (inner, active = 'today') => `<div class="frame"><aside class="side"><div class="brand"><i>${ic('today')}</i>trade-agent</div>${navItems(active)}</aside><main class="main co">${inner}</main></div>`;
+
+/* ---- Today ---- */
+/* the ETF card from direction A, fed from this page's data so card and page say the same thing */
+const etfCard = () => `<article class="panel card"><div class="hd"><div style="min-width:0"><div class="nm">${F.short}</div><div class="tk">${F.ticker} · ETF · UCITS · Acc</div></div><div class="pr"><b class="num">${F.cur} ${F.price}</b><small>${F.asOf}</small></div></div>
+  <div class="kv"><span class="chipx"><span class="mini" aria-hidden="true"><i style="width:${F.gap}%"></i></span>Gap score <b class="num">${F.gap}</b></span><span class="chipx">${confW(F.confidence)}</span><span class="chipx">${ic('layers', 'xs')}${F.category}</span></div>
+  <div class="ai"><p>${F.headline}</p>${aiLbl('AI headline')}</div>
+  <div class="qline">${ic('pass', 's')}Quality filter passed: cost ${F.ter}, size ${F.size}, no overlap with your ETFs</div>
+  <div class="ft"><a href="#" class="lk">Open research ${ic('arrow', 'xs')}</a><span class="sp"></span><button class="lk m" aria-label="Save ${F.short} to Discover">${ic('bookmark', 'xs')}Save</button></div></article>`;
+const stockPh = () => `<div class="ph0"><div><b>Stock card, unchanged</b>Overall score, confidence, risk, sector and the one-line reading, as in today-discovery.</div></div>`;
+const todayBody = (phone) => `<div class="today"><h1>Today</h1><div class="sub">Your latest research ideas and what needs attention on your holdings.</div></div>
+  <div class="sec"><h2>Other opportunities</h2><small>Prices at 14 Nov close</small></div><div class="grid3">${etfCard()}${stockPh()}${phone ? '' : stockPh()}</div>${adv()}`;
+
+/* ---- phone page: the result and the strips first, then the text, then facts and filter ---- */
+const phoneTop = () => `<div class="glance">${priceBlk(false)}<div class="gr">${conf('high')}<span class="cf"><b class="num" style="color:var(--text);margin-right:4px">${F.position}%</b>suggested</span></div></div>`;
+const phonePage = () => `${back()}${ident()}${phoneTop()}${tabs()}<div class="pane">${story(true)}${etfThesis()}${etfCats()}${etfBear()}${etfConcl()}${facts()}${filter()}${etfSrc()}</div>${adv()}`;
+const abar = () => `<div class="abar"><button class="btn">${ic('check', 's')}Approve</button><button class="btn ghost sq" aria-label="Save to Discover">${ic('bookmark', 's')}</button><button class="btn ghost sq" aria-label="Dismiss">${ic('x', 's')}</button><button class="btn ghost sq" aria-label="Ask AI">${ic('ask', 's')}</button></div>`;
+const todayPhone = () => `<div class="phone"><div class="scr co">${todayBody(true)}</div><div class="tabbar">${[['today', 'Today', 1], ['discover', 'Discover'], ['portfolio', 'Portfolio'], ['chat', 'Chat'], ['more', 'More']].map(([k, l, on]) => `<div class="${on ? 'on' : ''}">${ic(k)}${l}</div>`).join('')}</div></div>`;
+
+/* ---- states: just the narrow column and the strip, since the rest of the page is unchanged ---- */
+const stMed = () => `<div class="region"><div class="cap">Confidence medium: the fund size is unknown</div><div class="co" style="display:grid;grid-template-columns:300px 300px minmax(0,1fr);gap:24px;align-items:start">
+  ${rail({ c: 'medium', why: 'fund size unknown' })}${filter(true)}
+  <div class="medn">${ic('alert', 's')}<span><b>Why medium.</b> The data source did not report the fund size, so the size check could not run. It is not counted as a fail, but it lowers confidence to medium. Only medium and high can qualify, so this idea still qualifies; low would not.</span></div></div></div>`;
+const stDec = () => `<div class="region"><div class="cap">After you decided: read-only strip above the tabs, the rail leads with the move since the recommendation</div><div class="co">${page({ dec: true })}</div></div>`;
+
+/* ---- mount ---- */
+document.getElementById('desk').innerHTML = `<div class="cap" style="margin:0 0 8px">Today: the ETF card beside a stock card</div>${frame(todayBody(false))}<div class="cap" style="margin:22px 0 8px">The recommendation page, Overview</div>${frame(page())}`;
+document.getElementById('phones').innerHTML = `<div><div class="cap">Today</div>${todayPhone()}</div><div><div class="cap">The recommendation page</div>${coPhone(phonePage(), abar())}</div>`;
+document.getElementById('states').innerHTML = stMed() + stDec();
+document.addEventListener('click', (e) => { if (!e.target.closest('.theme')) return; const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; });
+</script>
+</body>
+</html>

@@ -206,7 +206,7 @@ ScanRun
   excluded (JSON list of Exclusion), rejected_mentions (JSON list of RejectedMention),
   coverage_summary (JSON object -- includes up to three ranked nearest misses when outcome is
       "none", each with ticker, overall and confidence; bounded Tavily failure messages when
-      source research could not complete)
+      source research could not complete; and `etf_lane` counts, see "ETF ideas")
   -- Forced owner-only RLS, runtime table/sequence grants, USER_TABLES registration, export,
   -- deletion coverage and its import classification (see "Importing your data") ship together. An empty shortlist still produces a completed scan row.
 
@@ -511,10 +511,46 @@ but not failed research or screening rejections. Reviewing/superseding a recomme
 changes these counts. Legacy scans without a valid saved count expose null for both; the API
 does not guess from summary prose or current pending rows. Empty-opportunity scans also save
 company names alongside ticker, overall and confidence in `nearest_misses`. Every scan also saves
-the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE`, as
-`coverage_summary.set_aside_ideas` (ticker, name, overall, confidence); `nearest_misses` is the first
-three of them and is still written only when nothing qualifies. Scans saved before this have no
-`set_aside_ideas`. Existing JSON columns hold these additions, so no database migration is required.
+the researched ideas that missed the bar, best first and at most `SHORTLIST_SIZE + ETF_SLOTS`
+(eleven), as `coverage_summary.set_aside_ideas` (ticker, name, overall, confidence);
+`nearest_misses` is the first three of them and is still written only when nothing qualifies.
+Scans saved before this have no `set_aside_ideas`. Existing JSON columns hold these additions, so
+no database migration is required.
+
+**ETF ideas in `IdeaOut`.** An idea with `asset_type "ETF"` reuses the same model, with these
+differences, enforced by the `IdeaOut` validator and the ETF scorer:
+
+- `scores` is exactly `[fit]`; there is no quality or valuation entry. A non-`None` `overall`
+  requires a fit score, and `overall` equals it: for the ETF lane the gap score is the score, an
+  exception to "fit never changes overall" that applies only to ETFs.
+- `peers` is `[]` and `competitors` is empty, since there is no peer comparison for a fund.
+- `snapshot.industry` carries the fund category (Yahoo's when it has one, else the universe row's
+  `industry`) and `snapshot.sector` is `null`.
+  `snapshot.fundamentals` carries `expenseRatio` (a fraction, so 0.0022 is 0.22% a year),
+  `totalAssets` (in the fund's own currency) and `fundSizeEur`: the size converted to EUR (the
+  universe file's figure, else Yahoo's total assets at the day's rate), or `null` when unknown.
+  These are the three facts the minimal frontend card shows: expense ratio, fund size and
+  category. A fact that was not saved reads "Not saved with this idea".
+- The API contract is otherwise unchanged. The frontend reads these through `IdeaOut` and
+  `etfFacts`; a proper ETF layout is a separate, owner-approved design slice.
+
+**`ScanRun` additions for ETFs.** `Exclusion.reason` gains three values, used only by the ETF
+lane: `not_ucits` (the fund is not marked UCITS in the universe file), `fails_quality_filter`
+(expense ratio above 0.50%, fund size under EUR 100 million, a leveraged or inverse fund, or a
+near-copy of a cheaper or larger candidate) and `overlaps_holding` (a return correlation of 0.95 or
+more with a held ETF, whatever the categories: a held fund's category is Yahoo's and a candidate's is
+the file's, so only the correlation is compared). A fund with too little
+history or no expense ratio is `insufficient_data`, and the existing price and currency reasons
+apply to funds too.
+`coverage_summary.etf_lane` is
+`{eligible, shortlisted, researched, skipped_reason}`; `skipped_reason` is a string, or `null`
+when the lane ran. It reads "ETF ideas need at least two holdings with price history" when fewer
+than two holdings have price history, "ETF ideas need price history for every holding" when two
+or more have but some valued holding has none (every fund would otherwise be excluded for lack of
+shared history), and "ETF ideas were unavailable in this scan" when the lane failed unexpectedly
+(the exception class is logged, never its message). In each case the scan is still `completed`,
+the lane simply did not run, the stock ideas are unchanged, and Scan results shows the text as a
+coverage note. Scans saved before ETF ideas have no `etf_lane`.
 
 ### Importing your data
 
@@ -846,10 +882,12 @@ missing snapshot fails with an explicit refresh message rather than a misleading
 Partial coverage, stale/uncertain prices, unavailable mentions and individual candidate failures
 are recorded in `coverage_summary`. It loads only the caller's open holdings and avoided sectors,
 admits cached mentions through the same safeguards, then ranks universe and admitted candidates
-for one eight-candidate shortlist. It never refreshes all 600 symbols or funds a global theme batch
-from a manual request. Candidate evaluation uses the caller's explicit client, at most three graphs
-at once and a 15-minute provider-work timeout. No candidates is a valid completed `none` scan;
-failure of every shortlisted graph is a failed job, never a no-opportunity claim.
+for one eight-candidate stock shortlist, plus up to three ETFs from the ETF lane (see "ETF ideas"
+below). It never refreshes all 600 symbols or funds a global theme batch from a manual request.
+Candidate evaluation uses the caller's explicit client, at most three graphs at once and a
+15-minute provider-work timeout; a scan runs at most eleven graphs. No candidates is a valid
+completed `none` scan; failure of every shortlisted graph is a failed job, never a
+no-opportunity claim.
 
 Portfolio fit reuses the analytics loader, retaining dated holding histories and removing future
 bars from both holding and candidate returns. An empty/inapplicable portfolio leaves fit absent.
@@ -887,9 +925,58 @@ independent of the existing per-user monthly analysis allowance and the daily th
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
 content has no scoring weight and cannot establish a confirmed thesis-invalidating event.
-ETFs remain in the universe but are explicitly excluded from discovery scoring until separate
-criteria exist. `TAVILY_API_KEY` is an optional backend setting for research, not a new
+ETFs are not scored by company fundamentals; they have their own lane (below).
+`TAVILY_API_KEY` is an optional backend setting for research, not a new
 requirement for startup, tests, snapshots or the existing analysis flow.
+
+**ETF ideas.** The [ETF ideas design](superpowers/specs/2026-11-16-etf-discovery-design.md) adds a
+lane inside the same scan, job, persistence and Scan results page, with its own eligibility, gap
+score and slots (`discovery/etf.py`, `ETF_SLOTS = 3`). The stock lane is unchanged: same universe
+rows, same peer scoring, the same 60 gate and eight slots.
+
+- *Which funds can be recommended.* Only rows marked `ucits=yes` in the universe file. The file
+  accepts that flag only for an ETF with a valid ISIN whose prefix is IE, LU, DE, FR or NL, so a
+  US-listed fund, or a Jersey, Swiss or Cayman product, cannot be marked. The US-listed ETFs stay in
+  the file and show up as `not_ucits` exclusions rather than being deleted.
+- *Universe columns.* `universe.csv` gains `isin`, `ucits` (`yes` or `no`), `ter` (a yearly expense
+  ratio as a fraction, above 0 and at most 0.05, a hand-kept fallback when Yahoo lacks it) and
+  `size_eur_m` (fund size in millions of euros, the same kind of fallback). Both may be empty. The
+  universe holds one listing per ISIN, and the ETF target is roughly 100 to 150 funds, grown in
+  batches. The existing `sector` column is filled for sector and theme funds only (for example
+  Technology for an information technology fund), using the sector names the stocks use; broad
+  funds leave it empty. It is copied into the fund's snapshot when Yahoo gives none, so a sector
+  the person avoids also skips that sector's funds. The `industry` column holds a fund's category
+  (a Morningstar-style label such as "Global Large-Cap Blend Equity"). The fund's category is
+  Yahoo's when Yahoo has one, else the row's `industry`: Yahoo gives none for UCITS funds (a live
+  run found 0 of 24), and the ETF lane cannot qualify a fund without one, so the file requires a
+  non-blank `industry` on every `ucits=yes` row. Funds with the same exposure share one label, so
+  the near-copy, overlap and one-per-category rules compare them; the stock lane never reads it.
+- *Eligibility and quality filter.* The first failure wins, in this order: UCITS, supported
+  currency, a reliable and fresh price, enough history (at least 200 closes and 60 return
+  intervals shared with the holdings), a known expense ratio, not leveraged or inverse, the hard
+  overlap exclusion against held ETFs (a correlation of 0.95 or more alone, with no category test),
+  then the pass or fail quality filter (expense ratio at most 0.50%, fund size at least EUR 100
+  million when it is known). Among near-copy candidates (same category, or either unknown,
+  correlation 0.95 or more; candidates share one category vocabulary) only the cheapest, then the largest, is kept, and at most one
+  fund per category is shortlisted. Every failure is an `Exclusion` shown on Scan results,
+  except that held tickers and avoided sectors are left out without one, as for stocks. Yahoo's
+  `netExpenseRatio` is read as a percent number; a result below 0.01% or above 5% a year as a
+  fraction is treated as unknown (a wrong divisor would otherwise make every fund look free), so
+  the fund is `insufficient_data`; the universe file's `ter` is not subject to this rule. A fund
+  is leveraged when its name or category holds 2x, 3x, 5x, x2, x3 or x5 as a whole token (so
+  "STOXX50" is not), or a word such as "leveraged", "inverse" or "daily short".
+- *Score and gate.* The gap score is the existing `fit` dimension (correlation, volatility and
+  concentration change when the fund is added at a hypothetical 5% weight) and is also the
+  `overall`. An ETF qualifies at `ETF_NO_OPPORTUNITY_MIN_OVERALL = 50` (stocks stay at
+  `NO_OPPORTUNITY_MIN_OVERALL = 60`) with `medium` or `high` confidence; a qualifying fund is saved as a pending BUY discovery recommendation by the same
+  persistence code, and the usual superseding applies by ticker. Funds that passed both filters
+  and scored under the gate are set aside, with the other researched ideas.
+- *Skipped lane.* With fewer than two holdings with price history, or with any valued holding
+  lacking it, or when the lane fails unexpectedly, the lane is skipped and
+  `coverage_summary.etf_lane.skipped_reason` says which (see "ETF ideas in `IdeaOut`" above).
+- *Cost.* The ETF lane raises the number of graphs per scan from at most eight to at most eleven.
+  The scheduled `discovery` command therefore needs 55 searches left in the owner budget (see the
+  scheduled-jobs section).
 
 **Research (Phase 2).** `research_candidate` makes at most four Tavily basic searches (monthly
 news, bull, bear, Reddit; five results each) and one Claude extraction with SDK retries disabled.
@@ -1430,8 +1517,8 @@ default — same dialect and models as production, started with
   `pause_state`, the caller's saved Claude key (explicit server fallback
   only for admins without a saved key), the monthly `analysis_run` allowance and discovery's
   single-flight job. It skips users with a completed scan on that UTC day and users whose owner
-  search budget has fewer than 40 searches left (eight candidates times four queries plus one
-  follow-up), without charging or making a day claim. There is no
+  search budget has fewer than 55 searches left (eleven candidates, eight stocks and three ETFs,
+  times four queries plus one follow-up), without charging or making a day claim. There is no
   holdings requirement. `discovery:ran:<user_id>:<YYYY-MM-DD>` (25-hour TTL) permits at most one
   automatic attempt per UTC day. Quota rejection clears it; refused job creation refunds before
   clearing it, including overlap with a manual discovery run. Accepted failed attempts retain it,

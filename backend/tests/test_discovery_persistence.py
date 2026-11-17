@@ -7,11 +7,19 @@ import pytest
 
 from app.config import settings
 from app.db import open_user_session
+from app.discovery.etf import ETF_SLOTS
 from app.discovery.persistence import save_scan
 from app.discovery.screen import SHORTLIST_SIZE
 from app.models import Recommendation, ScanRun
 from app.schemas import ScanRunOut
-from app.schemas_discovery import Exclusion, IdeaOut, IdeaSnapshot, Mention, RejectedMention
+from app.schemas_discovery import (
+    DimensionScore,
+    Exclusion,
+    IdeaOut,
+    IdeaSnapshot,
+    Mention,
+    RejectedMention,
+)
 from app.user_data import delete_user_data
 from tests.auth_support import OTHER_USER_ID, USER_ID, add_app_user
 from tests.discovery_fixtures import sample_candidate, sample_idea
@@ -27,6 +35,34 @@ def _idea(*, ticker="NESN.SW", overall=70, confidence="medium") -> IdeaOut:
         if dimension["name"] != "fit":
             dimension["score"] = overall
     return IdeaOut.model_validate(data)
+
+
+def _etf_idea(*, ticker="IWDA.AS", overall=70, confidence="medium", as_of=None) -> IdeaOut:
+    """A fund idea as the ETF lane builds it: no peers, a fit score only, category as industry."""
+    stock = sample_idea()
+    snapshot = IdeaSnapshot(
+        exchange="Amsterdam",
+        country="Ireland",
+        sector=None,
+        industry="Global Large-Cap Blend Equity",
+        currency="EUR",
+        price=95.0,
+        price_as_of=as_of or datetime.now(UTC) - timedelta(days=1),
+        fundamentals={"annualReportExpenseRatio": 0.002},
+        coverage=sample_candidate().coverage,
+    )
+    return stock.model_copy(
+        update={
+            "ticker": ticker,
+            "name": "iShares Core MSCI World UCITS ETF",
+            "asset_type": "ETF",
+            "scores": [DimensionScore(name="fit", score=overall, reasons=["Low overlap"])],
+            "overall": overall,
+            "confidence": confidence,
+            "peers": [],
+            "snapshot": snapshot,
+        }
+    )
 
 
 def _rec(user_id=USER_ID, *, source="discovery", status="PENDING") -> Recommendation:
@@ -85,14 +121,14 @@ def test_scan_saves_the_researched_ideas_that_missed_the_bar_best_first(
     assert "nearest_misses" not in scan.coverage_summary
 
 
-def test_set_aside_ideas_are_bounded_by_the_shortlist_size(db_session, app_session_local):
+def test_set_aside_ideas_are_bounded_by_the_stock_and_etf_slots(db_session, app_session_local):
     add_app_user(db_session)
-    ideas = [_idea(ticker=f"T{i:02d}", overall=5) for i in range(SHORTLIST_SIZE + 3)]
+    ideas = [_idea(ticker=f"T{i:02d}", overall=5) for i in range(SHORTLIST_SIZE + ETF_SLOTS + 3)]
     with patch("app.db.SessionLocal", app_session_local):
         scan = save_scan(USER_ID, ideas, **{**COUNTS, "researched": len(ideas)})
 
     assert scan is not None
-    assert len(scan.coverage_summary["set_aside_ideas"]) == SHORTLIST_SIZE
+    assert len(scan.coverage_summary["set_aside_ideas"]) == SHORTLIST_SIZE + ETF_SLOTS == 11
     assert scan.coverage_summary["nearest_misses"] == scan.coverage_summary["set_aside_ideas"][:3]
 
 
@@ -412,3 +448,54 @@ def test_an_idea_with_no_price_date_or_snapshot_is_left_unmeasured(db_session, a
     saved = _saved_entry(db_session, app_session_local, _idea_priced(None))
 
     assert saved.price_at_recommendation is None and saved.price_as_of is None
+
+
+@pytest.mark.parametrize(("score", "fraction"), [(50, 0.5), (79, 0.5), (80, 1.0)])
+def test_a_qualifying_etf_is_saved_as_a_pending_buy_sized_like_a_stock(
+    db_session, app_session_local, score, fraction
+):
+    as_of = datetime.now(UTC) - timedelta(days=2)
+    idea = _etf_idea(overall=score, as_of=as_of)
+
+    saved = _saved_entry(db_session, app_session_local, idea)
+
+    assert (saved.asset_type, saved.action, saved.source, saved.status) == (
+        "ETF",
+        "BUY",
+        "discovery",
+        "PENDING",
+    )
+    assert IdeaOut.model_validate(saved.idea) == idea
+    assert float(saved.suggested_position_pct) == pytest.approx(
+        settings.max_single_position_pct * fraction
+    )
+    # The fund's own price and day, taken from the candidate, are the issue price.
+    assert float(saved.price_at_recommendation) == 95.0
+    assert saved.price_as_of == datetime(as_of.year, as_of.month, as_of.day)
+
+
+def test_an_etf_under_its_gate_is_set_aside_not_saved(db_session, app_session_local):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        scan = save_scan(USER_ID, [_etf_idea(overall=49)], **COUNTS)
+
+    assert scan is not None and scan.outcome == "none"
+    assert [i["ticker"] for i in scan.coverage_summary["set_aside_ideas"]] == ["IWDA.AS"]
+    assert db_session.query(Recommendation).count() == 0
+
+
+def test_a_later_scan_supersedes_the_earlier_pending_etf_of_the_same_ticker(
+    db_session, app_session_local
+):
+    add_app_user(db_session)
+    with patch("app.db.SessionLocal", app_session_local):
+        save_scan(USER_ID, [_etf_idea(overall=65), _idea(ticker="STOCK")], **COUNTS)
+        save_scan(USER_ID, [_etf_idea(overall=85)], **COUNTS)
+
+    rows = db_session.query(Recommendation).order_by(Recommendation.id).all()
+    assert [(r.ticker, r.status) for r in rows] == [
+        ("STOCK", "PENDING"),  # the second scan did not evaluate this one
+        ("IWDA.AS", "SUPERSEDED"),
+        ("IWDA.AS", "PENDING"),
+    ]
+    assert rows[2].idea["overall"] == 85

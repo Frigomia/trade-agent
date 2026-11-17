@@ -1,28 +1,46 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Box, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { Globe } from "lucide-react";
+import { Globe, Layers } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { listingText, sectorText } from "@/lib/discovery";
+import { fundTags, isEtf } from "@/lib/etfIdea";
 import { SectorIcon } from "@/components/ui/SectorIcon";
 import { DecidedPhoneBar, DecidedRail, RunAgainDisabled, WithdrawnPhoneBar, WithdrawnRail } from "./DecidedRail";
 import { DecisionRail, DecisionSummary, PhoneActions } from "./DecisionRail";
+import { EtfOverview } from "./EtfOverview";
+import { EtfSideColumn } from "./EtfSideColumn";
 import { Numbers } from "./Numbers";
-import { Overview } from "./Overview";
+import { ChartPanel, Overview } from "./Overview";
 import { RiskFit } from "./RiskFit";
 import { SourcesTab } from "./SourcesTab";
 import { StatusStrip, type StripKind } from "./StatusStrip";
 
-const TABS = [
+type TabKey = "overview" | "numbers" | "risk" | "sources" | "price";
+const TABS: readonly { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "numbers", label: "Numbers" },
   { key: "risk", label: "Risk and fit" },
   { key: "sources", label: "Sources" },
-] as const;
-type TabKey = (typeof TABS)[number]["key"];
+];
+// A fund has no peers, valuation or quality score to show: its fit and filter sit in the Overview.
+const LONG_TAG: Record<string, string> = { Acc: "Accumulating", Dist: "Distributing" };
+const ETF_TABS: readonly { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "price", label: "Price" },
+  { key: "sources", label: "Sources" },
+];
+
+function FundTag({ children }: { children: ReactNode }) {
+  return (
+    <Box component="li" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, px: 1.25, py: 0.375, borderRadius: 999, bgcolor: "var(--track)", fontSize: "0.75rem", color: "var(--text2)", whiteSpace: "nowrap" }}>
+      {children}
+    </Box>
+  );
+}
 
 /** What happened to the idea, from its status: null while it waits for a decision. */
 function reopenedAs(rec: DiscoveryRecommendation): Exclude<StripKind, "newer"> | null {
@@ -54,17 +72,29 @@ export function Workbench({
   const view = reopenedAs(recommendation);
   const strip = view ?? notice;
   const isDesktop = useMediaQuery(useTheme().breakpoints.up("md"));
-  const [tab, setTab] = useState<TabKey>("overview");
+  const etf = isEtf(idea);
+  const tabs = etf ? ETF_TABS : TABS;
+  const [picked, setTab] = useState<TabKey>("overview");
+  const tab = tabs.some((t) => t.key === picked) ? picked : "overview"; // a key from the other list falls back
   const panelId = useId();
   const arrow = (e: KeyboardEvent) => {
     // The tab pattern: arrows (and Home/End) move between tabs, and only the selected one is a tab stop.
-    const at = TABS.findIndex((t) => t.key === tab);
-    const to = { ArrowRight: (at + 1) % TABS.length, ArrowLeft: (at + TABS.length - 1) % TABS.length, Home: 0, End: TABS.length - 1 }[e.key];
+    const at = tabs.findIndex((t) => t.key === tab);
+    const to = { ArrowRight: (at + 1) % tabs.length, ArrowLeft: (at + tabs.length - 1) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
     if (to === undefined) return;
     e.preventDefault();
-    setTab(TABS[to].key);
-    document.getElementById(`${panelId}-${TABS[to].key}-tab`)?.focus();
+    setTab(tabs[to].key);
+    document.getElementById(`${panelId}-${tabs[to].key}-tab`)?.focus();
   };
+  // A stock's rail is the grid item itself (it is sticky); an ETF's rail shares a wrapper with the fund panels.
+  const rail =
+    view === "withdrawn" ? (
+      <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
+    ) : view ? (
+      <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
+    ) : (
+      <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
+    );
   const country = idea.snapshot?.country;
   const sector = sectorText(idea);
   return (
@@ -75,19 +105,35 @@ export function Workbench({
           <Typography component="h1" sx={{ fontSize: { xs: "1.375rem", md: "1.625rem" }, fontWeight: 650, letterSpacing: "-0.025em", lineHeight: 1.15 }}>
             {idea.name}
           </Typography>
-          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>{listingText(idea)}</Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5, fontSize: "0.75rem", color: "var(--text2)" }}>
-            {sector && (
-              <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-                <SectorIcon sector={idea.snapshot?.sector} size={13} /> {sector}
-              </Box>
-            )}
-            {country && (
-              <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-                <Globe size={13} aria-hidden /> {country}
-              </Box>
-            )}
-          </Box>
+          <Typography sx={{ fontSize: "0.8125rem", color: "var(--muted)" }}>
+            {etf ? [idea.ticker, idea.snapshot?.exchange, idea.snapshot?.currency].filter(Boolean).join(" · ") : listingText(idea)}
+          </Typography>
+          {etf ? (
+            <Box component="ul" aria-label="Fund tags" sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 1, mb: 0, p: 0, listStyle: "none" }}>
+              {fundTags(idea).map((t) => (
+                <FundTag key={t}>{LONG_TAG[t] ?? t}</FundTag>
+              ))}
+              {idea.snapshot?.industry && (
+                <FundTag>
+                  <Layers size={13} aria-hidden />
+                  {idea.snapshot.industry}
+                </FundTag>
+              )}
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 0.5, fontSize: "0.75rem", color: "var(--text2)" }}>
+              {sector && (
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+                  <SectorIcon sector={idea.snapshot?.sector} size={13} /> {sector}
+                </Box>
+              )}
+              {country && (
+                <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+                  <Globe size={13} aria-hidden /> {country}
+                </Box>
+              )}
+            </Box>
+          )}
         </Box>
       </Box>
       {strip && <StatusStrip kind={strip} rec={recommendation} />}
@@ -97,8 +143,8 @@ export function Workbench({
           {view === "withdrawn" && <RunAgainDisabled />}
         </Box>
       )}
-      <Box role="tablist" aria-label="Company sections" sx={{ display: "flex", gap: "4px", p: "4px", borderRadius: 999, bgcolor: "var(--track)", width: { xs: "100%", md: "max-content" }, maxWidth: "100%" }}>
-        {TABS.map((t) => (
+      <Box role="tablist" aria-label={etf ? "Fund sections" : "Company sections"} sx={{ display: "flex", gap: "4px", p: "4px", borderRadius: 999, bgcolor: "var(--track)", width: { xs: "100%", md: "max-content" }, maxWidth: "100%" }}>
+        {tabs.map((t) => (
           <Box
             key={t.key}
             component="button"
@@ -130,19 +176,13 @@ export function Workbench({
       </Box>
       <Box sx={{ display: "grid", gap: 3, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 300px" }, alignItems: "start" }}>
         <Box role="tabpanel" id={`${panelId}-panel`} aria-labelledby={`${panelId}-${tab}-tab`} sx={{ minWidth: 0 }}>
-          {tab === "overview" && <Overview idea={idea} recommendationId={recommendation.id} />}
+          {tab === "overview" && (etf ? <EtfOverview idea={idea} withSide={!isDesktop} /> : <Overview idea={idea} recommendationId={recommendation.id} />)}
+          {tab === "price" && <ChartPanel recommendationId={recommendation.id} />}
           {tab === "numbers" && <Numbers idea={idea} />}
           {tab === "risk" && <RiskFit idea={idea} />}
           {tab === "sources" && <SourcesTab idea={idea} />}
         </Box>
-        {isDesktop &&
-          (view === "withdrawn" ? (
-            <WithdrawnRail rec={recommendation} onSeeSources={() => setTab("sources")} />
-          ) : view ? (
-            <DecidedRail rec={recommendation} onChanged={onChanged} onSeeSources={() => setTab("sources")} />
-          ) : (
-            <DecisionRail rec={recommendation} onDecided={onDecided} onSeeSources={() => setTab("sources")} />
-          ))}
+        {isDesktop && (etf ? <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>{rail}<EtfSideColumn idea={idea} /></Box> : rail)}
       </Box>
       <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", maxWidth: "72ch", lineHeight: 1.5 }}>
         Advisory research for human review, not investment advice. Saving or approving only records your decision; nothing is sent to a broker.

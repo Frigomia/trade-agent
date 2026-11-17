@@ -6,11 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.analysis.portfolio import PositionInput
 from app.discovery import runner
+from app.discovery.etf import ETF_LANE_NEEDS_HISTORY, ETF_LANE_SKIPPED, ETF_LANE_UNAVAILABLE
 from app.discovery.peers import PeerRecord
 from app.discovery.screen import SHORTLIST_SIZE, build_candidate
+from app.discovery.snapshot import Freshness
 from tests.auth_support import USER_ID
 from tests.discovery_fixtures import sample_exposure, sample_idea
+from tests.test_discovery_etf import HIST, etf, noise
 from tests.test_discovery_screen import snap
 
 
@@ -58,6 +62,13 @@ def test_scan_ranks_once_caps_provider_work_and_works_without_holdings(scan_inpu
     assert admission.await_args.args[2] == snapshots
     assert result.coverage_summary["mentions_available"] is False
     assert progress.await_args.args == ("evaluating", SHORTLIST_SIZE, SHORTLIST_SIZE)
+    # No holdings: the ETF lane is skipped with a visible reason and the stock result is untouched.
+    assert result.coverage_summary["etf_lane"] == {
+        "eligible": 0,
+        "shortlisted": 0,
+        "researched": 0,
+        "skipped_reason": ETF_LANE_SKIPPED,
+    }
 
 
 def test_admitted_mentions_compete_for_the_same_eight_places(scan_inputs):
@@ -158,7 +169,6 @@ def test_empty_fit_context_needs_no_market_data(monkeypatch):
 
 def test_holding_fit_context_drops_future_bars(monkeypatch):
     from app import portfolio_analytics
-    from app.analysis.portfolio import PositionInput
     from app.fx import EurPrice
 
     today = datetime.now(UTC).date()
@@ -230,3 +240,149 @@ def test_fatal_errors_cancel_all_sibling_evaluations(scan_inputs, failure):
             assert caught.value.subgroup(ResearchKeyRejected) is not None
 
     asyncio.run(scenario())
+
+
+HOLDINGS = [
+    PositionInput("SAP.DE", "SAP", 5, "STOCK"),
+    PositionInput("AAPL", "Apple", 5, "STOCK"),
+]
+ZEROS = {"eligible": 0, "shortlisted": 0, "researched": 0}
+
+
+@pytest.fixture
+def etf_scan(scan_inputs, monkeypatch):
+    """Two holdings with history, one healthy bond ETF in the universe, a working graph."""
+    snapshots, client, graph, _, _ = scan_inputs
+    snapshots.append(etf("BOND", noise(200), category="Bond"))
+    monkeypatch.setattr(runner, "_user_inputs", lambda user_id: (HOLDINGS, []))
+    monkeypatch.setattr(
+        runner, "load_fit_context", AsyncMock(return_value=(sample_exposure(), HIST))
+    )
+    monkeypatch.setattr(runner, "fetch_dated_closes", AsyncMock(return_value={}))
+    monkeypatch.setattr(runner, "check_freshness", lambda snaps, today: Freshness({}, {}))
+
+    async def works(candidate, user_client, *, fit):
+        return sample_idea().model_copy(update={"ticker": candidate.ticker})
+
+    graph.side_effect = works
+    return snapshots, client, graph
+
+
+def test_the_etf_lane_runs_next_to_the_stock_lane(etf_scan):
+    _, client, graph = etf_scan
+    progress = AsyncMock()
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, progress))
+    assert graph.await_count == SHORTLIST_SIZE + 1
+    assert "BOND" in {call.args[0].ticker for call in graph.await_args_list}
+    assert "BOND" in {idea.ticker for idea in result.ideas}
+    assert result.coverage_summary["etf_lane"] == {
+        "eligible": 1,
+        "shortlisted": 1,
+        "researched": 1,
+        "skipped_reason": None,
+    }
+    assert result.eligible == 13 and result.shortlisted == SHORTLIST_SIZE + 1
+    assert result.researched == SHORTLIST_SIZE + 1
+    assert progress.await_args_list[2].args == ("researching", SHORTLIST_SIZE + 1, 0)
+    assert progress.await_args.args == ("evaluating", SHORTLIST_SIZE + 1, SHORTLIST_SIZE + 1)
+
+
+def test_one_holding_skips_the_etf_lane_and_leaves_the_stock_result_alone(etf_scan, monkeypatch):
+    _, client, graph = etf_scan
+    exposure = sample_exposure()
+    one = exposure.model_copy(update={"positions": exposure.positions[:1]})
+    monkeypatch.setattr(runner, "load_fit_context", AsyncMock(return_value=(one, HIST)))
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.eligible == 12 and result.shortlisted == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {**ZEROS, "skipped_reason": ETF_LANE_SKIPPED}
+
+
+def test_holdings_without_usable_history_skip_the_lane_not_blame_every_fund(etf_scan, monkeypatch):
+    _, client, graph = etf_scan
+    histories = {"SAP.DE": HIST["SAP.DE"], "AAPL": {}}  # AAPL is valued but has no history
+    monkeypatch.setattr(
+        runner, "load_fit_context", AsyncMock(return_value=(sample_exposure(), histories))
+    )
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {**ZEROS, "skipped_reason": ETF_LANE_SKIPPED}
+    assert all(item.ticker != "BOND" for item in result.excluded)
+
+
+def test_one_of_three_holdings_without_history_skips_the_lane_with_its_own_reason(
+    etf_scan, monkeypatch
+):
+    _, client, graph = etf_scan
+    exposure = sample_exposure()
+    msft = exposure.positions[0].model_copy(update={"ticker": "MSFT"})
+    three = exposure.model_copy(update={"positions": [*exposure.positions, msft]})
+    histories = {**HIST, "MSFT": {}}  # MSFT is valued but its fetch failed: two usable of three
+    monkeypatch.setattr(runner, "load_fit_context", AsyncMock(return_value=(three, histories)))
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.eligible == 12 and result.shortlisted == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {
+        **ZEROS,
+        "skipped_reason": ETF_LANE_NEEDS_HISTORY,
+    }
+    assert all(item.ticker != "BOND" for item in result.excluded)
+
+
+def test_a_crash_in_the_etf_lane_skips_the_lane_and_leaves_the_stock_result_alone(
+    etf_scan, monkeypatch, caplog
+):
+    _, client, graph = etf_scan
+
+    def broken(*args, **kwargs):
+        raise ValueError("secret")
+
+    monkeypatch.setattr(runner, "_etf_lane", broken)
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert graph.await_count == SHORTLIST_SIZE
+    assert result.eligible == 12 and result.shortlisted == SHORTLIST_SIZE
+    assert result.coverage_summary["etf_lane"] == {
+        **ZEROS,
+        "skipped_reason": ETF_LANE_UNAVAILABLE,
+    }
+    assert "ValueError" in caplog.text and "secret" not in caplog.text
+
+
+def test_a_held_etf_is_not_recommended_again(etf_scan, monkeypatch):
+    _, client, graph = etf_scan
+    held = PositionInput("BOND", "Bond fund", 5, "ETF")
+    monkeypatch.setattr(runner, "_user_inputs", lambda user_id: ([*HOLDINGS, held], []))
+    asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert "BOND" not in {call.args[0].ticker for call in graph.await_args_list}
+
+
+def test_a_stock_only_universe_reports_an_etf_lane_of_zeros(etf_scan, monkeypatch):
+    snapshots, client, graph = etf_scan
+    stocks_only = [s for s in snapshots if s.asset_type != "ETF"]
+    monkeypatch.setattr(runner, "load_snapshot", AsyncMock(return_value=stocks_only))
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert result.coverage_summary["etf_lane"] == {**ZEROS, "skipped_reason": None}
+    assert graph.await_count == SHORTLIST_SIZE
+
+
+def test_every_etf_failing_does_not_fail_the_scan_but_both_lanes_failing_does(etf_scan):
+    _, client, graph = etf_scan
+
+    async def etf_breaks(candidate, user_client, *, fit):
+        if candidate.ticker == "BOND":
+            raise RuntimeError("secret")
+        return sample_idea().model_copy(update={"ticker": candidate.ticker})
+
+    graph.side_effect = etf_breaks
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+    assert result.coverage_summary["candidate_failures"] == ["BOND"]
+    assert result.coverage_summary["etf_lane"] == {
+        "eligible": 1,
+        "shortlisted": 1,
+        "researched": 0,
+        "skipped_reason": None,
+    }
+    assert result.researched == SHORTLIST_SIZE
+    graph.side_effect = RuntimeError("secret")
+    with pytest.raises(runner.CandidateEvaluationUnavailable):
+        asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))

@@ -114,6 +114,14 @@ describe("ScanResults", () => {
     expect(screen.getByText("Research mentions were available for this scan.")).toBeInTheDocument();
   });
 
+  it("lists an ETF exclusion with its reason and the note for a skipped ETF lane", () => {
+    const excluded = [{ ticker: "USXX", name: "US Tracker ETF", reason: "not_ucits" as const, explanation: "no UCITS status", evidence: [] }];
+    const etf_lane = { eligible: 2, shortlisted: 0, researched: 0, skipped_reason: "ETF ideas need at least two holdings with price history" };
+    render(<ScanResults scan={{ ...BASE, excluded, coverage_summary: { etf_lane } }} />);
+    expect(screen.getByText("Not available to EU retail investors")).toBeInTheDocument();
+    expect(screen.getByText("ETF ideas need at least two holdings with price history.")).toBeInTheDocument();
+  });
+
   it("says there is nothing to report when the scan recorded no notes", () => {
     render(<ScanResults scan={{ ...BASE, coverage_summary: { set_aside_ideas: [] } }} />);
     expect(screen.getByText("Nothing to report.")).toBeInTheDocument();

@@ -74,6 +74,21 @@ Return only those prose fields through record_research. Identity, risk, scores, 
 style tags are assigned by code and are never output fields for this tool.
 """
 
+# ETF prompts are the stock prompts with the subject swapped, so every safety clause stays
+# identical. Tests fail if a swap stops matching after the stock wording changes.
+_FUND_EVENTS = (
+    "Fund events (index change, merger, closure or fee increase) are among the negative "
+    "developments that can invalidate an ETF thesis."
+)
+ETF_THESIS_SYSTEM_PROMPT = THESIS_SYSTEM_PROMPT.replace(
+    "Reassess one company's investment thesis", "Reassess one ETF's investment thesis"
+).replace("Use only supplied evidence.", f"Use only supplied evidence. {_FUND_EVENTS}")
+ETF_SYNTHESIS_SYSTEM_PROMPT = SYNTHESIS_SYSTEM_PROMPT.replace(
+    "Write thesis, catalysts,",
+    "For an ETF the thesis states the fund's role in this portfolio, what it tracks, its cost,\n"
+    f"domicile and replication method. {_FUND_EVENTS}\nWrite thesis, catalysts,",
+)
+
 Prose = Annotated[str, Field(min_length=1, max_length=4000)]
 
 
@@ -180,6 +195,7 @@ async def research_node(state: DiscoveryState) -> dict[str, Any]:
             candidate.country,
             client,
             official_hosts=state["official_hosts"],
+            asset_type=candidate.asset_type,
         )
         if evidence.ticker != candidate.ticker:
             raise ValueError("Research identity does not match the candidate")
@@ -239,7 +255,9 @@ async def thesis_check(state: DiscoveryState) -> dict[str, Any]:
         try:
             raw = await research._extract(
                 client,
-                THESIS_SYSTEM_PROMPT,
+                ETF_THESIS_SYSTEM_PROMPT
+                if state["candidate"].asset_type == "ETF"
+                else THESIS_SYSTEM_PROMPT,
                 {
                     "numeric_scores": [
                         score.model_dump(mode="json") for score in state["quant_evaluation"].scores
@@ -347,6 +365,27 @@ def _validate_synthesis(prose: _Synthesis, evidence: ResearchEvidence) -> None:
 def _quant_only(state: DiscoveryState) -> _Synthesis:
     evaluation, fit = state["evaluation"], state["fit"]
     overall = "unavailable" if evaluation.overall is None else f"{evaluation.overall}/100"
+    conclusion = (
+        "Advisory research for human review only. Not a licensed advisor; no return is promised."
+    )
+    fit_summary = (
+        "Portfolio effects are shown in the fit dimension; they are context for human review."
+        if fit is not None and fit.applicable
+        else None
+    )
+    if state["candidate"].asset_type == "ETF":
+        return _Synthesis(
+            thesis=f"Quantitative screening only. The fund's portfolio-gap score is {overall}.",
+            catalysts=[],
+            outlook="A qualitative outlook is unavailable; future performance is uncertain.",
+            bear_case=(
+                "Past fund and index results cannot establish future returns. Cost, index "
+                "changes, fund closure or merger and missing data require review."
+            ),
+            fit_summary=fit_summary,
+            community_note=None,
+            conclusion=conclusion,
+        )
     return _Synthesis(
         thesis=f"Quantitative screening only. The quality/valuation overall score is {overall}.",
         catalysts=[],
@@ -355,16 +394,9 @@ def _quant_only(state: DiscoveryState) -> _Synthesis:
             "Peer comparisons cannot establish future results. "
             "Business risks and missing data require review."
         ),
-        fit_summary=(
-            "Portfolio effects are shown in the fit dimension; they are context for human review."
-            if fit is not None and fit.applicable
-            else None
-        ),
+        fit_summary=fit_summary,
         community_note=None,
-        conclusion=(
-            "Advisory research for human review only. "
-            "Not a licensed advisor; no return is promised."
-        ),
+        conclusion=conclusion,
     )
 
 
@@ -378,7 +410,9 @@ async def synthesize(state: DiscoveryState) -> dict[str, Any]:
         try:
             raw = await research._extract(
                 client,
-                SYNTHESIS_SYSTEM_PROMPT,
+                ETF_SYNTHESIS_SYSTEM_PROMPT
+                if candidate.asset_type == "ETF"
+                else SYNTHESIS_SYSTEM_PROMPT,
                 {
                     "numeric_scores": [
                         score.model_dump(mode="json") for score in evaluation.scores

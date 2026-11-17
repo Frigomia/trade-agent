@@ -3,6 +3,7 @@ import { Box, Table, TableBody, TableCell, TableHead, TableRow, Typography } fro
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Panel } from "@/components/ui/Panel";
 import type { IdeaOut, PeerComparison, PeerRow } from "@/lib/api/discovery-types";
+import { etfFacts } from "@/lib/discovery";
 import { bandLayout, eurCompact, formatMetric, metricLabel, peerGroupLabel, peerNote, POSITION_WORD } from "@/lib/metrics";
 import { BODY, H3 } from "./Cases";
 
@@ -25,20 +26,22 @@ function Section({ title, right, children }: { title: string; right?: ReactNode;
 
 const muted = { fontSize: "0.75rem", color: "var(--muted)" } as const;
 
-/** The figures to list: the scan's comparisons in their order, else whatever raw metrics were saved. */
-function figures(idea: IdeaOut): { metric: string; value: number | null }[] {
-  if (idea.peers && idea.peers.length > 0) return idea.peers.map((p) => ({ metric: p.metric, value: p.value }));
-  return Object.entries(idea.snapshot?.fundamentals ?? {}).map(([metric, value]) => ({ metric, value }));
+type Figure = { key: string; label: string; text: string | null };
+
+/** The figures to list: a fund's three facts, else the scan's comparisons in their order, else whatever raw metrics were saved. */
+function figures(idea: IdeaOut): Figure[] {
+  if (idea.asset_type === "ETF") return etfFacts(idea).map((f) => ({ key: f.label, label: f.label, text: f.value }));
+  const raw = idea.peers && idea.peers.length > 0 ? idea.peers.map((p) => ({ metric: p.metric, value: p.value })) : Object.entries(idea.snapshot?.fundamentals ?? {}).map(([metric, value]) => ({ metric, value }));
+  return raw.map(({ metric, value }) => ({ key: metric, label: metricLabel(metric), text: formatMetric(metric, value) }));
 }
 
-function Tiles({ items }: { items: { metric: string; value: number | null }[] }) {
+function Tiles({ items, fund }: { items: Figure[]; fund: boolean }) {
   return (
     <Box sx={{ display: "grid", gap: 1.25, gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", md: "repeat(3, minmax(0, 1fr))" } }}>
-      {items.map(({ metric, value }) => {
-        const text = formatMetric(metric, value);
+      {items.map(({ key, label, text }) => {
         return (
           <Box
-            key={metric}
+            key={key}
             sx={{
               borderRadius: "14px",
               p: "12px 14px",
@@ -49,12 +52,12 @@ function Tiles({ items }: { items: { metric: string; value: number | null }[] })
             }}
           >
             <Typography component="span" sx={{ fontSize: "0.75rem", color: "var(--text2)" }}>
-              {metricLabel(metric)}
+              {label}
             </Typography>
             <Typography component="b" sx={{ fontSize: text ? "1.25rem" : "0.8125rem", fontWeight: text ? 650 : 500, letterSpacing: "-0.02em", color: text ? "var(--text)" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
               {text ?? "Not available"}
             </Typography>
-            {!text && <Typography component="span" sx={muted}>No source for this company</Typography>}
+            {!text && <Typography component="span" sx={muted}>{fund ? "Not saved with this idea" : "No source for this company"}</Typography>}
           </Box>
         );
       })}
@@ -238,13 +241,14 @@ function PeerTableRow({ name, ticker, country, cap, values, columns, self = fals
 /** The Numbers tab: the company's fundamentals, how they compare with peers, and the named peers. */
 export function Numbers({ idea }: { idea: IdeaOut }) {
   const items = figures(idea);
+  const fund = idea.asset_type === "ETF";
   return (
     <Box sx={{ display: "grid", gap: 2, minWidth: 0 }}>
-      <Section title="Fundamentals">
-        {items.length === 0 ? <Typography sx={{ ...BODY, color: "var(--muted)" }}>No fundamentals were saved with this idea.</Typography> : <Tiles items={items} />}
+      <Section title={fund ? "Fund facts" : "Fundamentals"}>
+        {items.length === 0 ? <Typography sx={{ ...BODY, color: "var(--muted)" }}>No fundamentals were saved with this idea.</Typography> : <Tiles items={items} fund={fund} />}
       </Section>
-      <Peers idea={idea} />
-      <NamedPeers idea={idea} />
+      {!fund && <Peers idea={idea} />}
+      {!fund && <NamedPeers idea={idea} />}
     </Box>
   );
 }

@@ -25,9 +25,18 @@ from app.analysis.portfolio import (
 )
 from app.db import scoped_session
 from app.discovery.admit import admit_mentions
+from app.discovery.etf import (
+    ETF_LANE_NEEDS_HISTORY,
+    ETF_LANE_SKIPPED,
+    ETF_LANE_UNAVAILABLE,
+    ETF_MIN_HOLDINGS,
+    ETF_MIN_SHARED_INTERVALS,
+    EtfShortlist,
+    shortlist_etfs,
+)
 from app.discovery.refresh import load_snapshot
 from app.discovery.screen import SHORTLIST_SIZE, shortlist_for_user
-from app.discovery.snapshot import check_freshness
+from app.discovery.snapshot import Freshness, SymbolSnapshot, check_freshness
 from app.discovery.universe import load_universe
 from app.models import Holding, InvestmentPreferences
 from app.portfolio_analytics import load_fit_context
@@ -105,6 +114,41 @@ async def _rates() -> dict[str, Decimal]:
     }
 
 
+def _etf_lane(
+    snapshots: list[SymbolSnapshot],
+    freshness: Freshness,
+    rates: dict[str, Decimal],
+    holdings: list[PositionInput],
+    exposure: PortfolioExposure,
+    histories: Histories,
+    today: date,
+    avoided: list[str],
+) -> EtfShortlist:
+    """The ETF shortlist, or a skipped lane when the holdings cannot all be compared with.
+
+    `load_fit_context` already cleans its histories (do not clean again), but a holding whose
+    fetch failed comes back empty or short. A fund needs 60 shared return intervals with every
+    valued holding, so one such holding would exclude every fund as insufficient data: skip the
+    lane with a visible reason instead (the plain one when fewer than two holdings have history).
+    """
+    usable = {t: h for t, h in histories.items() if len(h) > ETF_MIN_SHARED_INTERVALS}
+    if len(usable) < ETF_MIN_HOLDINGS:
+        return EtfShortlist([], [], 0, ETF_LANE_SKIPPED)
+    if any(position.ticker not in usable for position in exposure.positions):
+        return EtfShortlist([], [], 0, ETF_LANE_NEEDS_HISTORY)
+    return shortlist_etfs(
+        snapshots,
+        freshness,
+        rates,
+        holdings=[h.ticker for h in holdings],
+        held_etfs=[h.ticker for h in holdings if h.asset_type == "ETF"],
+        exposure=exposure,
+        histories=usable,
+        today=today,
+        avoid_sectors=avoided,
+    )
+
+
 async def evaluate_candidate(
     candidate: CandidateMetrics,
     client: Anthropic,
@@ -134,7 +178,7 @@ async def evaluate_candidate(
 
 
 async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) -> ScanEvaluation:
-    """No scheduling, global paid theme searches or database writes; at most eight graph calls."""
+    """No scheduling, global paid theme searches or database writes; at most eleven graph calls."""
     await progress("screening", 0, 0)
     universe = await asyncio.to_thread(load_universe)
     snapshots = await load_snapshot([row.ticker for row in universe])
@@ -160,13 +204,23 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
         len(snapshots) + len(admitted),
         mentions_admitted=admitted,
     )
-    candidates = shortlist.candidates[:SHORTLIST_SIZE]
+    stock_candidates = shortlist.candidates[:SHORTLIST_SIZE]
     excluded = list(shortlist.excluded)
+    # Loaded whenever there are holdings: the ETF lane needs it even with no stock candidates.
+    exposure, histories = await load_fit_context(holdings)
+    try:
+        etf_lane = await asyncio.to_thread(
+            _etf_lane, snapshots, freshness, rates, holdings, exposure, histories, today, avoided
+        )
+    except Exception as exc:  # a broken fund record must not cost the stock ideas
+        logger.warning("Discovery ETF lane failed (%s)", type(exc).__name__)
+        etf_lane = EtfShortlist([], [], 0, ETF_LANE_UNAVAILABLE)
+    excluded.extend(etf_lane.excluded)
+    candidates = stock_candidates + etf_lane.candidates
     ideas: list[IdeaOut] = []
     failures: list[str] = []
     done = 0
     if candidates:
-        exposure, histories = await load_fit_context(holdings)
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_CANDIDATES)
 
         async def evaluate(index: int) -> None:
@@ -192,9 +246,11 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
         async with asyncio.TaskGroup() as group:
             for i in range(len(candidates)):
                 group.create_task(evaluate(i))
+        # Only a scan where both lanes failed completely is "unavailable", not one lane.
         if len(failures) == len(candidates):
             raise CandidateEvaluationUnavailable
     await progress("evaluating", len(candidates), done)
+    etf_failures = len({c.ticker for c in etf_lane.candidates}.intersection(failures))
     loaded = {snapshot.ticker for snapshot in snapshots}
     research_warnings = sorted(
         {note for idea in ideas for note in idea.data_notes if note.startswith("Tavily ")}
@@ -204,7 +260,7 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
         excluded=sorted(excluded, key=lambda item: item.ticker),
         rejected_mentions=rejected,
         universe_size=len(universe),
-        eligible=len(shortlist.candidates),
+        eligible=len(shortlist.candidates) + etf_lane.eligible,
         shortlisted=len(candidates),
         researched=done - len(failures),
         coverage_summary={
@@ -217,5 +273,12 @@ async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) ->
             "mentions_available": mentions is not None,
             "candidate_failures": sorted(failures),
             "research_warnings": research_warnings,
+            # `eligible` counts funds scored and kept one per category, before the cut to the slots.
+            "etf_lane": {
+                "eligible": etf_lane.eligible,
+                "shortlisted": len(etf_lane.candidates),
+                "researched": len(etf_lane.candidates) - etf_failures,
+                "skipped_reason": etf_lane.skipped_reason,
+            },
         },
     )

@@ -25,6 +25,7 @@ from app.agents.news import _get_client
 from app.auto_analysis import fresh_pending_tickers, pause_state
 from app.config import settings
 from app.discovery import jobs as discovery_jobs
+from app.discovery.etf import ETF_SLOTS
 from app.discovery.refresh import refresh_snapshot
 from app.discovery.screen import SHORTLIST_SIZE
 from app.discovery.universe import load_universe
@@ -155,7 +156,9 @@ async def run_discovery_snapshot(summary: Summary) -> None:
     universe = load_universe()
     tickers = [row.ticker for row in universe]
     report = await refresh_snapshot(
-        tickers, countries={row.ticker: row.country for row in universe}
+        tickers,
+        countries={row.ticker: row.country for row in universe},
+        rows={row.ticker: row for row in universe},
     )
     logger.info(
         "Discovery snapshot: cached=%d fetched=%d failed=%d",
@@ -415,8 +418,8 @@ async def _discover_user(
             )
             .first()
         )
-        # Full shortlist research plus one follow-up per candidate; actual claims stay atomic.
-        searches = SHORTLIST_SIZE * (research.CANDIDATE_QUERY_BUDGET + 1)
+        # Full stock and ETF shortlists plus one follow-up per candidate; actual claims stay atomic.
+        searches = (SHORTLIST_SIZE + ETF_SLOTS) * (research.CANDIDATE_QUERY_BUDGET + 1)
         if completed is not None or not await research.search_budget_available(searches):
             return "skipped"
         try:

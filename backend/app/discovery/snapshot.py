@@ -9,11 +9,12 @@ import json
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from app.discovery.fetching import RawSymbolData
 from app.discovery.peers import finite_number
+from app.discovery.universe import MAX_TER, UniverseRow
 from app.schemas_discovery import Coverage
 
 # Core fundamentals counted for coverage (plan section 4.3). A field counts as present when it is
@@ -51,6 +52,16 @@ _PLAIN = (
 _PERCENT_LIKE = ("debtToEquity", "dividendYield")
 METRIC_KEYS = (*_PLAIN, *_PERCENT_LIKE, "fcfMargin", "pegRatio")
 
+# What an ETF is counted on. `fundSize` is present when either the converted EUR size or Yahoo's
+# native-currency total assets is a finite number.
+ETF_CORE_FIELDS = ("expenseRatio", "fundSize")
+# Yahoo's `netExpenseRatio` is assumed to be a percent number (0.2 means 0.2%), so it is divided by
+# this to get a fraction. Unverified: the live spike decides, and this is the one place to change.
+YAHOO_EXPENSE_RATIO_DIVISOR = 100
+# A Yahoo cost outside this range as a fraction is more likely a wrong divisor than a real fund
+# (a fraction divided again looks free), so it is dropped and the fund is excluded as unknown.
+MIN_YAHOO_EXPENSE_RATIO = 0.0001
+
 SESSIONS_FRESH = 3  # a close within the latest three weekdays is current; missing fewer is fine
 MIN_SYMBOLS = 5  # fewer usable histories on an exchange cannot tell its sessions apart
 CALENDAR_FALLBACK_DAYS = 5  # for an exchange with too few symbols to compare
@@ -84,6 +95,11 @@ class SymbolSnapshot:
     metrics: dict[str, float | None]
     closes: list[float]
     dates: list[str]  # ISO dates, one per close; the dated series correlations are built from
+    # ETF facts. Defaults keep snapshots stored before these fields existed readable.
+    category: str | None = None
+    isin: str | None = None
+    ucits: bool = False
+    inception: str | None = None  # ISO date the fund started
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
@@ -106,6 +122,36 @@ def normalize_metrics(info: dict[str, Any]) -> dict[str, float | None]:
     peg = finite_number(info.get("trailingPegRatio"))
     metrics["pegRatio"] = number["pegRatio"] if number["pegRatio"] is not None else peg
     return metrics
+
+
+def normalize_etf_metrics(info: dict[str, Any], row: UniverseRow | None) -> dict[str, float | None]:
+    """The stock metrics plus the ETF's cost and size; the row's figures win over Yahoo's."""
+    metrics = normalize_metrics(info)
+    yahoo_cost = finite_number(info.get("netExpenseRatio"))
+    if row is not None and row.ter is not None:
+        metrics["expenseRatio"] = row.ter  # already a fraction
+    else:
+        cost = None if yahoo_cost is None else yahoo_cost / YAHOO_EXPENSE_RATIO_DIVISOR
+        plausible = cost is not None and MIN_YAHOO_EXPENSE_RATIO <= cost <= MAX_TER
+        metrics["expenseRatio"] = cost if plausible else None
+    metrics["totalAssets"] = finite_number(info.get("totalAssets"))  # native currency
+    size_m = row.size_eur_m if row is not None else None
+    metrics["fundSizeEur"] = None if size_m is None else size_m * 1e6
+    return metrics
+
+
+def etf_coverage_of(metrics: dict[str, float | None]) -> Coverage:
+    present = {
+        "expenseRatio": finite_number(metrics.get("expenseRatio")) is not None,
+        "fundSize": finite_number(metrics.get("fundSizeEur")) is not None
+        or finite_number(metrics.get("totalAssets")) is not None,
+    }
+    missing = [field for field in ETF_CORE_FIELDS if not present[field]]
+    return Coverage(
+        core_metrics_present=len(ETF_CORE_FIELDS) - len(missing),
+        core_metrics_total=len(ETF_CORE_FIELDS),
+        missing=missing,
+    )
 
 
 def coverage_of(metrics: dict[str, float | None]) -> Coverage:
@@ -214,21 +260,47 @@ def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def to_snapshot(ticker: str, raw: RawSymbolData, country: str | None = None) -> SymbolSnapshot:
+def _inception(value: Any) -> str | None:
+    """Yahoo's fund inception date is epoch seconds; anything else is a gap."""
+    seconds = finite_number(value)
+    if seconds is None:
+        return None
+    return datetime.fromtimestamp(seconds, UTC).date().isoformat()
+
+
+def to_snapshot(
+    ticker: str,
+    raw: RawSymbolData,
+    country: str | None = None,
+    row: UniverseRow | None = None,
+) -> SymbolSnapshot:
     info = raw.info
+    is_etf = info.get("quoteType") == "ETF"
+    category = None
+    if is_etf:
+        # Yahoo has a category only for US-listed funds, none for UCITS ones: the row's stands in.
+        category = _text(info.get("category"))
+        if category is None and row is not None:
+            category = row.industry.strip() or None
     return SymbolSnapshot(
         ticker=ticker,
-        asset_type="ETF" if info.get("quoteType") == "ETF" else "STOCK",
+        asset_type="ETF" if is_etf else "STOCK",
         name=_text(info.get("longName")) or _text(info.get("shortName")) or ticker,
         exchange=_text(info.get("exchange")),
         country=country,
-        sector=_text(info.get("sector")),
+        # Yahoo gives a fund no sector; a sector or theme fund gets its row's, so avoiding a sector
+        # also skips its funds.
+        sector=_text(info.get("sector")) or (row.sector or None if is_etf and row else None),
         industry=_text(info.get("industry")),
         currency=_text(info.get("currency")),
         price=raw.closes[-1] if raw.closes else None,
         market_cap=finite_number(info.get("marketCap")),
         avg_volume=finite_number(info.get("averageVolume")),
-        metrics=normalize_metrics(info),
+        metrics=normalize_etf_metrics(info, row) if is_etf else normalize_metrics(info),
         closes=raw.closes,
         dates=raw.dates,
+        category=category,
+        isin=(row.isin or None) if is_etf and row is not None else None,
+        ucits=row.ucits if is_etf and row is not None else False,
+        inception=_inception(info.get("fundInceptionDate")) if is_etf else None,
     )

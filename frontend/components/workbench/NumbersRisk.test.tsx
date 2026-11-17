@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { Numbers } from "./Numbers";
 import { RiskFit } from "./RiskFit";
-import { peer, testIdea } from "./testData";
+import { etfIdea, peer, testIdea } from "./testData";
 
 describe("Numbers", () => {
   it("lists the fundamentals as tiles with the right units, and says Not available for a missing one", () => {
@@ -14,6 +14,17 @@ describe("Numbers", () => {
     const cover = within(fund).getByText("Interest cover").parentElement!;
     expect(cover).toHaveTextContent("Not available");
     expect(cover).toHaveTextContent("No source for this company");
+  });
+
+  it("says a missing fund fact was not saved, never that a company has no source", () => {
+    const base = etfIdea();
+    const fundamentals = { expenseRatio: 0.0022 };
+    render(<Numbers idea={etfIdea({ snapshot: { ...base.snapshot!, fundamentals } })} />);
+
+    const size = screen.getByText("Fund size").parentElement!;
+    expect(size).toHaveTextContent("Not available");
+    expect(size).toHaveTextContent("Not saved with this idea");
+    expect(screen.queryByText("No source for this company")).not.toBeInTheDocument();
   });
 
   it("falls back to the saved raw fundamentals when no comparisons were saved", () => {

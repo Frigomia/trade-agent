@@ -97,6 +97,11 @@ export interface CandidateFit {
   notes: string[];
 }
 
+/**
+ * An ETF idea (`asset_type` "ETF") has only a `fit` score, `overall` equal to it, no `peers`, the Yahoo
+ * category in `snapshot.industry` and `expenseRatio` (a fraction), `totalAssets` and `fundSizeEur` in
+ * `snapshot.fundamentals`. `etfFacts` in lib/discovery.ts reads them.
+ */
 export interface IdeaOut {
   ticker: string;
   name: string;
@@ -140,7 +145,10 @@ export type ExclusionReason =
   | "unreliable_price"
   | "ambiguous_identity"
   | "currency_unsupported"
-  | "insufficient_data";
+  | "insufficient_data"
+  | "not_ucits"
+  | "fails_quality_filter"
+  | "overlaps_holding";
 
 export interface Exclusion {
   ticker: string;
@@ -200,6 +208,8 @@ export interface ScanRun {
     candidate_failures?: string[];
     mentions_available?: boolean;
     research_warnings?: string[];
+    /** Absent on scans saved before ETF ideas. `skipped_reason` is set when the lane did not run. */
+    etf_lane?: { eligible: number; shortlisted: number; researched: number; skipped_reason: string | null };
   } & Record<string, unknown>;
   opportunities: number | null; // null on scans saved before the count was stored
   set_aside: number | null;

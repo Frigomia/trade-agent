@@ -19,8 +19,18 @@ def test_every_region_is_close_to_its_target() -> None:
 
     # Targets, not quotas: allow a tenth either way (plan section 6, Phase 3).
     for region, target in REGION_TARGETS.items():
+        if region == "global_etf":
+            continue  # about 100 to 150 UCITS funds, grown in batches: checked below
         assert abs(counts[region] - target) <= target * 0.1, (region, counts[region], target)
     assert counts["unknown"] == 0
+
+
+def test_the_etf_lane_has_a_first_batch_of_ucits_funds_with_unique_isins() -> None:
+    funds = [row for row in load_universe() if row.ucits]
+
+    assert len(funds) >= 20
+    assert len({row.isin for row in funds}) == len(funds)
+    assert all(row.asset_type == "ETF" and row.isin for row in funds)
 
 
 def test_every_currency_in_the_file_can_be_converted_to_eur() -> None:
@@ -36,3 +46,23 @@ def test_the_universe_is_not_only_large_caps() -> None:
     small_or_less = sizes["micro"] + sizes["small"]
     assert small_or_less / len(stocks) >= 0.15
     assert sizes["large"] / len(stocks) <= 0.55
+
+
+def test_a_sector_fund_carries_a_sector_the_stock_rows_use_and_a_broad_fund_none() -> None:
+    rows = {row.ticker: row for row in load_universe()}
+    stock_sectors = {row.sector for row in rows.values() if row.asset_type == "STOCK"}
+    fund_sectors = {row.sector for row in rows.values() if row.asset_type == "ETF" and row.sector}
+
+    assert fund_sectors <= stock_sectors
+    assert rows["QDVE.DE"].sector == "Technology" and rows["ISOE.AS"].sector == "Basic Materials"
+    assert rows["IWDA.AS"].sector == "" and rows["SXR8.DE"].sector == ""
+
+
+def test_every_ucits_sector_fund_has_a_stock_sector_so_avoided_sectors_apply() -> None:
+    # Yahoo gives these funds no sector, so the row's is the only way an avoided sector skips one.
+    rows = load_universe()
+    stock_sectors = {row.sector for row in rows if row.asset_type == "STOCK" and row.sector}
+    sector_funds = [row for row in rows if row.ucits and row.industry.startswith("Sector Equity")]
+
+    assert sector_funds
+    assert [row.ticker for row in sector_funds if row.sector not in stock_sectors] == []

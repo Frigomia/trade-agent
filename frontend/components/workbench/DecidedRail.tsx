@@ -10,7 +10,7 @@ import { Panel } from "@/components/ui/Panel";
 import type { DiscoveryRecommendation } from "@/lib/api/discovery-types";
 import type { RecommendationOut } from "@/lib/api/recommendation-types";
 import { useDecision } from "@/lib/useDecision";
-import { askHref, DecisionSummary, FitLine, SourcesRow } from "./DecisionRail";
+import { askHref, DecisionSummary, FitLine, SourcesRow, SuggestedPosition } from "./DecisionRail";
 
 const RULE = <Box component="hr" sx={{ border: 0, borderTop: "1px solid var(--line)", m: 0 }} />;
 const NOTE_SX = { fontSize: "0.75rem", color: "var(--muted)", textAlign: "center" } as const;
@@ -47,6 +47,7 @@ export function DecidedRail({
     <Panel component="aside" aria-label="Your decision" sx={{ p: "1.25rem", display: "grid", gap: 2, position: { md: "sticky" }, top: "1rem" }}>
       <DecisionSummary rec={rec} showSince />
       {RULE}
+      <SuggestedPosition rec={rec} />
       <FitLine idea={rec.idea!} />
       {RULE}
       {error && <Alert severity="error">{error}</Alert>}

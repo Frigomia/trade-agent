@@ -23,9 +23,9 @@ keeps its existing graph and scoring behavior.
 Out of scope: broker availability, order execution, another financial data provider, new agent
 frameworks or services, strategy backtesting, user-configurable risk profiles, tax/dividend
 accounting, and changes to the existing holdings-path technical signal. These remain Phase 10
-or separate work. ETF-specific discovery scoring also needs a separate design: ETFs are kept in
-the universe but currently excluded with an explicit explanation, rather than evaluated using
-company fundamentals.
+or separate work. ETF-specific discovery scoring was out of scope here and is now designed in
+[ETF ideas in the new-ideas scan](2026-11-16-etf-discovery-design.md): the ETFs in the universe are
+evaluated in their own lane, by portfolio gap rather than by company fundamentals.
 
 ## What exists and what this phase delivers
 
@@ -58,16 +58,16 @@ not new environment-variable settings or a new user configuration system.
 
 | Decision | Default and rule | Owner |
 | --- | --- | --- |
-| Universe | 600 securities; regional composition targets: 180 North America, 180 Europe, 150 Asia-Pacific, 60 other emerging markets, 30 global ETFs. Targets do not override validation. | Phase 3, implemented |
+| Universe | 600 securities; regional composition targets: 180 North America, 180 Europe, 150 Asia-Pacific, 60 other emerging markets; for ETFs, about 100 to 150 UCITS funds, grown in batches (the first batch is listed in `universe.csv`; see the [ETF ideas design](2026-11-16-etf-discovery-design.md)). Targets do not override validation. | Phase 3, implemented |
 | Suitable peers | `MIN_PEERS=8`, counted per metric, excluding the candidate. Same industry when sufficient, otherwise global sector, within the same financial metric group. | `discovery/peers.py`, implemented |
 | Core coverage | `MIN_CORE_METRICS=3` finite core fundamentals; missing stays `None`. A zero that is a valid measurement counts as present. | `discovery/eligibility.py`, implemented |
 | Dimension coverage | `MIN_SCORED=2` valid peer comparisons per dimension; otherwise that dimension is `None`. | `discovery/scoring.py`, implemented |
 | Price freshness | Use the exchange-aware rules below. The old blanket `STALE_DAYS=5` proposal is superseded; 5 calendar days remains only the sparse-exchange fallback. | `discovery/snapshot.py`, implemented |
 | Research shortlist | `SHORTLIST_SIZE=8`. | `discovery/screen.py`, implemented |
 | Dynamic admission | `DISCOVERY_MAX_DYNAMIC=10` per scan; all remaining mentions carry `cap_reached` or another rejection reason. | `discovery/admit.py`, implemented (at most 30 mentions are looked up at all) |
-| Overall score | Equal-weight mean of available quality and valuation scores; `None` when neither exists. Fit never contributes to this mean. Serialize the final integer using Python `round`, matching current dimension scoring. | `analysis/discovery_score.py`, implemented |
+| Overall score | Equal-weight mean of available quality and valuation scores; `None` when neither exists. Fit never contributes to this mean. Exception: the ETF lane's overall is its gap score, which is its `fit` score (see the 2026-11-16 design). Serialize the final integer using Python `round`, matching current dimension scoring. | `analysis/discovery_score.py`, implemented |
 | Ranking | Descending overall, then lower risk (`low`, `medium`, `high`, `unknown`), then better available fit when applicable, then ticker for deterministic ordering. Current screening has no fit yet and uses ticker after risk. Missing overall is unrankable. | Phases 4 and 6 |
-| Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` and confidence at least `medium`; otherwise persist `outcome="none"` with up to three nearest misses. | `analysis/discovery_score.py`, implemented |
+| Opportunity threshold | `NO_OPPORTUNITY_MIN_OVERALL=60` (ETFs: `ETF_NO_OPPORTUNITY_MIN_OVERALL=50`, see the 2026-11-16 design) and confidence at least `medium`; otherwise persist `outcome="none"` with up to three nearest misses. | `analysis/discovery_score.py`, implemented |
 | Quota | One user scan consumes one existing `analysis_run` unit; a refused overlapping scan refunds it. No new usage kind or limit columns. | Phase 7 |
 | Research budget | At most 4 initial Tavily searches and one targeted follow-up per candidate. At most four Claude calls: initial extraction, follow-up extraction, one total reassessment, synthesis; each has a 60-second timeout and no SDK retries. Daily themes: at most 14 searches and one extraction, once per UTC date. | Phases 2 and 6, implemented |
 | Portfolio comparison | Hypothetical candidate weight 5%; correlations need 60 overlapping daily returns. No usable portfolio means fit is not applicable. | Phase 1 |
@@ -227,7 +227,7 @@ The deterministic defaults in `analysis/discovery_score.py` are:
 - Fit is unavailable without all three measured components and positive baseline volatility
   and HHI. Its score is the rounded equal mean of clamped 0–100 components: correlation
   `100*(1-corr)/2`, volatility `50+50*(1-vol_after/vol_before)`, concentration
-  `50+50*(1-hhi_after/hhi_before)`. Fit breaks ties after overall and risk; it never changes overall.
+  `50+50*(1-hhi_after/hhi_before)`. Fit breaks ties after overall and risk; it never changes overall, except for ETFs, whose overall is their fit score (see the 2026-11-16 ETF ideas design).
 - Style tags use quality/valuation at least 70, revenue growth at least 10%, dividend yield at
   least 3%, or defensive-sector membership (Consumer Defensive, Healthcare, Utilities) with
   positive return on equity. They are descriptive and have no ranking weight.
