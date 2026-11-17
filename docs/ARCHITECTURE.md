@@ -936,8 +936,10 @@ rows, same peer scoring, the same 60 gate and eight slots.
 
 - *Which funds can be recommended.* Only rows marked `ucits=yes` in the universe file. The file
   accepts that flag only for an ETF with a valid ISIN whose prefix is IE, LU, DE, FR or NL, so a
-  US-listed fund, or a Jersey, Swiss or Cayman product, cannot be marked. The US-listed ETFs stay in
-  the file and show up as `not_ucits` exclusions rather than being deleted.
+  US-listed fund, or a Jersey, Swiss or Cayman product, cannot be marked. The universe file holds
+  only UCITS ETFs: the US-listed rows (VT, GLD, EEM and the like) were removed because an EU retail
+  investor cannot buy them and they only filled the dropped list. A `ucits=no` ETF row is still
+  allowed, and is then reported as a `not_ucits` exclusion.
 - *Universe columns.* `universe.csv` gains `isin`, `ucits` (`yes` or `no`), `ter` (a yearly expense
   ratio as a fraction, above 0 and at most 0.05, a hand-kept fallback when Yahoo lacks it) and
   `size_eur_m` (fund size in millions of euros, the same kind of fallback). Both may be empty. The
