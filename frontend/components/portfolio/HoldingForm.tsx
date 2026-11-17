@@ -59,7 +59,7 @@ function HoldingFormBody({
   const [shares, setShares] = useState(holding ? String(holding.shares) : "");
   const [costBasis, setCostBasis] = useState(holding?.cost_basis == null ? "" : String(holding.cost_basis));
   const [firstPurchase, setFirstPurchase] = useState(holding?.first_purchase_date ?? "");
-  const [category, setCategory] = useState(holding?.sector ?? "");
+  const [category, setCategory] = useState(holding?.asset_type === "ETF" ? holding.sector ?? "" : "");
   const [showMore, setShowMore] = useState(editing);
   const [target, setTarget] = useState(fractionToPercentText(holding?.target_weight));
   const { run, submitting, error, setError } = useAction(onBusyChange);
@@ -74,6 +74,7 @@ function HoldingFormBody({
   function handlePick(match: SymbolMatch) {
     setName(match.name);
     setAssetType(match.type);
+    setCategory("");
     pick(match);
   }
 
@@ -81,6 +82,7 @@ function HoldingFormBody({
     setTicker(value);
     setName("");
     setAssetType("");
+    setCategory("");
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -112,9 +114,10 @@ function HoldingFormBody({
     };
     // An empty category sends no key, so the stored sector stays and the backend can still fill a missing one.
     const sector = assetType === "ETF" ? category.trim() : "";
-    // An ETF changed to Stock must not keep its fund category as the stock's sector: null clears it
-    // (and the backend then leaves the sector empty instead of filling it from Yahoo).
-    const clearsFundCategory = editing && holding.asset_type === "ETF" && assetType === "STOCK" && !!holding.sector?.trim();
+    // A holding switched between Stock and ETF must not carry its old sector or fund category over:
+    // null clears it (the backend then leaves it empty instead of filling it from Yahoo).
+    const switchedKind = editing && !!assetType && holding.asset_type !== assetType;
+    const clearsOldSector = switchedKind && !!holding.sector?.trim();
     await run(async () => {
       try {
         await apiFetch("/portfolio/holdings", {
@@ -123,7 +126,7 @@ function HoldingFormBody({
             ticker: normalizedTicker,
             ...(name.trim() ? { name: name.trim() } : {}),
             ...(assetType ? { asset_type: assetType } : {}),
-            ...(sector ? { sector } : clearsFundCategory ? { sector: null } : {}),
+            ...(sector ? { sector } : clearsOldSector ? { sector: null } : {}),
             shares: sharesNum,
             ...purchaseDetails,
           }),

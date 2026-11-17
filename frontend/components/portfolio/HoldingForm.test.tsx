@@ -287,6 +287,31 @@ describe("HoldingForm", () => {
       });
     });
 
+    it("does not carry one fund's category to the next ticker", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup();
+      type("Ticker", "vwce.de");
+      type("Type", "ETF");
+      type("Category", "Global Equity");
+      type("Ticker", "eimi.l");
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("");
+      type("Shares", "1");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({ ticker: "EIMI.L", asset_type: "ETF", shares: 1 });
+    });
+
+    it("does not prefill a stock's sector as a fund category when the type is corrected to ETF", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: HELD });
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toMatchObject({ ticker: "AAPL", asset_type: "ETF", sector: null });
+    });
+
     it("leaves a new holding alone: no sector key when its type is Stock", async () => {
       apiFetch.mockResolvedValue({});
       const { onSaved } = setup();
