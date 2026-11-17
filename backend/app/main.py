@@ -39,6 +39,7 @@ from app.routers import (
 )
 from app.routers import telegram as telegram_routes
 from app.snapshots import PriceUnavailable
+from app.tracing import flush_traces
 from app.usage import KIND_LABELS, UsageLimitExceeded
 
 
@@ -56,7 +57,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         with engine.connect() as conn:
             check_runtime_role(conn)
         check_master_secret()
-    yield
+    try:
+        yield
+    finally:
+        await flush_traces()
 
 
 app = FastAPI(title="Trading Agent API", lifespan=lifespan, **docs_kwargs(settings.app_env))

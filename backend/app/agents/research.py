@@ -35,6 +35,7 @@ from app.schemas_discovery import (
     NegativeDevelopment,
     ResearchEvidence,
 )
+from app.tracing import trace_anthropic, traced
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,7 @@ def _credentials(client: Anthropic | None) -> tuple[str, Anthropic]:
     return key, client
 
 
+@traced("research.tavily_search")
 async def _search(http: httpx.AsyncClient, query: dict[str, Any], key: str) -> list[Any]:
     response = await http.post(
         "https://api.tavily.com/search",
@@ -328,6 +330,7 @@ async def _gather(
     return sources, gaps, completed
 
 
+@traced("research.extract")
 async def _extract(
     client: Anthropic,
     prompt: str,
@@ -336,7 +339,9 @@ async def _extract(
 ) -> dict[str, Any]:
     def create() -> dict[str, Any]:
         # Disable SDK retries: each operation has one extraction attempt and a bounded timeout.
-        response = client.with_options(timeout=60.0, max_retries=0).messages.create(
+        response = trace_anthropic(
+            client.with_options(timeout=60.0, max_retries=0)
+        ).messages.create(
             model=settings.anthropic_model,
             max_tokens=8192,
             system=prompt,
@@ -589,6 +594,7 @@ def _etf_queries(subject: str, general: dict[str, str]) -> list[tuple[str, dict[
     ]
 
 
+@traced("research.initial")
 async def research_candidate(
     ticker: str,
     name: str,
@@ -646,6 +652,7 @@ async def research_candidate(
     return _evidence(ticker, name, {"claims": []}, sources, gaps, official_hosts=official_hosts)
 
 
+@traced("research.follow_up")
 async def follow_up_candidate(
     candidate: CandidateMetrics,
     evidence: ResearchEvidence,
@@ -714,6 +721,7 @@ async def follow_up_candidate(
     )
 
 
+@traced("research.daily_mentions")
 async def discover_mentions() -> list[Mention] | None:
     """One global daily attempt, including failed/empty work; never use a user's saved key.
 

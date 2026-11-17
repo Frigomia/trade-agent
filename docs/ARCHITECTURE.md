@@ -1274,6 +1274,23 @@ command).
 
 ---
 
+### Optional LangSmith observability
+
+`app/tracing.py` provides opt-in LangSmith tracing through Pydantic `LANGSMITH_*` settings.
+Named operations cover holdings jobs, per-ticker graphs, discovery jobs/scans/candidate graphs,
+company research, chat, research/follow-up/Tavily calls and scheduled commands. Native LangGraph
+nodes and wrapped Anthropic Messages calls nest in the same trace across parallel tasks and
+worker threads. Research wraps its timeout/retry-specific client copy; shared clients are not
+mutated. LangSmith is a direct dependency, using the existing locked SDK and its project-based
+destination API (agent-based workspaces use the environment's `tracer_session_name`).
+
+Tracing defaults off. Enabling it exports prompts, financial context, evidence and model outputs;
+credentials, SDK/database objects and structured user IDs are filtered, and raw exception details
+are omitted. Optional input/output hiding provides a reduced-content mode. Export failures must
+not rerun or fail agent work or change quotas, recommendations or approval behavior. Web shutdown
+and scheduler exit flush with a bounded wait; forced termination can lose pending traces. Setup,
+privacy limits and smoke checks: [LANGSMITH.md](LANGSMITH.md).
+
 ## 7. Human-in-the-loop approval workflow
 
 Every recommendation is written with `status="PENDING"`. When a new analysis run writes a

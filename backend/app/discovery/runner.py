@@ -49,6 +49,7 @@ from app.schemas_discovery import (
     PortfolioExposure,
     RejectedMention,
 )
+from app.tracing import traced
 
 logger = logging.getLogger(__name__)
 MAX_CONCURRENT_CANDIDATES = 3
@@ -179,6 +180,7 @@ async def evaluate_candidate(
     return await run_discovery_graph(candidate, client, fit=fit)
 
 
+@traced("discovery.scan")
 async def evaluate_scan(user_id: UUID, client: Anthropic, progress: Progress) -> ScanEvaluation:
     """No scheduling, global paid theme searches or database writes; at most eleven graph calls."""
     await progress("screening", 0, 0)

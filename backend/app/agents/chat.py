@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.agents.text import final_text, leading_text
 from app.config import settings
 from app.models import ChatMessage, Holding, Recommendation, WatchlistItem
+from app.tracing import trace_anthropic, traced
 
 RECENT_RECOMMENDATIONS_LIMIT = 10
 # The same heading the frontend splits on (frontend/lib/chat.ts): case-insensitive, optional colon,
@@ -18,6 +19,7 @@ RECENT_RECOMMENDATIONS_LIMIT = 10
 WEB_HEADING = re.compile(r"## From the web:?[ \t]*(\n|$)", re.IGNORECASE)
 
 
+@traced("chat.portfolio_context")
 async def build_portfolio_context(
     db: Session, user_id: uuid.UUID, idea_id: int | None = None
 ) -> str:
@@ -178,6 +180,7 @@ def _get_client() -> Anthropic:
     return _client
 
 
+@traced("chat.turn")
 async def run_chat(
     db: Session,
     user_id: uuid.UUID,
@@ -201,7 +204,7 @@ async def run_chat(
     )
 
     def _create() -> Message:
-        return client.messages.create(
+        return trace_anthropic(client).messages.create(
             model=settings.anthropic_model,
             max_tokens=4096,
             system=system_prompt,

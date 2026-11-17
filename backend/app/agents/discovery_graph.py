@@ -33,6 +33,7 @@ from app.schemas_discovery import (
     ResearchEvidence,
     Url,
 )
+from app.tracing import traced
 
 logger = logging.getLogger(__name__)
 
@@ -521,6 +522,7 @@ def build_discovery_graph() -> Any:
     return graph.compile()
 
 
+@traced("discovery.candidate")
 async def run_discovery_graph(
     candidate: CandidateMetrics,
     client: Anthropic | None,

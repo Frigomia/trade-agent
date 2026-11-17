@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-5"
     voyage_api_key: str | None = None
+    langsmith_tracing: bool = False
+    langsmith_api_key: str | None = Field(default=None, repr=False)
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_project: str = "trade-agent-development"
+    langsmith_workspace_id: str | None = None
+    langsmith_hide_inputs: bool = False
+    langsmith_hide_outputs: bool = False
     # Optional owner-funded discovery research; existing analysis works without it.
     tavily_api_key: str | None = Field(default=None, repr=False)
     tavily_daily_search_limit: int = Field(default=200, ge=0)

@@ -34,6 +34,7 @@ from app.models import AppUser, Holding, InvestmentPreferences, PortfolioSnapsho
 from app.notify import notify_user
 from app.redis_client import get_redis
 from app.snapshots import record_snapshot
+from app.tracing import flush_traces, traced
 from app.usage import (
     LimitDefaults,
     UsageLimitExceeded,
@@ -557,6 +558,7 @@ COMMANDS = (
 )
 
 
+@traced("scheduled.command")
 async def run_command(command: str) -> int:
     key = f"scheduled:{command}"
     token = uuid.uuid4().hex
@@ -611,7 +613,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=COMMANDS)
     args = parser.parse_args(argv)
     try:
-        return asyncio.run(run_command(args.command))
+
+        async def execute() -> int:
+            try:
+                return await run_command(args.command)
+            finally:
+                await flush_traces()
+
+        return asyncio.run(execute())
     except Exception as exc:
         logger.error("Scheduled %s failed (%s)", args.command, type(exc).__name__)
         return 1

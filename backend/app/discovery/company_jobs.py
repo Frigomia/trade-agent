@@ -25,6 +25,7 @@ from app.portfolio_analytics import load_fit_context
 from app.redis_client import _RELEASE_IF_MINE, _RENEW_IF_MINE, get_redis
 from app.schemas import CompanyAnalysisOut
 from app.schemas_discovery import Exclusion, IdeaOut
+from app.tracing import traced
 
 logger = logging.getLogger(__name__)
 _track = make_task_tracker("company_research")
@@ -215,6 +216,7 @@ def _save_result(user_id: UUID, job_id: str, result: IdeaOut | Exclusion) -> Non
             raise
 
 
+@traced("discovery.company_job")
 async def run_company(
     user_id: UUID,
     row: CompanyAnalysis,

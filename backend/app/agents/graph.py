@@ -10,6 +10,7 @@ from app.agents import context, market_data, news
 from app.analysis import fundamental, recommend, technical
 from app.claude_keys import is_key_problem, mark_needs_attention
 from app.db import scoped_session
+from app.tracing import traced
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ def build_graph() -> Any:
     return graph.compile()
 
 
+@traced("analysis.ticker")
 async def run_graph_for_ticker(
     user_id: uuid.UUID,
     ticker: str,

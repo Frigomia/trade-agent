@@ -15,6 +15,7 @@ from app.discovery.persistence import save_scan
 from app.discovery.runner import SCAN_TIMEOUT_SECONDS, SnapshotUnavailable, evaluate_scan
 from app.redis_client import _RELEASE_IF_MINE, _RENEW_IF_MINE, get_redis
 from app.schemas import ScanRunOut
+from app.tracing import traced
 from app.usage import refund_usage
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ async def get_job_status(job_id: str, user_id: UUID) -> dict[str, Any] | None:
     }
 
 
+@traced("discovery.job")
 async def run_job(
     job_id: str,
     user_id: UUID,
