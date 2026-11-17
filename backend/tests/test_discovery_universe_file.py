@@ -33,6 +33,12 @@ def test_the_etf_lane_has_a_first_batch_of_ucits_funds_with_unique_isins() -> No
     assert all(row.asset_type == "ETF" and row.isin for row in funds)
 
 
+def test_every_etf_in_the_committed_file_is_a_ucits_fund() -> None:
+    # US-listed funds cannot be bought by an EU retail investor: keep them out of the file.
+    etfs = [row for row in load_universe() if row.asset_type == "ETF"]
+    assert [row.ticker for row in etfs if not row.ucits] == []
+
+
 def test_every_currency_in_the_file_can_be_converted_to_eur() -> None:
     unsupported = {row.currency for row in load_universe()} - SUPPORTED
 
