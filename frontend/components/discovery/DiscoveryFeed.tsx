@@ -38,6 +38,7 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, prog
   const [showAll, setShowAll] = useState(false);
   const [lostSeen, setLostSeen] = useState(false); // the "no longer available" note can be dismissed
   const scan = ideas?.latest_scan ?? null;
+  const researchWarnings = scan?.coverage_summary.research_warnings ?? [];
   const recs = ideas?.recommendations ?? [];
   const { top, others, more } = splitIdeas(recs);
   // "Show more" lists the ideas beyond the top one and the three shown.
@@ -50,6 +51,11 @@ export function DiscoveryFeed({ ideas, loadError, job, running, startError, prog
       <ScanBar scan={scan} job={job} running={running} usage={usage} locked={locked} now={now} onRun={onRun} />
       {loadError ? <Alert severity="error">Your saved ideas are unavailable right now.</Alert> : null}
       {startError && <Alert severity="error">{startError}</Alert>}
+      {!running && researchWarnings.map((warning) => (
+        <Alert key={warning} severity="warning">
+          {warning} Some scan results may be quantitative-only because source research could not be completed.
+        </Alert>
+      ))}
       {progressUnavailable && (
         <Alert
           severity="warning"
