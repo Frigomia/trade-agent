@@ -228,7 +228,9 @@ def _credentials(client: Anthropic | None) -> tuple[str, Anthropic]:
         raise ResearchUnavailable("Research is unavailable; use quantitative screening only.")
     key = (settings.tavily_api_key or "").strip()
     if not key:
-        raise ResearchUnavailable("Research is unavailable; use quantitative screening only.")
+        raise ResearchUnavailable(
+            "Tavily API key is missing. Set TAVILY_API_KEY in backend/.env and restart the backend."
+        )
     return key, client
 
 
@@ -250,6 +252,31 @@ async def _search(http: httpx.AsyncClient, query: dict[str, Any], key: str) -> l
     if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
         raise ValueError("Invalid search response")
     return list(payload["results"][:MAX_RESULTS])
+
+
+def _tavily_failure_message(label: str, exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status in {401, 403}:
+            return (
+                f"Tavily rejected the API key during {label} search (HTTP {status}). "
+                "Check TAVILY_API_KEY."
+            )
+        if status == 429:
+            return (
+                f"Tavily {label} search hit the rate limit (HTTP 429). "
+                "Check your Tavily quota or retry later."
+            )
+        return (
+            f"Tavily {label} search returned HTTP {status}. "
+            "Check Tavily service status and retry later."
+        )
+    if isinstance(exc, httpx.RequestError):
+        return (
+            f"Tavily {label} search could not be reached. "
+            "Check the backend's network connection and retry."
+        )
+    return f"Tavily {label} search failed. Check backend logs for details."
 
 
 async def _gather(
@@ -276,7 +303,7 @@ async def _gather(
             except Exception as exc:  # provider failures never discard quantitative results
                 completed = False
                 logger.warning("Research search unavailable: %s", type(exc).__name__)
-                gaps.append(f"{label} search unavailable.")
+                gaps.append(_tavily_failure_message(label, exc))
                 continue
             if not results:
                 gaps.append(f"No {label} sources found; coverage is unavailable.")

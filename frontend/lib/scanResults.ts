@@ -182,5 +182,6 @@ export function coverageNotes(scan: ScanRun): string[] {
   if (c.etf_lane?.skipped_reason) notes.push(sentence(c.etf_lane.skipped_reason));
   if (c.mentions_available === true) notes.push("Research mentions were available for this scan.");
   if (c.mentions_available === false) notes.push("Research mentions were not available for this scan.");
+  notes.push(...(c.research_warnings ?? []));
   return notes;
 }
