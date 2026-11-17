@@ -26,6 +26,26 @@ export interface PriceChartGeometry {
   indexAtX: (x: number) => number;
 }
 
+/**
+ * The y-axis prices as "300K" or "1.2M": the left gutter is fixed, so long amounts must stay short.
+ * Uses the fewest decimals that lose nothing (52.5 stays 52.5, not 53) and keep every gridline's
+ * label different (1.005M and 1.01M need three, 0.001 and 0.004 need three).
+ */
+export function axisLabels(values: number[]): string[] {
+  const at = (digits: number) => {
+    const fmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: digits });
+    return values.map((v) => fmt.format(v));
+  };
+  let labels = at(0);
+  for (let digits = 0; digits < 6; digits++) {
+    const finer = at(digits + 1);
+    const exact = labels.every((l, i) => l === finer[i]);
+    if (exact && new Set(labels).size === values.length) return labels;
+    labels = finer;
+  }
+  return labels;
+}
+
 /** "2024" for five years, "Jul" for a long range, "19 Oct" for a short one, from a YYYY-MM-DD date. */
 export function tickLabel(date: string, range: HistoryRange): string {
   const day = new Date(`${date}T00:00:00Z`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct, tickLabel } from "./priceChart";
+import { axisLabels, buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct, tickLabel } from "./priceChart";
 
 const pts = (closes: number[]) => closes.map((close, i) => ({ date: `2026-10-${String(i + 1).padStart(2, "0")}`, close }));
 
@@ -59,6 +59,19 @@ describe("rangeChangePct", () => {
     expect(rangeChangePct(pts([100, 110]))).toBeCloseTo(10);
     expect(rangeChangePct(pts([200, 150]))).toBeCloseTo(-25);
     expect(rangeChangePct(pts([100]))).toBeNull();
+  });
+});
+
+describe("axisLabels", () => {
+  it("keeps long amounts short enough for the fixed left gutter", () => {
+    expect(axisLabels([100000, 200000, 300000])).toEqual(["100K", "200K", "300K"]);
+    expect(axisLabels([52.5, 55])).toEqual(["52.5", "55"]);
+    expect(axisLabels([2500000000])).toEqual(["2.5B"]);
+  });
+
+  it("adds decimals until neighbouring gridlines read differently", () => {
+    expect(axisLabels([1000000, 1005000, 1010000])).toEqual(["1M", "1.005M", "1.01M"]);
+    expect(axisLabels([0.001, 0.002, 0.003])).toEqual(["0.001", "0.002", "0.003"]);
   });
 });
 
