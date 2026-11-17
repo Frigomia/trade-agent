@@ -6,7 +6,7 @@ import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 import { Change } from "@/components/ui/Change";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { formatAmount } from "@/lib/format";
-import { buildPriceChart, CHART_HEIGHT, CHART_LEFT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
+import { buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
 
 const RANGE_NAME: Record<HistoryRange, string> = { "1w": "One week", "1m": "One month", "6m": "Six months", "1y": "One year", "5y": "Five years" };
 
@@ -118,9 +118,9 @@ export function PriceChart({
         </defs>
         {geo.yTicks.map((t) => (
           <g key={t.value}>
-            <line x1={CHART_LEFT} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
-            <text x={CHART_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">
-              {formatAmount(t.value)}
+            <line x1={geo.left} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
+            <text x={geo.left - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">
+              {t.label}
             </text>
           </g>
         ))}
