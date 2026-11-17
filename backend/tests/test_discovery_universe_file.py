@@ -2,6 +2,7 @@
 
 from collections import Counter
 
+from app.discovery.etf import ETF_MAX_EXPENSE_RATIO
 from app.discovery.universe import etf_category_for, load_universe, region_of
 from app.discovery.validate_universe import REGION_TARGETS
 from app.fx import SUPPORTED
@@ -37,6 +38,12 @@ def test_every_etf_in_the_committed_file_is_a_ucits_fund() -> None:
     # US-listed funds cannot be bought by an EU retail investor: keep them out of the file.
     etfs = [row for row in load_universe() if row.asset_type == "ETF"]
     assert [row.ticker for row in etfs if not row.ucits] == []
+
+
+def test_every_listed_fund_cost_can_pass_the_etf_cost_filter() -> None:
+    # The file's TER beats Yahoo's, so a fund above the limit could never be recommended.
+    funds = [r for r in load_universe() if r.ter is not None]
+    assert [r.ticker for r in funds if r.ter > ETF_MAX_EXPENSE_RATIO] == []
 
 
 def test_every_currency_in_the_file_can_be_converted_to_eur() -> None:
