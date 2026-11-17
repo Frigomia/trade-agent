@@ -184,7 +184,7 @@ def test_detail_fetches_stay_bounded_for_a_large_portfolio(client):
 def test_slow_math_does_not_block_the_request_event_loop():
     db = MagicMock()
     db.query.return_value.filter.return_value.all.return_value = [
-        SimpleNamespace(ticker="A", name="A", shares=1, asset_type="STOCK", sector=None)
+        SimpleNamespace(ticker="A", name="A", shares=1, asset_type="STOCK", sector=None, isin=None)
     ]
     started, released = threading.Event(), threading.Event()
 

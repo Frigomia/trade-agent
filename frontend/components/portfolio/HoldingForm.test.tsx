@@ -194,6 +194,136 @@ describe("HoldingForm", () => {
     expect(sentBody()).not.toHaveProperty("sector");
   });
 
+  describe("ETF category", () => {
+    const ETF: HoldingSummary = { ...HELD, ticker: "VWCE.DE", name: "Vanguard FTSE All-World", asset_type: "ETF", sector: "Global Equity" };
+    const saveButton = () => fireEvent.click(screen.getByRole("button", { name: "Save holding" }));
+
+    it("shows the Category field only when the type is ETF", () => {
+      setup({ holding: { ...HELD, sector: null } });
+      expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+
+      type("Type", "");
+      expect(screen.queryByLabelText("Category")).not.toBeInTheDocument();
+
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toBeInTheDocument();
+      expect(screen.getByText("Used to group this fund on the Portfolio page")).toBeInTheDocument();
+      expect(screen.getByLabelText("Category")).toHaveAttribute("maxlength", "100");
+    });
+
+    it("prefills the category when editing an ETF", () => {
+      setup({ holding: ETF });
+      expect(screen.getByLabelText("Type")).toHaveValue("ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("Global Equity");
+    });
+
+    it("sends the trimmed category", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Category", "  Emerging Markets  ");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody().sector).toBe("Emerging Markets");
+    });
+
+    it("sends no sector when the category is empty", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Category", "   ");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).not.toHaveProperty("sector");
+    });
+
+    it("clears the stored category when an ETF with one is changed to Stock", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      type("Type", "STOCK");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({
+        ticker: "VWCE.DE",
+        name: "Vanguard FTSE All-World",
+        asset_type: "STOCK",
+        sector: null,
+        shares: 10,
+        cost_basis: 150,
+        first_purchase_date: "2024-01-15",
+        target_weight: 0.2,
+      });
+    });
+
+    it("sends no sector when an ETF with no stored category is changed to Stock", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: { ...ETF, sector: null } });
+      type("Type", "STOCK");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({
+        ticker: "VWCE.DE",
+        name: "Vanguard FTSE All-World",
+        asset_type: "STOCK",
+        shares: 10,
+        cost_basis: 150,
+        first_purchase_date: "2024-01-15",
+        target_weight: 0.2,
+      });
+    });
+
+    it("sends the prefilled category when an ETF is saved unchanged", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: ETF });
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({
+        ticker: "VWCE.DE",
+        name: "Vanguard FTSE All-World",
+        asset_type: "ETF",
+        sector: "Global Equity",
+        shares: 10,
+        cost_basis: 150,
+        first_purchase_date: "2024-01-15",
+        target_weight: 0.2,
+      });
+    });
+
+    it("does not carry one fund's category to the next ticker", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup();
+      type("Ticker", "vwce.de");
+      type("Type", "ETF");
+      type("Category", "Global Equity");
+      type("Ticker", "eimi.l");
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("");
+      type("Shares", "1");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({ ticker: "EIMI.L", asset_type: "ETF", shares: 1 });
+    });
+
+    it("does not prefill a stock's sector as a fund category when the type is corrected to ETF", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup({ holding: HELD });
+      type("Type", "ETF");
+      expect(screen.getByLabelText("Category")).toHaveValue("");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toMatchObject({ ticker: "AAPL", asset_type: "ETF", sector: null });
+    });
+
+    it("leaves a new holding alone: no sector key when its type is Stock", async () => {
+      apiFetch.mockResolvedValue({});
+      const { onSaved } = setup();
+      type("Ticker", "msft");
+      type("Shares", "1");
+      type("Type", "STOCK");
+      saveButton();
+      await waitFor(() => expect(onSaved).toHaveBeenCalled());
+      expect(sentBody()).toEqual({ ticker: "MSFT", asset_type: "STOCK", shares: 1 });
+    });
+  });
+
   it("does not send a request when a required field is missing", () => {
     setup();
 

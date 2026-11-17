@@ -12,7 +12,7 @@ export interface AnalyticsPosition {
 }
 
 export interface AnalyticsExposure {
-  label: string; // "Technology", "USD", "Japan"; "Unclassified" when unknown
+  label: string; // "Technology", "USD", "Japan"; "Unclassified" when unknown; "Funds" as a country, "ETF: <category>" as a sector for a fund
   weight: number;
 }
 

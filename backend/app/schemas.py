@@ -311,9 +311,13 @@ class PortfolioSnapshotOut(BaseModel):
 class HoldingSummaryOut(HoldingIn):
     name: str
     asset_type: AssetType
+    isin: str | None = None
     industry: str | None = None
     country: str | None = None
     currency: str | None = None
+    # The sector label the allocation groups by; never stored. For an ETF it is the same
+    # `ETF: <category>` label as the Risk panel, else None (the stored `sector` is used).
+    group_sector: str | None = None
     as_of: date | None = None
     stale: bool = True
     # Computed at request time, never stored; all None when the quote fails (or shares == 0).

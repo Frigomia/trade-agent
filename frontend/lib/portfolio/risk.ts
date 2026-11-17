@@ -86,10 +86,14 @@ export interface Spread {
 /** The backend's label for a holding it could not classify. */
 export const UNCLASSIFIED = "Unclassified";
 
+/** The backend's country label for a fund: it has no country without look-through. */
+export const FUNDS = "Funds";
+
 /**
  * How widely the money is spread: counts of sectors, countries and currencies, and the biggest
  * sector. "Unclassified" is not counted as a sector, country or currency, and is never the largest
- * sector: it is a gap in the data, reported separately.
+ * sector: it is a gap in the data, reported separately. "Funds" is not counted as a country either
+ * (a fund category such as "ETF: Global Equity" does count as a sector).
  */
 export function spread(analytics: PortfolioAnalytics): Spread {
   const known = (list: { label: string; weight: number }[]) => list.filter((e) => e.label !== UNCLASSIFIED);
@@ -98,7 +102,7 @@ export function spread(analytics: PortfolioAnalytics): Spread {
   const unclassified = analytics.by_sector.find((e) => e.label === UNCLASSIFIED);
   return {
     sectors: sectors.length,
-    countries: known(analytics.by_country).length,
+    countries: known(analytics.by_country).filter((e) => e.label !== FUNDS).length,
     currencies: known(analytics.by_currency).length,
     largestSector: largest ? { label: largest.label, weight: largest.weight } : null,
     unclassifiedSector: unclassified ? unclassified.weight : null,
