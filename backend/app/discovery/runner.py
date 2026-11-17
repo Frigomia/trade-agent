@@ -80,7 +80,9 @@ class ScanEvaluation:
 def _user_inputs(user_id: UUID) -> tuple[list[PositionInput], list[str]]:
     with scoped_session(user_id) as db:
         holdings = [
-            PositionInput(row.ticker, row.name, float(row.shares), row.asset_type, row.sector)
+            PositionInput(
+                row.ticker, row.name, float(row.shares), row.asset_type, row.sector, row.isin
+            )
             for row in db.query(Holding).filter(Holding.user_id == user_id, Holding.shares > 0)
         ]
         preferences = db.query(InvestmentPreferences).filter_by(user_id=user_id).one_or_none()

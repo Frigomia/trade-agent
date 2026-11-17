@@ -111,14 +111,59 @@ def test_missing_price_is_skipped_and_the_other_position_still_works():
 
 
 def test_unknown_country_and_etf_category_are_explicit_buckets_not_look_through():
+    # The person's own category ("Technology") now beats Yahoo's ("Global Equity").
     exposure = analysis(
         holdings=[PositionInput("A", "Fund", 1, "ETF", "Technology")],
         profiles={"A": {"category": "Global Equity", "sector": "Technology"}},
     )
-    assert exposure.by_sector[0].label == "ETF: Global Equity"
-    assert exposure.by_industry[0].label == "ETF: Global Equity"
-    assert exposure.by_country[0].label == "Unclassified"
+    assert exposure.by_sector[0].label == "ETF: Technology"
+    assert exposure.by_industry[0].label == "ETF: Technology"
+    assert exposure.by_country[0].label == "Funds"
     assert any("no constituent look-through" in note for note in exposure.notes)
+
+
+def etf(sector=None, ticker="A"):
+    return [PositionInput(ticker, "Fund", 1, "ETF", sector)]
+
+
+def test_etf_own_category_beats_yahoo_category():
+    exposure = analysis(holdings=etf("My Tech Fund"), profiles={"A": {"category": "Global Equity"}})
+    assert exposure.by_sector[0].label == "ETF: My Tech Fund"
+
+
+def test_etf_uses_yahoo_category_without_an_own_one():
+    exposure = analysis(holdings=etf(), profiles={"A": {"category": "Global Equity"}})
+    assert exposure.by_sector[0].label == "ETF: Global Equity"
+    assert not any("profile unavailable" in note for note in exposure.notes)
+
+
+def test_etf_falls_back_to_the_universe_category_for_sector_and_industry():
+    exposure = analysis(
+        holdings=etf(ticker="IS3N.DE"),
+        histories={"IS3N.DE": curve()},
+        prices={"IS3N.DE": EurPrice(Decimal(100), "EUR", Decimal(1))},
+    )
+    assert exposure.by_sector[0].label == "ETF: Global Emerging Markets Equity"
+    assert exposure.by_industry[0].label == "ETF: Global Emerging Markets Equity"
+    assert not any("profile unavailable" in note for note in exposure.notes)
+
+
+def test_etf_whitespace_own_category_falls_through_to_the_next_source():
+    exposure = analysis(holdings=etf("   "), profiles={"A": {"category": "Global Equity"}})
+    assert exposure.by_sector[0].label == "ETF: Global Equity"
+
+
+def test_etf_with_no_category_anywhere_is_unclassified_with_a_note():
+    exposure = analysis(holdings=etf())
+    assert exposure.by_sector[0].label == "Unclassified"
+    assert exposure.by_industry[0].label == "Unclassified"
+    assert exposure.by_country[0].label == "Funds"
+    assert any("A:" in note and "category not set" in note for note in exposure.notes)
+
+
+def test_stock_with_unknown_country_is_still_unclassified():
+    exposure = analysis(holdings=[PositionInput("A", "Alpha", 1, "STOCK")])
+    assert exposure.by_country[0].label == "Unclassified"
 
 
 def test_profile_metadata_supplies_industry_and_country_without_storing_it():

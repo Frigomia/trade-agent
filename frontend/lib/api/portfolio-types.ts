@@ -18,6 +18,8 @@ export interface HoldingSummary {
   industry?: string | null;
   country?: string | null;
   currency?: string | null;
+  // The label the allocation groups by; for an ETF the same "ETF: <category>" as the Risk panel. Never stored.
+  group_sector?: string | null;
   as_of?: string | null;
   stale?: boolean;
 }

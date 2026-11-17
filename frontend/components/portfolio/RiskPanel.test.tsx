@@ -210,6 +210,13 @@ describe("RiskPanel", () => {
     expect(within(spread).getByText("Sector not known").nextSibling).toHaveTextContent("40.0%");
   });
 
+  it("does not count the Funds slice as a country", () => {
+    show({ by_country: [{ label: "Japan", weight: 0.5 }, { label: "Funds", weight: 0.5 }] });
+
+    const spread = screen.getByRole("heading", { name: "Spread", hidden: true }).parentElement!;
+    expect(within(spread).getByText("Countries").nextSibling).toHaveTextContent("1");
+  });
+
   it("names the correlation table's corner column for screen readers", () => {
     show();
 

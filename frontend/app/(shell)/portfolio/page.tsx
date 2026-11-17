@@ -311,7 +311,7 @@ export default function PortfolioPage() {
             <span>Weight / Target</span>
           </Box>
           {group && (
-            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", py: 1 }}>
+            <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", py: 1, overflowWrap: "anywhere" }}>
               Showing holdings in {group.name}.{" "}
               <ButtonBase onClick={() => setSelected(null)} sx={{ fontSize: "inherit", color: "var(--accent)", textDecoration: "underline", verticalAlign: "baseline" }}>
                 Show all

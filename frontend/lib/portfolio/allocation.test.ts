@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HoldingSummary } from "@/lib/api/portfolio-types";
-import { allocate, largestPositions, MAX_GROUPS, OTHER, OTHER_ID, UNKNOWN } from "./allocation";
+import { allocate, largestPositions, MAX_GROUPS, OTHER, OTHER_ID, UNKNOWN, wrapCaption } from "./allocation";
 
 const holding = (ticker: string, value: number | null, over: Partial<HoldingSummary> = {}): HoldingSummary => ({
   ticker,
@@ -91,6 +91,28 @@ describe("allocate", () => {
     expect(new Set(groups.map((g) => g.id)).size).toBe(groups.length);
   });
 
+  it("groups a fund by its group_sector label, not by the stored sector", () => {
+    const fund = holding("F", 100, { asset_type: "ETF", sector: "Technology", group_sector: "ETF: Global Large-Cap Blend Equity", country: "Funds" });
+    const list = [fund, holding("A", 300)];
+
+    expect(allocate(list, "sector").groups.map((g) => [g.name, g.tickers])).toEqual([
+      ["Technology", ["A"]],
+      ["ETF: Global Large-Cap Blend Equity", ["F"]],
+    ]);
+  });
+
+  it("falls back to the stored sector when group_sector is missing or blank", () => {
+    const list = [holding("F", 100, { asset_type: "ETF", sector: "My Fund", group_sector: null }), holding("G", 50, { asset_type: "ETF", sector: "My Fund", group_sector: "  " })];
+
+    expect(allocate(list, "sector").groups.map((g) => [g.name, g.tickers])).toEqual([["My Fund", ["F", "G"]]]);
+  });
+
+  it("makes a Funds country slice of the funds", () => {
+    const list = [holding("F", 100, { asset_type: "ETF", country: "Funds" }), holding("A", 300)];
+
+    expect(allocate(list, "country").groups.map((g) => [g.name, g.tickers])).toEqual([["United States", ["A"]], ["Funds", ["F"]]]);
+  });
+
   it("is empty for no holdings", () => {
     expect(allocate([], "sector")).toEqual({ groups: [], total: 0, unpriced: 0 });
   });
@@ -116,5 +138,45 @@ describe("largestPositions", () => {
   it("defaults to five and is empty for nothing priced", () => {
     expect(largestPositions(Array.from({ length: 8 }, (_, i) => holding(`T${i}`, 100 + i)))).toHaveLength(5);
     expect(largestPositions([holding("A", null)])).toEqual([]);
+  });
+});
+
+describe("wrapCaption", () => {
+  it("wraps at spaces, greedily", () => {
+    expect(wrapCaption("ETF: Global Large-Cap Blend Equity", 22, 2)).toEqual(["ETF: Global Large-Cap", "Blend Equity"]);
+  });
+
+  it("keeps a short name on one line and collapses spacing", () => {
+    expect(wrapCaption("Technology", 22, 2)).toEqual(["Technology"]);
+    expect(wrapCaption("  Real \n  Estate ", 22, 2)).toEqual(["Real Estate"]);
+  });
+
+  it("returns no lines for empty or blank text", () => {
+    expect(wrapCaption("", 22, 2)).toEqual([]);
+    expect(wrapCaption("   \t ", 22, 2)).toEqual([]);
+  });
+
+  it("ends the last line with an ellipsis when the text is cut, never past the width", () => {
+    const lines = wrapCaption("word ".repeat(20).trim() + " end", 22, 2);
+    expect(lines).toHaveLength(2);
+    expect(lines[1].endsWith("…")).toBe(true);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(22);
+  });
+
+  it("cuts a 100-character label to two lines of at most 22", () => {
+    const lines = wrapCaption("ETF: " + "Diversified-Emerging Markets ".repeat(5).slice(0, 95), 22, 2);
+    expect(lines[1].endsWith("…")).toBe(true);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(22);
+  });
+
+  it("hard-breaks a single word longer than the line", () => {
+    expect(wrapCaption("x".repeat(40), 22, 2)).toEqual(["x".repeat(22), "x".repeat(18)]);
+    const cut = wrapCaption("x".repeat(100), 22, 2);
+    expect(cut[0]).toBe("x".repeat(22));
+    expect(cut[1]).toBe("x".repeat(21) + "…");
+  });
+
+  it("breaks an over-long word at its hyphens first", () => {
+    expect(wrapCaption("Pharmaceuticals-Biotechnology", 22, 2)).toEqual(["Pharmaceuticals-", "Biotechnology"]);
   });
 });
