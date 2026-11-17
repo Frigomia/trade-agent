@@ -207,6 +207,7 @@ export interface ScanRun {
     uncertain_price_symbols?: string[];
     candidate_failures?: string[];
     mentions_available?: boolean;
+    research_warnings?: string[];
     /** Absent on scans saved before ETF ideas. `skipped_reason` is set when the lane did not run. */
     etf_lane?: { eligible: number; shortlisted: number; researched: number; skipped_reason: string | null };
   } & Record<string, unknown>;

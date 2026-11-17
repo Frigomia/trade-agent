@@ -114,6 +114,22 @@ def test_failed_candidates_are_disclosed_and_all_failed_is_not_a_quiet_day(scan_
         asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
 
 
+def test_tavily_warnings_are_saved_in_scan_coverage(scan_inputs):
+    _, client, graph, _, _ = scan_inputs
+    warning = "Tavily rate limit reached (HTTP 429). Check your Tavily quota or retry later."
+
+    async def graph_with_tavily_warning(candidate, user_client, *, fit):
+        return sample_idea().model_copy(
+            update={"ticker": candidate.ticker, "data_notes": [warning]}
+        )
+
+    graph.side_effect = graph_with_tavily_warning
+
+    result = asyncio.run(runner.evaluate_scan(USER_ID, client, AsyncMock()))
+
+    assert result.coverage_summary["research_warnings"] == [warning]
+
+
 def test_candidate_fit_drops_future_history(scan_inputs, monkeypatch):
     _, client, graph, _, _ = scan_inputs
     exposure = sample_exposure()
