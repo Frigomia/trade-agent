@@ -5,6 +5,7 @@ from anthropic.types import Message
 
 from app.agents.text import final_text
 from app.config import settings
+from app.tracing import trace_anthropic, traced
 
 NEWS_AGENT_SYSTEM_PROMPT = """You are assisting a personal, advisory-only trading agent. \
 You are not a licensed financial advisor. Use measured, non-promotional language. \
@@ -44,6 +45,7 @@ def _get_client() -> Anthropic | None:
     return _client
 
 
+@traced("analysis.news")
 async def run_news_agent(
     ticker: str,
     action: str,
@@ -70,7 +72,7 @@ async def run_news_agent(
     )
 
     def _create() -> Message:
-        return client.messages.create(
+        return trace_anthropic(client).messages.create(
             model=settings.anthropic_model,
             max_tokens=4096,
             system=NEWS_AGENT_SYSTEM_PROMPT,

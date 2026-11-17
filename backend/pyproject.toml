@@ -11,6 +11,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "langgraph",
+    "langsmith>=0.15.0",
     "anthropic",
     "yfinance",
     "redis",

@@ -11,6 +11,7 @@ from app.agents.graph import AnalysisState, run_graph_for_ticker
 from app.db import lock_and_check_active, scoped_session
 from app.models import Holding, Recommendation, WatchlistItem
 from app.redis_client import _RELEASE_IF_MINE, _RENEW_IF_MINE, get_redis
+from app.tracing import traced
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +154,7 @@ async def _process_ticker(
         await redis.eval(_RENEW_IF_MINE, 1, _active_key(user_id), job_id, JOB_TTL_SECONDS)
 
 
+@traced("analysis.job")
 async def run_job(
     job_id: str,
     user_id: uuid.UUID,

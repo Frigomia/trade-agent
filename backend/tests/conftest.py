@@ -20,6 +20,7 @@ from app.config import settings
 from app.db import Base, get_session_factory
 from app.main import app
 from app.models import AppUser, UserApiKey
+from app.tracing import get_tracing_client
 from tests.auth_support import (
     ADMIN_ID,
     TEST_SUPABASE_URL,
@@ -36,6 +37,14 @@ TEST_DATABASE_URL = (
 APP_TEST_DATABASE_URL = (
     "postgresql+psycopg://trading_agent_app:trading_agent_app@localhost:5432/trading_agent_test"
 )
+
+
+@pytest.fixture(autouse=True)
+def _disable_external_tracing(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    monkeypatch.setattr(settings, "langsmith_tracing", False)
+    get_tracing_client.cache_clear()
+    yield
+    get_tracing_client.cache_clear()
 
 
 @pytest.fixture(autouse=True)
