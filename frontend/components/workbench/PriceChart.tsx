@@ -6,7 +6,7 @@ import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 import { Change } from "@/components/ui/Change";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { formatAmount } from "@/lib/format";
-import { axisLabels, buildPriceChart, CHART_HEIGHT, CHART_LEFT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
+import { buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct } from "@/lib/priceChart";
 
 const RANGE_NAME: Record<HistoryRange, string> = { "1w": "One week", "1m": "One month", "6m": "Six months", "1y": "One year", "5y": "Five years" };
 
@@ -65,7 +65,6 @@ export function PriceChart({
     );
   }
 
-  const yLabels = axisLabels(geo.yTicks.map((t) => t.value));
   const last = clean[clean.length - 1];
   // Clamped, so a refreshed (shorter) series can never leave the reading pointing past its end.
   const index = Math.min(picked ?? clean.length - 1, clean.length - 1);
@@ -117,11 +116,11 @@ export function PriceChart({
             <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        {geo.yTicks.map((t, i) => (
+        {geo.yTicks.map((t) => (
           <g key={t.value}>
-            <line x1={CHART_LEFT} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
-            <text x={CHART_LEFT - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">
-              {yLabels[i]}
+            <line x1={geo.left} x2={CHART_WIDTH} y1={t.y} y2={t.y} stroke="var(--line)" />
+            <text x={geo.left - 6} y={t.y + 4} textAnchor="end" fontSize={10} fill="var(--muted)">
+              {t.label}
             </text>
           </g>
         ))}

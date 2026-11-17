@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { axisLabels, buildPriceChart, CHART_HEIGHT, CHART_WIDTH, cleanPoints, rangeChangePct, tickLabel } from "./priceChart";
+import { axisLabels, buildPriceChart, CHART_HEIGHT, CHART_LEFT, CHART_WIDTH, cleanPoints, rangeChangePct, tickLabel } from "./priceChart";
 
 const pts = (closes: number[]) => closes.map((close, i) => ({ date: `2026-10-${String(i + 1).padStart(2, "0")}`, close }));
 
@@ -72,6 +72,30 @@ describe("axisLabels", () => {
   it("adds decimals until neighbouring gridlines read differently", () => {
     expect(axisLabels([1000000, 1005000, 1010000])).toEqual(["1M", "1.005M", "1.01M"]);
     expect(axisLabels([0.001, 0.002, 0.003])).toEqual(["0.001", "0.002", "0.003"]);
+  });
+
+  it("falls back to the full amount when compact labels would be too long or collide", () => {
+    expect(axisLabels([1000000, 1000050, 1000100])).toEqual(["1,000,000", "1,000,050", "1,000,100"]);
+    expect(axisLabels([1000000, 1000000.5, 1000001])).toEqual(["1,000,000", "1,000,000.5", "1,000,001"]);
+  });
+});
+
+describe("price axis on narrow ranges", () => {
+  // Run through the real geometry (the ticks d3 picks), not hand-written values.
+  it.each([[[1000000, 1000100]], [[1000000, 1000001]], [[0.00001, 0.00003]], [[300000, 310000]]])(
+    "keeps labels distinct and inside the left margin for closes %j",
+    (closes) => {
+      const geo = buildPriceChart(pts(closes), "1m")!;
+      const labels = geo.yTicks.map((t) => t.label);
+      expect(new Set(labels).size).toBe(labels.length);
+      for (const l of labels) expect(l.length * 6 + 6).toBeLessThanOrEqual(geo.left);
+      expect(geo.left).toBeGreaterThanOrEqual(CHART_LEFT);
+    },
+  );
+
+  it("widens the margin only when the labels need it", () => {
+    expect(buildPriceChart(pts([100, 110]), "1m")!.left).toBe(CHART_LEFT);
+    expect(buildPriceChart(pts([1000000, 1000100]), "1m")!.left).toBeGreaterThan(CHART_LEFT);
   });
 });
 

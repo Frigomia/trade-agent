@@ -4,9 +4,13 @@ import type { HistoryRange, PriceHistory } from "@/lib/api/discovery-types";
 
 export const CHART_WIDTH = 600;
 export const CHART_HEIGHT = 220;
-// The left margin holds the price labels, as in the mock.
+// The left margin holds the price labels, as in the mock. It is the minimum: it grows when the labels
+// need more room (see `gutterFor`), so a label never spills out of the chart.
 export const CHART_LEFT = 40;
-const MARGIN = { top: 12, right: 6, bottom: 24, left: CHART_LEFT };
+const MARGIN = { top: 12, right: 6, bottom: 24 };
+// A label this short fits the minimum margin at the 10-unit axis font; longer ones widen the margin.
+const COMPACT_MAX_CHARS = 6;
+const CHAR_WIDTH = 6;
 
 type Point = PriceHistory["points"][number];
 
@@ -19,31 +23,46 @@ export interface PriceChartGeometry {
   count: number;
   linePath: string;
   areaPath: string;
-  yTicks: { value: number; y: number }[];
+  /** Width of the left margin: at least CHART_LEFT, wider when the price labels need it. */
+  left: number;
+  yTicks: { value: number; y: number; label: string }[];
   xTicks: { label: string; x: number; anchor: "start" | "middle" | "end" }[];
   xAt: (index: number) => number;
   yAt: (value: number) => number;
   indexAtX: (x: number) => number;
 }
 
-/**
- * The y-axis prices as "300K" or "1.2M": the left gutter is fixed, so long amounts must stay short.
- * Uses the fewest decimals that lose nothing (52.5 stays 52.5, not 53) and keep every gridline's
- * label different (1.005M and 1.01M need three, 0.001 and 0.004 need three).
- */
-export function axisLabels(values: number[]): string[] {
-  const at = (digits: number) => {
-    const fmt = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: digits });
-    return values.map((v) => fmt.format(v));
-  };
-  let labels = at(0);
-  for (let digits = 0; digits < 6; digits++) {
-    const finer = at(digits + 1);
-    const exact = labels.every((l, i) => l === finer[i]);
-    if (exact && new Set(labels).size === values.length) return labels;
+function labelsAt(values: number[], options: Intl.NumberFormatOptions): string[] {
+  const fmt = new Intl.NumberFormat("en", options);
+  return values.map((v) => fmt.format(v));
+}
+
+/** The fewest decimals (up to `max`) at which every label is different and adding one changes none. */
+function fewestDecimals(values: number[], max: number, options: Intl.NumberFormatOptions): string[] | null {
+  let labels = labelsAt(values, { ...options, maximumFractionDigits: 0 });
+  for (let digits = 0; digits < max; digits++) {
+    const finer = labelsAt(values, { ...options, maximumFractionDigits: digits + 1 });
+    if (new Set(labels).size === values.length && labels.every((l, i) => l === finer[i])) return labels;
     labels = finer;
   }
-  return labels;
+  return null;
+}
+
+/**
+ * The y-axis prices. Short compact labels ("300K", "1.2M") when they stay distinct and lose nothing
+ * (52.5 stays 52.5, not 53); otherwise the full amount with as many decimals as it takes, so two
+ * gridlines never read the same. The chart widens its left margin to fit whatever this returns.
+ */
+export function axisLabels(values: number[]): string[] {
+  const compact = fewestDecimals(values, 6, { notation: "compact" });
+  if (compact && compact.every((l) => l.length <= COMPACT_MAX_CHARS)) return compact;
+  return fewestDecimals(values, 12, {}) ?? labelsAt(values, { maximumFractionDigits: 12 });
+}
+
+/** Margin in chart units for these labels at the 10-unit axis font: the minimum, or wider. */
+export function gutterFor(labels: string[]): number {
+  const longest = Math.max(0, ...labels.map((l) => l.length));
+  return Math.max(CHART_LEFT, Math.ceil(longest * CHAR_WIDTH) + 10);
 }
 
 /** "2024" for five years, "Jul" for a long range, "19 Oct" for a short one, from a YYYY-MM-DD date. */
@@ -69,9 +88,6 @@ export function rangeChangePct(points: Point[]): number | null {
 export function buildPriceChart(clean: Point[], range: HistoryRange): PriceChartGeometry | null {
   if (clean.length < 2) return null;
   const count = clean.length;
-  const x = scaleLinear()
-    .domain([0, count - 1])
-    .range([MARGIN.left, CHART_WIDTH - MARGIN.right]);
   let min = Math.min(...clean.map((p) => p.close));
   let max = Math.max(...clean.map((p) => p.close));
   if (min === max) {
@@ -82,6 +98,12 @@ export function buildPriceChart(clean: Point[], range: HistoryRange): PriceChart
     .domain([min, max])
     .nice()
     .range([CHART_HEIGHT - MARGIN.bottom, MARGIN.top]);
+  const values = y.ticks(3);
+  const labels = axisLabels(values);
+  const left = gutterFor(labels);
+  const x = scaleLinear()
+    .domain([0, count - 1])
+    .range([left, CHART_WIDTH - MARGIN.right]);
   const baseline = CHART_HEIGHT - MARGIN.bottom;
   const linePath = line<Point>().x((_, i) => x(i)).y((d) => y(d.close))(clean) ?? "";
   const areaPath = area<Point>().x((_, i) => x(i)).y0(baseline).y1((d) => y(d.close))(clean) ?? "";
@@ -96,7 +118,8 @@ export function buildPriceChart(clean: Point[], range: HistoryRange): PriceChart
     count,
     linePath,
     areaPath,
-    yTicks: y.ticks(3).map((value) => ({ value, y: y(value) })),
+    left,
+    yTicks: values.map((value, i) => ({ value, y: y(value), label: labels[i] })),
     xTicks,
     xAt: (index) => x(index),
     yAt: (value) => y(value),
