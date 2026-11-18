@@ -132,3 +132,58 @@ def test_follow_up_applies_trusted_issuer_hosts_before_confirmation(monkeypatch)
     assert result.claims[0].source_tier == "official"
     assert result.negative_developments[0].status == "confirmed"
     assert result.negative_developments[0].invalidates_thesis
+
+
+def _run_follow_up(urls, official_hosts=()):
+    previous = evidence()
+    sources = {u: research._Source(u, "Title", FACT, None, "tavily") for u in urls}
+    data = {
+        "claims": [],
+        "negative_developments": [],
+        "competitors": [],
+        "mentions": [],
+        "conflicts": [],
+        "gaps": [],
+    }
+    with (
+        patch.object(research, "_gather", AsyncMock(return_value=(sources, ["search note"], True))),
+        patch.object(research, "_extract", AsyncMock(return_value=data)) as extract,
+        patch.object(research, "_get_client"),
+    ):
+        result = asyncio.run(
+            research.follow_up_candidate(
+                sample_candidate(), previous, MagicMock(), "question", official_hosts=official_hosts
+            )
+        )
+    return previous, result, extract
+
+
+def test_follow_up_makes_no_claude_call_when_no_result_is_authoritative(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "tavily_api_key", "test-key")
+    previous, result, extract = _run_follow_up(
+        ["https://www.reddit.com/r/stocks/abc", "https://unknown-blog.example/post"]
+    )
+    extract.assert_not_awaited()
+    assert result.claims == previous.claims
+    assert result.negative_developments == previous.negative_developments
+    assert result.gaps == [*previous.gaps, "search note", research.NO_AUTHORITY_GAP]
+
+
+@pytest.mark.parametrize(
+    "url", ["https://www.reuters.com/business/licence", "https://www.sec.gov/Archives/filing"]
+)
+def test_follow_up_extracts_when_a_result_is_reliable_reporting_or_official(
+    monkeypatch, url
+) -> None:
+    monkeypatch.setattr(settings, "tavily_api_key", "test-key")
+    _, _, extract = _run_follow_up(["https://www.reddit.com/r/stocks/abc", url])
+    extract.assert_awaited_once()
+
+
+def test_follow_up_extracts_for_a_verified_issuer_host(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "tavily_api_key", "test-key")
+    url = "https://ir.example-issuer.com/news/licence"
+    _, _, without_host = _run_follow_up([url])
+    without_host.assert_not_awaited()
+    _, _, with_host = _run_follow_up([url], official_hosts=("example-issuer.com",))
+    with_host.assert_awaited_once()

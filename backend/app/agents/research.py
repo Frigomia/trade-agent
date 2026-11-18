@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import unicodedata
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
 from email.utils import parsedate_to_datetime
@@ -652,6 +652,18 @@ async def research_candidate(
     return _evidence(ticker, name, {"claims": []}, sources, gaps, official_hosts=official_hosts)
 
 
+NO_AUTHORITY_GAP = (
+    "The follow-up search found no authoritative source; the allegation remains unverified."
+)
+
+
+def _has_trusted_source(urls: Iterable[str], official_hosts: Collection[str]) -> bool:
+    """Any URL that `source_tier` classifies as official or reliable reporting (host only)."""
+    return any(
+        source_tier(url, official_hosts) in {"official", "reliable_reporting"} for url in urls
+    )
+
+
 @traced("research.follow_up")
 async def follow_up_candidate(
     candidate: CandidateMetrics,
@@ -676,6 +688,10 @@ async def follow_up_candidate(
     )
     if not sources:
         return evidence.model_copy(update={"gaps": [*evidence.gaps, *gaps]})
+    # Only claims from an official or reliable-reporting host can become the trusted facts an
+    # exclusion needs, so without one of those the extraction call cannot change the outcome.
+    if not _has_trusted_source(sources, official_hosts):
+        return evidence.model_copy(update={"gaps": [*evidence.gaps, *gaps, NO_AUTHORITY_GAP]})
     try:
         data = await _extract(
             resolved,
