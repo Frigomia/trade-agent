@@ -187,3 +187,10 @@ def test_follow_up_extracts_for_a_verified_issuer_host(monkeypatch) -> None:
     without_host.assert_not_awaited()
     _, _, with_host = _run_follow_up([url], official_hosts=("example-issuer.com",))
     with_host.assert_awaited_once()
+
+
+def test_follow_up_sends_the_trimmed_schema(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "tavily_api_key", "test-key")
+    _, _, extract = _run_follow_up(["https://www.reuters.com/business/licence"])
+    assert extract.await_args.args[3] == research.candidate_evidence_schema()
+    assert "mentions" not in extract.await_args.args[3]["properties"]
