@@ -8,3 +8,6 @@ node_modules/
 .next/
 .impeccable/
 .superpowers/
+
+# Replay results (third-party text, local only)
+backend/.replay/
