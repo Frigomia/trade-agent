@@ -63,10 +63,10 @@ class Recording:
             if ticker not in self.followups:
                 raise ReplayMissing(f"no follow-up bundle recorded for {ticker}")
             return self.followups[ticker]
+        if ticker in self.planted and "initial" in self.planted[ticker]:
+            return self.planted[ticker]["initial"]  # never a live result for a fake company
         if (label, query) in self.searches:
             return self.searches[(label, query)]
-        if ticker in self.planted and "initial" in self.planted[ticker]:
-            return self.planted[ticker]["initial"]
         raise ReplayMissing(f"no recording for the {label} search: {query[:60]!r}")
 
 
@@ -155,6 +155,19 @@ def _cost(run: dict[str, Any]) -> float:
     return sum(c["input_tokens"] * PRICE_IN + c["output_tokens"] * PRICE_OUT for c in calls) / 1e6
 
 
+def _expected(cid: str, expect: dict[str, Any], case: dict[str, Any]) -> Check:
+    """A planted case must behave as the design states, so old == new can never pass vacuously."""
+    steps = {c["step"] for c in case["calls"]}
+    problems = []
+    if "exclusion" in expect and case["exclusion"] != expect["exclusion"]:
+        problems.append(f"exclusion {case['exclusion']} (expected {expect['exclusion']})")
+    problems += [f"missing step {s}" for s in expect.get("require_steps", []) if s not in steps]
+    problems += [f"unexpected step {s}" for s in expect.get("forbid_steps", []) if s in steps]
+    urls = {c["url"] for c in case["claims"]}
+    problems += [f"missing claim {u}" for u in expect.get("require_urls", []) if u not in urls]
+    return Check(f"expect:{cid}", not problems, "; ".join(problems) or "as stated")
+
+
 def compare_runs(old: dict[str, Any], new: dict[str, Any]) -> list[Check]:
     checks: list[Check] = []
     truncated_new = [
@@ -208,6 +221,10 @@ def compare_runs(old: dict[str, Any], new: dict[str, Any]) -> list[Check]:
                 f"old {old_case['exclusion']}, new {new_case['exclusion']}",
             )
         )
+    expectations = {p["case_id"]: p["expect"] for p in planted_cases()}
+    for cid, new_case in new["cases"].items():
+        if cid in expectations:
+            checks.append(_expected(cid, expectations[cid], new_case))
     old_out, new_out = (
         _sum(old, "research", "output_tokens"),
         _sum(new, "research", "output_tokens"),
@@ -257,18 +274,21 @@ def planted_cases() -> list[dict[str, Any]]:
     licence = "The regulator revoked the company's sole operating licence on 10 October 2026."
     return [
         {
+            "expect": {"exclusion": "thesis_invalidated", "require_steps": ["thesis"]},
             "case_id": "planted:starts_confirmed",
             "entry": {"ticker": "PLANT1.TEST", "name": "Planted One (TEST)"},
             "initial": [src("https://www.sec.gov/planted/1", licence)],
             "followup": [],
         },
         {
+            "expect": {"exclusion": "thesis_invalidated", "require_steps": ["follow_up", "thesis"]},
             "case_id": "planted:forum_led_confirmed_by_followup",
             "entry": {"ticker": "PLANT2.TEST", "name": "Planted Two (TEST)"},
             "initial": [src("https://www.reddit.com/r/stocks/planted2", "People say " + licence)],
             "followup": [src("https://www.sec.gov/planted/2", licence)],
         },
         {
+            "expect": {"exclusion": None, "forbid_steps": ["follow_up", "thesis"]},
             "case_id": "planted:unconfirmed_no_authoritative_source",
             "entry": {"ticker": "PLANT3.TEST", "name": "Planted Three (TEST)"},
             "initial": [src("https://www.reddit.com/r/stocks/planted3", "People say " + licence)],
@@ -278,6 +298,7 @@ def planted_cases() -> list[dict[str, Any]]:
             ],
         },
         {
+            "expect": {"require_steps": ["follow_up"]},
             "case_id": "planted:medium_allegation_trusted_bundle",
             "entry": {"ticker": "PLANT4.TEST", "name": "Planted Four (TEST)"},
             "initial": [
@@ -289,6 +310,13 @@ def planted_cases() -> list[dict[str, Any]]:
             "followup": [src("https://www.reuters.com/planted/4b", "The complaint was filed.")],
         },
         {
+            "expect": {
+                "exclusion": "thesis_invalidated",
+                "require_urls": [
+                    "https://www.sec.gov/planted/5a",
+                    "https://www.reuters.com/planted/5b",
+                ],
+            },
             "case_id": "planted:supporting_evidence_after_cap",
             "entry": {"ticker": "PLANT5.TEST", "name": "Planted Five (TEST)"},
             "initial": [
@@ -329,7 +357,8 @@ class _Meter:
         self.calls: list[dict[str, Any]] = []
         self.attempted = 0
         self.accepted = 0
-        self.final: Any = None
+        self.final: Any = None  # the evidence after the follow-up (if any)
+        self.research: Any = None  # the evidence the research step produced
         self.missing: list[str] = []  # lookups with no recording; the case fails if any
 
 
@@ -346,6 +375,10 @@ def _install(mode: str, recording: Recording | None, store: Recording, meter: _M
     async def search(http: Any, query: dict[str, Any], key: str) -> list[Any]:
         text, label, ticker = query["query"], current["label"], current["ticker"]
         if mode == "record":
+            if ticker in store.planted:  # a fake company: serve its planted sources, no live search
+                if label == "follow-up":
+                    return store.followups.get(ticker, [])
+                return store.planted[ticker]["initial"]
             results = await real_search(http, query, key)
             if label == "follow-up":
                 store.followups.setdefault(ticker, results)
@@ -414,7 +447,7 @@ def _install(mode: str, recording: Recording | None, store: Recording, meter: _M
     real_research, real_followup = research.research_candidate, research.follow_up_candidate
 
     async def research_candidate(*args: Any, **kwargs: Any) -> Any:
-        meter.final = await real_research(*args, **kwargs)
+        meter.research = meter.final = await real_research(*args, **kwargs)
         return meter.final
 
     async def follow_up_candidate(*args: Any, **kwargs: Any) -> Any:
@@ -430,9 +463,18 @@ def _install(mode: str, recording: Recording | None, store: Recording, meter: _M
     return current
 
 
-def _dump(final: Any, result: Any) -> dict[str, Any]:
-    claims = [c.model_dump(mode="json") for c in final.claims] if final else []
-    developments = [d.model_dump(mode="json") for d in final.negative_developments] if final else []
+def _dump(research_evidence: Any, final: Any, result: Any) -> dict[str, Any]:
+    """Retention is measured on the research step's evidence, so the trim is compared on the same
+    inputs even where the follow-up gate skips an extraction; the merged evidence is kept apart."""
+    claims = (
+        [c.model_dump(mode="json") for c in research_evidence.claims] if research_evidence else []
+    )
+    developments = (
+        [d.model_dump(mode="json") for d in research_evidence.negative_developments]
+        if research_evidence
+        else []
+    )
+    followup_claims = [c.model_dump(mode="json") for c in final.claims] if final else []
     catalysts = [c.model_dump(mode="json") for c in getattr(result, "catalysts", [])]
     exclusion = (
         getattr(result, "reason", None) if result.__class__.__name__ == "Exclusion" else None
@@ -440,6 +482,7 @@ def _dump(final: Any, result: Any) -> dict[str, Any]:
     cited = sorted({u for d in developments for u in d["evidence"]})
     return {
         "claims": claims,
+        "followup_claims": followup_claims,
         "developments": developments,
         "catalysts": catalysts,
         "exclusion": exclusion,
@@ -459,16 +502,16 @@ async def _run_all(mode: str, args: argparse.Namespace) -> dict[str, Any]:
             {(a, b): r for a, b, r in raw["searches"]}, raw["followups"], raw["planted"]
         )
     meter = _Meter()
-    current = _install(mode, recording, store, meter)
-    client = Anthropic(api_key=settings.anthropic_api_key)
-    entries = json.loads(Path(args.set).read_text(encoding="utf-8")) if args.set else []
-    cases = [(e["ticker"], e) for e in entries] + [(p["case_id"], p) for p in planted_cases()]
     planted = {p["entry"]["ticker"]: {"initial": p["initial"]} for p in planted_cases()}
     if mode == "record":
         store.planted = planted
         store.followups.update({p["entry"]["ticker"]: p["followup"] for p in planted_cases()})
     elif recording is not None:
         recording.planted = planted
+    current = _install(mode, recording, store, meter)
+    client = Anthropic(api_key=settings.anthropic_api_key)
+    entries = json.loads(Path(args.set).read_text(encoding="utf-8")) if args.set else []
+    cases = [(e["ticker"], e) for e in entries] + [(p["case_id"], p) for p in planted_cases()]
     out: dict[str, Any] = {"label": args.label if mode == "run" else "record", "cases": {}}
     for case_id, entry in cases:
         meter.reset()
@@ -490,7 +533,7 @@ async def _run_all(mode: str, args: argparse.Namespace) -> dict[str, Any]:
             "calls": meter.calls,
             "attempted_claims": meter.attempted,
             "accepted_claims": meter.accepted,
-            **_dump(meter.final, result),
+            **_dump(meter.research, meter.final, result),
         }
     if mode == "record":
         out_dir = Path(args.out)

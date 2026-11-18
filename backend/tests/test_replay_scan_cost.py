@@ -146,3 +146,93 @@ def test_a_replay_lookup_without_a_recording_raises():
         recording.lookup("news", "unrecorded query", "T")  # never empty, never a live search
     with pytest.raises(replay.ReplayMissing):
         recording.lookup("follow-up", "q", "NO-BUNDLE")
+
+
+def test_a_planted_ticker_is_served_its_planted_initial_sources_not_a_live_search():
+    live = [{"url": "https://live.example/tavily-result-for-a-fake-company"}]
+    planted = [{"url": "https://www.sec.gov/planted/1"}]
+    recording = replay.Recording(
+        searches={("news", "q"): live},  # what a careless record run could have saved
+        followups={"PLANT1.TEST": []},
+        planted={"PLANT1.TEST": {"initial": planted}},
+    )
+    assert recording.lookup("news", "q", "PLANT1.TEST") == planted
+    assert recording.lookup("news", "q", "REAL.DE") == live  # a real company still uses its own
+
+
+def test_claims_for_retention_come_from_the_research_step_not_the_follow_up_merge():
+    from types import SimpleNamespace
+
+    def evidence(claim_urls, dev_urls):
+        return SimpleNamespace(
+            claims=[
+                SimpleNamespace(model_dump=lambda mode, u=u: {"url": u, "text": "t"})
+                for u in claim_urls
+            ],
+            negative_developments=[
+                SimpleNamespace(model_dump=lambda mode, u=u: {"evidence": [u]}) for u in dev_urls
+            ],
+        )
+
+    research_ev = evidence(["https://a.example/1"], [])
+    final_ev = evidence(
+        ["https://a.example/1", "https://forum.example/2"], ["https://forum.example/2"]
+    )
+    out = replay._dump(research_ev, final_ev, SimpleNamespace(catalysts=[]))
+    assert [c["url"] for c in out["claims"]] == ["https://a.example/1"]
+    assert out["cited_urls"] == []  # a follow-up-only development is not a protected research claim
+    assert [c["url"] for c in out["followup_claims"]] == [
+        "https://a.example/1",
+        "https://forum.example/2",
+    ]
+
+
+def planted_case(case_id, *, exclusion=None, steps=(), claim_urls=()):
+    return {
+        **case(exclusion=exclusion),
+        "calls": [
+            {"step": s, "input_tokens": 1, "output_tokens": 1, "seconds": 1.0, "stop_reason": "x"}
+            for s in steps
+        ],
+        "claims": [claim(u, f"statement about {u}") for u in claim_urls],
+    }
+
+
+def planted_checks(case_id, new_case):
+    old = {"label": "old", "cases": {case_id: new_case}}
+    new = {"label": "new", "cases": {case_id: new_case}}
+    return {c.name: c for c in replay.compare_runs(old, new)}[f"expect:{case_id}"]
+
+
+def test_planted_cases_must_behave_as_stated_not_just_match_the_old_code():
+    starts = "planted:starts_confirmed"
+    assert planted_checks(
+        starts, planted_case(starts, exclusion="thesis_invalidated", steps=["thesis"])
+    ).ok
+    # old and new both retained a company that should have been excluded: a vacuous match
+    assert not planted_checks(starts, planted_case(starts, exclusion=None)).ok
+
+    forum = "planted:forum_led_confirmed_by_followup"
+    assert planted_checks(
+        forum, planted_case(forum, exclusion="thesis_invalidated", steps=["follow_up", "thesis"])
+    ).ok
+    assert not planted_checks(
+        forum, planted_case(forum, exclusion="thesis_invalidated", steps=["thesis"])
+    ).ok
+
+    none = "planted:unconfirmed_no_authoritative_source"
+    assert planted_checks(none, planted_case(none)).ok
+    assert not planted_checks(none, planted_case(none, steps=["follow_up"])).ok
+
+    medium = "planted:medium_allegation_trusted_bundle"
+    assert planted_checks(medium, planted_case(medium, steps=["follow_up"])).ok
+    assert not planted_checks(medium, planted_case(medium)).ok
+
+    support = "planted:supporting_evidence_after_cap"
+    urls = ["https://www.sec.gov/planted/5a", "https://www.reuters.com/planted/5b"]
+    assert planted_checks(
+        support, planted_case(support, exclusion="thesis_invalidated", claim_urls=urls)
+    ).ok
+    assert not planted_checks(
+        support, planted_case(support, exclusion="thesis_invalidated", claim_urls=urls[:1])
+    ).ok
