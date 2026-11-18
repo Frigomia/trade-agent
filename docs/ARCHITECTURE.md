@@ -1029,8 +1029,21 @@ One total thesis reassessment follows any follow-up. A verified invalidation end
 nested graphs or follow-up loops.
 
 The per-candidate ceiling is four initial Tavily searches plus one follow-up search, and four
-Claude calls: initial extraction, follow-up extraction, thesis reassessment and synthesis. Each
-Claude call has a 60-second timeout with SDK retries disabled. Missing clients/configuration,
+Claude calls: initial extraction, follow-up extraction, thesis reassessment and synthesis. Two of
+them are made only when they could change an exclusion. The follow-up search always runs for the
+first unresolved development, but its extraction is called only if the results include a host that
+`source_tier` classifies as official or reliable reporting (the same function and verified issuer
+hosts the evidence normalization uses); otherwise the evidence is kept with the gap "The follow-up
+search found no authoritative source; the allegation remains unverified." The thesis reassessment
+is called only when a development is confirmed, thesis-invalidating and backed by a trusted
+high-materiality fact (`thesis.exclusion_possible`); whether or not it runs, retained developments
+are cleaned of unsupported invalidation flags. The candidate research and follow-up extractions
+use a tool schema without `mentions` (nothing in the scan reads it; the stored `ResearchEvidence`
+shape and the daily mentions schema are unchanged) and the research prompt caps ordinary claims
+(`MAX_CLAIMS`) and negative developments (`MAX_DEVELOPMENTS`), never dropping claims that cite or
+support a development or state an explicit full event date. `scripts/replay_scan_cost.py` is a
+dev-only replay that compares the old and new code on frozen sources before such changes merge.
+Each Claude call has a 60-second timeout with SDK retries disabled. Missing clients/configuration,
 provider errors and invalid output retain available numbers and disclose gaps; an absent client
 does no paid work. Cancellation propagates instead of being converted into a result.
 
