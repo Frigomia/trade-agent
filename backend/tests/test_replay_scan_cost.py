@@ -166,11 +166,14 @@ def test_claims_for_retention_come_from_the_research_step_not_the_follow_up_merg
     def evidence(claim_urls, dev_urls):
         return SimpleNamespace(
             claims=[
-                SimpleNamespace(model_dump=lambda mode, u=u: {"url": u, "text": "t"})
+                SimpleNamespace(
+                    url=u, text="t", model_dump=lambda mode, u=u: {"url": u, "text": "t"}
+                )
                 for u in claim_urls
             ],
             negative_developments=[
-                SimpleNamespace(model_dump=lambda mode, u=u: {"evidence": [u]}) for u in dev_urls
+                SimpleNamespace(evidence=[u], model_dump=lambda mode, u=u: {"evidence": [u]})
+                for u in dev_urls
             ],
         )
 
@@ -181,10 +184,7 @@ def test_claims_for_retention_come_from_the_research_step_not_the_follow_up_merg
     out = replay._dump(research_ev, final_ev, SimpleNamespace(catalysts=[]))
     assert [c["url"] for c in out["claims"]] == ["https://a.example/1"]
     assert out["cited_urls"] == []  # a follow-up-only development is not a protected research claim
-    assert [c["url"] for c in out["followup_claims"]] == [
-        "https://a.example/1",
-        "https://forum.example/2",
-    ]
+    assert [c["url"] for c in out["followup_claims"]] == ["https://forum.example/2"]
 
 
 def planted_case(case_id, *, exclusion=None, steps=(), claim_urls=()):
@@ -244,3 +244,52 @@ def test_a_planted_case_missing_from_the_run_fails_instead_of_passing_silently()
     for cid in ("planted:starts_confirmed", "planted:forum_led_confirmed_by_followup"):
         assert not checks[f"expect:{cid}"].ok
         assert "missing" in checks[f"expect:{cid}"].detail
+
+
+def test_retention_requires_the_new_match_to_stay_a_trusted_high_fact():
+    old = [claim("https://sec.gov/a", "Revenue grew five percent in the reported fiscal year.")]
+    text = old[0]["text"]
+    assert replay.retention(old, [claim("https://sec.gov/a", text)], set()).ordinary_kept == 1
+    for downgrade in (
+        {"kind": "opinion"},
+        {"materiality": "low"},
+        {"materiality": "medium"},
+        {"source_tier": "other"},
+        {"kind": "forum", "source_tier": "forum"},
+    ):
+        result = replay.retention(old, [claim("https://sec.gov/a", text, **downgrade)], set())
+        assert result.ordinary_kept == 0, downgrade
+        assert not result.ok
+
+
+def followup_case(*, followup_claims, steps=("research", "follow_up"), cited=()):
+    base = case()
+    base["calls"] = [
+        {"step": s, "input_tokens": 1, "output_tokens": 1000, "seconds": 1.0, "stop_reason": "x"}
+        for s in steps
+    ]
+    base["followup_claims"] = followup_claims
+    base["cited_urls_final"] = list(cited)
+    return base
+
+
+def test_follow_up_evidence_is_compared_where_both_variants_extracted():
+    lost = "https://sec.gov/follow-up-only"
+    kept = [claim(lost, "The regulator confirmed the licence was revoked on 10 October 2026.")]
+    old = followup_case(followup_claims=kept, cited=[lost])
+    # every follow-up-only claim removed from a retained candidate: must not pass
+    assert not checks(old, followup_case(followup_claims=[], cited=[lost]))[
+        "followup_retention:c"
+    ].ok
+    assert checks(old, followup_case(followup_claims=kept, cited=[lost]))["followup_retention:c"].ok
+
+
+def test_a_skipped_follow_up_extraction_is_fine_only_if_the_old_one_found_nothing_trusted():
+    forum_only = [
+        claim("https://reddit.com/r/x", "People say so.", kind="forum", source_tier="forum")
+    ]
+    trusted = [claim("https://sec.gov/f", "The filing confirms the event.")]
+    skipped = followup_case(followup_claims=[], steps=("research",))
+    assert checks(followup_case(followup_claims=forum_only), skipped)["followup_skip:c"].ok
+    bad = checks(followup_case(followup_claims=trusted), skipped)["followup_skip:c"]
+    assert not bad.ok and "trusted" in bad.detail

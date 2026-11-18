@@ -116,6 +116,14 @@ def _same_claim(old: dict[str, Any], new: dict[str, Any]) -> bool:
     return old["url"] == new["url"] and _overlap(old["text"], new["text"]) >= OVERLAP_MIN
 
 
+def _trusted_high_fact(claim: dict[str, Any]) -> bool:
+    return (
+        claim.get("kind") == "fact"
+        and claim.get("source_tier") in TRUSTED_TIERS
+        and claim.get("materiality") == "high"
+    )
+
+
 def retention(
     old_claims: list[dict[str, Any]], new_claims: list[dict[str, Any]], protected_urls: set[str]
 ) -> RetentionResult:
@@ -125,16 +133,17 @@ def retention(
     for claim in old_claims:
         if claim["url"] in protected_urls or FULL_DATE.search(claim["text"]):
             kind = "protected"
-        elif (
-            claim.get("kind") == "fact"
-            and claim.get("source_tier") in TRUSTED_TIERS
-            and claim.get("materiality") == "high"
-        ):
+        elif _trusted_high_fact(claim):
             kind = "ordinary"
         else:
             continue
         counts[kind][0] += 1
-        counts[kind][1] += any(_same_claim(claim, new) for new in new_claims)
+        # An ordinary fact only counts as kept while its classification (a fact, from a trusted
+        # tier, of high materiality) is kept too: those fields drive the exclusion rules.
+        counts[kind][1] += any(
+            _same_claim(claim, new) and (kind == "protected" or _trusted_high_fact(new))
+            for new in new_claims
+        )
     return RetentionResult(*counts["protected"], *counts["ordinary"])
 
 
@@ -153,6 +162,31 @@ def _sum(run: dict[str, Any], step: str, field: str) -> int:
 def _cost(run: dict[str, Any]) -> float:
     calls = [c for case in run["cases"].values() for c in case["calls"]]
     return sum(c["input_tokens"] * PRICE_IN + c["output_tokens"] * PRICE_OUT for c in calls) / 1e6
+
+
+def _followup_checks(cid: str, old: dict[str, Any], new: dict[str, Any]) -> list[Check]:
+    """The follow-up stage is trimmed too. Where both variants ran its extraction, its own claims
+    (those the research step did not produce) are compared like the research claims; where the
+    gate skipped an extraction the old code made, the skip is fine only if that extraction found
+    nothing from a trusted tier, because only trusted claims can support an exclusion."""
+    ran_old = any(c["step"] == "follow_up" for c in old["calls"])
+    ran_new = any(c["step"] == "follow_up" for c in new["calls"])
+    old_claims = old.get("followup_claims", [])
+    if ran_old and ran_new:
+        result = retention(
+            old_claims, new.get("followup_claims", []), set(old.get("cited_urls_final", []))
+        )
+        return [Check(f"followup_retention:{cid}", result.ok, result.detail)]
+    if ran_old and not ran_new:
+        trusted = [c for c in old_claims if c.get("source_tier") in TRUSTED_TIERS]
+        return [
+            Check(
+                f"followup_skip:{cid}",
+                not trusted,
+                f"the skipped extraction produced {len(trusted)} trusted claims on the old code",
+            )
+        ]
+    return []
 
 
 def _expected(cid: str, expect: dict[str, Any], case: dict[str, Any]) -> Check:
@@ -221,6 +255,10 @@ def compare_runs(old: dict[str, Any], new: dict[str, Any]) -> list[Check]:
                 f"old {old_case['exclusion']}, new {new_case['exclusion']}",
             )
         )
+    for cid, old_case in old["cases"].items():
+        new_case = new["cases"].get(cid)
+        if new_case is not None:
+            checks += _followup_checks(cid, old_case, new_case)
     expectations = {p["case_id"]: p["expect"] for p in planted_cases()}
     for cid, expect in expectations.items():  # every planted case must be present and behave
         new_case = new["cases"].get(cid)
@@ -477,7 +515,15 @@ def _dump(research_evidence: Any, final: Any, result: Any) -> dict[str, Any]:
         if research_evidence
         else []
     )
-    followup_claims = [c.model_dump(mode="json") for c in final.claims] if final else []
+    researched = {(c["url"], c["text"]) for c in claims}
+    followup_claims = [
+        c.model_dump(mode="json")
+        for c in (final.claims if final else [])
+        if (c.url, c.text) not in researched
+    ]
+    cited_final = sorted(
+        {u for d in (final.negative_developments if final else []) for u in d.evidence}
+    )
     catalysts = [c.model_dump(mode="json") for c in getattr(result, "catalysts", [])]
     exclusion = (
         getattr(result, "reason", None) if result.__class__.__name__ == "Exclusion" else None
@@ -486,6 +532,7 @@ def _dump(research_evidence: Any, final: Any, result: Any) -> dict[str, Any]:
     return {
         "claims": claims,
         "followup_claims": followup_claims,
+        "cited_urls_final": cited_final,
         "developments": developments,
         "catalysts": catalysts,
         "exclusion": exclusion,
