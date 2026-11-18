@@ -236,3 +236,11 @@ def test_planted_cases_must_behave_as_stated_not_just_match_the_old_code():
     assert not planted_checks(
         support, planted_case(support, exclusion="thesis_invalidated", claim_urls=urls[:1])
     ).ok
+
+
+def test_a_planted_case_missing_from_the_run_fails_instead_of_passing_silently():
+    new = {"label": "new", "cases": {}}  # every planted case dropped, renamed or crashed
+    checks = {c.name: c for c in replay.compare_runs({"label": "old", "cases": {}}, new)}
+    for cid in ("planted:starts_confirmed", "planted:forum_led_confirmed_by_followup"):
+        assert not checks[f"expect:{cid}"].ok
+        assert "missing" in checks[f"expect:{cid}"].detail

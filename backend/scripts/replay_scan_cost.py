@@ -222,9 +222,12 @@ def compare_runs(old: dict[str, Any], new: dict[str, Any]) -> list[Check]:
             )
         )
     expectations = {p["case_id"]: p["expect"] for p in planted_cases()}
-    for cid, new_case in new["cases"].items():
-        if cid in expectations:
-            checks.append(_expected(cid, expectations[cid], new_case))
+    for cid, expect in expectations.items():  # every planted case must be present and behave
+        new_case = new["cases"].get(cid)
+        if new_case is None:
+            checks.append(Check(f"expect:{cid}", False, "planted case missing from the run"))
+        else:
+            checks.append(_expected(cid, expect, new_case))
     old_out, new_out = (
         _sum(old, "research", "output_tokens"),
         _sum(new, "research", "output_tokens"),
