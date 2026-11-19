@@ -984,7 +984,7 @@ def test_both_prompts_carry_the_output_rules():
         f"Return at most {research.MAX_DEVELOPMENTS} negative developments, ranked: confirmed "
         "and invalidating first, then by materiality, with all their cited evidence kept.",
     )
-    assert (research.MAX_CLAIMS, research.MAX_DEVELOPMENTS) == (15, 5)
+    assert (research.MAX_CLAIMS, research.MAX_DEVELOPMENTS) == (25, 5)
     for prompt in (research.RESEARCH_SYSTEM_PROMPT, research.ETF_RESEARCH_SYSTEM_PROMPT):
         for rule in rules:
             assert rule in " ".join(prompt.split())

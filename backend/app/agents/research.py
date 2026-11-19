@@ -56,7 +56,7 @@ MAX_MENTIONS = 30
 # Output limits of the candidate research and follow-up (tuned by the replay). They bound ordinary
 # claims only: protected claims (cited by or supporting a development, or dating an event) sit
 # outside them.
-MAX_CLAIMS = 15
+MAX_CLAIMS = 25
 MAX_DEVELOPMENTS = 5
 DAILY_TTL_SECONDS = 24 * 3600
 _MENTIONS: TypeAdapter[list[Mention] | None] = TypeAdapter(list[Mention] | None)
