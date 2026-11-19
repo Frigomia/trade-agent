@@ -5,6 +5,7 @@ import pytest
 from app.discovery.thesis import (
     dated_catalysts,
     exclusion_for,
+    exclusion_possible,
     normalize_evidence,
     pending_development,
 )
@@ -321,3 +322,48 @@ def test_other_community_sources_are_forum_evidence(url: str) -> None:
     assert normalized.claims[0].kind == normalized.claims[0].source_tier == "forum"
     assert normalized.negative_developments[0].status == "unverified"
     assert not normalized.negative_developments[0].invalidates_thesis
+
+
+def _possible(**changes) -> bool:
+    """exclusion_possible for normalized evidence with one development or claim field changed."""
+    normalized = normalize_evidence(evidence())
+    development = normalized.negative_developments[0].model_copy(
+        update={
+            k: v for k, v in changes.items() if k in {"status", "invalidates_thesis", "evidence"}
+        }
+    )
+    claim = normalized.claims[0].model_copy(
+        update={
+            k: v for k, v in changes.items() if k in {"materiality", "kind", "source_tier", "url"}
+        }
+    )
+    return exclusion_possible(
+        normalized.model_copy(update={"negative_developments": [development], "claims": [claim]})
+    )
+
+
+def test_exclusion_possible_for_a_confirmed_invalidating_event_with_a_trusted_high_fact() -> None:
+    assert _possible() is True
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"status": "disputed"},
+        {"status": "unverified"},
+        {"invalidates_thesis": False},
+        {"materiality": "medium"},
+        {"materiality": "low"},
+        {"kind": "opinion", "source_tier": "official"},
+        {"source_tier": "other"},
+        {"kind": "forum", "source_tier": "forum"},
+        {"evidence": ["https://www.sec.gov/not-the-claim"]},
+    ],
+)
+def test_exclusion_is_not_possible_when_any_precondition_is_missing(change) -> None:
+    assert _possible(**change) is False
+
+
+def test_exclusion_is_not_possible_without_developments() -> None:
+    normalized = normalize_evidence(evidence()).model_copy(update={"negative_developments": []})
+    assert exclusion_possible(normalized) is False

@@ -17,6 +17,7 @@ from app.discovery.citations import validate_citations
 from app.discovery.thesis import (
     dated_catalysts,
     exclusion_for,
+    exclusion_possible,
     normalize_evidence,
     pending_development,
 )
@@ -251,8 +252,9 @@ async def thesis_check(state: DiscoveryState) -> dict[str, Any]:
     evidence, client = state["evidence"], state["client"]
     exclusion = None
     reassessment = None
-    # One reassessment total, after any follow-up. Provider and schema failures retain the idea.
-    if client is not None and evidence.negative_developments:
+    # One reassessment total, after any follow-up. The call is made only when an exclusion is
+    # possible; provider and schema failures retain the idea.
+    if client is not None and evidence.negative_developments and exclusion_possible(evidence):
         try:
             raw = await research._extract(
                 client,
@@ -288,8 +290,9 @@ async def thesis_check(state: DiscoveryState) -> dict[str, Any]:
                     ]
                 }
             )
-        if exclusion is None:
-            evidence = _retained_developments(evidence, reassessment)
+    # Skipped or failed alike, a retained idea must not still claim an unverified invalidation.
+    if exclusion is None and evidence.negative_developments:
+        evidence = _retained_developments(evidence, reassessment)
     return {"evidence": evidence, "exclusion": exclusion}
 
 

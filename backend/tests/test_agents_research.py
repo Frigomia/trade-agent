@@ -13,6 +13,7 @@ from httpx import AsyncClient
 from app.agents import research
 from app.config import settings
 from app.redis_client import get_redis
+from app.schemas_discovery import ResearchEvidence
 
 
 @pytest.fixture
@@ -937,3 +938,53 @@ def test_etf_research_prompt_keeps_every_stock_safety_clause():
         assert clause in stock and clause in etf
     assert "index change, merger, closure or fee increase" in etf
     assert "fee change" not in etf
+
+
+def test_candidate_evidence_schema_drops_only_mentions():
+    full = ResearchEvidence.model_json_schema()
+    trimmed = research.candidate_evidence_schema()
+    assert "mentions" in full["properties"] and "mentions" in full["required"]  # stored shape
+    assert "mentions" not in trimmed["properties"]
+    assert "mentions" not in trimmed["required"]
+    assert set(trimmed["properties"]) == set(full["properties"]) - {"mentions"}
+    assert set(trimmed["required"]) == set(full["required"]) - {"mentions"}
+    assert "mentions" in ResearchEvidence.model_json_schema()["properties"]  # not mutated
+
+
+def test_candidate_research_sends_the_trimmed_schema_and_the_output_rules(providers):
+    client, _ = providers
+    asyncio.run(candidate(client))
+    kwargs = client.messages.create.call_args.kwargs
+    schema = kwargs["tools"][0]["input_schema"]
+    assert "mentions" not in schema["properties"] and "mentions" not in schema["required"]
+    assert "ordinary claims" in kwargs["system"]
+
+
+def test_daily_mentions_schema_still_requires_mentions(providers):
+    client, _ = providers
+    asyncio.run(research.discover_mentions())
+    schema = client.messages.create.call_args.kwargs["tools"][0]["input_schema"]
+    assert schema["required"] == ["mentions"] and "mentions" in schema["properties"]
+
+
+def test_evidence_is_built_without_a_mentions_key():
+    result = research._evidence("EXM.DE", "Example Machines", {"claims": []}, {}, [])
+    assert result.mentions == []
+
+
+def test_both_prompts_carry_the_output_rules():
+    rules = (
+        "The mentions field is not requested; name other companies only in competitors.",
+        f"Return at most {research.MAX_CLAIMS} ordinary claims, plus every claim cited by a "
+        "negative development, every trusted fact that supports one, and every claim whose "
+        "excerpt states an explicit full event date a catalyst could use: those are never "
+        "dropped and do not count against the limit.",
+        "Rank ordinary claims: trusted high-materiality facts first, keeping every distinct "
+        "outlet for such an event, then the rest by materiality.",
+        f"Return at most {research.MAX_DEVELOPMENTS} negative developments, ranked: confirmed "
+        "and invalidating first, then by materiality, with all their cited evidence kept.",
+    )
+    assert (research.MAX_CLAIMS, research.MAX_DEVELOPMENTS) == (15, 5)
+    for prompt in (research.RESEARCH_SYSTEM_PROMPT, research.ETF_RESEARCH_SYSTEM_PROMPT):
+        for rule in rules:
+            assert rule in " ".join(prompt.split())

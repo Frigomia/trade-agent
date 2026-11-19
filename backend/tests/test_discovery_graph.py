@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -505,7 +506,7 @@ def test_forum_allegation_never_excludes_and_has_one_follow_up(providers):
     initial, follow_up, extraction = providers
     developed = evidence(negative=True, forum=True, url="https://www.reddit.com/r/stocks/abc")
     initial.return_value = developed
-    extraction.side_effect = [reassessment(developed), prose(developed.claims[0].url)]
+    extraction.side_effect = [prose(developed.claims[0].url)]
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
     assert result.negative_developments[0].status == "unverified"
@@ -513,7 +514,7 @@ def test_forum_allegation_never_excludes_and_has_one_follow_up(providers):
     assert result.confidence == "low"
     assert "Unverified" in result.community_note
     follow_up.assert_awaited_once()
-    assert extraction.await_count == 2  # one reassessment, one synthesis
+    assert extraction.await_count == 1  # synthesis only: an unconfirmed allegation cannot exclude
 
 
 def test_unknown_host_cannot_promote_itself_to_official_evidence(providers):
@@ -597,17 +598,67 @@ def test_follow_up_confirmation_is_rechecked_before_single_reassessment(provider
     assert extraction.await_args.args[2]["untrusted_data"]["evidence"]["claims"][0]["url"] == URL
 
 
+def test_thesis_check_makes_no_call_for_an_unconfirmed_allegation(providers):
+    initial, follow_up, extraction = providers
+    disputed = evidence(negative=True, status="disputed")
+    initial.return_value = disputed
+    extraction.side_effect = [prose()]
+    result = run(MagicMock())
+    assert isinstance(result, IdeaOut)
+    assert result.negative_developments[0].status == "disputed"
+    follow_up.assert_awaited_once()
+    assert extraction.await_count == 1  # synthesis only: no thesis reassessment
+
+
+def test_thesis_check_skip_path_still_clears_an_unsupported_invalidation_flag():
+    ev = evidence(negative=True)  # confirmed and flagged invalidating
+    ev.claims = [ev.claims[0].model_copy(update={"materiality": "medium"})]  # no high support
+    state = {
+        "evidence": ev,
+        "client": MagicMock(),
+        "candidate": sample_candidate(),
+        "quant_evaluation": SimpleNamespace(scores=[], overall=50),
+    }
+    extract = AsyncMock()
+    original = research._extract
+    research._extract = extract
+    try:
+        out = asyncio.run(discovery_graph.thesis_check(state))
+    finally:
+        research._extract = original
+    extract.assert_not_awaited()
+    assert out["exclusion"] is None
+    development = out["evidence"].negative_developments[0]
+    assert development.invalidates_thesis is False
+    assert development.thesis_impact == "The event's effect on the thesis remains unverified."
+    assert "Thesis invalidation was not verified; retained for further human review." in (
+        out["evidence"].gaps
+    )
+    assert out["evidence"].claims == ev.claims  # facts are kept
+    assert not any("reassessment unavailable" in gap for gap in out["evidence"].gaps)
+
+
+def test_thesis_check_still_runs_once_for_a_confirmed_invalidating_development(providers):
+    initial, _, extraction = providers
+    confirmed = evidence(negative=True)
+    initial.return_value = confirmed
+    extraction.return_value = reassessment(confirmed)
+    result = run(MagicMock())
+    assert isinstance(result, Exclusion)
+    extraction.assert_awaited_once()
+
+
 def test_unresolved_dispute_never_loops(providers):
     initial, follow_up, extraction = providers
     disputed = evidence(negative=True, status="disputed")
     initial.return_value = disputed
-    extraction.side_effect = [reassessment(disputed), prose()]
+    extraction.side_effect = [prose()]
     result = run(MagicMock())
     assert isinstance(result, IdeaOut)
     assert result.negative_developments[0].status == "disputed"
     assert result.confidence == "low"
     follow_up.assert_awaited_once()
-    assert extraction.await_count == 2
+    assert extraction.await_count == 1  # synthesis only: a disputed allegation cannot exclude
 
 
 @pytest.mark.parametrize("stage", ["research", "follow_up", "reassessment", "synthesis"])
@@ -617,7 +668,10 @@ def test_provider_failures_preserve_quant_and_never_log_exception_secrets(provid
     if stage == "research":
         initial.side_effect = failure
     elif stage in {"follow_up", "reassessment"}:
-        developed = evidence(negative=True, status="disputed")
+        # The reassessment is only reached for a confirmed, supported, invalidating development.
+        developed = evidence(
+            negative=True, status="disputed" if stage == "follow_up" else "confirmed"
+        )
         initial.return_value = developed
         extraction.side_effect = [reassessment(developed), prose()]
         if stage == "follow_up":

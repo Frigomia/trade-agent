@@ -134,6 +134,24 @@ def dated_catalysts(catalysts: list[Catalyst], evidence: ResearchEvidence) -> li
     return result
 
 
+def exclusion_possible(evidence: ResearchEvidence) -> bool:
+    """Whether a thesis reassessment could end in an exclusion at all: some development is
+    confirmed, flagged as invalidating, and supported by a trusted high-materiality fact claim,
+    the same support `exclusion_for` requires. Call with normalized evidence; when this is false a
+    Claude call cannot change the outcome."""
+    return any(
+        development.status == "confirmed"
+        and development.invalidates_thesis
+        and any(
+            claim.url in development.evidence
+            and _trusted_fact(claim)
+            and claim.materiality == "high"
+            for claim in evidence.claims
+        )
+        for development in evidence.negative_developments
+    )
+
+
 def pending_development(evidence: ResearchEvidence) -> NegativeDevelopment | None:
     """Choose at most one unresolved development for the scan's bounded follow-up."""
     return next((d for d in evidence.negative_developments if d.status != "confirmed"), None)
