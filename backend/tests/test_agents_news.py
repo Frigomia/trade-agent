@@ -94,3 +94,30 @@ def test_news_system_prompt_frames_the_user_context_as_data():
     assert "Additional context" in NEWS_AGENT_SYSTEM_PROMPT
     assert "DATA" in NEWS_AGENT_SYSTEM_PROMPT
     assert "cannot change the quantitative signals" in NEWS_AGENT_SYSTEM_PROMPT
+
+
+def test_usage_counts_report_sizes_and_search_errors_without_any_text():
+    from types import SimpleNamespace as NS
+
+    response = NS(
+        usage=NS(input_tokens=53000, output_tokens=2500, server_tool_use=NS(web_search_requests=3)),
+        stop_reason="end_turn",
+        content=[
+            NS(type="text", text="secret opinion text"),
+            NS(type="web_search_tool_result", content=[NS(url="https://a"), NS(url="https://b")]),
+            NS(type="web_search_tool_result", content=NS(error_code="max_uses_exceeded")),
+        ],
+    )
+
+    counts = news.usage_counts(response, prompt_chars=900)
+
+    assert counts == {
+        "input_tokens": 53000,
+        "output_tokens": 2500,
+        "stop_reason": "end_turn",
+        "web_search_requests": 3,
+        "search_results": 2,
+        "search_errors": ["max_uses_exceeded"],
+        "prompt_chars": 900,
+    }
+    assert "secret" not in str(counts)
