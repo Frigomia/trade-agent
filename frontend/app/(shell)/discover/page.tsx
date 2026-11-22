@@ -164,15 +164,38 @@ export default function DiscoverPage() {
       {list.notice && (
         <Box
           role="status"
-          sx={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: "calc(var(--tabbar-h, 0px) + 16px)", zIndex: 1300, display: "flex", alignItems: "center", gap: 2, px: 2, minHeight: 48, borderRadius: "14px", bgcolor: "var(--text)", color: "var(--panel)", boxShadow: "var(--shadow)", maxWidth: "calc(100vw - 32px)", fontSize: "0.8125rem" }}
+          sx={{
+            position: "fixed",
+            // Pinned to both gutters on a phone. A lone `left: 50%` leaves only half the screen to size
+            // into, which is what squeezed the text to a word per line.
+            left: 16,
+            right: 16,
+            bottom: "calc(var(--tabbar-h, 0px) + 16px)",
+            // Wider screens: a centred bar that is as wide as its content, up to 560px.
+            "@media (min-width:600px)": { left: "50%", right: "auto", transform: "translateX(-50%)", width: "max-content", maxWidth: "min(560px, calc(100vw - 32px))" },
+            zIndex: 1300,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            py: 0.5,
+            pl: 2,
+            pr: 0.5,
+            minHeight: 48,
+            borderRadius: "14px",
+            bgcolor: "var(--text)",
+            color: "var(--panel)",
+            boxShadow: "var(--shadow)",
+            fontSize: "0.8125rem",
+            lineHeight: 1.4,
+          }}
         >
-          <span>{list.notice}</span>
+          <Box component="span" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{list.notice}</Box>
           {list.canUndo && (
-            <Button size="small" onClick={list.undo} sx={{ color: "inherit", fontWeight: 650, textDecoration: "underline", minHeight: 44 }}>
+            <Button size="small" onClick={list.undo} sx={{ color: "inherit", fontWeight: 650, textDecoration: "underline", minHeight: 44, minWidth: 44, flexShrink: 0 }}>
               Undo
             </Button>
           )}
-          <Button size="small" onClick={list.dismissNotice} aria-label="Dismiss" sx={{ color: "inherit", minWidth: 32 }}>
+          <Button size="small" onClick={list.dismissNotice} aria-label="Dismiss" sx={{ color: "inherit", minWidth: 44, minHeight: 44, flexShrink: 0, fontSize: "1.125rem", lineHeight: 1 }}>
             ×
           </Button>
         </Box>
