@@ -67,7 +67,9 @@ function Gaps({ analytics }: { analytics: PortfolioAnalytics }) {
 function CorrelationTable({ analytics }: { analytics: PortfolioAnalytics }) {
   const tickers = orderedPositions(analytics).map((p) => p.ticker);
   return (
-    <Box sx={{ overflowX: "auto" }}>
+    // `position: relative` is the fix for the page scrolling sideways: the visually hidden header cell is
+    // absolutely positioned, and without this wrapper as its containing block it sat against the page edge.
+    <Box sx={{ position: "relative", overflowX: "auto" }}>
       <Box component="table" aria-label="Correlation between holdings" sx={{ borderCollapse: "separate", borderSpacing: "2px", width: "100%", fontSize: "0.75rem" }}>
         <thead>
           <tr>
