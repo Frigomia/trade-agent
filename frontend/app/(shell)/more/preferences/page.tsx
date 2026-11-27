@@ -220,6 +220,10 @@ function PreferencesForm({ initial, onSaved }: { initial: Preferences; onSaved: 
 
         <Panel sx={{ p: "20px 24px" }}>
           <AutoAnalysisSwitch saved={initial} onSaved={onSaved} />
+          {/* Applies to manual runs too, so it sits outside the switch's own description. */}
+          <Typography sx={{ fontSize: "0.75rem", color: "var(--muted)", lineHeight: 1.5, mt: 1.5, pt: 1.5, borderTop: "1px solid var(--line2)" }}>
+            Web second opinion, automatic or manual: the ticker and company name of your holdings and watchlist companies may be sent to Tavily, a web search service, to find recent news. Your amounts and notes are not sent to it.
+          </Typography>
         </Panel>
         <Panel sx={{ p: "20px 24px" }}>
           <AutoAnalysisSwitch saved={initial} onSaved={onSaved} kind="discovery" />

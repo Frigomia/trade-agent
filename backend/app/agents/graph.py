@@ -100,6 +100,7 @@ async def news_agent(state: AnalysisState) -> dict[str, Any]:
             state["reasoning"],
             state["context"],
             client=state["client"],
+            asset_type=state["asset_type"],
         )
     except Exception as exc:
         # Anthropic rejected the caller's own key (revoked, invalid, or out of credit): flag it so

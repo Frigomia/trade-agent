@@ -922,6 +922,25 @@ claims or unavailable Redis prevent the HTTP request and disclose degraded resea
 remain counted on provider failure; date-keyed counters expire after two days. This budget is
 independent of the existing per-user monthly analysis allowance and the daily theme-batch lock.
 
+**News sources (web second opinion).** `agents/news_sources.py` makes two fixed basic searches per
+actionable ticker, built from the company or fund name and the ticker, over the past month (news,
+then risks). Both are claimed in one atomic step on the same daily counter, and only while it stays
+at or below `TAVILY_DAILY_SEARCH_LIMIT - TAVILY_DISCOVERY_RESERVE` (200 - 71 = 129), so news never
+takes the searches left for the mentions batch and one full scan a day. Further people with
+automatic discovery and repeat scans are not reserved. Searches discovery already spent count
+toward the same ceiling, so on such a day news gets fewer. Forum pages are dropped and results
+are deduplicated by normalized URL (the link sent is the one returned),
+taken alternately from both searches, bounded per field (URL 500, title 300, text 1500 characters),
+JSON encoded, capped at 20000 characters by dropping sources from the end, then required to number
+at least three. Claude then gets no tool, and a prompt that marks every source field as untrusted
+data. The hosted `web_search_20260209` call runs unchanged when retrieval is disabled, has no
+headroom, hits a Redis error (no Tavily request; the claim may still have counted), has a failed
+search (claims are not refunded) or yields fewer than three usable sources. A failed Claude call is
+not retried on the other path. An unexpected retrieval error also takes the hosted path. The `news call usage` log line records the path, source count and
+characters, searches claimed (null when unknown) and a fixed fallback code, never text. Tickers and
+company names of any person's actionable holdings and watchlist items are sent to Tavily,
+under the owner's key, on this path. The ceiling is shared by all people, with no per-person cap.
+
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum
 content has no scoring weight and cannot establish a confirmed thesis-invalidating event.
@@ -1271,7 +1290,7 @@ graph TD;
 | `technical_agent` | 50/200-day SMA trend, 14-day RSI, drawdown from 52w high — `analysis/technical.py` |
 | `synthesizer` | Combines both into one recommendation. **Fundamentals gate the decision; technicals only time entries within that gate** — never the reverse. Logic in `analysis/recommend.py` |
 | `context_agent` | Assembles qualitative context for the LLM's reasoning: investment preferences, similar past recommendations with outcomes, and relevant session memory from chat history. Calls `build_context()` — see §15.1 step 4c |
-| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude with the `web_search_20250305` server tool for a qualitative second opinion. Uses the caller's own Claude key; the server `ANTHROPIC_API_KEY` is used only for an admin with no key of their own, and the step is skipped when no key applies — degrades gracefully to quant-only. A key Anthropic rejects (invalid, revoked, out of credit) flags the user's key `needs_attention`. Also degrades to quant-only (`ai_analysis` null, exception class logged) if the call fails (billing, rate limit, outage): the second opinion never discards an already-computed recommendation |
+| `news_agent` | For anything the synthesizer flagged as actionable (not `HOLD`), calls Claude for a qualitative second opinion, with application-retrieved Tavily sources, or the hosted `web_search_20260209` tool as the fallback (see "News sources" below). Uses the caller's own Claude key; the server `ANTHROPIC_API_KEY` is used only for an admin with no key of their own, and the step is skipped when no key applies — degrades gracefully to quant-only. A key Anthropic rejects (invalid, revoked, out of credit) flags the user's key `needs_attention`. Also degrades to quant-only (`ai_analysis` null, exception class logged) if the call fails (billing, rate limit, outage): the second opinion never discards an already-computed recommendation |
 
 Guardrails to build into every AI prompt (`agents/prompts.py`):
 not a licensed advisor, measured language only, treat quant signals as
@@ -1418,6 +1437,7 @@ ANTHROPIC_API_KEY=
 ANTHROPIC_MODEL=claude-sonnet-5             # optional override
 TAVILY_API_KEY=                             # optional backend-only key for discovery research
 TAVILY_DAILY_SEARCH_LIMIT=200               # owner-wide search attempts per UTC day; 0 disables
+TAVILY_DISCOVERY_RESERVE=71                 # searches the web second opinion leaves for discovery
 KEY_ENCRYPTION_SECRET=                      # base64 of 32 random bytes (openssl rand -base64 32); encrypts users' saved Claude keys; required when APP_ENV=production
 MIGRATION_DATABASE_URL=                     # owner role; Alembic and the bootstrap command only
 SUPABASE_URL=                               # e.g. https://<project>.supabase.co; JWKS and issuer derive from it
@@ -1435,7 +1455,8 @@ APP_URL=                                    # the frontend origin; the message l
 `TAVILY_API_KEY` belongs to the environment owner and must be stored only in backend secret
 configuration (HTTPS destination: `api.tavily.com`), never in a `NEXT_PUBLIC_*` variable.
 It is optional and omitted from the settings object's repr. Research uses the existing `httpx`
-dependency, not a new SDK, and does not change existing analysis behavior. The module handles
+dependency, not a new SDK. The same key serves the web second opinion's retrieval (Section 6);
+without it that step uses Claude's hosted search. The research module handles
 missing/empty keys and provider failures as described in Section 6, preserving quant-only output
 with an explicit data limitation. The owning environment funds Tavily; a user scan still uses
 that user's Claude client and one existing `analysis_run` quota unit (when Phase 7 lands).

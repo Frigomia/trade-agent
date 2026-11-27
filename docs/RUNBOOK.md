@@ -446,6 +446,10 @@ consume one monthly analysis unit independently of holdings analysis. A complete
 a prior automatic attempt, a missing/paused key, fewer than two monthly units left or fewer than
 40 Tavily searches remaining skips the
 user. The owner cap remains `TAVILY_DAILY_SEARCH_LIMIT=200` per UTC day across all searches.
+The web second opinion shares it: two searches per actionable ticker, only up to the limit minus
+`TAVILY_DISCOVERY_RESERVE` (default 71: mentions plus one scan; add 55 for each further person with
+automatic discovery). Without headroom it uses Claude's hosted search. To switch the Tavily path off
+for the second opinion only, set the reserve to the limit or higher; this needs no code change.
 Missing owner configuration makes the mentions command a no-op; a configured failed batch exits 1.
 Both commands are selectable in the workflow's `job` dispatch input. They do not send Telegram
 messages themselves; the existing 05:30 daily job includes at most one high-confidence idea in

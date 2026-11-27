@@ -48,6 +48,13 @@ describe("PreferencesPage", () => {
     expect(screen.getByText(/never change the score or the call/i)).toBeInTheDocument();
   });
 
+  it("says which company data the web second opinion sends to the search service", async () => {
+    renderFresh();
+    const notice = await screen.findByText(/sent to Tavily, a web search service/i);
+    expect(notice).toHaveTextContent(/ticker and company name of your holdings and watchlist/i);
+    expect(notice).toHaveTextContent(/amounts and notes are not sent to it/i);
+  });
+
   it("adds a sector once even with different case and stray spaces", async () => {
     renderFresh();
     await screen.findByText("Energy");
