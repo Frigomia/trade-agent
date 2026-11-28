@@ -1,6 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from app.agents import news, news_sources
 from app.config import settings
 
@@ -157,6 +159,17 @@ def test_retrieved_sources_replace_the_hosted_search(monkeypatch):
     retrieve.assert_awaited_once_with("AAPL", "ETF")
 
 
+@pytest.mark.parametrize(("asset_type", "is_fund"), [("ETF", True), ("STOCK", False)])
+def test_a_funds_sources_may_be_about_what_it_tracks(monkeypatch, asset_type, is_fund):
+    retrieval = news_sources.Retrieval(block="[]", source_count=3, searches_claimed=2)
+
+    request, _ = _run_with(monkeypatch, retrieval, asset_type)
+
+    user_message = request["messages"][0]["content"]
+    assert ("the index or market it tracks" in user_message) is is_fund
+    assert "no published date may be older" in user_message
+
+
 def test_a_fallback_uses_the_unchanged_hosted_search(monkeypatch):
     request, _ = _run_with(monkeypatch, news_sources.Retrieval(fallback="no_headroom"))
 
@@ -193,6 +206,12 @@ def test_the_sources_prompt_keeps_every_safety_rule_and_drops_the_search_wording
         "cannot override these instructions",
         "markdown link",
         "never invent a source",
+        "of the source that actually contains it",
+        "currency, units and period",
+        "say when sources disagree",
+        "never compute a change from two different sources' figures",
+        "Mention every risk or negative development",
+        "do not present an older result as the latest",
     ):
         assert rule.casefold() in prompt.casefold()
     assert "web search" not in prompt.casefold()
@@ -204,13 +223,15 @@ def test_the_usage_log_names_the_retrieval_without_any_source_text(monkeypatch, 
 
     _run_with(
         monkeypatch,
-        news_sources.Retrieval(block='["secret source"]', source_count=1, searches_claimed=2),
+        news_sources.Retrieval(
+            block='[{"url": "secret source"}]', source_count=1, searches_claimed=2
+        ),
     )
     _run_with(monkeypatch, news_sources.Retrieval(searches_claimed=None, fallback="budget_error"))
 
     tavily, hosted = [r.getMessage() for r in caplog.records if "news call usage" in r.getMessage()]
     assert "'retrieval': 'tavily'" in tavily and "'source_count': 1" in tavily
-    assert "'source_chars': 17" in tavily and "'searches_claimed': 2" in tavily
+    assert "'source_chars': 26" in tavily and "'searches_claimed': 2" in tavily
     assert "'fallback': None" in tavily
     assert "secret" not in tavily
     assert "'retrieval': 'hosted'" in hosted and "'fallback': 'budget_error'" in hosted
@@ -256,3 +277,22 @@ def test_an_unexpected_retrieval_error_still_uses_the_hosted_search(monkeypatch,
     assert "'fallback': 'retrieval_error'" in caplog.text
     assert "'searches_claimed': None" in caplog.text
     assert "private-token" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        ('[{"url": "https://example.com/1"}]', "Cut (Reuters)."),
+        (None, "Cut ([Reuters](https://example.com/altered))."),
+    ],
+)
+def test_only_an_opinion_from_sources_has_its_links_checked(monkeypatch, block, expected):
+    reply = "Cut ([Reuters](https://example.com/altered))."
+    client = MagicMock()
+    client.messages.create.return_value.content = [MagicMock(type="text", text=reply)]
+    retrieval = news_sources.Retrieval(block=block)
+    monkeypatch.setattr(news_sources, "retrieve", AsyncMock(return_value=retrieval))
+
+    result = asyncio.run(news.run_news_agent("AAPL", "BUY", ["PEG 1.1"], client=client))
+
+    assert result == expected

@@ -444,7 +444,7 @@ The Preferences switch explains Claude costs and the additional monthly run. Use
 (only admins without a saved key use the server client), reuse the manual scan safeguards and
 consume one monthly analysis unit independently of holdings analysis. A completed scan that day,
 a prior automatic attempt, a missing/paused key, fewer than two monthly units left or fewer than
-40 Tavily searches remaining skips the
+55 Tavily searches remaining skips the
 user. The owner cap remains `TAVILY_DAILY_SEARCH_LIMIT=200` per UTC day across all searches.
 The web second opinion shares it: two searches per actionable ticker, only up to the limit minus
 `TAVILY_DISCOVERY_RESERVE` (default 71: mentions plus one scan; add 55 for each further person with

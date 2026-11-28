@@ -49,9 +49,15 @@ export function ActionChip({ action }: { action: Action }) {
 
 // The card's one-line take: the web opinion's first sentence. `reasoning` is deliberately not
 // shown — it is only the raw wording of the score/signal EvidencePanel already renders.
+// [words](address), allowing one level of brackets in the words and parentheses in the address.
+const MARKDOWN_LINK = /\[((?:[^[\]]|\[[^[\]]*\])*)\]\((?:[^()\s]|\([^()\s]*\))*\)/g;
+
 function reasoningLine(recommendation: RecommendationOut): string | null {
-  // The text is markdown; drop its markers so the card shows plain words.
-  const text = recommendation.ai_analysis?.replace(/[#*`>]/g, "").trim();
+  // The text is markdown; keep each link's words, drop addresses and markers.
+  const text = recommendation.ai_analysis
+    ?.replace(MARKDOWN_LINK, "$1")
+    .replace(/[#*`>]/g, "")
+    .trim();
   if (!text) return null;
   const end = text.indexOf(". ");
   return end === -1 ? text : text.slice(0, end + 1);

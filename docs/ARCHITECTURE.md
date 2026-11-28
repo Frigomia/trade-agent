@@ -95,7 +95,7 @@ flowchart TB
 
     subgraph External
         YF[Yahoo Finance<br/>via yfinance]
-        CLAUDE[Anthropic API<br/>+ web search]
+        CLAUDE[Anthropic API<br/>+ web search fallback]
     end
 
     FE -->|HTTP| API
@@ -117,7 +117,7 @@ flowchart TB
 | Backend language | Python | Mature quant ecosystem (pandas, ta-lib available if needed), and LangGraph is the most mature stateful multi-agent framework with native human-in-the-loop support |
 | API framework | FastAPI | Async, typed, auto OpenAPI docs, first-class WebSocket support for future streaming |
 | Agent orchestration | LangGraph | Explicit state graph; fan-out/fan-in for parallel specialist agents; `interrupt()` primitive for human approval gates (see §6) |
-| LLM | Claude (Anthropic API), `claude-sonnet-5` default, overridable via env | Web search tool built in server-side; no separate search API needed |
+| LLM | Claude (Anthropic API), `claude-sonnet-5` default, overridable via env | Web search tool built in server-side; discovery and the web second opinion search with Tavily, the latter falling back to the built-in tool |
 | Frontend | Next.js (React) + TypeScript + MUI | Richest ecosystem for AI-native dashboards (streaming chat UIs, agent trace components) |
 | Data fetching (FE) | SWR | Lightweight, no backend coupling; swap for the Vercel AI SDK later if chat moves to streaming |
 | Database | Postgres via **Supabase** (local dev: Postgres+pgvector in Docker Compose — same SQLAlchemy models, same dialect as production) | Bundling DB + Auth in one project avoids running a separate auth service; matching the local and production dialect exactly avoids SQLite/Postgres drift in query behavior |
@@ -923,23 +923,26 @@ remain counted on provider failure; date-keyed counters expire after two days. T
 independent of the existing per-user monthly analysis allowance and the daily theme-batch lock.
 
 **News sources (web second opinion).** `agents/news_sources.py` makes two fixed basic searches per
-actionable ticker, built from the company or fund name and the ticker, over the past month (news,
-then risks). Both are claimed in one atomic step on the same daily counter, and only while it stays
-at or below `TAVILY_DAILY_SEARCH_LIMIT - TAVILY_DISCOVERY_RESERVE` (200 - 71 = 129), so news never
-takes the searches left for the mentions batch and one full scan a day. Further people with
-automatic discovery and repeat scans are not reserved. Searches discovery already spent count
-toward the same ceiling, so on such a day news gets fewer. Forum pages are dropped and results
-are deduplicated by normalized URL (the link sent is the one returned),
-taken alternately from both searches, bounded per field (URL 500, title 300, text 1500 characters),
-JSON encoded, capped at 20000 characters by dropping sources from the end, then required to number
-at least three. Claude then gets no tool, and a prompt that marks every source field as untrusted
-data. The hosted `web_search_20260209` call runs unchanged when retrieval is disabled, has no
-headroom, hits a Redis error (no Tavily request; the claim may still have counted), has a failed
-search (claims are not refunded) or yields fewer than three usable sources. A failed Claude call is
-not retried on the other path. An unexpected retrieval error also takes the hosted path. The `news call usage` log line records the path, source count and
-characters, searches claimed (null when unknown) and a fixed fallback code, never text. Tickers and
-company names of any person's actionable holdings and watchlist items are sent to Tavily,
-under the owner's key, on this path. The ceiling is shared by all people, with no per-person cap.
+actionable ticker, over the past month (news, then risks), built from the company or fund name and
+the ticker; an ETF's news search instead names what it tracks, cut from the fund name (the ticker
+wording if nothing is left). Both are claimed in one atomic step on the same daily counter, and only
+while it stays at or below `TAVILY_DAILY_SEARCH_LIMIT - TAVILY_DISCOVERY_RESERVE` (200 - 71 = 129),
+so news never takes the searches left for the mentions batch and one full scan a day. Further people
+with automatic discovery and repeat scans are not reserved. Searches discovery already spent count
+toward the same ceiling, so on such a day news gets fewer. Forum pages and the search provider's
+company profile pages are dropped and results are deduplicated by normalized URL (the link sent is
+the one returned), taken alternately from both searches, bounded per field (URL 500, title 300, text
+1500 characters), JSON encoded, capped at 20000 characters by dropping sources from the end, then
+required to number at least three. Claude then gets no tool, and a prompt that marks every source
+field as untrusted data and asks it to cite the source holding each claim, keep its currency and
+period, and mention every reported risk. A link in that reply which is not one of the sources is reduced to its words. The hosted `web_search_20260209` call runs unchanged when
+retrieval is disabled, has no headroom, hits a Redis error (no Tavily request; the claim may still
+have counted), has a failed search (claims are not refunded) or yields fewer than three usable
+sources. A failed Claude call is not retried on the other path. An unexpected retrieval error also
+takes the hosted path. The `news call usage` log line records the path, source count and characters,
+searches claimed (null when unknown) and a fixed fallback code, never text. Tickers and company
+names of any person's actionable holdings and watchlist items are sent to Tavily, under the owner's
+key, on this path. The ceiling is shared by all people, with no per-person cap.
 
 Discovery is fundamentals-first: numeric rank comes from quality and valuation, with risk then
 available portfolio fit breaking ties. Research supplies cited evidence and a bear case; forum

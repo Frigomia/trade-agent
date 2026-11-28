@@ -38,8 +38,8 @@ class Settings(BaseSettings):
     # Optional owner-funded discovery research; existing analysis works without it.
     tavily_api_key: str | None = Field(default=None, repr=False)
     tavily_daily_search_limit: int = Field(default=200, ge=0)
-    # Searches the web second opinion leaves for discovery: the mentions batch (16) plus one full
-    # scan (55). Raise it by 55 for each further person with automatic discovery.
+    # Searches the web second opinion leaves for discovery: the mentions batch (14) plus one full
+    # scan (55), with 2 spare. Raise it by 55 for each further person with automatic discovery.
     tavily_discovery_reserve: int = Field(default=71, ge=0)
     supabase_url: str | None = None  # https://<project>.supabase.co; JWKS + issuer derive from it
     migration_database_url: str | None = None  # owner role: Alembic and the bootstrap command only
