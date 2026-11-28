@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 JOB_TTL_SECONDS = 3600
 MAX_CONCURRENT_TICKERS = 3
-MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web search plus an embedding)
+MAX_RUN_TICKERS = 50  # each ticker is its own graph run (a Claude web opinion plus an embedding)
 
 
 class AnalysisAlreadyRunning(Exception):

@@ -48,6 +48,12 @@ def _disable_external_tracing(monkeypatch: pytest.MonkeyPatch) -> Generator[None
 
 
 @pytest.fixture(autouse=True)
+def _disable_external_search(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A developer's .env may hold a real Tavily key; tests that need one set a fake themselves.
+    monkeypatch.setattr(settings, "tavily_api_key", None)
+
+
+@pytest.fixture(autouse=True)
 def _mock_holding_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
     # API tests must not call Yahoo; market-data tests exercise the real cache/provider helper.
     monkeypatch.setattr("app.holdings.fetch_profile", AsyncMock(return_value={}))

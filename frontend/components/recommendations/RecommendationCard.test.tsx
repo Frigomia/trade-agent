@@ -54,6 +54,13 @@ describe("RecommendationCard", () => {
     vi.clearAllMocks();
   });
 
+  it("shows a linked first sentence as plain words, without the link address", () => {
+    const text =
+      "## Guidance was cut ([Reuters](https://www.reuters.com/a.b/c_(d))) [[2]](https://example.com/2). More.";
+    render(<RecommendationCard recommendation={rec({ ai_analysis: text })} onDecided={vi.fn()} />);
+    expect(screen.getByText("Guidance was cut (Reuters) [2].")).toBeInTheDocument();
+  });
+
   it("shows ticker, action, price, day change, and the first sentence of ai_analysis", () => {
     render(<RecommendationCard recommendation={rec()} onDecided={vi.fn()} />);
 
